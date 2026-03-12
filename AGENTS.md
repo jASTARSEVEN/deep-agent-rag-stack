@@ -66,6 +66,23 @@
 - 在所有授權敏感路徑保留 deny-by-default 語意。
 - 安全敏感行為必須明確、可文件化、可測試。
 
+## 專案級文件規則
+以下四份文件是本專案的長期上下文來源，所有 agent 在規劃或實作前都必須先閱讀：
+- `Summary.md`：產品背景、需求範圍、核心業務規則與固定技術選型
+- `PROJECT_STATUS.md`：記錄目前做到哪、已完成內容、目前 focus、下一步
+- `ROADMAP.md`：記錄 phase、里程碑、推薦實作順序
+- `ARCHITECTURE.md`：記錄系統設計、模組責任、資料流與核心約束
+
+使用規則：
+- 若需要理解產品背景、需求邊界、固定技術棧與長期不易變動的業務規則，先讀 `Summary.md`。
+- 開始新任務前，先確認 `PROJECT_STATUS.md` 的目前 phase 與已完成內容。
+- 若要調整實作順序、phase 拆分、里程碑規劃，必須同步更新 `ROADMAP.md`。
+- 若架構決策、資料流、模組責任、授權設計有變更，必須同步更新 `ARCHITECTURE.md`。
+- 若產品範圍、需求邊界、固定技術選型、核心業務規則有變更，必須同步更新 `Summary.md`。
+- 若完成重大里程碑或完成一輪功能交付，必須同步更新 `PROJECT_STATUS.md`。
+- 不得只更新其中一份文件卻讓其餘文件失真。
+- 若任務與這四份文件的建立、更新、治理有關，應使用專案級 skill：`project-documentation-governance`。
+
 ## 文件規範
 每個原始碼檔案都必須遵守以下規則：
 - 每個檔案都需要檔案層級說明。
@@ -73,7 +90,7 @@
 - 每個 function / method 都要有 function-level docstring。
 - 每個全域變數 / module-level constant 都要有用途註解。
 - 涉及安全、授權、SQL gate、外部整合的程式碼，必須記錄前置條件與風險。
-- 所有的說明 / Readme / docstirng / .md 都要用使用台灣繁體中文
+- 所有的說明 / README / docstring / `.md` 都要使用台灣繁體中文。
 
 ## 模組 README 規範
 `apps/*`、`infra/*`、`packages/*` 下的每個頂層模組都必須包含 `README.md`。
