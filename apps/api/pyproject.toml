@@ -8,6 +8,13 @@ version = "0.1.0"
 description = "FastAPI skeleton service for the Deep Agent RAG Stack."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "Apache License 2.0" }
+authors = [
+  { name = "品至", email = "easypinex@gmail.com" },
+]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+]
 dependencies = [
   "alembic>=1.14.0,<2.0.0",
   "celery[redis]>=5.4.0,<6.0.0",
