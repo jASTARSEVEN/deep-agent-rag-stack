@@ -1,0 +1,43 @@
+# 統一文字檔換行格式，避免跨平台 CRLF/LF 差異造成雜訊。
+
+* text=auto eol=lf
+
+# Python
+*.py text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+
+# JavaScript / TypeScript / Web
+*.js text eol=lf
+*.cjs text eol=lf
+*.mjs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+
+# Shell and config
+*.sh text eol=lf
+*.env.example text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+
+# Windows scripts 保留 CRLF，避免在 Windows 上執行出問題。
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二進位檔案避免做文字換行轉換。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary

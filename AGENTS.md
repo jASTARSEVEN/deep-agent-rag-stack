@@ -73,6 +73,7 @@
 - 每個 function / method 都要有 function-level docstring。
 - 每個全域變數 / module-level constant 都要有用途註解。
 - 涉及安全、授權、SQL gate、外部整合的程式碼，必須記錄前置條件與風險。
+- 所有的說明 / Readme / docstirng / .md 都要用使用台灣繁體中文
 
 ## 模組 README 規範
 `apps/*`、`infra/*`、`packages/*` 下的每個頂層模組都必須包含 `README.md`。
@@ -128,8 +129,8 @@
 
 ## 協作指引
 實作功能時建議流程：
-1. planner 先定義範圍、依賴與任務切分
-2. 相關實作 agent 在可行時並行工作
+1. planner 先定義範圍、依賴與任務切分，並顯示列出 sub-agent task split，再依 split 執行。
+2. 相關實作 sub-agent 在可行時並行工作
 3. qa-security-agent 驗證正確性與安全性
 4. planner 或主責 agent 總結修改內容與剩餘缺口
 

@@ -1,0 +1,9 @@
+/** React 前端骨架使用的 Tailwind 入口樣式表。 */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
