@@ -61,3 +61,23 @@ def require_area_access(session: Session, principal: CurrentPrincipal, area_id: 
     if effective_role is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="找不到指定的 area。")
     return effective_role
+
+
+def require_minimum_area_role(
+    session: Session,
+    principal: CurrentPrincipal,
+    area_id: str,
+    minimum_role: Role,
+) -> Role:
+    """要求使用者在指定 area 至少具有某一層級的角色。"""
+
+    effective_role = require_area_access(session=session, principal=principal, area_id=area_id)
+    if ROLE_PRIORITY[effective_role] < ROLE_PRIORITY[minimum_role]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="目前角色無法執行此操作。")
+    return effective_role
+
+
+def require_area_admin(session: Session, principal: CurrentPrincipal, area_id: str) -> Role:
+    """要求使用者必須是指定 area 的 admin。"""
+
+    return require_minimum_area_role(session=session, principal=principal, area_id=area_id, minimum_role=Role.admin)

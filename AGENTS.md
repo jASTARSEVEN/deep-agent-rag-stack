@@ -89,6 +89,7 @@
 - 每個 class 都要有 class docstring。
 - 每個 function / method 都要有 function-level docstring。
 - 每個全域變數 / module-level constant 都要有用途註解。
+- 只要是類似 Model、DTO、Bean 的資料結構型別，其所有欄位 / 變數都必須有用途註解。
 - 涉及安全、授權、SQL gate、外部整合的程式碼，必須記錄前置條件與風險。
 - 所有的說明 / README / docstring / `.md` 都要使用台灣繁體中文。
 

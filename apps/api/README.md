@@ -6,6 +6,8 @@
 - 最小 landing route 與 health route
 - JWT / Keycloak 驗證骨架
 - `sub` / `groups` claims 解析
+- Knowledge Area CRUD 最小切片
+- area access management API
 - area access-check 驗證切片
 - SQLAlchemy 與 Alembic migration 骨架
 
@@ -57,6 +59,11 @@
 - `GET /`
 - `GET /health`
 - `GET /auth/context`
+- `POST /areas`
+- `GET /areas`
+- `GET /areas/{area_id}`
+- `GET /areas/{area_id}/access`
+- `PUT /areas/{area_id}/access`
 - `GET /areas/{area_id}/access-check`
 
 ## 疑難排解
@@ -64,4 +71,5 @@
 - 若 import 失敗，請確認啟動命令包含 `--app-dir src`。
 - 若 `alembic upgrade head` 無法連到資料庫，請先確認根目錄 `.env` 內的 `DATABASE_URL`。
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
-- 此模組目前尚未實作 area CRUD、upload、retrieval 或 chat。
+- `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
+- 此模組目前尚未實作文件 upload、retrieval 或 chat。

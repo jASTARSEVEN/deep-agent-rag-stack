@@ -1,0 +1,177 @@
+"""Knowledge Area CRUD 與 access management service。"""
+
+from collections.abc import Iterable
+
+from fastapi import HTTPException, status
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.auth.verifier import CurrentPrincipal
+from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
+from app.schemas.areas import (
+    AccessGroupEntry,
+    AccessUserEntry,
+    AreaAccessManagementResponse,
+    AreaSummaryResponse,
+    ReplaceAreaAccessRequest,
+)
+from app.services.access import ROLE_PRIORITY, require_area_access, require_area_admin
+
+
+def create_area(
+    session: Session,
+    principal: CurrentPrincipal,
+    *,
+    name: str,
+    description: str | None,
+) -> AreaSummaryResponse:
+    """建立 area，並讓建立者自動成為 admin。"""
+
+    area = Area(name=name.strip(), description=_normalize_optional_text(description))
+    session.add(area)
+    session.flush()
+    session.add(AreaUserRole(area_id=area.id, user_sub=principal.sub, role=Role.admin))
+    session.commit()
+    session.refresh(area)
+    return _build_area_summary(area=area, effective_role=Role.admin)
+
+
+def list_accessible_areas(session: Session, principal: CurrentPrincipal) -> list[AreaSummaryResponse]:
+    """列出目前使用者可存取的 areas。"""
+
+    direct_rows = session.execute(
+        select(Area, AreaUserRole.role).join(AreaUserRole, AreaUserRole.area_id == Area.id).where(
+            AreaUserRole.user_sub == principal.sub
+        )
+    ).all()
+    group_rows = []
+    if principal.groups:
+        group_rows = session.execute(
+            select(Area, AreaGroupRole.role).join(AreaGroupRole, AreaGroupRole.area_id == Area.id).where(
+                AreaGroupRole.group_path.in_(principal.groups)
+            )
+        ).all()
+
+    return _merge_area_rows([*direct_rows, *group_rows])
+
+
+def get_area_detail(session: Session, principal: CurrentPrincipal, area_id: str) -> AreaSummaryResponse:
+    """取得單一 area 詳細資料。"""
+
+    effective_role = require_area_access(session=session, principal=principal, area_id=area_id)
+    area = session.get(Area, area_id)
+    if area is None:
+        raise _build_area_not_found_error()
+    return _build_area_summary(area=area, effective_role=effective_role)
+
+
+def get_area_access_management(
+    session: Session,
+    principal: CurrentPrincipal,
+    area_id: str,
+) -> AreaAccessManagementResponse:
+    """讀取指定 area 的 access 規則。"""
+
+    require_area_admin(session=session, principal=principal, area_id=area_id)
+    return _load_area_access_management(session=session, area_id=area_id)
+
+
+def replace_area_access_management(
+    session: Session,
+    principal: CurrentPrincipal,
+    area_id: str,
+    payload: ReplaceAreaAccessRequest,
+) -> AreaAccessManagementResponse:
+    """整體替換指定 area 的 access 規則。"""
+
+    require_area_admin(session=session, principal=principal, area_id=area_id)
+
+    session.execute(delete(AreaUserRole).where(AreaUserRole.area_id == area_id))
+    session.execute(delete(AreaGroupRole).where(AreaGroupRole.area_id == area_id))
+
+    user_roles = [
+        AreaUserRole(area_id=area_id, user_sub=entry.user_sub.strip(), role=entry.role)
+        for entry in _deduplicate_user_entries(payload.users)
+    ]
+    group_roles = [
+        AreaGroupRole(area_id=area_id, group_path=entry.group_path.strip(), role=entry.role)
+        for entry in _deduplicate_group_entries(payload.groups)
+    ]
+    session.add_all([*user_roles, *group_roles])
+    session.commit()
+    return _load_area_access_management(session=session, area_id=area_id)
+
+
+def _merge_area_rows(rows: Iterable[tuple[Area, Role]]) -> list[AreaSummaryResponse]:
+    """將 direct role 與 group role 查詢結果合併成唯一 area 清單。"""
+
+    area_map: dict[str, tuple[Area, Role]] = {}
+    for area, role in rows:
+        current = area_map.get(area.id)
+        if current is None or ROLE_PRIORITY[role] > ROLE_PRIORITY[current[1]]:
+            area_map[area.id] = (area, role)
+
+    merged = [_build_area_summary(area=area, effective_role=role) for area, role in area_map.values()]
+    return sorted(merged, key=lambda item: item.created_at, reverse=True)
+
+
+def _build_area_summary(area: Area, effective_role: Role) -> AreaSummaryResponse:
+    """將 ORM area model 轉成 API schema。"""
+
+    return AreaSummaryResponse(
+        id=area.id,
+        name=area.name,
+        description=area.description,
+        effective_role=effective_role,
+        created_at=area.created_at,
+        updated_at=area.updated_at,
+    )
+
+
+def _normalize_optional_text(value: str | None) -> str | None:
+    """將可選文字欄位去除前後空白，空值則轉為 None。"""
+
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _deduplicate_user_entries(entries: list[AccessUserEntry]) -> Iterable[AccessUserEntry]:
+    """以最後一次輸入為準去除重複的 user_sub。"""
+
+    deduplicated: dict[str, AccessUserEntry] = {}
+    for entry in entries:
+        deduplicated[entry.user_sub.strip()] = entry
+    return deduplicated.values()
+
+
+def _deduplicate_group_entries(entries: list[AccessGroupEntry]) -> Iterable[AccessGroupEntry]:
+    """以最後一次輸入為準去除重複的 group_path。"""
+
+    deduplicated: dict[str, AccessGroupEntry] = {}
+    for entry in entries:
+        deduplicated[entry.group_path.strip()] = entry
+    return deduplicated.values()
+
+
+def _build_area_not_found_error() -> HTTPException:
+    """建立與授權層一致的 area not found 例外。"""
+
+    return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="找不到指定的 area。")
+
+
+def _load_area_access_management(session: Session, area_id: str) -> AreaAccessManagementResponse:
+    """直接依 area_id 讀取 access 規則內容。"""
+
+    user_rows = session.scalars(
+        select(AreaUserRole).where(AreaUserRole.area_id == area_id).order_by(AreaUserRole.user_sub.asc())
+    ).all()
+    group_rows = session.scalars(
+        select(AreaGroupRole).where(AreaGroupRole.area_id == area_id).order_by(AreaGroupRole.group_path.asc())
+    ).all()
+    return AreaAccessManagementResponse(
+        area_id=area_id,
+        users=[AccessUserEntry(user_sub=row.user_sub, role=row.role) for row in user_rows],
+        groups=[AccessGroupEntry(group_path=row.group_path, role=row.role) for row in group_rows],
+    )

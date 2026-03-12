@@ -3,10 +3,18 @@
 import type { PlannedService } from "./types";
 
 
+/** 前端支援的 auth 模式。 */
+export type AuthMode = "keycloak" | "test";
+
+
 // 顯示在 landing page 上、可由前端讀取的應用程式名稱。
 export const appConfig = {
   appName: import.meta.env.VITE_APP_NAME ?? "Deep Agent RAG Stack",
   apiBaseUrl: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:18000",
+  authMode: (import.meta.env.VITE_AUTH_MODE ?? "keycloak") as AuthMode,
+  keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL ?? "http://localhost:18080",
+  keycloakRealm: import.meta.env.VITE_KEYCLOAK_REALM ?? "deep-agent-dev",
+  keycloakClientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? "deep-agent-web",
 };
 
 

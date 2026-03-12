@@ -50,6 +50,7 @@
 
 目標：
 - 使用者可以看到自己可存取的 Knowledge Areas
+- 此階段以最小可驗證垂直切片為主，不包含完整 Areas CRUD
 
 內容：
 - area schema
@@ -58,9 +59,14 @@
 - effective role calculation
 - list accessible areas
 - area-level access placeholders
+- read area detail
+- area access management
+- web 手動 token 驗證頁
+- web Keycloak login / callback / logout flow
+- Playwright E2E 基礎設施與 smoke/regression coverage
 
 狀態：
-- `未開始`
+- `已完成`
 
 ## Phase 3 — Documents & Ingestion
 
@@ -74,6 +80,19 @@
 - worker status transitions
 - parser / chunking skeleton
 - embedding / FTS placeholders
+
+狀態：
+- `未開始`
+
+## Post-Phase 3 Backlog — Area Management Hardening
+
+目標：
+- 在 Documents MVP 穩定後補強 area 管理能力，但不阻擋主流程推進
+
+內容：
+- area rename / update
+- area delete
+- 視需要補齊完整 Areas CRUD 的 API、UI 與測試
 
 狀態：
 - `未開始`
@@ -116,7 +135,7 @@
 
 ## 近期建議順序
 
-1. Phase 2：Areas
-2. Phase 3：Documents & Ingestion
+1. Phase 3：Documents & Ingestion
+2. Post-Phase 3 Backlog：Area Management Hardening
 3. Phase 4：Retrieval
 4. Phase 5：Chat

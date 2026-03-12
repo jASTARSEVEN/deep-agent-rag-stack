@@ -1,6 +1,7 @@
 """FastAPI 應用程式進入點。"""
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.verifier import build_token_verifier
 from app.core.settings import AppSettings, get_settings
@@ -23,6 +24,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     application.state.engine = create_database_engine(resolved_settings)
     application.state.session_factory = create_session_factory(application.state.engine)
     application.state.token_verifier = build_token_verifier(resolved_settings)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=[origin.strip() for origin in resolved_settings.cors_origins.split(",") if origin.strip()],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     application.include_router(root_router)
     application.include_router(auth_router)
     application.include_router(areas_router)

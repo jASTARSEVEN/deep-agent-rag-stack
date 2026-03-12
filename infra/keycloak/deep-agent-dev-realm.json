@@ -46,6 +46,20 @@
       ],
       "protocolMappers": [
         {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "sub",
+            "jsonType.label": "String"
+          }
+        },
+        {
           "name": "groups",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-group-membership-mapper",
@@ -89,6 +103,9 @@
     {
       "username": "alice",
       "enabled": true,
+      "email": "alice@deep-agent.dev",
+      "firstName": "Alice",
+      "lastName": "Lin",
       "emailVerified": true,
       "credentials": [
         {
@@ -104,6 +121,9 @@
     {
       "username": "bob",
       "enabled": true,
+      "email": "bob@deep-agent.dev",
+      "firstName": "Bob",
+      "lastName": "Chen",
       "emailVerified": true,
       "credentials": [
         {
@@ -119,6 +139,9 @@
     {
       "username": "carol",
       "enabled": true,
+      "email": "carol@deep-agent.dev",
+      "firstName": "Carol",
+      "lastName": "Wang",
       "emailVerified": true,
       "credentials": [
         {
@@ -134,6 +157,9 @@
     {
       "username": "dave",
       "enabled": true,
+      "email": "dave@deep-agent.dev",
+      "firstName": "Dave",
+      "lastName": "Hsu",
       "emailVerified": true,
       "credentials": [
         {
@@ -146,6 +172,9 @@
     {
       "username": "erin",
       "enabled": true,
+      "email": "erin@deep-agent.dev",
+      "firstName": "Erin",
+      "lastName": "Tsai",
       "emailVerified": true,
       "credentials": [
         {
@@ -162,6 +191,9 @@
     {
       "username": "frank",
       "enabled": true,
+      "email": "frank@deep-agent.dev",
+      "firstName": "Frank",
+      "lastName": "Kao",
       "emailVerified": true,
       "credentials": [
         {
