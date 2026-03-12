@@ -33,15 +33,26 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 - client：`deep-agent-web`
 - groups claim：`groups`
 - groups：
-  - `/reader`
-  - `/maintainer`
-  - `/admin`
+  - `/dept/hr`
+  - `/dept/finance`
+  - `/dept/rd`
+  - `/platform/knowledge-admins`
 - users：
-  - `alice / alice123`：`/reader`
-  - `bob / bob123`：`/maintainer`
-  - `carol / carol123`：`/admin`
+  - `alice / alice123`：`/dept/hr`
+  - `bob / bob123`：`/dept/finance`
+  - `carol / carol123`：`/dept/rd`
   - `dave / dave123`：無群組，用於 deny-by-default 驗證
-  - `erin / erin123`：`/reader` + `/maintainer`
+  - `erin / erin123`：`/dept/hr` + `/dept/rd`
+  - `frank / frank123`：`/platform/knowledge-admins`
+
+## 群組設計原則
+
+- Keycloak `group` 代表組織或職能身分，不直接等於 area 角色。
+- area 內的 `reader`、`maintainer`、`admin` 權限，應由 API 資料層將 `group path` 映射到對應角色。
+- 本機開發預設只提供少量部門群組，目的是驗證：
+  - 同一群組可在不同 area 映射到不同角色
+  - 多群組使用者會取 direct role 與 group role 的最大值
+  - 無群組使用者仍會被 deny-by-default 擋下
 
 ## 對外介面
 

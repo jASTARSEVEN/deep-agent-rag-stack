@@ -63,13 +63,26 @@
   ],
   "groups": [
     {
-      "name": "reader"
+      "name": "dept",
+      "subGroups": [
+        {
+          "name": "hr"
+        },
+        {
+          "name": "finance"
+        },
+        {
+          "name": "rd"
+        }
+      ]
     },
     {
-      "name": "maintainer"
-    },
-    {
-      "name": "admin"
+      "name": "platform",
+      "subGroups": [
+        {
+          "name": "knowledge-admins"
+        }
+      ]
     }
   ],
   "users": [
@@ -85,7 +98,7 @@
         }
       ],
       "groups": [
-        "/reader"
+        "/dept/hr"
       ]
     },
     {
@@ -100,7 +113,7 @@
         }
       ],
       "groups": [
-        "/maintainer"
+        "/dept/finance"
       ]
     },
     {
@@ -115,7 +128,7 @@
         }
       ],
       "groups": [
-        "/admin"
+        "/dept/rd"
       ]
     },
     {
@@ -142,8 +155,23 @@
         }
       ],
       "groups": [
-        "/reader",
-        "/maintainer"
+        "/dept/hr",
+        "/dept/rd"
+      ]
+    },
+    {
+      "username": "frank",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "frank123",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/platform/knowledge-admins"
       ]
     }
   ]
