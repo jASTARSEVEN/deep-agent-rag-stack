@@ -57,10 +57,15 @@ class Area(Base):
 
     __tablename__ = "areas"
 
+    # Area 唯一識別碼。
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # Area 顯示名稱。
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Area 補充說明。
     description: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # Area 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # Area 最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
 
@@ -70,10 +75,15 @@ class AreaUserRole(Base):
     __tablename__ = "area_user_roles"
     __table_args__ = (UniqueConstraint("area_id", "user_sub", name="uq_area_user_roles_area_subject"),)
 
+    # 角色映射唯一識別碼。
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 角色映射所屬 area。
     area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
+    # 被授權使用者的 `sub`。
     user_sub: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 直接指派給使用者的角色。
     role: Mapped[Role] = mapped_column(SqlEnum(Role, native_enum=False), nullable=False)
+    # 角色映射建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
@@ -83,35 +93,57 @@ class AreaGroupRole(Base):
     __tablename__ = "area_group_roles"
     __table_args__ = (UniqueConstraint("area_id", "group_path", name="uq_area_group_roles_area_group_path"),)
 
+    # 群組角色映射唯一識別碼。
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 角色映射所屬 area。
     area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
+    # 被授權 Keycloak group path。
     group_path: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 指派給群組的角色。
     role: Mapped[Role] = mapped_column(SqlEnum(Role, native_enum=False), nullable=False)
+    # 角色映射建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 class Document(Base):
-    """未來文件上傳與檢索流程使用的最小占位 model。"""
+    """文件上傳與 ingest 流程使用的文件資料。"""
 
     __tablename__ = "documents"
 
+    # 文件唯一識別碼。
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 文件所屬 area。
     area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
+    # 使用者上傳時的原始檔名。
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 上傳時記錄的 MIME 類型。
+    content_type: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 原始檔大小，單位為 bytes。
+    file_size: Mapped[int] = mapped_column(nullable=False)
+    # 原始檔在物件儲存中的鍵值。
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # 文件目前處理狀態。
     status: Mapped[DocumentStatus] = mapped_column(SqlEnum(DocumentStatus, native_enum=False), nullable=False)
+    # 文件建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # 文件最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
 
 class IngestJob(Base):
-    """未來背景索引流程使用的最小占位 model。"""
+    """背景 ingest 工作狀態資料。"""
 
     __tablename__ = "ingest_jobs"
 
+    # 背景 job 唯一識別碼。
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 此 job 對應的文件識別碼。
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # job 目前狀態。
     status: Mapped[IngestJobStatus] = mapped_column(SqlEnum(IngestJobStatus, native_enum=False), nullable=False)
+    # job 失敗時的可讀錯誤訊息。
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # job 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # job 最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)

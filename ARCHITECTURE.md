@@ -19,13 +19,13 @@
 - 提供 HTTP / SSE 介面
 - 負責 auth integration、RBAC 邊界、service orchestration
 - 對外暴露 areas、documents、jobs、chat 相關 API
-- 目前已提供 `auth/context`、`areas` 的 create/list/detail 最小集合與 `areas/{area_id}/access` 管理端點
+- 目前已提供 `auth/context`、`areas` 的 create/list/detail、`areas/{area_id}/access` 管理端點，以及 documents / ingest jobs 最小集合
 - JWT 驗證目前以 Keycloak issuer + JWKS 為基礎，並要求 access token 內存在 `sub` 與 `groups`
 
 ### Worker
 - Celery
 - 負責背景 ingest / indexing 工作
-- 處理 parse、chunk、embed、FTS preparation、status transition
+- 目前已處理最小 ingest parse routing 與 status transition；chunk、embed、FTS preparation 仍待後續 phase
 
 ### Infra
 - PostgreSQL：主要資料庫
@@ -63,7 +63,7 @@
 1. Web 上傳檔案
 2. API 驗證請求並建立 `documents` / `ingest_jobs`
 3. API 將原始檔存入 MinIO
-4. Worker 執行 parse / chunk / embed / FTS preparation
+4. Worker 執行最小 parse routing 與 ingest status transition
 5. Worker 更新狀態為 `ready` 或 `failed`
 
 ### 問答流程
@@ -104,6 +104,13 @@
 3. `GET /areas` 只回傳目前使用者可存取的 area，並附上 effective role
 4. `GET /areas/{area_id}` 與 `GET /areas/{area_id}/access` 都先做 SQL access check
 5. `PUT /areas/{area_id}/access` 僅允許 `admin` 以整體替換方式更新 direct user roles 與 group roles
+
+### Documents & ingestion vertical slice
+1. `POST /areas/{area_id}/documents` 僅允許 `maintainer` 以上上傳單一文件
+2. API 先將原始檔寫入物件儲存，再建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`
+3. 正式環境由 Celery worker 執行 ingest；測試模式可走 inline ingest 以維持本機驗證可重跑
+4. Worker 僅真正解析 `TXT/MD`；其餘產品範圍內格式目前統一進入受控 `failed`
+5. `GET /areas/{area_id}/documents`、`GET /documents/{document_id}`、`GET /ingest-jobs/{job_id}` 都必須先套 area access 邊界
 
 ## 預期模組邊界
 

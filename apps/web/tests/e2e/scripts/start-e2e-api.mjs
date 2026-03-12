@@ -17,6 +17,9 @@ const apiRoot = resolve(webRoot, "../api");
 /** Playwright E2E 共用的 SQLite 測試資料庫路徑。 */
 const databasePath = join(webRoot, ".tmp", "playwright-e2e.sqlite");
 
+/** Playwright E2E 共用的本機檔案儲存路徑。 */
+const storagePath = join(webRoot, ".tmp", "playwright-storage");
+
 /** API server 啟動用子行程。 */
 const childProcess = spawn(
   "python",
@@ -34,8 +37,16 @@ const childProcess = spawn(
       DATABASE_URL: `sqlite+pysqlite:///${databasePath}`,
       DATABASE_ECHO: "false",
       REDIS_URL: "redis://localhost:16379/0",
+      STORAGE_BACKEND: "filesystem",
       MINIO_ENDPOINT: "http://localhost:19000",
+      MINIO_ACCESS_KEY: "minio",
+      MINIO_SECRET_KEY: "minio123",
       MINIO_BUCKET: "documents",
+      LOCAL_STORAGE_PATH: storagePath,
+      MAX_UPLOAD_SIZE_BYTES: "1048576",
+      CELERY_BROKER_URL: "redis://localhost:16379/0",
+      CELERY_RESULT_BACKEND: "redis://localhost:16379/1",
+      INGEST_INLINE_MODE: "true",
       KEYCLOAK_URL: "http://localhost:18080",
       KEYCLOAK_ISSUER: "http://localhost:18080/realms/deep-agent-dev",
       KEYCLOAK_JWKS_URL: "http://localhost:18080/realms/deep-agent-dev/protocol/openid-connect/certs",

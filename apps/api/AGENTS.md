@@ -20,3 +20,5 @@
 - route 要薄，service 要清楚
 - auth / security-sensitive code 需有明確 docstring
 - 反向路徑測試不可少
+- ORM 查詢與 model 宣告必須使用 SQLAlchemy 2 寫法，例如 `Mapped[...]`、`mapped_column(...)`、`select(...)`、`session.scalars(...)`
+- 所有 function / method docstring 都必須包含參數與回傳說明

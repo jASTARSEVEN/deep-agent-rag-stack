@@ -2,7 +2,7 @@
 
 ## 模組目的
 
-此模組包含本機 Docker Compose stack，以及啟動 MVP 骨架環境所需的容器建置資產。
+此模組包含本機 Docker Compose stack，以及啟動 Areas + Documents & Ingestion MVP 所需的容器建置資產。
 
 ## 啟動方式
 
@@ -19,7 +19,11 @@
 - `API_*`
 - `DATABASE_URL`
 - `REDIS_URL`
+- `STORAGE_BACKEND`
+- `LOCAL_STORAGE_PATH`
+- `MAX_UPLOAD_SIZE_BYTES`
 - `CELERY_*`
+- `INGEST_INLINE_MODE`
 - `VITE_*`
 - `PG_JIEBA_REPO_URL`
 - `PG_JIEBA_REF`
@@ -50,3 +54,4 @@
 - Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
 - 若要回到預設 Keycloak 身份資料，請刪除 `keycloak-db` volume 後重新啟動 stack。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
+- 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。

@@ -18,8 +18,12 @@ const tempDirectory = join(webRoot, ".tmp");
 /** E2E SQLite 測試資料庫路徑。 */
 const databasePath = join(tempDirectory, "playwright-e2e.sqlite");
 
+/** E2E 本機物件儲存路徑。 */
+const storagePath = join(tempDirectory, "playwright-storage");
+
 mkdirSync(tempDirectory, { recursive: true });
 rmSync(databasePath, { force: true });
+rmSync(storagePath, { recursive: true, force: true });
 
 const seedProcess = spawnSync("python", [join(currentDirectory, "seed_e2e_data.py"), databasePath], {
   cwd: webRoot,

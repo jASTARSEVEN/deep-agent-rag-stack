@@ -34,7 +34,16 @@ def create_area_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaSummaryResponse:
-    """建立新的 Knowledge Area。"""
+    """建立新的 Knowledge Area。
+
+    參數：
+    - `payload`：建立 area 所需的名稱與說明。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaSummaryResponse`：剛建立 area 的摘要資料。
+    """
 
     return create_area(
         session=session,
@@ -49,7 +58,15 @@ def list_areas_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaListResponse:
-    """列出目前使用者可存取的 areas。"""
+    """列出目前使用者可存取的 areas。
+
+    參數：
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaListResponse`：目前使用者可存取的 area 清單。
+    """
 
     return AreaListResponse(items=list_accessible_areas(session=session, principal=principal))
 
@@ -60,7 +77,16 @@ def read_area_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaSummaryResponse:
-    """讀取單一 area 詳細資料。"""
+    """讀取單一 area 詳細資料。
+
+    參數：
+    - `area_id`：要查詢的 area 識別碼。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaSummaryResponse`：指定 area 的摘要資料。
+    """
 
     return get_area_detail(session=session, principal=principal, area_id=area_id)
 
@@ -71,7 +97,16 @@ def read_area_access_check(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaAccessResponse:
-    """檢查目前使用者是否對指定 area 擁有有效角色。"""
+    """檢查目前使用者是否對指定 area 擁有有效角色。
+
+    參數：
+    - `area_id`：要檢查權限的 area 識別碼。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaAccessResponse`：指定 area 的 effective role 檢查結果。
+    """
 
     effective_role = require_area_access(session=session, principal=principal, area_id=area_id)
     return AreaAccessResponse(area_id=area_id, effective_role=effective_role)
@@ -83,7 +118,16 @@ def read_area_access_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaAccessManagementResponse:
-    """讀取指定 area 的 access 管理資料。"""
+    """讀取指定 area 的 access 管理資料。
+
+    參數：
+    - `area_id`：要查詢 access 管理資料的 area 識別碼。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaAccessManagementResponse`：指定 area 的 access 管理資料。
+    """
 
     return get_area_access_management(session=session, principal=principal, area_id=area_id)
 
@@ -95,7 +139,17 @@ def replace_area_access_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> AreaAccessManagementResponse:
-    """整體替換指定 area 的 access 規則。"""
+    """整體替換指定 area 的 access 規則。
+
+    參數：
+    - `area_id`：要更新 access 規則的 area 識別碼。
+    - `payload`：新的 access 規則內容。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `AreaAccessManagementResponse`：更新後的 access 管理資料。
+    """
 
     return replace_area_access_management(
         session=session,

@@ -1,14 +1,39 @@
 """Celery 骨架 worker 使用的設定物件。"""
 
 from functools import lru_cache
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # 本機開發命令預設使用的環境變數檔名稱。
 ENV_FILE_NAME = ".env"
+
+
+EMPTY_STRING_ENV_KEYS = {"MINIO_SECURE"}
+
+
+def _drop_empty_string_env_values(data: Any) -> Any:
+    """移除值為空字串的設定輸入，讓欄位回退預設值。
+
+    Args:
+        data: Pydantic 在 model 驗證前收到的原始輸入資料。
+
+    Returns:
+        若輸入為 dict，會移除指定欄位中的空字串值；否則保留原值。
+    """
+
+    if not isinstance(data, dict):
+        return data
+
+    normalized_data = dict(data)
+    for key in EMPTY_STRING_ENV_KEYS:
+        value = normalized_data.get(key)
+        if isinstance(value, str) and value.strip() == "":
+            normalized_data.pop(key)
+    return normalized_data
 
 
 class WorkerSettings(BaseSettings):
@@ -17,12 +42,41 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE_NAME, env_file_encoding="utf-8", extra="ignore")
 
     service_name: Annotated[str, Field(alias="WORKER_SERVICE_NAME")] = "deep-agent-worker"
+    database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://app:app@postgres:5432/deep_agent_rag"
     broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
+    storage_backend: Annotated[str, Field(alias="STORAGE_BACKEND")] = "minio"
+    minio_endpoint: Annotated[str, Field(alias="MINIO_ENDPOINT")] = "http://minio:9000"
+    minio_access_key: Annotated[str, Field(alias="MINIO_ACCESS_KEY")] = "minio"
+    minio_secret_key: Annotated[str, Field(alias="MINIO_SECRET_KEY")] = "minio123"
+    minio_secure: Annotated[bool, Field(alias="MINIO_SECURE")] = False
+    minio_bucket: Annotated[str, Field(alias="MINIO_BUCKET")] = "documents"
+    local_storage_path: Annotated[Path, Field(alias="LOCAL_STORAGE_PATH")] = Path(".local-storage")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_empty_string_env(cls, data: Any) -> Any:
+        """將 compose 注入的空字串欄位移除，避免覆蓋預設值。
+
+        Args:
+            data: model 驗證前收到的原始設定輸入。
+
+        Returns:
+            已移除空字串設定的輸入資料。
+        """
+
+        return _drop_empty_string_env_values(data)
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> WorkerSettings:
-    """回傳快取後的設定物件，確保同一個行程內設定一致。"""
+    """回傳快取後的設定物件，確保同一個行程內設定一致。
+
+    參數：
+    - 無
+
+    回傳：
+    - `WorkerSettings`：目前行程共用的 worker 執行期設定。
+    """
 
     return WorkerSettings()

@@ -18,13 +18,15 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 2 — Areas`
+當前主階段：`Phase 3 — Documents & Ingestion`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
 - `Phase 1` 授權與資料基礎骨架 MVP 已完成
 - `Phase 2` Areas 垂直切片 MVP 已完成
+- `Phase 3` Documents & Ingestion 垂直切片 MVP 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
+- 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -68,29 +70,36 @@
 - `apps/web` 已建立 Playwright E2E 基礎設施，可在本機以 `AUTH_TEST_MODE=true` 驗證 Areas UI 主要流程
 - Web 已接上 Keycloak 正式登入 / callback / logout 流程，並保留 test auth mode 供 Playwright E2E 使用
 
+### Phase 3 — 已完成的 MVP 垂直切片
+- 已實作 `POST /areas/{area_id}/documents`、`GET /areas/{area_id}/documents`、`GET /documents/{document_id}` 與 `GET /ingest-jobs/{job_id}`
+- 文件 upload 已接上物件儲存、`documents` / `ingest_jobs` 建立與 Celery dispatch
+- 已實作 `uploaded -> processing -> ready|failed` 與 `queued -> processing -> succeeded|failed` 狀態轉換
+- Worker 已補最小 ingest task、`TXT/MD` parser 與其他檔案型別的受控失敗語意
+- Web 已在 `/areas` 補上 Files 區塊、單檔 upload、文件狀態與失敗訊息顯示
+- API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
+- Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 2` 的 Area create/list/detail 與 access management 垂直切片
-- 穩定前端 Playwright E2E 與 test-mode API 驗證路徑
-- 穩定前端 Keycloak 正式登入與 callback session flow
+- 穩定 `Phase 3` 的 Documents & Ingestion 垂直切片
+- 穩定物件儲存、Celery dispatch 與 test-mode inline ingest 驗證路徑
+- 穩定前端 Files UI 與 Playwright E2E 驗證覆蓋
 - 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
-- 準備進入 `Phase 3` 的 documents / upload / ingest 流程
 - area rename / delete 不列為當前 phase 目標，預計於 Documents MVP 完成後再作為管理補強項目評估與排入
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 針對 documents / ingest_jobs 接上正式 upload vertical slice
-2. 建立 MinIO 上傳、背景 job 建立與狀態轉換
-3. 在 worker 補 parser / chunking / indexing skeleton
-4. 為 Phase 3 準備 documents list、job progress 與 reindex / delete 權限邏輯
-5. Documents MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+1. 補 `documents delete`、`reindex` 與更完整的 ingest job 觀測能力
+2. 為 Phase 4 準備 `ready` 文件限定、SQL gate 與 retrieval query contract
+3. 將 parser / chunking / indexing skeleton 延伸為真正的 indexing pipeline
+4. Documents MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
 - 文件上傳正式流程
-- ingest / indexing 正式流程
+- indexing 正式流程
 - retrieval pipeline
 - chat 與 citations
 - SQL gate

@@ -25,7 +25,17 @@ def create_area(
     name: str,
     description: str | None,
 ) -> AreaSummaryResponse:
-    """建立 area，並讓建立者自動成為 admin。"""
+    """建立 area，並讓建立者自動成為 admin。
+
+    參數：
+    - `session`：用來建立 area 與角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `name`：新 area 的名稱。
+    - `description`：新 area 的補充說明。
+
+    回傳：
+    - `AreaSummaryResponse`：剛建立 area 的摘要資料。
+    """
 
     area = Area(name=name.strip(), description=_normalize_optional_text(description))
     session.add(area)
@@ -37,7 +47,15 @@ def create_area(
 
 
 def list_accessible_areas(session: Session, principal: CurrentPrincipal) -> list[AreaSummaryResponse]:
-    """列出目前使用者可存取的 areas。"""
+    """列出目前使用者可存取的 areas。
+
+    參數：
+    - `session`：用來查詢 area 與角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+
+    回傳：
+    - `list[AreaSummaryResponse]`：目前使用者可存取的 area 清單。
+    """
 
     direct_rows = session.execute(
         select(Area, AreaUserRole.role).join(AreaUserRole, AreaUserRole.area_id == Area.id).where(
@@ -56,7 +74,16 @@ def list_accessible_areas(session: Session, principal: CurrentPrincipal) -> list
 
 
 def get_area_detail(session: Session, principal: CurrentPrincipal, area_id: str) -> AreaSummaryResponse:
-    """取得單一 area 詳細資料。"""
+    """取得單一 area 詳細資料。
+
+    參數：
+    - `session`：用來查詢 area 的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要讀取的 area 識別碼。
+
+    回傳：
+    - `AreaSummaryResponse`：指定 area 的摘要資料。
+    """
 
     effective_role = require_area_access(session=session, principal=principal, area_id=area_id)
     area = session.get(Area, area_id)
@@ -70,7 +97,16 @@ def get_area_access_management(
     principal: CurrentPrincipal,
     area_id: str,
 ) -> AreaAccessManagementResponse:
-    """讀取指定 area 的 access 規則。"""
+    """讀取指定 area 的 access 規則。
+
+    參數：
+    - `session`：用來查詢 access 規則的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要讀取 access 規則的 area 識別碼。
+
+    回傳：
+    - `AreaAccessManagementResponse`：指定 area 的 access 管理資料。
+    """
 
     require_area_admin(session=session, principal=principal, area_id=area_id)
     return _load_area_access_management(session=session, area_id=area_id)
@@ -82,7 +118,17 @@ def replace_area_access_management(
     area_id: str,
     payload: ReplaceAreaAccessRequest,
 ) -> AreaAccessManagementResponse:
-    """整體替換指定 area 的 access 規則。"""
+    """整體替換指定 area 的 access 規則。
+
+    參數：
+    - `session`：用來更新 access 規則的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要更新 access 規則的 area 識別碼。
+    - `payload`：新的 access 規則內容。
+
+    回傳：
+    - `AreaAccessManagementResponse`：更新後的 access 管理資料。
+    """
 
     require_area_admin(session=session, principal=principal, area_id=area_id)
 
@@ -103,7 +149,14 @@ def replace_area_access_management(
 
 
 def _merge_area_rows(rows: Iterable[tuple[Area, Role]]) -> list[AreaSummaryResponse]:
-    """將 direct role 與 group role 查詢結果合併成唯一 area 清單。"""
+    """將 direct role 與 group role 查詢結果合併成唯一 area 清單。
+
+    參數：
+    - `rows`：包含 area 與角色的查詢結果集合。
+
+    回傳：
+    - `list[AreaSummaryResponse]`：去重、取最大角色後的 area 清單。
+    """
 
     area_map: dict[str, tuple[Area, Role]] = {}
     for area, role in rows:
@@ -116,7 +169,15 @@ def _merge_area_rows(rows: Iterable[tuple[Area, Role]]) -> list[AreaSummaryRespo
 
 
 def _build_area_summary(area: Area, effective_role: Role) -> AreaSummaryResponse:
-    """將 ORM area model 轉成 API schema。"""
+    """將 ORM area model 轉成 API schema。
+
+    參數：
+    - `area`：ORM area model。
+    - `effective_role`：目前使用者在此 area 的 effective role。
+
+    回傳：
+    - `AreaSummaryResponse`：可供 API 回傳的 area 摘要資料。
+    """
 
     return AreaSummaryResponse(
         id=area.id,
@@ -129,7 +190,14 @@ def _build_area_summary(area: Area, effective_role: Role) -> AreaSummaryResponse
 
 
 def _normalize_optional_text(value: str | None) -> str | None:
-    """將可選文字欄位去除前後空白，空值則轉為 None。"""
+    """將可選文字欄位去除前後空白，空值則轉為 None。
+
+    參數：
+    - `value`：待標準化的可選文字值。
+
+    回傳：
+    - `str | None`：去除空白後的文字；若為空值則回傳 `None`。
+    """
 
     if value is None:
         return None
@@ -138,7 +206,14 @@ def _normalize_optional_text(value: str | None) -> str | None:
 
 
 def _deduplicate_user_entries(entries: list[AccessUserEntry]) -> Iterable[AccessUserEntry]:
-    """以最後一次輸入為準去除重複的 user_sub。"""
+    """以最後一次輸入為準去除重複的 user_sub。
+
+    參數：
+    - `entries`：原始 direct user role 輸入列表。
+
+    回傳：
+    - `Iterable[AccessUserEntry]`：已去除重複 user_sub 的條目集合。
+    """
 
     deduplicated: dict[str, AccessUserEntry] = {}
     for entry in entries:
@@ -147,7 +222,14 @@ def _deduplicate_user_entries(entries: list[AccessUserEntry]) -> Iterable[Access
 
 
 def _deduplicate_group_entries(entries: list[AccessGroupEntry]) -> Iterable[AccessGroupEntry]:
-    """以最後一次輸入為準去除重複的 group_path。"""
+    """以最後一次輸入為準去除重複的 group_path。
+
+    參數：
+    - `entries`：原始 group role 輸入列表。
+
+    回傳：
+    - `Iterable[AccessGroupEntry]`：已去除重複 group_path 的條目集合。
+    """
 
     deduplicated: dict[str, AccessGroupEntry] = {}
     for entry in entries:
@@ -156,13 +238,28 @@ def _deduplicate_group_entries(entries: list[AccessGroupEntry]) -> Iterable[Acce
 
 
 def _build_area_not_found_error() -> HTTPException:
-    """建立與授權層一致的 area not found 例外。"""
+    """建立與授權層一致的 area not found 例外。
+
+    參數：
+    - 無
+
+    回傳：
+    - `HTTPException`：用來隱藏 area 存在性的 404 例外。
+    """
 
     return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="找不到指定的 area。")
 
 
 def _load_area_access_management(session: Session, area_id: str) -> AreaAccessManagementResponse:
-    """直接依 area_id 讀取 access 規則內容。"""
+    """直接依 area_id 讀取 access 規則內容。
+
+    參數：
+    - `session`：用來查詢 access 規則的資料庫 session。
+    - `area_id`：要讀取 access 規則的 area 識別碼。
+
+    回傳：
+    - `AreaAccessManagementResponse`：指定 area 的 access 管理資料。
+    """
 
     user_rows = session.scalars(
         select(AreaUserRole).where(AreaUserRole.area_id == area_id).order_by(AreaUserRole.user_sub.asc())

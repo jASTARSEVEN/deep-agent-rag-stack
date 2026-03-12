@@ -6,12 +6,15 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import {
   createArea,
+  fetchDocuments,
   fetchApiHealth,
   fetchAreaAccess,
   fetchAreaDetail,
   fetchAreas,
   fetchAuthContext,
+  fetchIngestJob,
   replaceAreaAccess,
+  uploadDocument,
 } from "../lib/api";
 import { appConfig } from "../lib/config";
 import type {
@@ -21,6 +24,8 @@ import type {
   AreaAccessPayload,
   AreaRole,
   AreaSummary,
+  DocumentSummary,
+  IngestJobSummary,
 } from "../lib/types";
 
 
@@ -33,8 +38,18 @@ const EMPTY_ACCESS_STATE = {
   groupsText: "",
 };
 
+/** 空的文件上傳狀態。 */
+const EMPTY_UPLOAD_STATE = {
+  file: null as File | null,
+};
 
-/** 將 API 時間字串格式化為較易讀的本地時間。 */
+
+/**
+ * 將 API 時間字串格式化為較易讀的本地時間。
+ *
+ * @param value API 回傳的 ISO 時間字串。
+ * @returns 適合 UI 顯示的本地化時間字串。
+ */
 function formatTimestamp(value: string): string {
   return new Intl.DateTimeFormat("zh-TW", {
     dateStyle: "medium",
@@ -43,19 +58,34 @@ function formatTimestamp(value: string): string {
 }
 
 
-/** 將 user access entries 序列化為可編輯文字。 */
+/**
+ * 將 user access entries 序列化為可編輯文字。
+ *
+ * @param entries users access 條目列表。
+ * @returns 可直接放入 textarea 的文字內容。
+ */
 function serializeUsers(entries: AccessUserEntry[]): string {
   return entries.map((entry) => `${entry.user_sub},${entry.role}`).join("\n");
 }
 
 
-/** 將 group access entries 序列化為可編輯文字。 */
+/**
+ * 將 group access entries 序列化為可編輯文字。
+ *
+ * @param entries groups access 條目列表。
+ * @returns 可直接放入 textarea 的文字內容。
+ */
 function serializeGroups(entries: AccessGroupEntry[]): string {
   return entries.map((entry) => `${entry.group_path},${entry.role}`).join("\n");
 }
 
 
-/** 驗證並解析 user access 編輯文字。 */
+/**
+ * 驗證並解析 user access 編輯文字。
+ *
+ * @param rawValue textarea 內的原始 users access 文字。
+ * @returns 驗證後的 users access 條目列表。
+ */
 function parseUsersText(rawValue: string): AccessUserEntry[] {
   return rawValue
     .split("\n")
@@ -71,7 +101,12 @@ function parseUsersText(rawValue: string): AccessUserEntry[] {
 }
 
 
-/** 驗證並解析 group access 編輯文字。 */
+/**
+ * 驗證並解析 group access 編輯文字。
+ *
+ * @param rawValue textarea 內的原始 groups access 文字。
+ * @returns 驗證後的 groups access 條目列表。
+ */
 function parseGroupsText(rawValue: string): AccessGroupEntry[] {
   return rawValue
     .split("\n")
@@ -87,7 +122,12 @@ function parseGroupsText(rawValue: string): AccessGroupEntry[] {
 }
 
 
-/** 將 access payload 轉成 textarea 可編輯狀態。 */
+/**
+ * 將 access payload 轉成 textarea 可編輯狀態。
+ *
+ * @param accessPayload API 回傳的 area access payload。
+ * @returns 可直接綁定到 textarea 的編輯狀態。
+ */
 function buildEditableAccessState(accessPayload: AreaAccessPayload): { usersText: string; groupsText: string } {
   return {
     usersText: serializeUsers(accessPayload.users),
@@ -103,8 +143,11 @@ export function AreasPage(): JSX.Element {
   const [areas, setAreas] = useState<AreaSummary[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
   const [selectedArea, setSelectedArea] = useState<AreaSummary | null>(null);
+  const [documents, setDocuments] = useState<DocumentSummary[]>([]);
   const [accessPayload, setAccessPayload] = useState<AreaAccessPayload | null>(null);
+  const [documentJobs, setDocumentJobs] = useState<Record<string, IngestJobSummary>>({});
   const [accessEditor, setAccessEditor] = useState(EMPTY_ACCESS_STATE);
+  const [uploadState, setUploadState] = useState(EMPTY_UPLOAD_STATE);
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -112,6 +155,7 @@ export function AreasPage(): JSX.Element {
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [isSubmittingAccess, setIsSubmittingAccess] = useState(false);
+  const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,7 +189,45 @@ export function AreasPage(): JSX.Element {
     void loadWorkspace();
   }, []);
 
-  /** 依目前 session 重新載入 auth context 與 area 清單。 */
+  useEffect(() => {
+    if (!selectedAreaId) {
+      return;
+    }
+
+    const hasPendingDocuments = documents.some(
+      (document) => document.status === "uploaded" || document.status === "processing",
+    );
+    const pendingJobEntries = Object.entries(documentJobs).filter(([, job]) =>
+      job.status === "queued" || job.status === "processing",
+    );
+    if (!hasPendingDocuments && pendingJobEntries.length === 0) {
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      void (async () => {
+        await loadArea(selectedAreaId);
+        if (pendingJobEntries.length > 0) {
+          const refreshedJobs = await Promise.all(
+            pendingJobEntries.map(async ([documentId, job]) => [documentId, await fetchIngestJob(job.id)] as const),
+          );
+          setDocumentJobs((current) => ({
+            ...current,
+            ...Object.fromEntries(refreshedJobs),
+          }));
+        }
+      })();
+    }, 2_000);
+
+    return () => window.clearTimeout(timerId);
+  }, [selectedAreaId, documents, documentJobs]);
+
+  /**
+   * 依目前 session 重新載入 auth context 與 area 清單。
+   *
+   * @param preferredAreaId 載入完成後優先選取的 area 識別碼。
+   * @returns 無；僅更新頁面狀態。
+   */
   async function loadWorkspace(preferredAreaId?: string | null): Promise<void> {
     setIsLoadingWorkspace(true);
     setWorkspaceError(null);
@@ -161,25 +243,37 @@ export function AreasPage(): JSX.Element {
         await loadArea(nextSelectedAreaId);
       } else {
         setSelectedArea(null);
+        setDocuments([]);
         setAccessPayload(null);
+        setDocumentJobs({});
         setAccessEditor(EMPTY_ACCESS_STATE);
+        setUploadState(EMPTY_UPLOAD_STATE);
       }
     } catch (error) {
       setWorkspaceError(error instanceof Error ? error.message : "載入工作區失敗。");
       setAreas([]);
       setSelectedAreaId(null);
       setSelectedArea(null);
+      setDocuments([]);
       setAccessPayload(null);
+      setDocumentJobs({});
       setAccessEditor(EMPTY_ACCESS_STATE);
+      setUploadState(EMPTY_UPLOAD_STATE);
     } finally {
       setIsLoadingWorkspace(false);
     }
   }
 
-  /** 載入單一 area 詳細資料與必要的 access 資訊。 */
+  /**
+   * 載入單一 area 詳細資料與必要的 access 資訊。
+   *
+   * @param areaId 要載入的 area 識別碼。
+   * @returns 無；僅更新頁面狀態。
+   */
   async function loadArea(areaId: string): Promise<void> {
-    const detail = await fetchAreaDetail(areaId);
+    const [detail, documentsPayload] = await Promise.all([fetchAreaDetail(areaId), fetchDocuments(areaId)]);
     setSelectedArea(detail);
+    setDocuments(documentsPayload.items);
     if (detail.effective_role === "admin") {
       const nextAccessPayload = await fetchAreaAccess(areaId);
       setAccessPayload(nextAccessPayload);
@@ -190,7 +284,12 @@ export function AreasPage(): JSX.Element {
     setAccessEditor(EMPTY_ACCESS_STATE);
   }
 
-  /** 建立新的 area，成功後自動選取。 */
+  /**
+   * 建立新的 area，成功後自動選取。
+   *
+   * @param event 建立 area 表單的 submit event。
+   * @returns 無；僅更新頁面狀態。
+   */
   async function handleCreateArea(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     setIsSubmittingCreate(true);
@@ -212,7 +311,12 @@ export function AreasPage(): JSX.Element {
     }
   }
 
-  /** 切換目前選取的 area。 */
+  /**
+   * 切換目前選取的 area。
+   *
+   * @param areaId 要切換到的 area 識別碼。
+   * @returns 無；僅更新頁面狀態。
+   */
   async function handleSelectArea(areaId: string): Promise<void> {
     setSelectedAreaId(areaId);
     setWorkspaceError(null);
@@ -224,7 +328,12 @@ export function AreasPage(): JSX.Element {
     }
   }
 
-  /** 提交 access 整體替換。 */
+  /**
+   * 提交 access 整體替換。
+   *
+   * @param event access 表單的 submit event。
+   * @returns 無；僅更新頁面狀態。
+   */
   async function handleSaveAccess(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     if (!selectedAreaId) {
@@ -247,6 +356,36 @@ export function AreasPage(): JSX.Element {
       setWorkspaceError(error instanceof Error ? error.message : "更新 access 失敗。");
     } finally {
       setIsSubmittingAccess(false);
+    }
+  }
+
+  /**
+   * 上傳單一文件並更新文件列表。
+   *
+   * @param event upload 表單的 submit event。
+   * @returns 無；僅更新頁面狀態。
+   */
+  async function handleUploadDocument(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (!selectedAreaId || !uploadState.file) {
+      setWorkspaceError("請先選擇要上傳的檔案。");
+      return;
+    }
+
+    setIsSubmittingUpload(true);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+    try {
+      const payload = await uploadDocument(selectedAreaId, uploadState.file);
+      const refreshedJob = await fetchIngestJob(payload.job.id);
+      setDocumentJobs((current) => ({ ...current, [payload.document.id]: refreshedJob }));
+      setUploadState(EMPTY_UPLOAD_STATE);
+      setWorkspaceNotice(`已建立文件：${payload.document.file_name}`);
+      await loadArea(selectedAreaId);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "上傳文件失敗。");
+    } finally {
+      setIsSubmittingUpload(false);
     }
   }
 
@@ -494,6 +633,100 @@ export function AreasPage(): JSX.Element {
                         目前角色只能檢視 area detail。若需要管理 access，必須使用 admin 身分。
                       </div>
                     )}
+                  </div>
+
+                  <div className="rounded-2xl border border-stone-200 bg-white p-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-lg font-semibold">Files Tab</h3>
+                      <span className="text-sm text-stone-500">{documents.length} files</span>
+                    </div>
+
+                    {selectedArea.effective_role === "admin" || selectedArea.effective_role === "maintainer" ? (
+                      <form className="mt-4 space-y-4" onSubmit={handleUploadDocument}>
+                        <div>
+                          <label className="block text-sm font-medium text-stone-700" htmlFor="document-upload">
+                            Upload File
+                          </label>
+                          <input
+                            id="document-upload"
+                            data-testid="document-upload"
+                            className="mt-2 block w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm"
+                            type="file"
+                            accept=".txt,.md,.pdf,.docx,.pptx,.html"
+                            onChange={(event) =>
+                              setUploadState({ file: event.target.files?.[0] ?? null })
+                            }
+                          />
+                          <p className="mt-2 text-sm text-stone-500">
+                            MVP 目前真正支援解析 `TXT/MD`；其餘型別會建立 job，但可能進入 failed。
+                          </p>
+                        </div>
+                        <button
+                          data-testid="upload-document-submit"
+                          className="rounded-full bg-emerald-700 px-5 py-2 text-sm font-medium text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isSubmittingUpload}
+                          type="submit"
+                        >
+                          {isSubmittingUpload ? "上傳中..." : "上傳文件"}
+                        </button>
+                      </form>
+                    ) : (
+                      <div className="mt-4 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-sm text-stone-500">
+                        目前角色可檢視文件與狀態，但不可上傳新文件。
+                      </div>
+                    )}
+
+                    <div className="mt-5 grid gap-3" data-testid="documents-list">
+                      {documents.length > 0 ? (
+                        documents.map((document) => {
+                          const latestJob = documentJobs[document.id] ?? null;
+                          return (
+                            <article
+                              key={document.id}
+                              data-testid={`document-card-${document.id}`}
+                              className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-4"
+                            >
+                              <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-semibold text-stone-900">{document.file_name}</p>
+                                  <p className="mt-1 text-sm text-stone-600">
+                                    {document.content_type} / {document.file_size} bytes
+                                  </p>
+                                </div>
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                                    document.status === "ready"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : document.status === "failed"
+                                        ? "bg-red-100 text-red-700"
+                                        : "bg-amber-100 text-amber-700"
+                                  }`}
+                                >
+                                  {document.status}
+                                </span>
+                              </div>
+                              <p className="mt-3 text-xs text-stone-500">
+                                更新時間：{formatTimestamp(document.updated_at)}
+                              </p>
+                              {latestJob ? (
+                                <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-stone-700">
+                                  <p className="font-medium text-stone-900">job: {latestJob.status}</p>
+                                  {latestJob.error_message ? (
+                                    <p className="mt-2 text-red-700" data-testid={`document-job-error-${document.id}`}>
+                                      {latestJob.error_message}
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </article>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-8 text-center text-sm text-stone-500">
+                          此 area 尚無文件。
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (

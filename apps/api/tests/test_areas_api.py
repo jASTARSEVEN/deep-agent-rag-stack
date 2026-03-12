@@ -1,5 +1,7 @@
 """Knowledge Area CRUD 與 access management API 測試。"""
 
+from sqlalchemy import select
+
 from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
 
 
@@ -28,7 +30,7 @@ def test_create_area_assigns_creator_as_admin(client, db_session) -> None:
     assert payload["description"] == "MVP area"
     assert payload["effective_role"] == "admin"
 
-    area_role = db_session.query(AreaUserRole).filter(AreaUserRole.area_id == payload["id"]).one()
+    area_role = db_session.scalars(select(AreaUserRole).where(AreaUserRole.area_id == payload["id"])).one()
     assert area_role.user_sub == "user-admin"
     assert area_role.role == Role.admin
 
@@ -199,8 +201,8 @@ def test_replace_area_access_replaces_existing_rules_for_admin(client, db_sessio
         "groups": [{"group_path": "/group/new", "role": "reader"}],
     }
 
-    stored_user_roles = db_session.query(AreaUserRole).filter(AreaUserRole.area_id == area.id).all()
-    stored_group_roles = db_session.query(AreaGroupRole).filter(AreaGroupRole.area_id == area.id).all()
+    stored_user_roles = db_session.scalars(select(AreaUserRole).where(AreaUserRole.area_id == area.id)).all()
+    stored_group_roles = db_session.scalars(select(AreaGroupRole).where(AreaGroupRole.area_id == area.id)).all()
     assert {(item.user_sub, item.role.value) for item in stored_user_roles} == {
         ("user-admin", "admin"),
         ("user-next", "maintainer"),

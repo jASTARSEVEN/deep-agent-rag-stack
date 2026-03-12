@@ -19,7 +19,14 @@ ROLE_PRIORITY = {
 
 
 def resolve_highest_role(roles: Iterable[Role]) -> Role | None:
-    """從多個角色中取出權限最大的角色。"""
+    """從多個角色中取出權限最大的角色。
+
+    參數：
+    - `roles`：待比較的角色集合。
+
+    回傳：
+    - `Role | None`：權限最大的角色；若集合為空則回傳 `None`。
+    """
 
     resolved_roles = list(roles)
     if not resolved_roles:
@@ -33,6 +40,14 @@ def resolve_effective_role_for_area(
     area_id: str,
 ) -> Role | None:
     """計算使用者在指定 area 的 effective role。
+
+    參數：
+    - `session`：用來查詢 area 角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要計算 effective role 的 area 識別碼。
+
+    回傳：
+    - `Role | None`：使用者在指定 area 的最大權限；若沒有任何角色則回傳 `None`。
 
     前置條件：
     - `principal` 必須已完成 JWT 驗證。
@@ -55,7 +70,16 @@ def resolve_effective_role_for_area(
 
 
 def require_area_access(session: Session, principal: CurrentPrincipal, area_id: str) -> Role:
-    """要求使用者必須對 area 具有有效角色，否則回傳不暴露存在性的 404。"""
+    """要求使用者必須對 area 具有有效角色，否則回傳不暴露存在性的 404。
+
+    參數：
+    - `session`：用來查詢 area 角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要驗證存取權的 area 識別碼。
+
+    回傳：
+    - `Role`：使用者在指定 area 的 effective role。
+    """
 
     effective_role = resolve_effective_role_for_area(session=session, principal=principal, area_id=area_id)
     if effective_role is None:
@@ -69,7 +93,17 @@ def require_minimum_area_role(
     area_id: str,
     minimum_role: Role,
 ) -> Role:
-    """要求使用者在指定 area 至少具有某一層級的角色。"""
+    """要求使用者在指定 area 至少具有某一層級的角色。
+
+    參數：
+    - `session`：用來查詢 area 角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要驗證存取權的 area 識別碼。
+    - `minimum_role`：允許執行操作所需的最小角色。
+
+    回傳：
+    - `Role`：使用者在指定 area 的 effective role。
+    """
 
     effective_role = require_area_access(session=session, principal=principal, area_id=area_id)
     if ROLE_PRIORITY[effective_role] < ROLE_PRIORITY[minimum_role]:
@@ -78,6 +112,15 @@ def require_minimum_area_role(
 
 
 def require_area_admin(session: Session, principal: CurrentPrincipal, area_id: str) -> Role:
-    """要求使用者必須是指定 area 的 admin。"""
+    """要求使用者必須是指定 area 的 admin。
+
+    參數：
+    - `session`：用來查詢 area 角色映射的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要驗證管理權限的 area 識別碼。
+
+    回傳：
+    - `Role`：驗證成功後的 `admin` effective role。
+    """
 
     return require_minimum_area_role(session=session, principal=principal, area_id=area_id, minimum_role=Role.admin)

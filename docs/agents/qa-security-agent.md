@@ -30,7 +30,7 @@
 - admin 可修改 access，maintainer 不可
 
 執行期 / 容器 smoke test：
-- 若任務變更 `pyproject.toml`、`requirements.txt`、Dockerfile、Compose env、DB session、auth verifier、外部服務 client，必須驗證相關服務可在 `docker compose -f infra/docker-compose.yml --env-file .env up --build` 下成功啟動
+- 若任務變更 `pyproject.toml`、Dockerfile、Compose env、DB session、auth verifier、外部服務 client，必須驗證相關服務可在 `docker compose -f infra/docker-compose.yml --env-file .env up --build` 下成功啟動
 - 至少驗證受影響服務的 health endpoint、容器狀態或啟動日誌，確認沒有缺少執行期依賴
 - 若測試使用 SQLite、mock、stub 或 test mode，必須額外說明其不能替代 PostgreSQL / Keycloak / Compose runtime 驗證
 

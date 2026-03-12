@@ -3,7 +3,13 @@
 import { expect, test } from "@playwright/test";
 
 
-/** 以 test auth mode 指定角色登入。 */
+/**
+ * 以 test auth mode 指定角色登入。
+ *
+ * @param page Playwright page 物件。
+ * @param role 要使用的測試角色。
+ * @returns 無；僅推進登入流程。
+ */
 async function loginAs(page, role: "admin" | "maintainer" | "reader" | "outsider"): Promise<void> {
   await page.goto("/");
   await page.getByTestId(`test-login-${role}`).click();
@@ -56,6 +62,16 @@ test("admin 可登入、建立 area 並更新 access 規則", async ({ page }) =
 
   await expect(page.getByTestId("access-summary")).toContainText("users: 2 筆");
   await expect(page.getByTestId("access-summary")).toContainText("groups: 1 筆");
+
+  await page.getByTestId("document-upload").setInputFiles({
+    name: "playwright-notes.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Playwright\nready\n"),
+  });
+  await page.getByTestId("upload-document-submit").click();
+
+  await expect(page.getByTestId("documents-list")).toContainText("playwright-notes.md");
+  await expect(page.getByTestId("documents-list")).toContainText("ready");
 });
 
 
@@ -66,6 +82,8 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
   await expect(page.getByTestId("areas-list")).toContainText("Reader Handbook Area");
   await expect(page.getByTestId("area-detail-panel")).toContainText("Reader Handbook Area");
   await expect(page.getByText("目前角色只能檢視 area detail。若需要管理 access，必須使用 admin 身分。")).toBeVisible();
+  await expect(page.getByTestId("documents-list")).toContainText("reader-handbook.md");
+  await expect(page.getByTestId("document-upload")).toHaveCount(0);
 });
 
 
@@ -76,6 +94,33 @@ test("maintainer 可看 detail 但 access 管理區不可操作", async ({ page 
   await expect(page.getByTestId("areas-list")).toContainText("Maintainer Docs Area");
   await expect(page.getByTestId("area-detail-panel")).toContainText("Maintainer Docs Area");
   await expect(page.getByTestId("access-users")).toHaveCount(0);
+  await expect(page.getByTestId("documents-list")).toContainText("maintainer-guide.md");
+
+  await page.getByTestId("document-upload").setInputFiles({
+    name: "maintainer-upload.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Maintainer\nupload\n"),
+  });
+  await page.getByTestId("upload-document-submit").click();
+
+  await expect(page.getByTestId("documents-list")).toContainText("maintainer-upload.md");
+  await expect(page.getByTestId("documents-list")).toContainText("ready");
+});
+
+
+test("admin 上傳未支援檔案後會看到 failed 與錯誤訊息", async ({ page }) => {
+  await loginAs(page, "admin");
+
+  await page.getByTestId("document-upload").setInputFiles({
+    name: "unsupported.pdf",
+    mimeType: "application/pdf",
+    buffer: Buffer.from("%PDF-1.4"),
+  });
+  await page.getByTestId("upload-document-submit").click();
+
+  await expect(page.getByTestId("documents-list")).toContainText("unsupported.pdf");
+  await expect(page.getByTestId("documents-list")).toContainText("failed");
+  await expect(page.getByText("目前尚未支援此檔案類型的解析。")).toBeVisible();
 });
 
 
@@ -83,6 +128,21 @@ test("outsider 會被 deny-by-default 擋下，area list 應為空", async ({ pa
   await loginAs(page, "outsider");
 
   await expect(page).toHaveURL(/\/areas$/);
+  await expect(page.getByTestId("areas-list")).toContainText("尚無可存取的 area。");
+});
+
+
+test("當 areas API 在瀏覽器層失敗時，頁面應顯示可診斷的連線錯誤", async ({ page }) => {
+  await page.route("http://127.0.0.1:18001/areas", async (route) => {
+    await route.abort("failed");
+  });
+
+  await loginAs(page, "admin");
+
+  await expect(page).toHaveURL(/\/areas$/);
+  await expect(page.getByTestId("workspace-error")).toContainText("無法連線到 API");
+  await expect(page.getByTestId("workspace-error")).toContainText("API CORS");
+  await expect(page.getByText("0 items")).toBeVisible();
   await expect(page.getByTestId("areas-list")).toContainText("尚無可存取的 area。");
 });
 

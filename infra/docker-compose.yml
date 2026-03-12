@@ -103,10 +103,17 @@ services:
       API_CORS_ORIGINS: ${API_CORS_ORIGINS}
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
+      STORAGE_BACKEND: ${STORAGE_BACKEND}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
       MINIO_BUCKET: ${MINIO_BUCKET}
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-5242880}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      INGEST_INLINE_MODE: ${INGEST_INLINE_MODE:-false}
       KEYCLOAK_URL: ${KEYCLOAK_URL}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
       KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL}
@@ -134,10 +141,22 @@ services:
       dockerfile: infra/docker/worker/Dockerfile
     environment:
       WORKER_SERVICE_NAME: ${WORKER_SERVICE_NAME}
+      DATABASE_URL: ${DATABASE_URL}
       CELERY_BROKER_URL: ${CELERY_BROKER_URL}
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      STORAGE_BACKEND: ${STORAGE_BACKEND}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      MINIO_BUCKET: ${MINIO_BUCKET}
+      LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH}
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     command: ["celery", "-A", "worker.celery_app.celery_app", "worker", "--loglevel=INFO"]
 

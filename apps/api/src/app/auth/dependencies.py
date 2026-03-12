@@ -11,7 +11,14 @@ BEARER_SCHEME = HTTPBearer(auto_error=False)
 
 
 def get_token_verifier(request: Request) -> TokenVerifier:
-    """從應用程式狀態取得 token verifier。"""
+    """從應用程式狀態取得 token verifier。
+
+    參數：
+    - `request`：目前 HTTP request；用來讀取 `app.state.token_verifier`。
+
+    回傳：
+    - `TokenVerifier`：目前應用程式使用的 token 驗證器。
+    """
 
     return request.app.state.token_verifier
 
@@ -19,7 +26,14 @@ def get_token_verifier(request: Request) -> TokenVerifier:
 def get_bearer_token(
     credentials: HTTPAuthorizationCredentials | None = Security(BEARER_SCHEME),
 ) -> str:
-    """解析 Bearer token；缺漏時回傳 401。"""
+    """解析 Bearer token；缺漏時回傳 401。
+
+    參數：
+    - `credentials`：FastAPI security dependency 解析出的授權資訊。
+
+    回傳：
+    - `str`：去除 `Bearer` 前綴後的 token 字串。
+    """
 
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少有效的 Bearer token。")
@@ -31,6 +45,13 @@ def get_current_principal(
     verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> CurrentPrincipal:
     """驗證 token 並回傳目前使用者 principal。
+
+    參數：
+    - `token`：已由 Bearer dependency 解析出的 access token。
+    - `verifier`：目前應用程式使用的 token 驗證器。
+
+    回傳：
+    - `CurrentPrincipal`：已驗證使用者的最小 auth context。
 
     前置條件：
     - token verifier 必須能驗證來源 token，並解析出 `sub` 與 `groups`。

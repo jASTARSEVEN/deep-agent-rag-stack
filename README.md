@@ -32,7 +32,7 @@
    - `cp .env.example .env`
 2. Optional local Python dependencies install:
    - `python -m venv .venv && source .venv/bin/activate`
-   - `pip install -r requirements.txt`
+   - `pip install -e ./apps/api -e ./apps/worker`
 3. Build and start the local stack:
    - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
 4. 開啟本機服務：

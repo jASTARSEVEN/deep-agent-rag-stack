@@ -16,3 +16,4 @@
 - OCR 不在範圍內
 - 只有索引完成後才能標記 ready
 - 失敗必須可觀測
+- 所有 function / method docstring 都必須包含參數與回傳說明

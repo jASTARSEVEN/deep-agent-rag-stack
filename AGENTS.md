@@ -65,6 +65,7 @@
 - 不要默默擴大既定產品邊界。
 - 在所有授權敏感路徑保留 deny-by-default 語意。
 - 安全敏感行為必須明確、可文件化、可測試。
+- Python ORM 一律使用 SQLAlchemy 2 寫法；不得新增 `session.query(...)` 這類 1.x 風格 API。
 
 ## 專案級文件規則
 以下四份文件是本專案的長期上下文來源，所有 agent 在規劃或實作前都必須先閱讀：
@@ -87,9 +88,9 @@
 每個原始碼檔案都必須遵守以下規則：
 - 每個檔案都需要檔案層級說明。
 - 每個 class 都要有 class docstring。
-- 每個 function / method 都要有 function-level docstring。
+- 每個 function / method 都要有 function-level docstring，且必須包含參數說明與回傳說明。
 - 每個全域變數 / module-level constant 都要有用途註解。
-- 只要是類似 Model、DTO、Bean 的資料結構型別，其所有欄位 / 變數都必須有用途註解。
+- 只要是類似 Model、DTO、Bean、interface、Base 的資料結構型別，其所有欄位 / 變數都必須有用途註解。
 - 涉及安全、授權、SQL gate、外部整合的程式碼，必須記錄前置條件與風險。
 - 所有的說明 / README / docstring / `.md` 都要使用台灣繁體中文。
 

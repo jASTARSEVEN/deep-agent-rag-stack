@@ -69,6 +69,8 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
         sa.Column("area_id", sa.String(length=36), sa.ForeignKey("areas.id", ondelete="CASCADE"), nullable=False),
         sa.Column("file_name", sa.String(length=255), nullable=False),
+        sa.Column("content_type", sa.String(length=255), nullable=False),
+        sa.Column("file_size", sa.Integer(), nullable=False),
         sa.Column("storage_key", sa.String(length=512), nullable=False),
         sa.Column("status", document_status_enum, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

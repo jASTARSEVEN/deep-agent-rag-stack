@@ -82,7 +82,7 @@
 - embedding / FTS placeholders
 
 狀態：
-- `未開始`
+- `已完成（MVP 垂直切片）`
 
 ## Post-Phase 3 Backlog — Area Management Hardening
 
@@ -135,7 +135,6 @@
 
 ## 近期建議順序
 
-1. Phase 3：Documents & Ingestion
+1. Phase 4：Retrieval
 2. Post-Phase 3 Backlog：Area Management Hardening
-3. Phase 4：Retrieval
-4. Phase 5：Chat
+3. Phase 5：Chat

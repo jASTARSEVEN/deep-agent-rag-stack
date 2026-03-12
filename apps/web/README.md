@@ -2,7 +2,7 @@
 
 ## 模組目的
 
-此模組包含專案的 React + Tailwind 前端。它目前提供匿名首頁、Keycloak 正式登入 / callback 流程，以及登入後的 Areas 管理頁。
+此模組包含專案的 React + Tailwind 前端。它目前提供匿名首頁、Keycloak 正式登入 / callback 流程，以及登入後的 Areas / Files 管理頁。
 
 ## 啟動方式
 
@@ -52,18 +52,20 @@
 - 瀏覽器路由：`/areas`
 - 使用 `VITE_API_BASE_URL + /health` 顯示 API health 狀態
 - 使用 `VITE_API_BASE_URL + /auth/context` 建立登入後 principal
-- 使用 `VITE_API_BASE_URL + /areas*` 執行 Area CRUD 與 access management
+- 使用 `VITE_API_BASE_URL + /areas*` 執行 Area create/list/detail、access management 與 files upload/list
+- 使用 `VITE_API_BASE_URL + /documents/*`、`/ingest-jobs/*` 顯示文件與 job 狀態
 - `npm run test:e2e`：啟動 Playwright、web dev server 與 test-mode API 自動化驗證
 - `npm run test:smoke:keycloak`：直接對 compose 的真實 Keycloak / callback / logout 流程做 smoke 驗證
 
 ## 疑難排解
 
 - 若頁面顯示 API 錯誤，請確認 API container 健康且 `VITE_API_BASE_URL` 設定正確。
+- 若 Areas 頁出現 `Failed to fetch` 或無法連線到 API，請確認 `API_CORS_ORIGINS` 已包含目前前端來源；本機預設應至少包含 `http://localhost:3000` 與 `http://localhost:13000`。
 - 若登入後 callback 無法回到前端，請確認 Keycloak client `deep-agent-web` 的 redirect URI 與 `VITE_KEYCLOAK_URL`、`VITE_KEYCLOAK_CLIENT_ID` 一致。
 - 若 area API 一直出現 `401`，請確認 Keycloak token 內仍含 `groups` claim，且 API issuer / JWKS 設定正確。
 - `VITE_AUTH_MODE=test` 僅供 Playwright 與本機測試，不可當成正式登入驗證結論。
 - `npm run test:e2e` 使用 test auth mode，不會覆蓋真實 Keycloak issuer、callback、logout 與 SSO 行為；這些問題需由 `npm run test:smoke:keycloak` 補驗。
-- files、activity、chat 與 citations 頁面目前仍未實作。
+- files 已整合到 `/areas` 頁；activity、chat 與 citations 頁面目前仍未實作。
 - 若 `npm run test:e2e` 失敗於瀏覽器缺失，請先執行 `npx playwright install chromium`。
 - 若 `npm run test:smoke:keycloak` 失敗，請先確認 compose stack 已完成啟動，且 `deep-agent-dev` realm 仍可用 `alice / alice123` 登入。
 - 若 E2E 啟動失敗，請先確認 `python`、`uvicorn` 與 `apps/api` 依賴已可在本機 shell 執行。

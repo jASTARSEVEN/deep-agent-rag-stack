@@ -6,7 +6,14 @@ from worker.core.settings import get_settings
 
 
 def create_celery_app() -> Celery:
-    """建立並設定 Celery 應用程式實例。"""
+    """建立並設定 Celery 應用程式實例。
+
+    參數：
+    - 無
+
+    回傳：
+    - `Celery`：已完成基本 queue 與 serializer 設定的 Celery 應用程式。
+    """
 
     settings = get_settings()
     application = Celery(

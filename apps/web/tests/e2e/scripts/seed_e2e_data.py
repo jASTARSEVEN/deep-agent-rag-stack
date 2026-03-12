@@ -14,7 +14,14 @@ API_SRC_DIRECTORY = Path(__file__).resolve().parents[4] / "api" / "src"
 
 
 def build_engine(database_path: Path):
-    """建立 E2E 專用 SQLite engine。"""
+    """建立 E2E 專用 SQLite engine。
+
+    參數：
+    - `database_path`：E2E SQLite 資料庫檔案路徑。
+
+    回傳：
+    - 建立完成的 SQLAlchemy engine。
+    """
 
     return create_engine(
         f"sqlite+pysqlite:///{database_path}",
@@ -24,12 +31,19 @@ def build_engine(database_path: Path):
 
 
 def seed_e2e_database(database_path: Path) -> None:
-    """重建 schema 並寫入 Playwright E2E 固定資料。"""
+    """重建 schema 並寫入 Playwright E2E 固定資料。
+
+    參數：
+    - `database_path`：E2E SQLite 資料庫檔案路徑。
+
+    回傳：
+    - `None`：此函式只負責重建 schema 與寫入 seed data。
+    """
 
     sys.path.insert(0, str(API_SRC_DIRECTORY))
 
     from app.db.base import Base
-    from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
+    from app.db.models import Area, AreaGroupRole, AreaUserRole, Document, DocumentStatus, Role
 
     engine = build_engine(database_path)
     Base.metadata.drop_all(bind=engine)
@@ -50,11 +64,40 @@ def seed_e2e_database(database_path: Path) -> None:
                 AreaGroupRole(area_id="area-maintainer", group_path="/group/maintainer", role=Role.maintainer),
             ]
         )
+        session.add_all(
+            [
+                Document(
+                    id="document-reader-ready",
+                    area_id="area-reader",
+                    file_name="reader-handbook.md",
+                    content_type="text/markdown",
+                    file_size=128,
+                    storage_key="seed/reader-handbook.md",
+                    status=DocumentStatus.ready,
+                ),
+                Document(
+                    id="document-maintainer-ready",
+                    area_id="area-maintainer",
+                    file_name="maintainer-guide.md",
+                    content_type="text/markdown",
+                    file_size=256,
+                    storage_key="seed/maintainer-guide.md",
+                    status=DocumentStatus.ready,
+                ),
+            ]
+        )
         session.commit()
 
 
 def main() -> None:
-    """解析 CLI 參數並執行 seed。"""
+    """解析 CLI 參數並執行 seed。
+
+    參數：
+    - 無
+
+    回傳：
+    - `None`：此函式以程序副作用方式完成 seed。
+    """
 
     if len(sys.argv) != 2:
         raise SystemExit("用法：python seed_e2e_data.py <sqlite_db_path>")
