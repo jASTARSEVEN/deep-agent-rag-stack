@@ -38,7 +38,7 @@ Unlike many RAG demos that focus only on a chat interface or a single vector ret
 
 ## Current Status
 
-The initial vertical slice listed below was assembled within one day through a multi-agent collaborative development workflow. The point was not to maximize feature completeness in a single burst, but to test how quickly a reasonably structured enterprise knowledge system prototype could be composed when task decomposition, implementation ownership, and integration flow were explicitly coordinated.
+The initial vertical slice listed below was assembled within one day of off-hours work through a multi-agent collaborative development workflow. The point was not to maximize feature completeness in a single burst, but to test how quickly a reasonably structured enterprise knowledge system prototype could be composed when task decomposition, implementation ownership, and integration flow were explicitly coordinated.
 
 - Monorepo structure, Docker Compose, and the local development stack
 - Basic wiring across the `FastAPI` API, `Celery` worker, and `React + Tailwind` web app
