@@ -1,5 +1,7 @@
 # Deep Agent RAG Stack
 
+具備 OAuth2 認證、RBAC 與多策略檢索設計的企業知識助理雛形。
+
 [English README](README.md)
 
 ## 模組目的

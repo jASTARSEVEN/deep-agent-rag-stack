@@ -1,5 +1,7 @@
 # Deep Agent RAG Stack
 
+An enterprise knowledge assistant prototype with OAuth2-based authentication, RBAC, and multi-strategy retrieval.
+
 [繁體中文版本](README.zh-TW.md)
 
 ## Purpose
