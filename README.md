@@ -30,9 +30,12 @@
 
 1. Copy environment variables:
    - `cp .env.example .env`
-2. Build and start the local stack:
+2. Optional local Python dependencies install:
+   - `python -m venv .venv && source .venv/bin/activate`
+   - `pip install -r requirements.txt`
+3. Build and start the local stack:
    - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
-3. 開啟本機服務：
+4. 開啟本機服務：
    - Web: `http://localhost:13000`
    - API: `http://localhost:18000`
    - API health: `http://localhost:18000/health`
@@ -52,6 +55,8 @@
   - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
 - Web wiring：
   - Open `http://localhost:13000` and confirm that the API health panel reports `ok`
+- Phase 1 auth 驗證手冊：
+  - `docs/phase1-auth-verification.md`
 
 ## 疑難排解
 

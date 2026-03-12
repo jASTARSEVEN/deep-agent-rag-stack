@@ -2,7 +2,7 @@
 
 from urllib.parse import urlparse
 
-from app.core.settings import get_settings
+from app.core.settings import AppSettings
 from app.schemas.health import DependencySnapshot
 
 
@@ -18,10 +18,8 @@ def _sanitize_target(target: str) -> str:
     return f"{parsed.scheme}://{host}{port}{path}"
 
 
-def build_dependency_snapshot() -> list[DependencySnapshot]:
+def build_dependency_snapshot(settings: AppSettings) -> list[DependencySnapshot]:
     """建立不含敏感資訊的依賴快照，供本機接線驗證使用。"""
-
-    settings = get_settings()
     return [
         DependencySnapshot(name="postgres", target=_sanitize_target(settings.database_url)),
         DependencySnapshot(name="redis", target=_sanitize_target(settings.redis_url)),

@@ -8,6 +8,7 @@
 
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
+  - `pip install -r requirements.txt`
   - `pip install -e .`
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - 本機健康檢查命令：

@@ -1,8 +1,12 @@
-"""API 骨架的 FastAPI 應用程式進入點。"""
+"""FastAPI 應用程式進入點。"""
 
 from fastapi import FastAPI
 
+from app.auth.verifier import build_token_verifier
 from app.core.settings import AppSettings, get_settings
+from app.db.session import create_database_engine, create_session_factory
+from app.routes.areas import router as areas_router
+from app.routes.auth import router as auth_router
 from app.routes.root import router as root_router
 
 
@@ -15,8 +19,13 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         version=resolved_settings.version,
         summary="MVP skeleton API for the Deep Agent RAG Stack.",
     )
-    application.include_router(root_router)
     application.state.settings = resolved_settings
+    application.state.engine = create_database_engine(resolved_settings)
+    application.state.session_factory = create_session_factory(application.state.engine)
+    application.state.token_verifier = build_token_verifier(resolved_settings)
+    application.include_router(root_router)
+    application.include_router(auth_router)
+    application.include_router(areas_router)
     return application
 
 

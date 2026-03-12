@@ -31,7 +31,7 @@
 - `docker/api`：API container 映像
 - `docker/worker`：Worker container 映像
 - `docker/web`：Web container 映像
-- `keycloak`：未來 realm bootstrap 資產的預留目錄
+- `keycloak`：本機開發用的 realm bootstrap 匯入資產
 
 ## 對外介面
 
@@ -47,5 +47,6 @@
 ## 疑難排解
 
 - `PG_JIEBA_REF` 在本輪仍只是預留值；開始做 FTS 之前請改成固定 commit SHA。
-- Keycloak realm import 目前尚未自動化，請在下一階段手動建立 realm 與 client。
+- Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
+- 若要回到預設 Keycloak 身份資料，請刪除 `keycloak-db` volume 後重新啟動 stack。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。

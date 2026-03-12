@@ -1,0 +1,3 @@
+# Root 聚合 requirements，供本機一次安裝所有 Python 模組依賴。
+-r apps/api/requirements.txt
+-r apps/worker/requirements.txt

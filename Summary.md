@@ -69,6 +69,7 @@
 
 ### 授權
 - JWT claims 使用 `sub` 與 `groups`
+- Keycloak access token 必須透過 mapper 穩定提供 `groups` claim，且建議使用完整 group path
 - effective role = 使用者直接角色與群組角色中的最大值
 - 沒有有效角色者，必須在 SQL / 資料存取層直接擋下
 - 授權採 deny-by-default
@@ -156,6 +157,6 @@
 ## 風險與假設
 
 - `pg_jieba` 必須使用指定 fork，並固定到 commit SHA
-- Keycloak token 中需穩定提供 `groups` claim
+- Keycloak token 中需穩定提供 `groups` claim；若 client mapper 缺失，group-based access 將無法成立
 - Rerank 候選數與 chunk 長度必須受控，避免成本失控
 - 本專案預設為單一組織、單 realm

@@ -18,6 +18,8 @@
 - 提供 HTTP / SSE 介面
 - 負責 auth integration、RBAC 邊界、service orchestration
 - 對外暴露 areas、documents、jobs、chat 相關 API
+- 在 foundation 階段先提供 `auth/context` 與 `areas/{area_id}/access-check` 驗證切片
+- JWT 驗證目前以 Keycloak issuer + JWKS 為基礎，並要求 access token 內存在 `sub` 與 `groups`
 
 ### Worker
 - Celery
@@ -29,6 +31,7 @@
 - Redis：Celery broker/result backend
 - MinIO：原始檔案儲存
 - Keycloak：身分與群組來源
+- Alembic：資料庫 schema versioning 與 migration 執行入口
 
 ## 關鍵架構原則
 
@@ -71,6 +74,20 @@
 7. 用 LLM 生成回答與 citations
 8. API 以 SSE 或 HTTP 回傳前端
 
+## 已驗證的 foundation 路徑
+
+### Keycloak -> API auth context
+1. 使用者透過 Keycloak 取得 access token
+2. access token 必須包含 `sub` 與 `groups`
+3. API 透過 issuer / JWKS 驗證 token
+4. API 將 token 解析為 principal，提供 `GET /auth/context`
+
+### Group-based area access check
+1. `area_group_roles` 或 `area_user_roles` 提供 area 權限映射
+2. API 以 SQL 查詢 direct role 與 group role
+3. service 取最大值作為 effective role
+4. 沒有有效角色者統一回 `404`，避免暴露資源存在性
+
 ## 預期模組邊界
 
 ### `apps/api`
@@ -80,6 +97,7 @@
 - `routes`：HTTP routes
 - `schemas`：Pydantic models
 - `services`：業務邏輯協調
+- `alembic`：migration skeleton 與 schema versioning
 
 ### `apps/worker`
 - `core`：worker settings

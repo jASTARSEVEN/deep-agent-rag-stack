@@ -39,9 +39,12 @@
 - `sub` / `groups` claim 解析
 - auth middleware / dependency 基礎
 - shared contracts 規整
+- `GET /auth/context` 驗證切片
+- `GET /areas/{area_id}/access-check` 驗證切片
+- 真實 Keycloak token 與 group-based access 的本機驗證手冊
 
 狀態：
-- `下一階段`
+- `已完成`
 
 ## Phase 2 — Areas
 
@@ -113,8 +116,7 @@
 
 ## 近期建議順序
 
-1. Phase 1：Auth & Platform Foundations
-2. Phase 2：Areas
-3. Phase 3：Documents & Ingestion
-4. Phase 4：Retrieval
-5. Phase 5：Chat
+1. Phase 2：Areas
+2. Phase 3：Documents & Ingestion
+3. Phase 4：Retrieval
+4. Phase 5：Chat

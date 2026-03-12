@@ -18,12 +18,13 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 0 — Project Skeleton`
+當前主階段：`Phase 1 — Auth & Platform Foundations`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
-- 專案已具備本機可啟動 stack
-- 尚未進入正式 business logic 實作
+- `Phase 1` 授權與資料基礎骨架 MVP 已完成
+- 專案已具備可驗證的 auth context 與 area access-check 基礎能力
+- 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
 
@@ -41,20 +42,34 @@
 - `.gitignore`、`.gitattributes` 已建立
 - 本輪新增文件、註解與 docstring 已統一為台灣繁體中文用法
 
+### Phase 1 — 已完成的 MVP 基礎
+- API settings 已延伸為 app / auth / db 所需的最小設定集
+- `apps/api` 已加入 SQLAlchemy 與 Alembic migration skeleton
+- 已建立 `areas`、`area_user_roles`、`area_group_roles`、`documents`、`ingest_jobs` 最小資料模型
+- 已建立 Bearer token 驗證介面與 `sub` / `groups` principal 解析
+- 已建立 effective role 計算與 deny-by-default area access-check service
+- 已新增 `GET /auth/context` 與 `GET /areas/{area_id}/access-check`
+- 已新增授權與資訊洩漏保護的單元 / API 測試
+- 已修正 API 容器缺少 PostgreSQL driver 的執行期依賴問題
+- 已驗證 Keycloak client 需要 `Group Membership` mapper 才能讓 access token 輸出 `groups`
+- 已完成 Keycloak realm / client / groups mapper / demo users 的首次啟動自動匯入
+- 已完成 migration 執行、測試 area/access seed 與 group-based `reader` 權限驗證
+- 已新增 `docs/phase1-auth-verification.md` 作為可重跑的驗證手冊
+
 ## 目前階段重點
 
 ### Current Focus
-- 保持 `Phase 0` 完成態可穩定啟動
-- 為下一階段的 DB wiring、auth skeleton、document vertical slice 做好延伸點
-- 避免在沒有明確要求前提前實作未來 phase
+- 結束 `Phase 1` 並準備進入 `Phase 2`
+- 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
+- 為下一階段的 area CRUD 與 access management 做好延伸點
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 建立 API 設定分層與 DB wiring 骨架
-2. 建立 migration 基礎與資料模型占位
-3. 建立 Keycloak auth middleware skeleton
-4. 建立文件上傳最小垂直切片的 API / worker 契約
+1. 實作 Area CRUD 與 creator becomes admin 規則
+2. 建立 area access management API
+3. 補 maintainer / admin 權限差異測試
+4. 針對 documents / ingest_jobs 接上正式 upload vertical slice
 
 ## 尚未開始的功能
 

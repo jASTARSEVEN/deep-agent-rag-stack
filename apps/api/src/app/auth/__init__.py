@@ -1,1 +1,1 @@
-"""FastAPI 骨架未來 auth 整合的預留模組。"""
+"""FastAPI 服務的 auth 元件。"""

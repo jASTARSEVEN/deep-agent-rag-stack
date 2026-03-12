@@ -1,7 +1,45 @@
-"""未來 Keycloak auth 整合使用的依賴預留模組。"""
+"""Auth dependency 與 Bearer token 解析。"""
+
+from fastapi import Depends, HTTPException, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from app.auth.verifier import CurrentPrincipal, InvalidTokenError, TokenVerifier
 
 
-def get_current_subject() -> None:
-    """預留未來 JWT subject 解析用的 auth dependency。"""
+# Bearer token 方案，所有受保護路由都使用同一套安全依賴。
+BEARER_SCHEME = HTTPBearer(auto_error=False)
 
-    return None
+
+def get_token_verifier(request: Request) -> TokenVerifier:
+    """從應用程式狀態取得 token verifier。"""
+
+    return request.app.state.token_verifier
+
+
+def get_bearer_token(
+    credentials: HTTPAuthorizationCredentials | None = Security(BEARER_SCHEME),
+) -> str:
+    """解析 Bearer token；缺漏時回傳 401。"""
+
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少有效的 Bearer token。")
+    return credentials.credentials
+
+
+def get_current_principal(
+    token: str = Depends(get_bearer_token),
+    verifier: TokenVerifier = Depends(get_token_verifier),
+) -> CurrentPrincipal:
+    """驗證 token 並回傳目前使用者 principal。
+
+    前置條件：
+    - token verifier 必須能驗證來源 token，並解析出 `sub` 與 `groups`。
+
+    風險：
+    - 若 verifier 放寬驗證條件，所有受保護 route 都會受影響，因此必須集中在此處管理。
+    """
+
+    try:
+        return verifier.verify(token)
+    except InvalidTokenError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="無法驗證存取 token。") from exc

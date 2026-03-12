@@ -17,12 +17,16 @@
 - 標記前後端契約是否變更。
 - 說明是否涉及 Keycloak claim 假設。
 - 說明是否需要 Compose / env 變更。
+- 若任務新增或變更執行期依賴、DB 連線、JWT 驗證、外部服務整合、Dockerfile 或 Compose wiring，必須在 acceptance checklist 中明列 runtime smoke test。
+- 若測試策略包含 SQLite、mock、stub 或 test mode，必須同時標記哪些 production-like 路徑尚未被驗證。
+- 驗收標準必須區分 logic-level 測試與 runtime-level 驗證，避免以單元測試通過取代容器啟動驗收。
 
 ## 禁止事項
 - 不要一開始就做大規模重構。
 - 不要重設產品方向或擴大既定範圍。
 - 不要預設有 OCR、檔案層級 ACL 或 multi-tenant 需求。
 - 不要對安全敏感行為輕描淡寫。
+- 不要在涉及執行期依賴或外部整合的任務中，只安排 mock / unit test 而缺少 Compose 或等價的啟動驗證。
 
 ## 輸出格式
 1. Goal
@@ -32,3 +36,8 @@
 5. Parallelizable tasks
 6. Risks / assumptions
 7. Acceptance checklist
+
+## Acceptance Checklist 補充要求
+- 若任務影響 API、worker、DB、Keycloak、Redis、MinIO 或 Docker Compose 接線，checklist 至少包含一條 `docker compose -f infra/docker-compose.yml --env-file .env up --build` 或等價 production-like 驗證。
+- 若任務新增 health endpoint、啟動腳本或環境變數，checklist 必須要求驗證對應服務真的可啟動並回應。
+- 若無法在本輪執行 runtime 驗證，planner 必須在風險欄位明確記錄原因與未覆蓋範圍。
