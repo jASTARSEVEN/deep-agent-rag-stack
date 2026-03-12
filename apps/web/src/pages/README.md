@@ -1,25 +1,27 @@
-# Pages 預留目錄
+# Pages Placeholder
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此目錄預留給未來路由層級頁面使用，例如 login、areas、files、access、chat。
+## Purpose
 
-## 啟動方式
+This directory is reserved for future route-level pages such as login, areas, files, access, and chat.
 
-- 本輪尚未實作獨立頁面模組。
+## How to Start
 
-## 環境變數
+- There is no standalone page module implemented in this phase.
 
-- 沿用 web 模組的環境變數設定。
+## Environment Variables
 
-## 主要目錄結構
+- Reuses the environment configuration from the web module.
 
-- 未來頁面進入元件會放在這裡。
+## Main Directory Structure
 
-## 對外介面
+- Future route entry components will live here.
 
-- 本輪無。
+## Public Interfaces
 
-## 疑難排解
+- None in the current phase.
 
-- 未來加入功能頁面後，請將路由層級關注點集中在此目錄。
+## Troubleshooting
+
+- As new feature pages are added, keep route-level concerns centralized in this directory.

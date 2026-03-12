@@ -1,31 +1,33 @@
-# Docker 資產
+# Docker Assets
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此目錄包含本機 Docker Compose stack 會使用到的容器建置定義。
+## Purpose
 
-## 啟動方式
+This directory contains the container build definitions used by the local Docker Compose stack.
 
-- 這些 Dockerfile 會透過 `infra/docker-compose.yml` 建置。
-- 只有在除錯 container 問題時才需要手動個別建置。
+## How to Start
 
-## 環境變數
+- These Dockerfiles are built through `infra/docker-compose.yml`.
+- Manual per-container builds are only needed when debugging container-specific issues.
+
+## Environment Variables
 
 - `PG_JIEBA_REPO_URL`
 - `PG_JIEBA_REF`
 - App-level variables are injected through Compose rather than hardcoded here.
 
-## 主要目錄結構
+## Main Directory Structure
 
 - `api`: FastAPI container image
 - `worker`: Celery worker container image
 - `web`: React frontend container image
-- `postgres`: Postgres base image with future pg_jieba build hooks
+- `postgres`: Postgres base image with future `pg_jieba` build hooks
 
-## 對外介面
+## Public Interfaces
 
-- 提供本機 Compose stack 使用的 container 映像。
+- Provides container images consumed by the local Compose stack.
 
-## 疑難排解
+## Troubleshooting
 
-- 若建置失敗，可用 `docker compose -f infra/docker-compose.yml build <service>` 單獨重建服務。
+- If a build fails, rebuild an individual service with `docker compose -f infra/docker-compose.yml build <service>`.

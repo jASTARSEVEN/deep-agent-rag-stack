@@ -1,93 +1,97 @@
 # Deep Agent RAG Stack
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此倉庫是作者用來展示與驗證工程能力的實作作品，主題是一個可自架、NotebookLM 風格的企業知識聊天應用雛形。專案聚焦在真實企業場景常見的系統問題，包括文件上傳與背景處理、`RAG` 多策略搜尋、`Keycloak` OAuth2 認證整合、以群組與角色為核心的 `RBAC` 授權模型，以及對 Knowledge Area 與文件資源採取 `deny-by-default` 的存取控制設計。
+## Purpose
 
-這裡提到的多 Agents 指的是開發過程中的任務拆分、角色分工與協作模式，而不是產品對外提供的功能。這個專案的目的，不只是做出聊天介面，而是整理出一套可延伸到企業等級應用場景的知識系統架構，驗證從 auth、資料邊界、背景工作到檢索策略的整體落地能力。
+This repository is an engineering implementation project built around a self-hosted, NotebookLM-style enterprise knowledge chat application, and also serves as an experimental prototype for a multi-agent collaborative development workflow. The development process adopts multi-agent collaboration for task decomposition and implementation. The project focuses on real enterprise problems such as document upload and background processing, multi-strategy `RAG` retrieval, `Keycloak` OAuth2 integration, group-based `RBAC`, and `deny-by-default` access control for knowledge areas and documents.
+
+The "multi-agent" part refers to the development process: task decomposition, role specialization, and collaborative implementation. It is not a user-facing product feature. The goal is not just to build a chat UI, but to validate an end-to-end knowledge system architecture that can scale toward enterprise use cases across auth, data boundaries, background jobs, and retrieval strategy.
 
 ## Why This Project
 
-企業在導入知識聊天應用時，真正的難點通常不只是接上 LLM，而是如何讓內部文件能被安全地整理、授權、索引與檢索，並在可控成本下提供可信的回答品質。這個專案聚焦的正是這些落地問題，目標是驗證一套更接近真實企業需求的知識系統雛形。
+The hard part of enterprise knowledge chat is rarely just plugging in an LLM. The real challenge is organizing, authorizing, indexing, and retrieving internal documents safely while keeping quality and cost under control. This project focuses on those operational constraints to validate a knowledge system prototype that is closer to real enterprise adoption requirements.
 
-## 未來展望
+## Future Direction
 
-這個專案未來不只會停留在文件問答，而是希望進一步結合 `Deep Agents` 能力，讓系統從「回答問題」走向「能理解上下文、可調用工具、可執行任務」的真正助理。下一步的願景包括接上 `MCP`、整合可重用的 `Skill`、擴充多步驟任務協作與外部系統操作能力，讓知識系統不只是提供資訊，而是能進一步參與企業流程、協助決策與實際完成工作。
+This project is not intended to stop at document Q&A. The longer-term direction is to evolve from "answering questions" into a real assistant that can understand context, call tools, and execute tasks through `Deep Agents`. The next-stage vision includes integrating `MCP`, reusable `Skill` modules, multi-step task orchestration, and external system operations so the knowledge system can participate in enterprise workflows instead of only returning information.
 
 ## What Makes This Project Different
 
-相較於常見只聚焦在聊天介面或單一路徑向量檢索的 RAG demo，這個專案從一開始就把企業場景中更關鍵的問題放進核心設計，包括 `Keycloak` 群組式授權、`deny-by-default`、`ready-only` 文件生命週期控制，以及規劃中的 `SQL gate + vector recall + FTS recall + RRF + rerank` 多策略搜尋流程。目標不是只做出能回答問題的系統，而是做出一個更接近企業實際可採用條件的知識助理基礎架構。
+Unlike many RAG demos that focus only on a chat interface or a single vector retrieval path, this project treats enterprise constraints as first-class design requirements from the start. That includes `Keycloak` group-based authorization, `deny-by-default`, `ready-only` document lifecycle controls, and a planned `SQL gate + vector recall + FTS recall + RRF + rerank` retrieval flow. The target is not just a system that can answer questions, but a knowledge assistant foundation that is closer to enterprise production expectations.
 
-## 工程亮點
+## Engineering Highlights
 
-- 以 `Keycloak groups` 與 direct role 合併計算 effective role，落實 area-level `RBAC`
-- 在資料存取層維持 `deny-by-default`，並用一致的未授權 `404` 避免暴露受保護資源存在性
-- 將文件生命週期拆為 `uploaded -> processing -> ready|failed`，避免未完成資料進入檢索
-- 規劃 `SQL gate + vector recall + FTS recall + RRF + rerank` 的多策略搜尋路徑，兼顧授權、安全與檢索品質
-- 以 `FastAPI + PostgreSQL + Celery + Redis + MinIO + React` 建立可本機重現的完整垂直切片
+- Merges direct roles and `Keycloak groups` to compute an effective area-level `RBAC` role
+- Enforces `deny-by-default` at the data access layer and uses consistent unauthorized `404` responses to avoid resource existence leaks
+- Models the document lifecycle as `uploaded -> processing -> ready|failed` so incomplete data never enters retrieval
+- Plans a `SQL gate + vector recall + FTS recall + RRF + rerank` retrieval path that balances authorization, quality, and cost
+- Builds a locally reproducible vertical slice with `FastAPI + PostgreSQL + Celery + Redis + MinIO + React`
 
-## 我主導的內容
+## What I Personally Owned
 
-- 專案需求收斂、模組拆分與 phase-by-phase 實作順序規劃
-- 認證授權設計，包括 JWT claims、group-based access 與 area access management
-- API、worker、web 與 Docker Compose 的本機整合
-- 文件 upload / ingest 狀態流、測試策略與 E2E 驗證基礎
-- README、架構文件與專案長期文件的整理與維護
+- Project scoping, module boundaries, and phase-by-phase implementation planning
+- Authentication and authorization design, including JWT claims, group-based access, and area access management
+- Local integration across API, worker, web, and Docker Compose
+- Document upload and ingest state transitions, test strategy, and E2E testing foundations
+- Project documentation, architecture notes, and long-term repo governance docs
 
-## 目前已完成
+## Current Status
 
-- Monorepo、Docker Compose 與本機開發環境骨架
-- `FastAPI` API、`Celery` worker、`React + Tailwind` Web 應用基本串接
-- `Keycloak` OAuth2 登入流程、JWT claims 解析與 auth context 驗證
-- 以使用者角色與群組角色整合的 area-level `RBAC`
-- `deny-by-default` 的 area / document 存取控制與未授權 `404` 保護
-- Knowledge Area 的 create / list / detail / access management MVP
-- 文件上傳、物件儲存、ingest job 建立與 `uploaded -> processing -> ready|failed` 狀態轉換
-- Web 端 Areas / Files 基本操作流程與最小 E2E 驗證基礎
+The initial vertical slice listed below was assembled within one day through a multi-agent collaborative development workflow. The point was not to maximize feature completeness in a single burst, but to test how quickly a reasonably structured enterprise knowledge system prototype could be composed when task decomposition, implementation ownership, and integration flow were explicitly coordinated.
 
-## 目前尚未完成
+- Monorepo structure, Docker Compose, and the local development stack
+- Basic wiring across the `FastAPI` API, `Celery` worker, and `React + Tailwind` web app
+- `Keycloak` OAuth2 login flow, JWT claim parsing, and auth context verification
+- Area-level `RBAC` based on merged user roles and group roles
+- `deny-by-default` protection for area and document access with consistent `404` behavior
+- Knowledge Area create/list/detail/access-management MVP
+- Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
+- Core Areas / Files workflows in the web app plus baseline E2E coverage
 
-- 正式 indexing pipeline，包括 chunking、embedding 與 FTS 寫入
-- Retrieval pipeline，包括 SQL gate、vector recall、FTS recall、`RRF` 與 rerank
-- Chat 問答、citations 與完整知識聊天體驗
-- 文件刪除、reindex 與更完整的 ingest / retrieval 觀測能力
-- area rename / delete 等管理補強功能
+## Not Yet Implemented
 
-## TODO / 未來補充
+- Full indexing pipeline, including chunking, embeddings, and FTS persistence
+- Retrieval pipeline, including SQL gate, vector recall, FTS recall, `RRF`, and rerank
+- Chat answers, citations, and the full knowledge-chat experience
+- Document delete, reindex, and richer ingest / retrieval observability
+- Area rename / delete and related management hardening
 
-- 補上系統架構圖，清楚呈現 Web、API、Worker、DB、MinIO、Keycloak 與 retrieval flow 的關係
-- 補上 E2E demo，展示從登入、上傳、處理到文件存取驗證的完整主流程
-- 補上測試覆蓋重點，整理授權、狀態轉換、API 邊界與 E2E 驗證範圍
-- 補上權限邊界案例，說明不同角色與群組在 area / document / chat 的實際存取差異
-- 補上失敗處理流程，整理 upload、ingest、未支援格式與授權失敗時的系統行為
+## TODO / Future Additions
 
-## 授權
+- Add a system architecture diagram showing the relationships among web, API, worker, DB, MinIO, Keycloak, and retrieval flow
+- Add an E2E demo that shows the main flow from login to upload, processing, and access validation
+- Add a testing coverage summary for authorization, state transitions, API boundaries, and E2E scope
+- Add explicit permission boundary examples for different roles and groups across area / document / chat access
+- Add failure-handling flow documentation for upload, ingest, unsupported file types, and authorization failures
 
-本專案採用 `Apache-2.0` 授權，完整條款請參考根目錄的 `LICENSE`。
+## License
 
-## 聯絡方式
+This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the full text.
 
-- 維護者：卓品至
-- Email：`easypinex@gmail.com`
+## Contact
 
-## 倉庫結構
+- Maintainer: Pin-Chih Cho
+- Email: `easypinex@gmail.com`
 
-- `apps/api`：FastAPI API、JWT 驗證、RBAC、areas / documents / ingest jobs 路由與服務
-- `apps/worker`：Celery 背景工作、文件 ingest 與狀態轉換流程
-- `apps/web`：React + Tailwind 前端、登入流程、areas / files 操作介面
-- `infra`：Docker Compose 與容器建置資產
-- `packages/shared`：共用型別與設定的預留模組
+## Repository Structure
 
-## 啟動方式
+- `apps/api`: FastAPI API, JWT auth, RBAC, and services/routes for areas, documents, and ingest jobs
+- `apps/worker`: Celery background jobs for ingest and status transitions
+- `apps/web`: React + Tailwind frontend, login flow, and Areas / Files UI
+- `infra`: Docker Compose assets and container build definitions
+- `packages/shared`: Reserved space for shared types and configuration
 
-1. Copy environment variables:
+## How to Start
+
+1. Copy the environment file:
    - `cp .env.example .env`
-2. Optional local Python dependencies install:
+2. Optionally install local Python dependencies:
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
 3. Build and start the local stack:
    - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
-4. 開啟本機服務：
+4. Open the local services:
    - Web: `http://localhost:13000`
    - API: `http://localhost:18000`
    - API health: `http://localhost:18000/health`
@@ -95,25 +99,25 @@
    - MinIO API: `http://localhost:19000`
    - MinIO Console: `http://localhost:19001`
 
-## 環境變數
+## Environment Variables
 
-完整本機預設值請參考 `.env.example`。
+See `.env.example` for the full local default configuration.
 
-## 驗證方式
+## Verification
 
-- API health：
+- API health:
   - `curl http://localhost:18000/health`
-- Auth context：
+- Auth context:
   - `curl -H "Authorization: Bearer <access-token>" http://localhost:18000/auth/context`
-- Worker ping task：
+- Worker ping task:
   - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
-- Web / Areas / Files：
-  - 開啟 `http://localhost:13000`，登入後驗證 area 與文件列表、上傳與狀態顯示流程
-- Phase 1 auth 驗證手冊：
+- Web / Areas / Files:
+  - Open `http://localhost:13000`, sign in, and verify area listing, file upload, and document status behavior
+- Phase 1 auth verification guide:
   - `docs/phase1-auth-verification.md`
 
-## 疑難排解
+## Troubleshooting
 
-- 若 Docker 映像建置失敗，請確認 Docker Desktop 正在執行，且能存取套件來源。
-- 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
-- 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
+- If Docker image builds fail, confirm Docker Desktop is running and can reach package registries.
+- If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
+- If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.

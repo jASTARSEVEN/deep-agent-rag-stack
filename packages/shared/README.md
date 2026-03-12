@@ -1,26 +1,28 @@
-# Shared 套件預留目錄
+# Shared Package Placeholder
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此目錄預留給未來會被多個模組共用的型別、契約與常數。
+## Purpose
 
-## 啟動方式
+This directory is reserved for future shared types, contracts, and constants that will be reused across multiple modules.
 
-- 本輪尚未建立可執行的 runtime package。
-- 只有在至少兩個模組需要同一份契約時，才在此加入程式碼。
+## How to Start
 
-## 環境變數
+- There is no runnable runtime package in this phase.
+- Add code here only when at least two modules need the same contract.
 
-- 本輪無。
+## Environment Variables
 
-## 主要目錄結構
+- None in the current phase.
 
-- 此模組目前只有文件說明。
+## Main Directory Structure
 
-## 對外介面
+- This module currently contains documentation only.
 
-- 目前無。
+## Public Interfaces
 
-## 疑難排解
+- None for now.
 
-- 若此目錄開始成長，請補上正式 package manifest 並更新本 README。
+## Troubleshooting
+
+- If this directory starts to grow, add a proper package manifest and update this README.

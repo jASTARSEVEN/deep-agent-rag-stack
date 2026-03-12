@@ -1,31 +1,33 @@
-# API 模組
+# API Module
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此模組包含專案的 FastAPI 服務。它目前提供：
-- 最小 landing route 與 health route
-- JWT / Keycloak 驗證骨架
-- `sub` / `groups` claims 解析
-- Knowledge Area create/list/detail 最小切片
-- area access management API
-- area access-check 驗證切片
-- documents upload / list / detail API
-- ingest jobs detail API
-- SQLAlchemy 與 Alembic migration 骨架
+## Purpose
 
-## 啟動方式
+This module contains the project's FastAPI service. It currently provides:
+- Minimal landing and health routes
+- JWT / Keycloak authentication scaffolding
+- `sub` / `groups` claim parsing
+- A minimal Knowledge Area create/list/detail slice
+- Area access management APIs
+- An area access-check verification slice
+- Document upload / list / detail APIs
+- Ingest job detail APIs
+- SQLAlchemy and Alembic migration scaffolding
 
-- 本機 Python 執行：
+## How to Start
+
+- Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
   - `alembic upgrade head`
   - `uvicorn app.main:app --app-dir src --reload --host 0.0.0.0 --port 18000`
-- 本機執行測試：
+- Run tests locally:
   - `pytest`
-- Docker Compose：
+- Docker Compose:
   - `docker compose -f ../../infra/docker-compose.yml --env-file ../../.env up api`
 
-## 環境變數
+## Environment Variables
 
 - `API_SERVICE_NAME`
 - `API_VERSION`
@@ -52,19 +54,19 @@
 - `KEYCLOAK_GROUPS_CLAIM`
 - `AUTH_TEST_MODE`
 
-## 主要目錄結構
+## Main Directory Structure
 
-- `src/app/main.py`：FastAPI 應用程式進入點
-- `src/app/core`：設定與共用執行期輔助元件
-- `src/app/auth`：JWT 驗證、principal 解析與 auth dependency
-- `src/app/db`：SQLAlchemy models、session 與 metadata
+- `src/app/main.py`: FastAPI application entry point
+- `src/app/core`: settings and shared runtime helpers
+- `src/app/auth`: JWT validation, principal parsing, and auth dependencies
+- `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
-- `src/app/schemas`：回應模型
-- `src/app/services`：授權與 runtime service
-- `alembic`：migration 執行環境與版本腳本
-- `tests`：授權與 API 測試
+- `src/app/schemas`: response schemas
+- `src/app/services`: authorization and runtime services
+- `alembic`: migration environment and revision scripts
+- `tests`: authorization and API tests
 
-## 對外介面
+## Public Interfaces
 
 - `GET /`
 - `GET /health`
@@ -80,11 +82,11 @@
 - `GET /documents/{document_id}`
 - `GET /ingest-jobs/{job_id}`
 
-## 疑難排解
+## Troubleshooting
 
-- 若 import 失敗，請確認啟動命令包含 `--app-dir src`。
-- 若 `alembic upgrade head` 無法連到資料庫，請先確認根目錄 `.env` 內的 `DATABASE_URL`。
-- 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
-- `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
-- `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 與 `INGEST_INLINE_MODE=true`，供 API 測試與 Playwright E2E 使用。
-- 此模組目前尚未實作 retrieval 或 chat。
+- If imports fail, make sure the startup command includes `--app-dir src`.
+- If `alembic upgrade head` cannot connect to the database, verify `DATABASE_URL` in the repo root `.env`.
+- For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
+- `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
+- `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
+- Retrieval and chat are not implemented in this module yet.

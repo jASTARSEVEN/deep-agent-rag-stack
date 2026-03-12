@@ -1,70 +1,72 @@
-# Keycloak 初始化資產
+# Keycloak Bootstrap Assets
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此目錄存放本機開發用的 Keycloak realm 自動匯入資產，讓第一次啟動 stack 時即可建立固定的身份測試資料。
+## Purpose
 
-## 啟動方式
+This directory stores the Keycloak realm import assets used for local development so the stack can boot with stable identity test data on first startup.
 
-- 在專案根目錄執行：
+## How to Start
+
+- Run from the repository root:
 
 ```bash
 cp .env.example .env
 docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
-- `keycloak` 服務會在啟動時讀取 `/opt/keycloak/data/import` 下的 realm JSON。
-- 若 `keycloak-db` volume 是全新狀態，Keycloak 會建立 `deep-agent-dev` realm 與預設身份資料。
-- 若 `keycloak-db` volume 已存在，日常重啟不會覆蓋已存在的 realm 內容。
-- 若你修改 `deep-agent-dev-realm.json` 後希望套用到既有本機環境，單純 `docker compose restart` 或重新 `up` 既有 container 不會生效，必須先重置 Keycloak 的持久化資料。
-- Compose 已固定 `KC_HOSTNAME` 為 `http://localhost:${KEYCLOAK_PORT}`，避免瀏覽器端與容器內請求取得不同 issuer，導致 API JWT 驗證失敗。
+- The `keycloak` service reads the realm JSON from `/opt/keycloak/data/import` at startup.
+- If the `keycloak-db` volume is brand new, Keycloak creates the `deep-agent-dev` realm and the default identity dataset.
+- If the `keycloak-db` volume already exists, normal restarts do not overwrite the existing realm content.
+- If you change `deep-agent-dev-realm.json` and want the changes applied to an existing local environment, a simple `docker compose restart` or `up` on existing containers is not enough. You must reset Keycloak persistent data first.
+- Compose pins `KC_HOSTNAME` to `http://localhost:${KEYCLOAK_PORT}` so browser-side and container-side requests use the same issuer and do not break API JWT validation.
 
-## 環境變數
+## Environment Variables
 
 - `KEYCLOAK_REALM`
 - `KEYCLOAK_CLIENT_ID`
 - `KEYCLOAK_GROUPS_CLAIM`
 
-## 主要目錄結構
+## Main Directory Structure
 
-- `deep-agent-dev-realm.json`：本機開發用 realm import 資產
+- `deep-agent-dev-realm.json`: local development realm import asset
 
-## 預設身份資料
+## Default Identity Data
 
-- realm：`deep-agent-dev`
-- client：`deep-agent-web`
-- groups claim：`groups`
-- groups：
+- realm: `deep-agent-dev`
+- client: `deep-agent-web`
+- groups claim: `groups`
+- groups:
   - `/dept/hr`
   - `/dept/finance`
   - `/dept/rd`
   - `/platform/knowledge-admins`
-- users：
-  - `alice / alice123`：`/dept/hr`
-  - `bob / bob123`：`/dept/finance`
-  - `carol / carol123`：`/dept/rd`
-  - `dave / dave123`：無群組，用於 deny-by-default 驗證
-  - `erin / erin123`：`/dept/hr` + `/dept/rd`
-  - `frank / frank123`：`/platform/knowledge-admins`
+- users:
+  - `alice / alice123`: `/dept/hr`
+  - `bob / bob123`: `/dept/finance`
+  - `carol / carol123`: `/dept/rd`
+  - `dave / dave123`: no groups, used to validate `deny-by-default`
+  - `erin / erin123`: `/dept/hr` + `/dept/rd`
+  - `frank / frank123`: `/platform/knowledge-admins`
 
-## 群組設計原則
+## Group Design Principles
 
-- Keycloak `group` 代表組織或職能身分，不直接等於 area 角色。
-- area 內的 `reader`、`maintainer`、`admin` 權限，應由 API 資料層將 `group path` 映射到對應角色。
-- 本機開發預設只提供少量部門群組，目的是驗證：
-  - 同一群組可在不同 area 映射到不同角色
-  - 多群組使用者會取 direct role 與 group role 的最大值
-  - 無群組使用者仍會被 deny-by-default 擋下
+- A Keycloak `group` represents an organizational or functional identity and does not directly equal an area role.
+- Area-level `reader`, `maintainer`, and `admin` permissions should be mapped from `group path` to the corresponding role in the API data layer.
+- Local development intentionally uses only a small set of department groups to validate:
+  - the same group mapping to different roles in different areas
+  - multi-group users taking the maximum value between direct role and group role
+  - group-less users still being blocked by `deny-by-default`
 
-## 對外介面
+## Public Interfaces
 
-- `infra/docker-compose.yml` 會將本目錄下的 realm import JSON 掛載到 Keycloak import 目錄。
+- `infra/docker-compose.yml` mounts the realm import JSON in this directory into Keycloak's import path.
 
-## 疑難排解
+## Troubleshooting
 
-- 若你已經手動建立過其他 realm 或修改過 `deep-agent-dev`，日常重啟不會回到預設資料。
-- 若你修改了 `deep-agent-dev-realm.json`，要讓新的 realm 設定、使用者或 mapper 生效，必須先刪除 `keycloak-db` volume，再重新啟動 Keycloak。
-- 建議優先只重置 Keycloak 專用 volume，避免連其他服務資料一起清掉：
+- If you already created or modified other realms, normal restarts will not reset the data back to defaults.
+- If you updated `deep-agent-dev-realm.json`, you must delete the `keycloak-db` volume and restart Keycloak for the new realm settings, users, or mappers to take effect.
+- Prefer resetting only the Keycloak-specific volume to avoid wiping unrelated service data:
 
 ```bash
 docker compose -f infra/docker-compose.yml --env-file .env down
@@ -72,13 +74,13 @@ docker volume rm deep-agent-rag-stack_keycloak-db-data
 docker compose -f infra/docker-compose.yml --env-file .env up --build -d keycloak-db keycloak
 ```
 
-- 若你看到前端 callback 顯示「無法驗證存取 token」，請先確認 Keycloak container 已使用最新的 `KC_HOSTNAME` 設定重建，再重新登入；必要時一併清掉瀏覽器的 sessionStorage 舊 token。
+- If the frontend callback shows a "cannot validate access token" error, rebuild the Keycloak container with the latest `KC_HOSTNAME` setting, sign in again, and clear stale tokens from `sessionStorage` if needed.
 
-- 若你要整個開發 stack 一起重建，才使用 `down -v`：
+- Use `down -v` only when you intentionally want to rebuild the entire development stack:
 
 ```bash
 docker compose -f infra/docker-compose.yml --env-file .env down -v
 docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
-- API JWT 驗證目前假設 access token 中存在穩定的 `groups` claim。若 token 內缺少 `groups`，請先確認 `deep-agent-dev-realm.json` 內的 `groups` protocol mapper 未被移除。
+- API JWT validation currently assumes a stable `groups` claim exists in the access token. If the token is missing `groups`, verify that the `groups` protocol mapper still exists in `deep-agent-dev-realm.json`.

@@ -1,16 +1,18 @@
-# Infra 模組
+# Infra Module
 
-## 模組目的
+[繁體中文版本](README.zh-TW.md)
 
-此模組包含本機 Docker Compose stack，以及啟動 Areas + Documents & Ingestion MVP 所需的容器建置資產。
+## Purpose
 
-## 啟動方式
+This module contains the local Docker Compose stack and the container build assets required to run the Areas + Documents & Ingestion MVP.
+
+## How to Start
 
 - From the repository root:
   - `cp .env.example .env`
   - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
 
-## 環境變數
+## Environment Variables
 
 - `POSTGRES_*`
 - `REDIS_PORT`
@@ -28,18 +30,18 @@
 - `PG_JIEBA_REPO_URL`
 - `PG_JIEBA_REF`
 
-## 主要目錄結構
+## Main Directory Structure
 
-- `docker-compose.yml`：本機服務編排設定
-- `docker/postgres`：預留未來 `pg_jieba` 建置掛勾的 Postgres 映像
-- `docker/api`：API container 映像
-- `docker/worker`：Worker container 映像
-- `docker/web`：Web container 映像
-- `keycloak`：本機開發用的 realm bootstrap 匯入資產
+- `docker-compose.yml`: local service orchestration
+- `docker/postgres`: Postgres base image with future `pg_jieba` build hooks
+- `docker/api`: API container image
+- `docker/worker`: worker container image
+- `docker/web`: web container image
+- `keycloak`: bootstrap import assets for local realm initialization
 
-## 對外介面
+## Public Interfaces
 
-- 本機服務埠號：
+- Local service ports:
   - Web: `13000`
   - API: `18000`
   - Keycloak: `18080`
@@ -48,10 +50,10 @@
   - Postgres: `15432`
   - Redis: `16379`
 
-## 疑難排解
+## Troubleshooting
 
-- `PG_JIEBA_REF` 在本輪仍只是預留值；開始做 FTS 之前請改成固定 commit SHA。
-- Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
-- 若要回到預設 Keycloak 身份資料，請刪除 `keycloak-db` volume 後重新啟動 stack。
-- Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
-- 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。
+- `PG_JIEBA_REF` is still only a placeholder at this stage. Pin it to a fixed commit SHA before implementing FTS.
+- Keycloak automatically imports the `deep-agent-dev` realm, the `deep-agent-web` client, the groups mapper, and default users/groups on first startup.
+- To restore the default Keycloak identity data, remove the `keycloak-db` volume and restart the stack.
+- Current compose health checks only verify stack readiness, not complete business correctness.
+- The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and pair it with `INGEST_INLINE_MODE=true`.

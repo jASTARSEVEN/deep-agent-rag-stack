@@ -92,12 +92,16 @@
 - 每個全域變數 / module-level constant 都要有用途註解。
 - 只要是類似 Model、DTO、Bean、interface、Base 的資料結構型別，其所有欄位 / 變數都必須有用途註解。
 - 涉及安全、授權、SQL gate、外部整合的程式碼，必須記錄前置條件與風險。
-- 所有的說明 / README / docstring / `.md` 都要使用台灣繁體中文。
+- 除 `README.md` 外，所有的說明 / docstring / `.md` 都要使用台灣繁體中文。
+- 所有對外 README 主版都必須使用英文，包含根目錄 `README.md` 與各模組的 `README.md`。
+- 每一份英文 README 都必須同步維護對應的 `README.zh-TW.md`，內容需與英文版在主要資訊上保持一致，作為繁體中文版本。
 
 ## 模組 README 規範
 `apps/*`、`infra/*`、`packages/*` 下的每個頂層模組都必須包含 `README.md`。
 
 每個有自己 `pyproject.toml` 或 `package.json` 的獨立模組，也都必須包含 `README.md`。
+
+所有模組若包含 `README.md`，也必須同步包含 `README.zh-TW.md`。
 
 每份 README 必須包含：
 - Purpose
