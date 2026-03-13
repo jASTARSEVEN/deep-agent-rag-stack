@@ -64,6 +64,9 @@
 - `COHERE_API_KEY`
 - `RERANK_TOP_N`
 - `RERANK_MAX_CHARS_PER_DOC`
+- `ASSEMBLER_MAX_CONTEXTS`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT`
+- `ASSEMBLER_MAX_CHILDREN_PER_PARENT`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
@@ -84,7 +87,7 @@
 - `src/app/db`：SQLAlchemy models、session 與 metadata
 - `src/app/routes`: HTTP routes
 - `src/app/schemas`：回應模型
-- `src/app/services`：授權、indexing 與 internal retrieval service
+- `src/app/services`：授權、indexing、internal retrieval 與 assembler service
 - `alembic`：migration 執行環境與版本腳本
 - `tests`：授權與 API 測試
 
@@ -117,7 +120,8 @@
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
 - `ready` 現在代表 chunk tree、embedding 與 FTS payload 都已完成。
-- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall、`RRF` merge 與 minimal rerank，但尚未公開為 HTTP API。
+- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall、`RRF` merge、minimal rerank 與 table-aware retrieval assembler，但尚未公開為 HTTP API。
+- assembler 會將 rerank 後的 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata，並以 budget guardrails 控制成本。
 - rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
 - 未支援格式仍維持受控 `failed`。
 - chat 與 citations 仍待後續 phase。

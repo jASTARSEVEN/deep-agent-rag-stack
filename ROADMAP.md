@@ -158,9 +158,11 @@
 - rerank integration
 - retrieval trace metadata
 - table-aware retrieval assembler
+- chat-ready context 與 citation-ready metadata contract
+- assembler budget guardrails 與 trace
 
 狀態：
-- `進行中（minimal rerank slice 已完成）`
+- `已完成`
 
 ## Phase 5 — Chat
 
@@ -185,6 +187,5 @@
 
 ## 近期建議順序
 
-1. Phase 4.2：Retrieval Ranking & Assembly
+1. Phase 5：Chat
 2. Post-Phase 3 Backlog：Area Management Hardening
-3. Phase 5：Chat

@@ -29,11 +29,13 @@
 - `Phase 3.6` Markdown / HTML 表格感知 chunking 已完成
 - `Phase 4.1` Retrieval foundation 已完成
 - `Phase 4.2` minimal rerank slice 已完成
+- `Phase 4.2` table-aware retrieval assembler slice 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
 - 專案已具備 internal-only 的 minimal rerank 路徑，涵蓋 Cohere / deterministic rerank provider、retrieval trace metadata 與 fail-open fallback
+- 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -128,30 +130,35 @@
 - 已落實 rerank runtime failure 的 fail-open fallback，不影響 deny-by-default、same-404 與 ready-only 邊界
 - API 測試已補 rerank provider factory、runtime fallback、rerank metadata 與 upload -> ingest -> retrieval 的近似 E2E 驗證
 
+### Phase 4.2 — 已完成的 table-aware retrieval assembler slice
+- 已新增 internal retrieval assembler service，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
+- assembler 已以 `(document_id, parent_chunk_id, structure_kind)` 作為聚合邊界，避免 text/table 混合與同一 parent 重複灌入 prompt
+- assembler 已支援 table row-group child 合併，並在合併後僅保留一次表頭
+- 已新增 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` guardrails
+- assembler trace 已補齊 kept/dropped chunk ids、per-context merge 結果與 truncation metadata
+- API 測試已補 text merge、table merge、budget trace、citation offsets、rerank fallback 與 upload -> ingest -> retrieval -> assembly 近似 E2E 驗證
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 4.2` minimal rerank slice 與 `pg_jieba` 本機啟動路徑
-- 穩定 `hnsw` vector recall、`RRF` 與 rerank 之間的排序語意
-- 穩定 `embedding` / `fts_document` / rerank trace 與既有 reindex / delete / observability 路徑的相容性
-- 穩定 ready-only、deny-by-default、SQL gate 與 rerank fail-open fallback 的 retrieval 語意
-- 為後續 table-aware retrieval assembler 與 chat/citations flow 準備組裝契約
-- 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
+- 穩定 `Phase 4.2` assembler slice 與 `pg_jieba` 本機啟動路徑
+- 穩定 `hnsw` vector recall、`RRF`、rerank 與 assembler 之間的排序與 budget 語意
+- 穩定 `embedding` / `fts_document` / retrieval trace / assembler trace 與既有 reindex / delete / observability 路徑的相容性
+- 為後續 public chat API、answer generation 與 citations formatting 準備組裝契約
+- 保持 ready-only、deny-by-default、SQL gate 與 rerank fail-open fallback 的 retrieval / assembly 語意
 - area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 完成 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
-2. 在 API 內將 internal retrieval service 與 trace 串到後續 chat/citations flow
-3. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
-4. 視需要補真實 Cohere compose smoke 驗證，但不作為 MVP 阻擋項
-5. Retrieval ranking 路徑穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+1. 在 API 內將 assembler 輸出串到後續 chat/citations flow
+2. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
+3. 視需要補真實 Cohere compose smoke 驗證，但不作為 MVP 阻擋項
+4. Retrieval ranking / assembly 路徑穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
 - public chat API 與 citations
-- table-aware retrieval assembler
 - area rename / delete
 
 ## Agent Rules

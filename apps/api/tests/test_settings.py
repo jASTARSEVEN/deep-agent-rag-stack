@@ -19,6 +19,9 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
         RERANK_TOP_N="",
         RERANK_MAX_CHARS_PER_DOC="",
+        ASSEMBLER_MAX_CONTEXTS="",
+        ASSEMBLER_MAX_CHARS_PER_CONTEXT="",
+        ASSEMBLER_MAX_CHILDREN_PER_PARENT="",
     )
 
     assert settings.minio_secure is False
@@ -33,3 +36,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.chunk_table_max_rows_per_child == 20
     assert settings.rerank_top_n == 6
     assert settings.rerank_max_chars_per_doc == 2000
+    assert settings.assembler_max_contexts == 6
+    assert settings.assembler_max_chars_per_context == 2500
+    assert settings.assembler_max_children_per_parent == 3

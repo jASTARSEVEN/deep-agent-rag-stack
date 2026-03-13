@@ -31,6 +31,9 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_HNSW_EF_SEARCH",
     "RERANK_TOP_N",
     "RERANK_MAX_CHARS_PER_DOC",
+    "ASSEMBLER_MAX_CONTEXTS",
+    "ASSEMBLER_MAX_CHARS_PER_CONTEXT",
+    "ASSEMBLER_MAX_CHILDREN_PER_PARENT",
 }
 
 
@@ -108,6 +111,9 @@ class AppSettings(BaseSettings):
     cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
     rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 6
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
+    assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 6
+    assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 2500
+    assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 3
 
     @model_validator(mode="before")
     @classmethod

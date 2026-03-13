@@ -64,6 +64,9 @@ This module contains the project's FastAPI service. It currently provides:
 - `COHERE_API_KEY`
 - `RERANK_TOP_N`
 - `RERANK_MAX_CHARS_PER_DOC`
+- `ASSEMBLER_MAX_CONTEXTS`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT`
+- `ASSEMBLER_MAX_CHILDREN_PER_PARENT`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
@@ -84,7 +87,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
 - `src/app/schemas`: response schemas
-- `src/app/services`: authorization, indexing, and internal retrieval services
+- `src/app/services`: authorization, indexing, internal retrieval, and assembler services
 - `alembic`: migration environment and revision scripts
 - `tests`: authorization and API tests
 
@@ -117,7 +120,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and FTS payloads have all been written.
-- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, `RRF` merge, and minimal rerank, but it is not exposed as a public HTTP route yet.
+- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, `RRF` merge, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
+- The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
 - Unsupported formats still move into controlled `failed`.
 - Chat and citations remain out of scope for this module's current phase.
