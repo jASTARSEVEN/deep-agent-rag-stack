@@ -30,6 +30,7 @@ This module contains the local Docker Compose stack and the container build asse
 - `OPENAI_API_KEY`
 - `RERANK_*`
 - `COHERE_API_KEY`
+- `LANGSMITH_*`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_*`
 - `VITE_*`

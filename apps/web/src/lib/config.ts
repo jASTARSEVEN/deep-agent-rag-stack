@@ -15,6 +15,7 @@ export const appConfig = {
   keycloakUrl: import.meta.env.VITE_KEYCLOAK_URL ?? "http://localhost:18080",
   keycloakRealm: import.meta.env.VITE_KEYCLOAK_REALM ?? "deep-agent-dev",
   keycloakClientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID ?? "deep-agent-web",
+  chatStreamDebug: import.meta.env.VITE_CHAT_STREAM_DEBUG === "true",
 };
 
 

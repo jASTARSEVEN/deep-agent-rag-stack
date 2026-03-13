@@ -85,7 +85,13 @@ This module contains the project's FastAPI service. It currently provides:
 - `CHAT_TIMEOUT_SECONDS`
 - `CHAT_INCLUDE_TRACE`
 - `CHAT_STREAM_CHUNK_SIZE`
+- `CHAT_STREAM_DEBUG`
 - `LANGGRAPH_SERVICE_PORT`
+- `LANGSMITH_TRACING`
+- `LANGSMITH_API_KEY`
+- `LANGSMITH_PROJECT`
+- `LANGSMITH_ENDPOINT`
+- `LANGSMITH_WORKSPACE_ID`
 
 ## Main Directory Structure
 

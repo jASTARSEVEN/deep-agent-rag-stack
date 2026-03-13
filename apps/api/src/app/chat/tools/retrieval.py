@@ -105,6 +105,29 @@ def build_assembled_context_payload(retrieval_result: RetrievalToolResult | None
     ]
 
 
+def build_agent_tool_context_payload(retrieval_result: RetrievalToolResult | None) -> list[dict[str, object]]:
+    """建立回傳給 LLM 的最小 assembled context payload。
+
+    參數：
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `list[dict[str, object]]`：僅含回答所需最小欄位的 context 列表。
+    """
+
+    if retrieval_result is None:
+        return []
+
+    return [
+        (
+            {"heading": context.heading, "assembled_text": context.assembled_text}
+            if context.heading
+            else {"assembled_text": context.assembled_text}
+        )
+        for context in retrieval_result.assembled_contexts
+    ]
+
+
 def build_tool_call_output_summary(retrieval_result: RetrievalToolResult | None) -> dict[str, object]:
     """建立 custom `tool_call.completed` 事件的 debug-safe 摘要。
 

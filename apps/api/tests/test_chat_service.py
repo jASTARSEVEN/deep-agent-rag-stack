@@ -1,5 +1,7 @@
 """Chat runtime 與 Deep Agents 路徑測試。"""
 
+import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -286,6 +288,8 @@ def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch)
         "citations_count": 0,
         "contexts": [],
     }
+    token_events = [event for event in emitted_events if event["type"] == "token"]
+    assert token_events == [{"type": "token", "delta": "這是帶搜尋流程的回答。"}]
 
 
 def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypatch) -> None:
@@ -421,3 +425,313 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
 
     assert context_payload["excerpt"] == "這是一段組裝後的內容。"
     assert "assembled_text" not in context_payload
+
+
+def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> None:
+    """Deep Agents tool 回傳給 LLM 時應只包含最小 assembled contexts。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：僅驗證餵給 LLM 的 tool payload 已瘦身。
+    """
+
+    captured_tool_result: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    @dataclass
+    class FakeCitation:
+        """模擬 citation 的最小 `model_dump` 介面。"""
+
+        context_index: int
+        document_id: str
+        excerpt: str
+
+        def model_dump(self, *, mode: str = "json") -> dict[str, object]:
+            """回傳與 Pydantic model 類似的 dump 結果。
+
+            參數：
+            - `mode`：序列化模式。
+
+            回傳：
+            - `dict[str, object]`：序列化後字典。
+            """
+
+            assert mode == "json"
+            return {
+                "context_index": self.context_index,
+                "document_id": self.document_id,
+                "excerpt": self.excerpt,
+            }
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+
+    def fake_retrieve_area_contexts_tool(**kwargs):
+        """回傳包含單一 assembled context 的 retrieval 結果。"""
+
+        return SimpleNamespace(
+            assembled_contexts=[
+                AssembledContext(
+                    document_id="doc-1",
+                    parent_chunk_id="parent-1",
+                    chunk_ids=["child-1"],
+                    structure_kind=ChunkStructureKind.text,
+                    heading="Reader Policy",
+                    assembled_text="這是一段組裝後的內容。",
+                    source="業務規格書.md",
+                    start_offset=10,
+                    end_offset=40,
+                )
+            ],
+            citations=[FakeCitation(context_index=0, document_id="doc-1", excerpt="這是一段組裝後的內容。")],
+            trace={
+                "retrieval": {"query": kwargs["question"]},
+                "assembler": {"contexts": [{"context_index": 0, "truncated": False}]},
+            },
+        )
+
+    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+
+    class FakeAgent:
+        """模擬主 agent，並擷取 tool 回傳字串。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。"""
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先執行 retrieval，再回傳固定回答。"""
+
+            assert stream_mode == ["messages", "values"]
+            captured_tool_result.update(json.loads(self.tools[0]("reader policy")))
+            return iter(
+                [
+                    ("messages", ({"content": "這是回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+
+    provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="請根據文件回答 reader policy",
+    )
+
+    assert list(captured_tool_result.keys()) == ["assembled_contexts"]
+    assert captured_tool_result["assembled_contexts"] == [
+        {
+            "heading": "Reader Policy",
+            "assembled_text": "這是一段組裝後的內容。",
+        }
+    ]
+
+
+def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkeypatch) -> None:
+    """啟用 LangSmith tracing 時，Deep Agents invocation 應包在 tracing context 內。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：僅驗證 tracing context 參數與包覆範圍。
+    """
+
+    captured_context: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    @contextmanager
+    def fake_tracing_context(**kwargs):
+        """記錄 tracing context 參數，並模擬 context manager。
+
+        參數：
+        - `**kwargs`：傳入 tracing context 的設定。
+
+        回傳：
+        - context manager：供測試包覆 Deep Agents invocation。
+        """
+
+        captured_context["kwargs"] = kwargs
+        captured_context["entered"] = True
+        try:
+            yield
+        finally:
+            captured_context["exited"] = True
+
+    class FakeAgent:
+        """模擬主 agent。"""
+
+        def stream(self, _input, *, stream_mode):
+            """回傳固定串流回答。
+
+            參數：
+            - `_input`：agent 輸入。
+            - `stream_mode`：要求的 stream modes。
+
+            回傳：
+            - `Iterator[tuple[str, object]]`：固定的 messages/values 串流片段。
+            """
+
+            assert stream_mode == ["messages", "values"]
+            assert captured_context.get("entered") is True
+            return iter(
+                [
+                    ("messages", ({"content": "這是 traced 回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是 traced 回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tracing_context", fake_tracing_context)
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent())
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+        LANGSMITH_TRACING=True,
+        LANGSMITH_API_KEY="langsmith-test-key",
+        LANGSMITH_PROJECT="deep-agent-rag-stack-test",
+    )
+
+    result = provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="請根據文件回答 reader policy",
+    )
+
+    assert result["answer"] == "這是 traced 回答。"
+    assert captured_context["kwargs"] == {
+        "enabled": True,
+        "project_name": "deep-agent-rag-stack-test",
+        "tags": [
+            "deepagents",
+            "langgraph",
+            "chat_provider:deepagents",
+            "chat_model:gpt-5-mini",
+        ],
+        "metadata": {
+            "area_id": "area-1",
+            "principal_sub": "user-1",
+            "principal_groups_count": 1,
+            "chat_provider": "deepagents",
+            "chat_model": "gpt-5-mini",
+            "question_length": len("請根據文件回答 reader policy"),
+        },
+    }
+    assert captured_context["exited"] is True
+
+
+def test_deepagents_runtime_rejects_langsmith_tracing_without_api_key(monkeypatch) -> None:
+    """啟用 LangSmith tracing 但未提供 API key 時應提早失敗。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：僅驗證缺少必要設定時的錯誤訊息。
+    """
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+        LANGSMITH_TRACING=True,
+        LANGSMITH_API_KEY="",
+    )
+
+    try:
+        provider.run(
+            session=None,
+            principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+            settings=settings,
+            area_id="area-1",
+            question="請根據文件回答 reader policy",
+        )
+    except ValueError as exc:
+        assert "LANGSMITH_API_KEY" in str(exc)
+    else:
+        raise AssertionError("預期缺少 LANGSMITH_API_KEY 時應拋出 ValueError。")

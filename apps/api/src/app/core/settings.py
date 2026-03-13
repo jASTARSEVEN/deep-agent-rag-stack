@@ -39,7 +39,12 @@ EMPTY_STRING_ENV_KEYS = {
     "CHAT_MAX_OUTPUT_TOKENS",
     "CHAT_TIMEOUT_SECONDS",
     "CHAT_STREAM_CHUNK_SIZE",
+    "CHAT_STREAM_DEBUG",
     "LANGGRAPH_SERVICE_PORT",
+    "LANGSMITH_API_KEY",
+    "LANGSMITH_ENDPOINT",
+    "LANGSMITH_WORKSPACE_ID",
+    "LANGSMITH_TRACING",
 }
 
 
@@ -126,7 +131,13 @@ class AppSettings(BaseSettings):
     chat_timeout_seconds: Annotated[int, Field(alias="CHAT_TIMEOUT_SECONDS")] = 30
     chat_include_trace: Annotated[bool, Field(alias="CHAT_INCLUDE_TRACE")] = False
     chat_stream_chunk_size: Annotated[int, Field(alias="CHAT_STREAM_CHUNK_SIZE")] = 64
+    chat_stream_debug: Annotated[bool, Field(alias="CHAT_STREAM_DEBUG")] = False
     langgraph_service_port: Annotated[int, Field(alias="LANGGRAPH_SERVICE_PORT")] = 8000
+    langsmith_tracing: Annotated[bool, Field(alias="LANGSMITH_TRACING")] = False
+    langsmith_api_key: Annotated[str | None, Field(alias="LANGSMITH_API_KEY")] = None
+    langsmith_project: Annotated[str, Field(alias="LANGSMITH_PROJECT")] = "deep-agent-rag-stack"
+    langsmith_endpoint: Annotated[str | None, Field(alias="LANGSMITH_ENDPOINT")] = None
+    langsmith_workspace_id: Annotated[str | None, Field(alias="LANGSMITH_WORKSPACE_ID")] = None
 
     @model_validator(mode="before")
     @classmethod

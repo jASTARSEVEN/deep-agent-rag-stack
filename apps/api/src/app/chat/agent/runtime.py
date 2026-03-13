@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from collections.abc import Callable, Iterator
+from contextlib import nullcontext
 from dataclasses import asdict, dataclass
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.agent.deep_agents import build_main_agent
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
+    build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,
     retrieve_area_contexts_tool,
@@ -26,6 +30,15 @@ try:
     from langchain_openai import ChatOpenAI
 except ImportError:  # pragma: no cover - 依賴缺失時於執行期明確失敗。
     ChatOpenAI = None  # type: ignore[assignment]
+
+try:
+    from langsmith import tracing_context
+except ImportError:  # pragma: no cover - 依賴缺失時於執行期明確失敗。
+    tracing_context = None  # type: ignore[assignment]
+
+
+# chat streaming debug 使用的模組 logger。
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -142,6 +155,52 @@ class DeepAgentsChatRuntime:
         self._max_output_tokens = max_output_tokens
         self._timeout_seconds = timeout_seconds
 
+    def _build_langsmith_tags(self, *, settings: AppSettings) -> list[str]:
+        """建立本次 chat invocation 的 LangSmith tags。
+
+        參數：
+        - `settings`：API 執行期設定。
+
+        回傳：
+        - `list[str]`：LangSmith UI 可篩選的 tags。
+        """
+
+        return [
+            "deepagents",
+            "langgraph",
+            f"chat_provider:{self.provider_name}",
+            f"chat_model:{settings.chat_model}",
+        ]
+
+    def _build_langsmith_metadata(
+        self,
+        *,
+        principal: CurrentPrincipal,
+        settings: AppSettings,
+        area_id: str,
+        question: str,
+    ) -> dict[str, object]:
+        """建立本次 chat invocation 的 LangSmith metadata。
+
+        參數：
+        - `principal`：目前已驗證使用者。
+        - `settings`：API 執行期設定。
+        - `area_id`：目標 area。
+        - `question`：使用者提問。
+
+        回傳：
+        - `dict[str, object]`：供 LangSmith trace 篩選與除錯使用的 metadata。
+        """
+
+        return {
+            "area_id": area_id,
+            "principal_sub": principal.sub,
+            "principal_groups_count": len(principal.groups),
+            "chat_provider": self.provider_name,
+            "chat_model": settings.chat_model,
+            "question_length": len(question),
+        }
+
     def run(
         self,
         *,
@@ -173,10 +232,37 @@ class DeepAgentsChatRuntime:
         retrieval_result: RetrievalToolResult | None = None
         citations_payload: list[dict[str, object]] = []
         assembled_contexts_payload: list[dict[str, object]] = []
+        llm_tool_contexts_payload: list[dict[str, object]] = []
+        stream_started_at = time.perf_counter()
+        first_token_emitted = False
+
+        def log_stream_debug(*, event: str, **fields: object) -> None:
+            """在啟用 debug 時記錄 chat stream 關鍵時間點。
+
+            參數：
+            - `event`：事件名稱。
+            - `**fields`：附帶欄位。
+
+            回傳：
+            - `None`：僅記錄 debug log。
+            """
+
+            if not settings.chat_stream_debug:
+                return
+            elapsed_ms = round((time.perf_counter() - stream_started_at) * 1000, 1)
+            LOGGER.info(
+                "chat_stream_debug event=%s elapsed_ms=%s area_id=%s question=%r fields=%s",
+                event,
+                elapsed_ms,
+                area_id,
+                question,
+                fields,
+            )
 
         def emit_phase(*, phase: str, status: str, message: str) -> None:
             """透過 LangGraph custom stream 發送高層 chat 階段事件。"""
 
+            log_stream_debug(event="phase", phase=phase, status=status, message=message)
             if writer is None:
                 return
             writer({"type": "phase", "phase": phase, "status": status, "message": message})
@@ -190,6 +276,7 @@ class DeepAgentsChatRuntime:
         ) -> None:
             """透過 LangGraph custom stream 發送工具呼叫事件。"""
 
+            log_stream_debug(event="tool_call", name=name, status=status)
             if writer is None:
                 return
             writer(
@@ -202,11 +289,26 @@ class DeepAgentsChatRuntime:
                 }
             )
 
+        def emit_token_delta(*, delta: str) -> None:
+            """透過 LangGraph custom stream 發送回答 token 增量事件。
+
+            參數：
+            - `delta`：本次新增的回答文字片段。
+
+            回傳：
+            - `None`：僅透過 writer 發送事件。
+            """
+
+            log_stream_debug(event="token_emit", delta_preview=delta[:80], delta_length=len(delta))
+            if writer is None or not delta:
+                return
+            writer({"type": "token", "delta": delta})
+
         @tool
         def retrieve_area_contexts(focus_query: str | None = None) -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。"""
 
-            nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload
+            nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload
 
             if retrieval_result is None:
                 tool_input = {
@@ -225,7 +327,13 @@ class DeepAgentsChatRuntime:
                 )
                 citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
                 assembled_contexts_payload = build_assembled_context_payload(retrieval_result)
+                llm_tool_contexts_payload = build_agent_tool_context_payload(retrieval_result)
                 retrieval_invoked = True
+                log_stream_debug(
+                    event="retrieval_complete",
+                    contexts_count=len(retrieval_result.assembled_contexts),
+                    citations_count=len(retrieval_result.citations),
+                )
                 emit_phase(phase="searching", status="completed", message="知識庫搜尋完成")
                 emit_phase(phase="tool_calling", status="completed", message="知識庫工具呼叫完成")
                 emit_tool_call(
@@ -237,9 +345,7 @@ class DeepAgentsChatRuntime:
 
             return json.dumps(
                 {
-                    "assembled_contexts": assembled_contexts_payload,
-                    "citations": citations_payload,
-                    "trace": retrieval_result.trace if retrieval_result is not None else {},
+                    "assembled_contexts": llm_tool_contexts_payload,
                 },
                 ensure_ascii=False,
             )
@@ -251,25 +357,68 @@ class DeepAgentsChatRuntime:
             max_tokens=min(self._max_output_tokens, 1200),
             streaming=True,
         )
+        tracing_manager = nullcontext()
+        if settings.langsmith_tracing:
+            if tracing_context is None:  # pragma: no cover - 依賴缺失時於執行期明確失敗。
+                raise RuntimeError("缺少 langsmith 依賴，無法啟用 LangSmith tracing。")
+            if not settings.langsmith_api_key:
+                raise ValueError("啟用 LangSmith tracing 前必須提供 LANGSMITH_API_KEY。")
+            tracing_manager = tracing_context(
+                enabled=True,
+                project_name=settings.langsmith_project,
+                tags=self._build_langsmith_tags(settings=settings),
+                metadata=self._build_langsmith_metadata(
+                    principal=principal,
+                    settings=settings,
+                    area_id=area_id,
+                    question=question,
+                ),
+            )
+
         emit_phase(phase="thinking", status="started", message="正在思考如何回答")
         main_agent = build_main_agent(model=llm, retrieve_area_contexts_tool=retrieve_area_contexts)
+        log_stream_debug(event="agent_stream_start")
 
         result: object | None = None
         streamed_answer_parts: list[str] = []
-        for stream_item in main_agent.stream(
-            {"messages": [{"role": "user", "content": question}]},
-            stream_mode=["messages", "values"],
-        ):
-            stream_mode, stream_payload = _normalize_agent_stream_item(stream_item)
-            if stream_mode == "messages":
-                text_delta = _extract_stream_message_text(stream_payload)
-                if text_delta:
-                    streamed_answer_parts.append(text_delta)
-                continue
-            if stream_mode == "values" and isinstance(stream_payload, dict):
-                result = stream_payload
+        with tracing_manager:
+            for stream_item in main_agent.stream(
+                {"messages": [{"role": "user", "content": question}]},
+                stream_mode=["messages", "values"],
+            ):
+                stream_mode, stream_payload = _normalize_agent_stream_item(stream_item)
+                if stream_mode == "messages":
+                    text_delta = _extract_stream_message_text(stream_payload)
+                    if text_delta:
+                        if not first_token_emitted:
+                            first_token_emitted = True
+                            log_stream_debug(
+                                event="first_answer_token",
+                                delta_preview=text_delta[:80],
+                                delta_length=len(text_delta),
+                            )
+                        streamed_answer_parts.append(text_delta)
+                        emit_token_delta(delta=text_delta)
+                    continue
+                if stream_mode == "values" and isinstance(stream_payload, dict):
+                    log_stream_debug(
+                        event="agent_values",
+                        message_count=(
+                            len(stream_payload.get("messages", []))
+                            if isinstance(stream_payload.get("messages"), list)
+                            else 0
+                        ),
+                        has_answer=bool(_extract_final_answer_text(stream_payload)),
+                    )
+                    result = stream_payload
 
         answer = _extract_final_answer_text(result) or "".join(streamed_answer_parts).strip() or "目前無法根據現有內容生成穩定回答。"
+        log_stream_debug(
+            event="answer_complete",
+            token_events=len(streamed_answer_parts),
+            answer_length=len(answer),
+            retrieval_invoked=retrieval_invoked,
+        )
         emit_phase(phase="thinking", status="completed", message="回答內容已整理完成")
 
         trace = {

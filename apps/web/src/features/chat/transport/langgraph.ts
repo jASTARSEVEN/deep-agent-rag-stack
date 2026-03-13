@@ -36,6 +36,18 @@ export interface LangGraphChatStreamUpdate {
   usedKnowledgeBase?: boolean;
 }
 
+/** 等待 run 結束後再提交到 UI 的最終 state 摘要。 */
+interface PendingCompletionUpdate {
+  /** 最終 references。 */
+  references: ChatContextReference[];
+  /** 最終回答文字。 */
+  answer: string;
+  /** 最終 trace。 */
+  trace?: Record<string, unknown>;
+  /** 本輪是否有使用知識庫 references。 */
+  usedKnowledgeBase: boolean;
+}
+
 
 /** 判斷未知資料是否為一般 record。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -79,6 +91,22 @@ function extractMessageDelta(data: unknown): string {
       return [];
     })
     .join("");
+}
+
+
+/** 判斷 values event 是否屬於目前送出的問題。 */
+function isCurrentQuestionState(data: Record<string, unknown>, areaId: string, question: string): boolean {
+  return data.area_id === areaId && data.question === question;
+}
+
+
+/** 於啟用 debug 時輸出前端 chat stream 時間點。 */
+function logChatStreamDebug(startedAt: number, event: string, fields: Record<string, unknown> = {}): void {
+  if (!appConfig.chatStreamDebug) {
+    return;
+  }
+  const elapsedMs = Math.round((performance.now() - startedAt) * 10) / 10;
+  console.debug("[chat-stream-debug]", { event, elapsedMs, ...fields });
 }
 
 
@@ -206,7 +234,9 @@ async function streamAreaThreadChatInternal(
     throw new Error("目前尚未登入，無法呼叫 LangGraph chat。");
   }
 
+  const streamStartedAt = performance.now();
   const client = createLangGraphClient(token);
+  let pendingCompletion: PendingCompletionUpdate | null = null;
   try {
     const assistantId = await ensureAssistant(client);
     const threadId = await ensureAreaThreadId(areaId, accessTokenGetter);
@@ -222,6 +252,10 @@ async function streamAreaThreadChatInternal(
       if ((part.event === "messages" || part.event === "messages-tuple")) {
         const delta = extractMessageDelta(part.data);
         if (delta) {
+          logChatStreamDebug(streamStartedAt, "messages_tuple", {
+            deltaLength: delta.length,
+            deltaPreview: delta.slice(0, 80),
+          });
           onUpdate({ delta });
         }
         continue;
@@ -235,6 +269,7 @@ async function streamAreaThreadChatInternal(
           && (status === "started" || status === "completed")
           && typeof message === "string"
         ) {
+          logChatStreamDebug(streamStartedAt, "phase", { phase, status, message });
           onUpdate({
             phaseState: {
               phase,
@@ -242,6 +277,17 @@ async function streamAreaThreadChatInternal(
               message,
             },
           });
+        }
+        continue;
+      }
+      if (part.event === "custom" && isRecord(part.data) && part.data.type === "token") {
+        const delta = part.data.delta;
+        if (typeof delta === "string" && delta) {
+          logChatStreamDebug(streamStartedAt, "custom_token", {
+            deltaLength: delta.length,
+            deltaPreview: delta.slice(0, 80),
+          });
+          onUpdate({ delta });
         }
         continue;
       }
@@ -256,6 +302,7 @@ async function streamAreaThreadChatInternal(
           && isRecord(input)
           && (output === null || output === undefined || isRecord(output))
         ) {
+          logChatStreamDebug(streamStartedAt, "tool_call", { name, status });
           onUpdate({
             toolCall: {
               name,
@@ -267,7 +314,7 @@ async function streamAreaThreadChatInternal(
         }
         continue;
       }
-      if (part.event === "values" && isRecord(part.data)) {
+      if (part.event === "values" && isRecord(part.data) && isCurrentQuestionState(part.data, areaId, question)) {
         const citations = Array.isArray(part.data.citations) ? (part.data.citations as ChatContextReference[]) : [];
         const assembledContexts = Array.isArray(part.data.assembled_contexts)
           ? (part.data.assembled_contexts as Array<Record<string, unknown>>)
@@ -299,15 +346,28 @@ async function streamAreaThreadChatInternal(
           part.data.trace && typeof part.data.trace === "object"
             ? (part.data.trace as Record<string, unknown>)
             : undefined;
-        onUpdate({
+        logChatStreamDebug(streamStartedAt, "values_current_question", {
+          answerLength: answer.length,
+          referencesCount: references.length,
+        });
+        pendingCompletion = {
           references,
           answer,
           trace,
-          completed: true,
-          phaseState: null,
           usedKnowledgeBase: references.length > 0 || Boolean((trace?.agent as { retrieval_invoked?: boolean } | undefined)?.retrieval_invoked),
-        });
+        };
       }
+    }
+    if (pendingCompletion) {
+      logChatStreamDebug(streamStartedAt, "completion_commit", {
+        answerLength: pendingCompletion.answer.length,
+        referencesCount: pendingCompletion.references.length,
+      });
+      onUpdate({
+        ...pendingCompletion,
+        completed: true,
+        phaseState: null,
+      });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
