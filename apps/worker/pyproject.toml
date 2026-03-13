@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
   "celery[redis]>=5.4.0,<6.0.0",
+  "langchain-text-splitters>=0.3.11,<0.4.0",
   "minio>=7.2.12,<8.0.0",
   "pydantic-settings>=2.4.0,<3.0.0",
   "psycopg2-binary>=2.9.10,<3.0.0",

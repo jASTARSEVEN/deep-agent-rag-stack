@@ -49,14 +49,15 @@ The initial vertical slice listed below was assembled within one day of off-hour
 - `deny-by-default` protection for area and document access with consistent `404` behavior
 - Knowledge Area create/list/detail/access-management MVP
 - Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
+- SQL-first `parent -> child` chunk tree generation for `TXT/MD`, with custom parent sections and LangChain-based child splitting
 - Core Areas / Files workflows in the web app plus baseline E2E coverage
 
 ## Not Yet Implemented
 
-- Full indexing pipeline, including chunking, embeddings, and FTS persistence
+- Full indexing pipeline beyond the current SQL-first chunk tree foundation, including embeddings and FTS persistence
 - Retrieval pipeline, including SQL gate, vector recall, FTS recall, `RRF`, and rerank
 - Chat answers, citations, and the full knowledge-chat experience
-- Document delete, reindex, and richer ingest / retrieval observability
+- Richer retrieval observability beyond the current document delete, reindex, and chunk/job observability
 - Area rename / delete and related management hardening
 
 ## TODO / Future Additions
@@ -103,7 +104,7 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
 
 ## Environment Variables
 
-See `.env.example` for the full local default configuration.
+See `.env.example` for the full local default configuration. The template is grouped by variable category and includes bilingual comments.
 
 ## Verification
 

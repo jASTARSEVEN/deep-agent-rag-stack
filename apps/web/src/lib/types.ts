@@ -112,6 +112,19 @@ export type DocumentStatus = "uploaded" | "processing" | "ready" | "failed";
 export type IngestJobStatus = "queued" | "processing" | "succeeded" | "failed";
 
 
+/** 文件或 ingest job 的 chunk 摘要。 */
+export interface ChunkSummary {
+  /** chunk 總數。 */
+  total_chunks: number;
+  /** parent chunk 數量。 */
+  parent_chunks: number;
+  /** child chunk 數量。 */
+  child_chunks: number;
+  /** 最近一次成功完成 indexing 的時間。 */
+  last_indexed_at: string | null;
+}
+
+
 /** 單一文件摘要。 */
 export interface DocumentSummary {
   /** 文件唯一識別碼。 */
@@ -126,6 +139,8 @@ export interface DocumentSummary {
   file_size: number;
   /** 文件目前處理狀態。 */
   status: DocumentStatus;
+  /** 文件 chunk 摘要。 */
+  chunk_summary: ChunkSummary;
   /** 文件建立時間。 */
   created_at: string;
   /** 文件最後更新時間。 */
@@ -141,6 +156,10 @@ export interface IngestJobSummary {
   document_id: string;
   /** job 目前狀態。 */
   status: IngestJobStatus;
+  /** job 目前執行階段。 */
+  stage: string;
+  /** job chunk 摘要。 */
+  chunk_summary: ChunkSummary;
   /** job 失敗時的可讀錯誤訊息。 */
   error_message: string | null;
   /** job 建立時間。 */
@@ -162,6 +181,15 @@ export interface UploadDocumentPayload {
   /** 剛建立的文件摘要。 */
   document: DocumentSummary;
   /** 與本次上傳對應的 ingest job 摘要。 */
+  job: IngestJobSummary;
+}
+
+
+/** 單一文件 reindex 回應。 */
+export interface ReindexDocumentPayload {
+  /** 重新派送後的文件摘要。 */
+  document: DocumentSummary;
+  /** 新建立的 ingest job 摘要。 */
   job: IngestJobSummary;
 }
 

@@ -55,7 +55,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - Uses `VITE_API_BASE_URL + /health` to display API health
 - Uses `VITE_API_BASE_URL + /auth/context` to establish the signed-in principal
 - Uses `VITE_API_BASE_URL + /areas*` for area create/list/detail, access management, and file upload/list
-- Uses `VITE_API_BASE_URL + /documents/*` and `/ingest-jobs/*` to display document and job status
+- Uses `VITE_API_BASE_URL + /documents/*` and `/ingest-jobs/*` to display document status, chunk summaries, reindex, delete, and job stage
 - `npm run test:e2e`: runs Playwright with the web dev server and the test-mode API for automated verification
 - `npm run test:smoke:keycloak`: smoke-tests the real Keycloak / callback / logout flow against the compose stack
 

@@ -1,6 +1,7 @@
 """API 端 Celery dispatch 與測試 inline ingest 輔助。"""
 
-from celery import Celery
+from typing import Any
+
 from fastapi import Request
 
 from app.core.settings import AppSettings
@@ -13,7 +14,28 @@ INGEST_DOCUMENT_TASK_NAME = "worker.tasks.ingest.process_document_ingest"
 DEFAULT_TASK_QUEUE_NAME = "default"
 
 
-def build_celery_client(settings: AppSettings) -> Celery:
+class NoopCeleryClient:
+    """在 inline ingest 模式下替代 Celery 的最小 client。"""
+
+    # 標記目前 client 僅供缺少 celery 套件時佔位使用。
+    missing_dependency = True
+
+    def send_task(self, name: str, kwargs: dict[str, object], queue: str) -> None:
+        """忽略 task dispatch，因為 inline ingest 不會走到此 client。
+
+        參數：
+        - `name`：原本要送出的 task 名稱。
+        - `kwargs`：原本要送出的 task kwargs。
+        - `queue`：原本要使用的 queue 名稱。
+
+        回傳：
+        - `None`：此方法只保留相容介面。
+        """
+
+        del name, kwargs, queue
+
+
+def build_celery_client(settings: AppSettings) -> Any:
     """建立 API 用 Celery client。
 
     參數：
@@ -22,6 +44,11 @@ def build_celery_client(settings: AppSettings) -> Celery:
     回傳：
     - `Celery`：供 API 派送背景任務使用的 Celery client。
     """
+
+    try:
+        from celery import Celery
+    except ModuleNotFoundError:
+        return NoopCeleryClient()
 
     client = Celery(
         f"{settings.service_name}-producer",
@@ -32,7 +59,7 @@ def build_celery_client(settings: AppSettings) -> Celery:
     return client
 
 
-def get_celery_client(request: Request) -> Celery:
+def get_celery_client(request: Request) -> Any:
     """從應用程式狀態讀取 Celery client。
 
     參數：
@@ -45,7 +72,7 @@ def get_celery_client(request: Request) -> Celery:
     return request.app.state.celery_client
 
 
-def dispatch_document_ingest(celery_client: Celery, *, job_id: str) -> None:
+def dispatch_document_ingest(celery_client: Any, *, job_id: str) -> None:
     """派送文件 ingest task。
 
     參數：
@@ -55,6 +82,9 @@ def dispatch_document_ingest(celery_client: Celery, *, job_id: str) -> None:
     回傳：
     - `None`：此函式只負責送出任務，不回傳業務資料。
     """
+
+    if getattr(celery_client, "missing_dependency", False):
+        raise RuntimeError("目前環境缺少 celery 套件，無法派送背景 ingest task。")
 
     celery_client.send_task(
         INGEST_DOCUMENT_TASK_NAME,

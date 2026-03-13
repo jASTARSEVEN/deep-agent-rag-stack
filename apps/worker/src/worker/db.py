@@ -1,4 +1,4 @@
-"""Worker 使用的資料庫 engine、session 與最小 ORM model。"""
+"""Worker 使用的資料庫 engine、session 與 chunking 流程 ORM model。"""
 
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, String, Text, create_engine
+from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
@@ -65,6 +65,13 @@ class IngestJobStatus(str, Enum):
     failed = "failed"
 
 
+class ChunkType(str, Enum):
+    """文件 chunk 結構型別。"""
+
+    parent = "parent"
+    child = "child"
+
+
 class Document(Base):
     """Worker 更新文件狀態時使用的最小 documents model。"""
 
@@ -84,6 +91,8 @@ class Document(Base):
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
     # 文件目前處理狀態。
     status: Mapped[DocumentStatus] = mapped_column(SqlEnum(DocumentStatus, native_enum=False), nullable=False)
+    # 最近一次成功完成 chunking 的時間。
+    indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 文件建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # 文件最後更新時間。
@@ -101,11 +110,61 @@ class IngestJob(Base):
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
     # job 目前狀態。
     status: Mapped[IngestJobStatus] = mapped_column(SqlEnum(IngestJobStatus, native_enum=False), nullable=False)
+    # job 目前執行階段。
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
     # job 失敗時的可讀錯誤訊息。
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 本次 job 產生的 parent chunk 數量。
+    parent_chunk_count: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    # 本次 job 產生的 child chunk 數量。
+    child_chunk_count: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
     # job 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # job 最後更新時間。
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class DocumentChunk(Base):
+    """Worker 寫入的文件 parent-child chunk tree。"""
+
+    __tablename__ = "document_chunks"
+    __table_args__ = (
+        UniqueConstraint("document_id", "position", name="uq_document_chunks_document_position"),
+        UniqueConstraint("document_id", "section_index", "child_index", name="uq_document_chunks_document_section_child"),
+    )
+
+    # chunk 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # chunk 所屬文件。
+    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    # child chunk 對應的 parent chunk；parent 為空值。
+    parent_chunk_id: Mapped[str | None] = mapped_column(
+        ForeignKey("document_chunks.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    # chunk 型別。
+    chunk_type: Mapped[ChunkType] = mapped_column(SqlEnum(ChunkType, native_enum=False), nullable=False)
+    # chunk 在整份文件中的穩定排序。
+    position: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # parent section 順序。
+    section_index: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # parent 下 child 順序；parent 本身為空值。
+    child_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # markdown section 標題；TXT 或無標題時為空值。
+    heading: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # chunk 原始內容。
+    content: Mapped[str] = mapped_column(Text(), nullable=False)
+    # 供 observability 使用的內容摘要。
+    content_preview: Mapped[str] = mapped_column(String(255), nullable=False)
+    # chunk 內容長度。
+    char_count: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # normalize 後文字座標起點。
+    start_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # normalize 後文字座標終點。
+    end_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # chunk 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # chunk 最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
 

@@ -10,6 +10,7 @@ import type {
   DocumentSummary,
   AuthContextPayload,
   IngestJobSummary,
+  ReindexDocumentPayload,
   UploadDocumentPayload,
 } from "./types";
 
@@ -274,6 +275,33 @@ export async function uploadDocument(areaId: string, file: File): Promise<Upload
 export async function fetchDocumentDetail(documentId: string): Promise<DocumentSummary> {
   const response = await fetchProtected(`/documents/${documentId}`);
   return (await response.json()) as DocumentSummary;
+}
+
+
+/**
+ * 重新建立單一文件的 ingest job 與 chunks。
+ *
+ * @param documentId 要重建索引的文件識別碼。
+ * @returns 重建後的文件與新 ingest job payload。
+ */
+export async function reindexDocument(documentId: string): Promise<ReindexDocumentPayload> {
+  const response = await fetchProtected(`/documents/${documentId}/reindex`, {
+    method: "POST",
+  });
+  return (await response.json()) as ReindexDocumentPayload;
+}
+
+
+/**
+ * 刪除單一文件與相關索引資料。
+ *
+ * @param documentId 要刪除的文件識別碼。
+ * @returns 無；成功時僅代表刪除完成。
+ */
+export async function deleteDocument(documentId: string): Promise<void> {
+  await fetchProtected(`/documents/${documentId}`, {
+    method: "DELETE",
+  });
 }
 
 

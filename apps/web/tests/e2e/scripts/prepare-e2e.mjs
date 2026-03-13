@@ -25,7 +25,7 @@ mkdirSync(tempDirectory, { recursive: true });
 rmSync(databasePath, { force: true });
 rmSync(storagePath, { recursive: true, force: true });
 
-const seedProcess = spawnSync("python", [join(currentDirectory, "seed_e2e_data.py"), databasePath], {
+const seedProcess = spawnSync("python", [join(currentDirectory, "seed_e2e_data.py"), databasePath, storagePath], {
   cwd: webRoot,
   stdio: "inherit",
 });

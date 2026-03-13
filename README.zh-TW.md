@@ -49,14 +49,15 @@
 - `deny-by-default` 的 area / document 存取控制與未授權 `404` 保護
 - Knowledge Area 的 create / list / detail / access management MVP
 - 文件上傳、物件儲存、ingest job 建立與 `uploaded -> processing -> ready|failed` 狀態轉換
+- `TXT/MD` 的 SQL-first `parent -> child` chunk tree 建立，保留 custom parent section 並以 LangChain 處理 child split
 - Web 端 Areas / Files 基本操作流程與最小 E2E 驗證基礎
 
 ## 目前尚未完成
 
-- 正式 indexing pipeline，包括 chunking、embedding 與 FTS 寫入
+- 超出目前 SQL-first chunk tree 基礎之上的正式 indexing pipeline，包括 embedding 與 FTS 寫入
 - Retrieval pipeline，包括 SQL gate、vector recall、FTS recall、`RRF` 與 rerank
 - Chat 問答、citations 與完整知識聊天體驗
-- 文件刪除、reindex 與更完整的 ingest / retrieval 觀測能力
+- 超出目前 document delete、reindex 與 chunk/job 觀測能力之上的更完整 retrieval 觀測
 - area rename / delete 等管理補強功能
 
 ## TODO / 未來補充
@@ -103,7 +104,7 @@
 
 ## 環境變數
 
-完整本機預設值請參考 `.env.example`。
+完整本機預設值請參考 `.env.example`。範本已依參數類型補上分段的中英雙語註解。
 
 ## 驗證方式
 

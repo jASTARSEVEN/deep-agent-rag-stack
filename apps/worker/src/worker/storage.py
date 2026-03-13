@@ -96,7 +96,10 @@ class FilesystemObjectStorageReader(ObjectStorageReader):
         - `bytes`：讀取出的原始位元組內容。
         """
 
-        return (self._base_path / object_key).read_bytes()
+        try:
+            return (self._base_path / object_key).read_bytes()
+        except FileNotFoundError as exc:
+            raise StorageError("無法讀取物件儲存。") from exc
 
 
 def build_object_storage_reader(settings: WorkerSettings) -> ObjectStorageReader:

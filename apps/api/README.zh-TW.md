@@ -45,6 +45,11 @@
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
+- `CHUNK_MIN_PARENT_SECTION_LENGTH`
+- `CHUNK_TARGET_CHILD_SIZE`
+- `CHUNK_CHILD_OVERLAP`
+- `CHUNK_CONTENT_PREVIEW_LENGTH`
+- `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `INGEST_INLINE_MODE`
@@ -80,6 +85,8 @@
 - `POST /areas/{area_id}/documents`
 - `GET /areas/{area_id}/documents`
 - `GET /documents/{document_id}`
+- `POST /documents/{document_id}/reindex`
+- `DELETE /documents/{document_id}`
 - `GET /ingest-jobs/{job_id}`
 
 ## 疑難排解
@@ -89,4 +96,6 @@
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
 - `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
 - `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 與 `INGEST_INLINE_MODE=true`，供 API 測試與 Playwright E2E 使用。
+- `TXT/MD` 上傳目前會建立 SQL-first 的 parent-child `document_chunks`；會保留 custom parent sections，並以 `LangChain RecursiveCharacterTextSplitter` 切分 child chunks。
+- 未支援格式仍維持受控 `failed`。
 - 此模組目前尚未實作 retrieval 或 chat。

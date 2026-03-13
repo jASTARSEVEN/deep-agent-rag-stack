@@ -41,6 +41,17 @@ class ObjectStorage(ABC):
         - `bytes`：讀取出的原始位元組內容。
         """
 
+    @abstractmethod
+    def delete_object(self, *, object_key: str) -> None:
+        """刪除既有物件內容。
+
+        參數：
+        - `object_key`：物件儲存中的鍵值。
+
+        回傳：
+        - `None`：此抽象方法只描述刪除行為。
+        """
+
 
 class MinioObjectStorage(ObjectStorage):
     """以 MinIO/S3 API 儲存原始檔。"""
@@ -109,6 +120,21 @@ class MinioObjectStorage(ObjectStorage):
         except S3Error as exc:
             raise StorageError("無法讀取物件儲存。") from exc
 
+    def delete_object(self, *, object_key: str) -> None:
+        """刪除既有 MinIO 物件。
+
+        參數：
+        - `object_key`：物件儲存中的鍵值。
+
+        回傳：
+        - `None`：此方法只負責刪除物件。
+        """
+
+        try:
+            self._client.remove_object(self._bucket, object_key)
+        except S3Error as exc:
+            raise StorageError("無法刪除物件儲存內容。") from exc
+
 
 class FilesystemObjectStorage(ObjectStorage):
     """測試與本機驗證使用的檔案系統儲存。"""
@@ -153,7 +179,24 @@ class FilesystemObjectStorage(ObjectStorage):
         """
 
         source = self._base_path / object_key
-        return source.read_bytes()
+        try:
+            return source.read_bytes()
+        except FileNotFoundError as exc:
+            raise StorageError("無法讀取物件儲存。") from exc
+
+    def delete_object(self, *, object_key: str) -> None:
+        """從本機檔案系統刪除既有物件。
+
+        參數：
+        - `object_key`：檔案系統儲存中的相對鍵值。
+
+        回傳：
+        - `None`：此方法只負責刪除檔案。
+        """
+
+        target = self._base_path / object_key
+        if target.exists():
+            target.unlink()
 
 
 def build_object_storage(settings: AppSettings) -> ObjectStorage:

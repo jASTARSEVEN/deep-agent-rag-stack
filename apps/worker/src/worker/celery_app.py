@@ -1,11 +1,30 @@
 """Worker 骨架的 Celery 應用程式進入點。"""
 
-from celery import Celery
-
 from worker.core.settings import get_settings
 
 
-def create_celery_app() -> Celery:
+class _FallbackCeleryApp:
+    """在本機缺少 celery 套件時提供最小 task decorator。"""
+
+    def task(self, name: str):
+        """回傳不改動原函式的 decorator。
+
+        參數：
+        - `name`：原本要註冊的 task 名稱。
+
+        回傳：
+        - 可直接包裝函式的 decorator。
+        """
+
+        del name
+
+        def decorator(function):
+            return function
+
+        return decorator
+
+
+def create_celery_app():
     """建立並設定 Celery 應用程式實例。
 
     參數：
@@ -14,6 +33,11 @@ def create_celery_app() -> Celery:
     回傳：
     - `Celery`：已完成基本 queue 與 serializer 設定的 Celery 應用程式。
     """
+
+    try:
+        from celery import Celery
+    except ModuleNotFoundError:
+        return _FallbackCeleryApp()
 
     settings = get_settings()
     application = Celery(

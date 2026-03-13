@@ -1,8 +1,8 @@
-"""Documents 與 ingest jobs API 測試。"""
+"""Documents、chunks 與 ingest jobs API 測試。"""
 
 from pathlib import Path
 
-from app.db.models import Area, AreaUserRole, Document, DocumentStatus, IngestJob, IngestJobStatus, Role
+from app.db.models import Area, AreaUserRole, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
 
 
 # 管理者測試 token。
@@ -18,34 +18,90 @@ READER_TOKEN = "Bearer test::user-reader::/group/reader"
 OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
 
 
-def test_upload_document_creates_document_job_and_inline_ready(client, db_session, app_settings) -> None:
-    """maintainer 上傳 md 後應建立 document/job，並在 inline ingest 下轉為 ready。"""
+def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app_settings) -> None:
+    """maintainer 上傳 md 後應建立 parent-child chunks，並在 inline ingest 下轉為 ready。"""
 
     area = Area(id="area-maintainer-docs", name="Maintainer Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
 
+    file_payload = f"# Intro\n{'A' * 320}\n\n## Detail\n{'B' * 340}\n".encode()
     response = client.post(
         f"/areas/{area.id}/documents",
         headers={"Authorization": MAINTAINER_TOKEN},
-        files={"file": ("notes.md", b"# Title\ncontent\n", "text/markdown")},
+        files={"file": ("notes.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    response_payload = response.json()
+    assert response_payload["document"]["file_name"] == "notes.md"
+    assert response_payload["document"]["status"] == "ready"
+    assert response_payload["document"]["chunk_summary"] == {
+        "total_chunks": 4,
+        "parent_chunks": 2,
+        "child_chunks": 2,
+        "last_indexed_at": response_payload["document"]["chunk_summary"]["last_indexed_at"],
+    }
+    assert response_payload["job"]["status"] == "succeeded"
+    assert response_payload["job"]["stage"] == "succeeded"
+    assert response_payload["job"]["chunk_summary"]["child_chunks"] == 2
+
+    stored_document = db_session.get(Document, response_payload["document"]["id"])
+    stored_job = db_session.get(IngestJob, response_payload["job"]["id"])
+    stored_chunks = db_session.query(DocumentChunk).filter(DocumentChunk.document_id == response_payload["document"]["id"]).all()
+    assert stored_document is not None
+    assert stored_document.status == DocumentStatus.ready
+    assert stored_document.file_size == len(file_payload)
+    assert stored_document.indexed_at is not None
+    assert stored_job is not None
+    assert stored_job.status == IngestJobStatus.succeeded
+    assert stored_job.parent_chunk_count == 2
+    assert stored_job.child_chunk_count == 2
+    assert len(stored_chunks) == 4
+    assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
+
+
+def test_upload_document_preserves_langchain_child_offsets(client, db_session) -> None:
+    """inline ingest 應將 LangChain child splitter 的 offsets 正確寫入資料庫。"""
+
+    area = Area(id="area-maintainer-offsets", name="Maintainer Offsets")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    repeated_sentence = ("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu " * 14).strip()
+    file_payload = f"# Intro\n{repeated_sentence}".encode()
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("offsets.md", file_payload, "text/markdown")},
     )
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["document"]["file_name"] == "notes.md"
-    assert payload["document"]["status"] == "ready"
-    assert payload["job"]["status"] == "succeeded"
 
-    stored_document = db_session.get(Document, payload["document"]["id"])
-    stored_job = db_session.get(IngestJob, payload["job"]["id"])
-    assert stored_document is not None
-    assert stored_document.status == DocumentStatus.ready
-    assert stored_document.file_size == len(b"# Title\ncontent\n")
-    assert stored_job is not None
-    assert stored_job.status == IngestJobStatus.succeeded
-    assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
+    stored_children = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"], DocumentChunk.chunk_type == "child")
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    parent = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"], DocumentChunk.chunk_type == "parent")
+        .order_by(DocumentChunk.position.asc())
+        .one()
+    )
+    assert len(stored_children) >= 2
+    for index, child in enumerate(stored_children):
+        assert child.child_index == index
+        assert child.start_offset < child.end_offset
+        assert child.content == child.content.strip()
+        assert child.char_count == len(child.content)
+        relative_start = child.start_offset - parent.start_offset
+        relative_end = child.end_offset - parent.start_offset
+        assert parent.content[relative_start:relative_end] == child.content
 
 
 def test_upload_document_rejects_reader(client, db_session) -> None:
@@ -143,7 +199,7 @@ def test_upload_document_rejects_unknown_extension(client, db_session) -> None:
 
 
 def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db_session) -> None:
-    """產品範圍內但本 phase 未支援的副檔名應進入 failed。"""
+    """產品範圍內但本 phase 未支援的副檔名應進入 failed 且沒有 chunks。"""
 
     area = Area(id="area-pdf-docs", name="PDF Docs")
     db_session.add(area)
@@ -159,12 +215,13 @@ def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db
     assert response.status_code == 201
     payload = response.json()
     assert payload["document"]["status"] == "failed"
+    assert payload["document"]["chunk_summary"]["total_chunks"] == 0
     assert payload["job"]["status"] == "failed"
     assert payload["job"]["error_message"] == "目前尚未支援此檔案類型的解析。"
 
 
-def test_list_documents_returns_only_area_documents(client, db_session) -> None:
-    """area 文件列表只應回傳指定 area 內的文件。"""
+def test_list_documents_returns_only_area_documents_with_chunk_summary(client, db_session) -> None:
+    """area 文件列表只應回傳指定 area 內的文件與其 chunk 摘要。"""
 
     visible_area = Area(id="area-doc-visible", name="Visible")
     hidden_area = Area(id="area-doc-hidden", name="Hidden")
@@ -191,6 +248,20 @@ def test_list_documents_returns_only_area_documents(client, db_session) -> None:
                 storage_key="hidden",
                 status=DocumentStatus.ready,
             ),
+            DocumentChunk(
+                document_id="document-visible",
+                parent_chunk_id=None,
+                chunk_type="parent",
+                position=0,
+                section_index=0,
+                child_index=None,
+                heading="Visible",
+                content="Visible section",
+                content_preview="Visible section",
+                char_count=15,
+                start_offset=0,
+                end_offset=15,
+            ),
         ]
     )
     db_session.commit()
@@ -199,6 +270,7 @@ def test_list_documents_returns_only_area_documents(client, db_session) -> None:
 
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == ["document-visible"]
+    assert response.json()["items"][0]["chunk_summary"]["parent_chunks"] == 1
 
 
 def test_document_detail_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
@@ -247,6 +319,125 @@ def test_ingest_job_detail_returns_same_404_for_unauthorized_and_missing(client,
 
     unauthorized_response = client.get(f"/ingest-jobs/{job.id}", headers={"Authorization": OUTSIDER_TOKEN})
     missing_response = client.get("/ingest-jobs/missing-job", headers={"Authorization": OUTSIDER_TOKEN})
+
+    assert unauthorized_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert unauthorized_response.json() == missing_response.json()
+
+
+def test_reindex_document_replaces_existing_chunks(client, db_session, app_settings) -> None:
+    """reindex 應清掉舊 chunks，並以新內容重建 chunk tree。"""
+
+    area = Area(id="area-reindex-docs", name="Reindex Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    original_payload = f"# Intro\n{'A' * 320}\n".encode()
+    upload_response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": ADMIN_TOKEN},
+        files={"file": ("notes.md", original_payload, "text/markdown")},
+    )
+    upload_payload = upload_response.json()
+    document_id = upload_payload["document"]["id"]
+
+    original_chunk_ids = {
+        chunk.id for chunk in db_session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).all()
+    }
+    stored_document = db_session.get(Document, document_id)
+    assert stored_document is not None
+    (Path(app_settings.local_storage_path) / stored_document.storage_key).write_bytes(
+        f"# Intro\n{'C' * 320}\n\n## Next\n{'D' * 340}\n".encode()
+    )
+
+    reindex_response = client.post(f"/documents/{document_id}/reindex", headers={"Authorization": ADMIN_TOKEN})
+
+    assert reindex_response.status_code == 200
+    reindex_payload = reindex_response.json()
+    assert reindex_payload["document"]["status"] == "ready"
+    assert reindex_payload["job"]["status"] == "succeeded"
+    assert reindex_payload["document"]["chunk_summary"]["parent_chunks"] == 2
+
+    refreshed_chunk_ids = {
+        chunk.id for chunk in db_session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).all()
+    }
+    assert original_chunk_ids.isdisjoint(refreshed_chunk_ids)
+
+
+def test_reindex_document_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
+    """未授權與不存在的 reindex 操作都應回相同 404。"""
+
+    area = Area(id="area-reindex-secret", name="Reindex Secret")
+    document = Document(
+        id="document-reindex-secret",
+        area_id=area.id,
+        file_name="secret.md",
+        content_type="text/markdown",
+        file_size=9,
+        storage_key="secret",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, document])
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    unauthorized_response = client.post(f"/documents/{document.id}/reindex", headers={"Authorization": OUTSIDER_TOKEN})
+    missing_response = client.post("/documents/missing-document/reindex", headers={"Authorization": OUTSIDER_TOKEN})
+
+    assert unauthorized_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert unauthorized_response.json() == missing_response.json()
+
+
+def test_delete_document_removes_storage_chunks_and_record(client, db_session, app_settings) -> None:
+    """刪除文件時應一併移除 storage、chunks 與 document record。"""
+
+    area = Area(id="area-delete-docs", name="Delete Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    upload_response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": ADMIN_TOKEN},
+        files={"file": ("notes.md", b"# Intro\ncontent\n", "text/markdown")},
+    )
+    document_id = upload_response.json()["document"]["id"]
+
+    stored_document = db_session.get(Document, document_id)
+    assert stored_document is not None
+    storage_path = Path(app_settings.local_storage_path) / stored_document.storage_key
+    assert storage_path.exists()
+
+    delete_response = client.delete(f"/documents/{document_id}", headers={"Authorization": ADMIN_TOKEN})
+
+    assert delete_response.status_code == 204
+    db_session.expire_all()
+    assert db_session.get(Document, document_id) is None
+    assert db_session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).count() == 0
+    assert not storage_path.exists()
+
+
+def test_delete_document_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
+    """未授權與不存在的 delete 操作都應回相同 404。"""
+
+    area = Area(id="area-delete-secret", name="Delete Secret")
+    document = Document(
+        id="document-delete-secret",
+        area_id=area.id,
+        file_name="secret.md",
+        content_type="text/markdown",
+        file_size=9,
+        storage_key="secret",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, document])
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    unauthorized_response = client.delete(f"/documents/{document.id}", headers={"Authorization": OUTSIDER_TOKEN})
+    missing_response = client.delete("/documents/missing-document", headers={"Authorization": OUTSIDER_TOKEN})
 
     assert unauthorized_response.status_code == 404
     assert missing_response.status_code == 404

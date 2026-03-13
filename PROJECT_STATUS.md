@@ -18,15 +18,17 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 3 — Documents & Ingestion`
+當前主階段：`Phase 3.5 — Document Lifecycle Hardening & Chunk Tree Foundation`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
 - `Phase 1` 授權與資料基礎骨架 MVP 已完成
 - `Phase 2` Areas 垂直切片 MVP 已完成
 - `Phase 3` Documents & Ingestion 垂直切片 MVP 已完成
+- `Phase 3.5` Document lifecycle hardening 與 chunk tree foundation 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
+- 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -42,6 +44,7 @@
 - Worker `ping` task 與 healthcheck 腳本已可使用
 - Web 首頁已可顯示 API health 與骨架說明
 - `.env.example`、README、模組 README 已補齊
+- 根目錄 `.env.example` 已補齊，並依參數類型提供中英雙語區段註解
 - `.gitignore`、`.gitattributes` 已建立
 - 本輪新增文件、註解與 docstring 已統一為台灣繁體中文用法
 
@@ -79,27 +82,39 @@
 - API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
 - Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例
 
+### Phase 3.5 — 已完成的 lifecycle hardening 與 chunk tree 基礎
+- 已新增 `document_chunks` SQL-first schema，採固定 `parent -> child` 兩層結構
+- 已為 `TXT/MD` 實作真正的 chunk tree 建立流程，並將 `document.status=ready` 與 chunking 成功綁定
+- 已採 hybrid chunking 策略：保留 custom parent section builder，child chunk 改用 `LangChain RecursiveCharacterTextSplitter`
+- 已擴充 `documents` 與 `ingest_jobs` observability，提供 chunk counts、stage 與 last indexed time
+- 已實作 `POST /documents/{document_id}/reindex` 與 `DELETE /documents/{document_id}`
+- 已落實 reindex replace-all 語意：重建前清除舊 chunks，不保留殘留資料
+- 已落實 delete 會移除 document、ingest jobs、document_chunks 與原始檔
+- Web Files UI 已補 chunk summary、reindex、delete 與失敗訊息顯示
+- API、worker 與 Playwright E2E 已補 chunk tree、reindex、delete、same-404 與 read-only 驗證
+- API 在 inline ingest 模式下已可於缺少 celery 套件的本機環境啟動與測試
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 3` 的 Documents & Ingestion 垂直切片
-- 穩定物件儲存、Celery dispatch 與 test-mode inline ingest 驗證路徑
-- 穩定前端 Files UI 與 Playwright E2E 驗證覆蓋
+- 穩定 `Phase 3.5` 的 chunk tree foundation 與 lifecycle hardening
+- 穩定 LangChain child splitter 與既有 SQL-first chunk 欄位映射的一致性
+- 穩定 document delete / reindex / chunk summary 的 API、worker 與 UI 驗證路徑
+- 為 `Phase 4` 準備 ready-only retrieval contract、SQL gate 與 retrieval query 組裝
 - 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
-- area rename / delete 不列為當前 phase 目標，預計於 Documents MVP 完成後再作為管理補強項目評估與排入
+- area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 補 `documents delete`、`reindex` 與更完整的 ingest job 觀測能力
-2. 為 Phase 4 準備 `ready` 文件限定、SQL gate 與 retrieval query contract
-3. 將 parser / chunking / indexing skeleton 延伸為真正的 indexing pipeline
-4. Documents MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+1. 為 Phase 4 建立 `ready-only` 文件限定、SQL gate 與 retrieval query contract
+2. 以既有 `document_chunks` 為基礎補 FTS builder、candidate 組裝與 retrieval trace metadata
+3. 補 embeddings / vector recall / FTS recall / RRF merge / rerank integration
+4. Retrieval foundation 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
-- 文件上傳正式流程
-- indexing 正式流程
+- embedding / vector indexing 正式流程
 - retrieval pipeline
 - chat 與 citations
 - SQL gate

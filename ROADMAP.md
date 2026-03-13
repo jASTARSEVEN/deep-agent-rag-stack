@@ -84,6 +84,23 @@
 狀態：
 - `已完成（MVP 垂直切片）`
 
+## Phase 3.5 — Document Lifecycle Hardening & Chunk Tree Foundation
+
+目標：
+- 讓文件 ingest 不只更新狀態，也能產出可供後續 retrieval 使用的 parent-child chunk tree
+
+內容：
+- `document_chunks` SQL-first schema
+- `TXT/MD` parent-child chunk tree writer
+- 保留 custom parent section builder，child chunk 採 `LangChain RecursiveCharacterTextSplitter`
+- document delete / reindex
+- ingest job stage 與 chunk observability
+- Files UI chunk summary、reindex、delete
+- API / worker / E2E 驗證補齊
+
+狀態：
+- `已完成`
+
 ## Post-Phase 3 Backlog — Area Management Hardening
 
 目標：

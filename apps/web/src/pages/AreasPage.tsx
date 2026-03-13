@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 import {
   createArea,
+  deleteDocument,
   fetchDocuments,
   fetchApiHealth,
   fetchAreaAccess,
@@ -13,6 +14,7 @@ import {
   fetchAreas,
   fetchAuthContext,
   fetchIngestJob,
+  reindexDocument,
   replaceAreaAccess,
   uploadDocument,
 } from "../lib/api";
@@ -55,6 +57,17 @@ function formatTimestamp(value: string): string {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+
+/**
+ * 將 chunk 摘要格式化為易讀文字。
+ *
+ * @param document 要顯示 chunk 摘要的文件。
+ * @returns 簡短的 chunk 摘要字串。
+ */
+function formatChunkSummary(document: DocumentSummary): string {
+  return `${document.chunk_summary.total_chunks} chunks (${document.chunk_summary.parent_chunks} parent / ${document.chunk_summary.child_chunks} child)`;
 }
 
 
@@ -156,6 +169,7 @@ export function AreasPage(): JSX.Element {
   const [isSubmittingCreate, setIsSubmittingCreate] = useState(false);
   const [isSubmittingAccess, setIsSubmittingAccess] = useState(false);
   const [isSubmittingUpload, setIsSubmittingUpload] = useState(false);
+  const [activeDocumentActionId, setActiveDocumentActionId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -386,6 +400,59 @@ export function AreasPage(): JSX.Element {
       setWorkspaceError(error instanceof Error ? error.message : "上傳文件失敗。");
     } finally {
       setIsSubmittingUpload(false);
+    }
+  }
+
+  /**
+   * 重新建立單一文件的索引與 chunks。
+   *
+   * @param document 要重新建立索引的文件摘要。
+   * @returns 無；僅更新頁面狀態。
+   */
+  async function handleReindexDocument(document: DocumentSummary): Promise<void> {
+    setActiveDocumentActionId(document.id);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+    try {
+      const payload = await reindexDocument(document.id);
+      const refreshedJob = await fetchIngestJob(payload.job.id);
+      setDocumentJobs((current) => ({ ...current, [document.id]: refreshedJob }));
+      setWorkspaceNotice(`已重新建立索引：${document.file_name}`);
+      if (selectedAreaId) {
+        await loadArea(selectedAreaId);
+      }
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "重新建立索引失敗。");
+    } finally {
+      setActiveDocumentActionId(null);
+    }
+  }
+
+  /**
+   * 刪除單一文件與相關 chunk/job。
+   *
+   * @param document 要刪除的文件摘要。
+   * @returns 無；僅更新頁面狀態。
+   */
+  async function handleDeleteDocument(document: DocumentSummary): Promise<void> {
+    setActiveDocumentActionId(document.id);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+    try {
+      await deleteDocument(document.id);
+      setDocumentJobs((current) => {
+        const nextJobs = { ...current };
+        delete nextJobs[document.id];
+        return nextJobs;
+      });
+      setWorkspaceNotice(`已刪除文件：${document.file_name}`);
+      if (selectedAreaId) {
+        await loadArea(selectedAreaId);
+      }
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "刪除文件失敗。");
+    } finally {
+      setActiveDocumentActionId(null);
     }
   }
 
@@ -708,14 +775,53 @@ export function AreasPage(): JSX.Element {
                               <p className="mt-3 text-xs text-stone-500">
                                 更新時間：{formatTimestamp(document.updated_at)}
                               </p>
+                              <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-stone-700">
+                                <p className="font-medium text-stone-900">chunks</p>
+                                <p className="mt-1" data-testid={`document-chunk-summary-${document.id}`}>
+                                  {formatChunkSummary(document)}
+                                </p>
+                                <p className="mt-1 text-xs text-stone-500">
+                                  最近 indexing：
+                                  {" "}
+                                  {document.chunk_summary.last_indexed_at
+                                    ? formatTimestamp(document.chunk_summary.last_indexed_at)
+                                    : "尚未完成"}
+                                </p>
+                              </div>
                               {latestJob ? (
                                 <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-stone-700">
                                   <p className="font-medium text-stone-900">job: {latestJob.status}</p>
+                                  <p className="mt-1 text-xs text-stone-500">stage: {latestJob.stage}</p>
+                                  <p className="mt-1 text-xs text-stone-500">
+                                    chunks: {latestJob.chunk_summary.parent_chunks} parent / {latestJob.chunk_summary.child_chunks} child
+                                  </p>
                                   {latestJob.error_message ? (
                                     <p className="mt-2 text-red-700" data-testid={`document-job-error-${document.id}`}>
                                       {latestJob.error_message}
                                     </p>
                                   ) : null}
+                                </div>
+                              ) : null}
+                              {selectedArea.effective_role === "admin" || selectedArea.effective_role === "maintainer" ? (
+                                <div className="mt-3 flex flex-wrap gap-3">
+                                  <button
+                                    data-testid={`reindex-document-${document.id}`}
+                                    className="rounded-full bg-stone-900 px-4 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={activeDocumentActionId === document.id}
+                                    onClick={() => void handleReindexDocument(document)}
+                                    type="button"
+                                  >
+                                    {activeDocumentActionId === document.id ? "處理中..." : "重新建立索引"}
+                                  </button>
+                                  <button
+                                    data-testid={`delete-document-${document.id}`}
+                                    className="rounded-full border border-red-300 px-4 py-2 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                    disabled={activeDocumentActionId === document.id}
+                                    onClick={() => void handleDeleteDocument(document)}
+                                    type="button"
+                                  >
+                                    刪除文件
+                                  </button>
                                 </div>
                               ) : null}
                             </article>

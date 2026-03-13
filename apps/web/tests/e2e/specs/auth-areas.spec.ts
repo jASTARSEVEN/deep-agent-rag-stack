@@ -72,6 +72,7 @@ test("admin 可登入、建立 area 並更新 access 規則", async ({ page }) =
 
   await expect(page.getByTestId("documents-list")).toContainText("playwright-notes.md");
   await expect(page.getByTestId("documents-list")).toContainText("ready");
+  await expect(page.getByTestId("documents-list")).toContainText("chunks");
 });
 
 
@@ -83,7 +84,9 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
   await expect(page.getByTestId("area-detail-panel")).toContainText("Reader Handbook Area");
   await expect(page.getByText("目前角色只能檢視 area detail。若需要管理 access，必須使用 admin 身分。")).toBeVisible();
   await expect(page.getByTestId("documents-list")).toContainText("reader-handbook.md");
+  await expect(page.getByTestId("documents-list")).toContainText("2 chunks (1 parent / 1 child)");
   await expect(page.getByTestId("document-upload")).toHaveCount(0);
+  await expect(page.getByTestId("reindex-document-document-reader-ready")).toHaveCount(0);
 });
 
 
@@ -105,6 +108,8 @@ test("maintainer 可看 detail 但 access 管理區不可操作", async ({ page 
 
   await expect(page.getByTestId("documents-list")).toContainText("maintainer-upload.md");
   await expect(page.getByTestId("documents-list")).toContainText("ready");
+  await page.getByTestId("reindex-document-document-maintainer-ready").click();
+  await expect(page.getByTestId("documents-list")).toContainText("job: succeeded");
 });
 
 
@@ -121,6 +126,16 @@ test("admin 上傳未支援檔案後會看到 failed 與錯誤訊息", async ({ 
   await expect(page.getByTestId("documents-list")).toContainText("unsupported.pdf");
   await expect(page.getByTestId("documents-list")).toContainText("failed");
   await expect(page.getByText("目前尚未支援此檔案類型的解析。")).toBeVisible();
+  await expect(page.getByTestId("documents-list")).toContainText("0 chunks (0 parent / 0 child)");
+});
+
+
+test("maintainer 可刪除文件，刪除後列表應移除", async ({ page }) => {
+  await loginAs(page, "maintainer");
+
+  await expect(page.getByTestId("documents-list")).toContainText("maintainer-guide.md");
+  await page.getByTestId("delete-document-document-maintainer-ready").click();
+  await expect(page.getByTestId("documents-list")).not.toContainText("maintainer-guide.md");
 });
 
 

@@ -1,24 +1,24 @@
-"""Documents 與 ingest jobs service。"""
+"""Documents、document chunks 與 ingest jobs service。"""
 
 from pathlib import PurePosixPath
+from typing import Any
 from uuid import uuid4
 
-from celery import Celery
 from fastapi import HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import Document, DocumentStatus, IngestJob, IngestJobStatus, Role
-from app.schemas.documents import DocumentSummary, IngestJobSummary
+from app.db.models import ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
+from app.schemas.documents import ChunkSummary, DocumentSummary, IngestJobSummary
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.ingest import process_ingest_job_inline
 from app.services.storage import ObjectStorage
 from app.services.tasks import dispatch_document_ingest
 
 
-# Phase 3 MVP 真正支援解析的副檔名。
+# Phase 3.5 真正支援解析的副檔名。
 SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md"}
 
 # 產品範圍內但本 phase 尚未真正處理的副檔名。
@@ -33,7 +33,7 @@ def create_document_upload(
     principal: CurrentPrincipal,
     settings: AppSettings,
     storage: ObjectStorage,
-    celery_client: Celery,
+    celery_client: Any,
     *,
     area_id: str,
     upload: UploadFile,
@@ -68,19 +68,26 @@ def create_document_upload(
         file_size=len(payload),
         storage_key=storage_key,
         status=DocumentStatus.uploaded,
+        indexed_at=None,
     )
-    job = IngestJob(document_id=document.id, status=IngestJobStatus.queued)
+    job = IngestJob(
+        document_id=document.id,
+        status=IngestJobStatus.queued,
+        stage="queued",
+        parent_chunk_count=0,
+        child_chunk_count=0,
+    )
     session.add_all([document, job])
     session.commit()
     session.refresh(document)
     session.refresh(job)
     if settings.ingest_inline_mode:
-        process_ingest_job_inline(session=session, storage=storage, job_id=job.id)
+        process_ingest_job_inline(session=session, storage=storage, job_id=job.id, settings=settings)
         session.refresh(document)
         session.refresh(job)
     else:
         dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
-    return build_document_summary(document), build_ingest_job_summary(job)
+    return build_document_summary(session=session, document=document), build_ingest_job_summary(document=document, job=job)
 
 
 def list_area_documents(session: Session, principal: CurrentPrincipal, *, area_id: str) -> list[DocumentSummary]:
@@ -99,7 +106,15 @@ def list_area_documents(session: Session, principal: CurrentPrincipal, *, area_i
     documents = session.scalars(
         select(Document).where(Document.area_id == area_id).order_by(Document.created_at.desc())
     ).all()
-    return [build_document_summary(item) for item in documents]
+    chunk_summary_by_document_id = _load_chunk_summaries(session=session, document_ids=[document.id for document in documents])
+    return [
+        build_document_summary(
+            session=session,
+            document=document,
+            chunk_summary=chunk_summary_by_document_id.get(document.id),
+        )
+        for document in documents
+    ]
 
 
 def get_document_detail(session: Session, principal: CurrentPrincipal, *, document_id: str) -> DocumentSummary:
@@ -123,7 +138,7 @@ def get_document_detail(session: Session, principal: CurrentPrincipal, *, docume
         if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise _build_document_not_found_error() from exc
         raise
-    return build_document_summary(document)
+    return build_document_summary(session=session, document=document)
 
 
 def get_ingest_job_detail(session: Session, principal: CurrentPrincipal, *, job_id: str) -> IngestJobSummary:
@@ -150,19 +165,101 @@ def get_ingest_job_detail(session: Session, principal: CurrentPrincipal, *, job_
         if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise _build_job_not_found_error() from exc
         raise
-    return build_ingest_job_summary(job)
+    return build_ingest_job_summary(document=document, job=job)
 
 
-def build_document_summary(document: Document) -> DocumentSummary:
+def reindex_document(
+    session: Session,
+    principal: CurrentPrincipal,
+    settings: AppSettings,
+    storage: ObjectStorage,
+    celery_client: Any,
+    *,
+    document_id: str,
+) -> tuple[DocumentSummary, IngestJobSummary]:
+    """重新建立既有文件的 ingest job 與 chunk tree。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `settings`：應用程式設定。
+    - `storage`：原始檔物件儲存介面。
+    - `celery_client`：用來派送 ingest task 的 Celery client。
+    - `document_id`：要重建索引的文件識別碼。
+
+    回傳：
+    - `tuple[DocumentSummary, IngestJobSummary]`：重建後的文件與新 job 摘要。
+    """
+
+    document = _get_authorized_document_for_write(session=session, principal=principal, document_id=document_id)
+    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    document.status = DocumentStatus.uploaded
+    document.indexed_at = None
+    job = IngestJob(
+        document_id=document.id,
+        status=IngestJobStatus.queued,
+        stage="queued",
+        parent_chunk_count=0,
+        child_chunk_count=0,
+    )
+    session.add(job)
+    session.commit()
+    session.refresh(document)
+    session.refresh(job)
+    if settings.ingest_inline_mode:
+        process_ingest_job_inline(session=session, storage=storage, job_id=job.id, settings=settings)
+        session.refresh(document)
+        session.refresh(job)
+    else:
+        dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
+    return build_document_summary(session=session, document=document), build_ingest_job_summary(document=document, job=job)
+
+
+def delete_document(
+    session: Session,
+    principal: CurrentPrincipal,
+    storage: ObjectStorage,
+    *,
+    document_id: str,
+) -> None:
+    """刪除文件、相關 jobs、chunks 與原始檔。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `storage`：原始檔物件儲存介面。
+    - `document_id`：要刪除的文件識別碼。
+
+    回傳：
+    - `None`：此函式只負責完成刪除流程。
+    """
+
+    document = _get_authorized_document_for_write(session=session, principal=principal, document_id=document_id)
+    storage.delete_object(object_key=document.storage_key)
+    session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+    session.execute(delete(IngestJob).where(IngestJob.document_id == document.id))
+    session.delete(document)
+    session.commit()
+
+
+def build_document_summary(
+    *,
+    session: Session,
+    document: Document,
+    chunk_summary: ChunkSummary | None = None,
+) -> DocumentSummary:
     """將 document model 轉成 API schema。
 
     參數：
+    - `session`：用來查詢 chunk 摘要的資料庫 session。
     - `document`：ORM document model。
+    - `chunk_summary`：若已預先查好，直接沿用的 chunk 摘要。
 
     回傳：
     - `DocumentSummary`：可供 API 回傳的文件摘要資料。
     """
 
+    resolved_chunk_summary = chunk_summary or _build_document_chunk_summary(session=session, document=document)
     return DocumentSummary(
         id=document.id,
         area_id=document.area_id,
@@ -170,15 +267,17 @@ def build_document_summary(document: Document) -> DocumentSummary:
         content_type=document.content_type,
         file_size=document.file_size,
         status=document.status,
+        chunk_summary=resolved_chunk_summary,
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
 
 
-def build_ingest_job_summary(job: IngestJob) -> IngestJobSummary:
+def build_ingest_job_summary(*, document: Document, job: IngestJob) -> IngestJobSummary:
     """將 ingest job model 轉成 API schema。
 
     參數：
+    - `document`：此 job 對應的 document。
     - `job`：ORM ingest job model。
 
     回傳：
@@ -189,10 +288,107 @@ def build_ingest_job_summary(job: IngestJob) -> IngestJobSummary:
         id=job.id,
         document_id=job.document_id,
         status=job.status,
+        stage=job.stage,
+        chunk_summary=ChunkSummary(
+            total_chunks=job.parent_chunk_count + job.child_chunk_count,
+            parent_chunks=job.parent_chunk_count,
+            child_chunks=job.child_chunk_count,
+            last_indexed_at=document.indexed_at,
+        ),
         error_message=job.error_message,
         created_at=job.created_at,
         updated_at=job.updated_at,
     )
+
+
+def _build_document_chunk_summary(session: Session, document: Document) -> ChunkSummary:
+    """查詢單一文件的 chunk 摘要。
+
+    參數：
+    - `session`：用來查詢 document_chunks 的資料庫 session。
+    - `document`：要查詢 chunk 摘要的文件。
+
+    回傳：
+    - `ChunkSummary`：指定文件的 chunk 摘要資訊。
+    """
+
+    return _load_chunk_summaries(session=session, document_ids=[document.id]).get(
+        document.id,
+        ChunkSummary(total_chunks=0, parent_chunks=0, child_chunks=0, last_indexed_at=document.indexed_at),
+    )
+
+
+def _load_chunk_summaries(session: Session, *, document_ids: list[str]) -> dict[str, ChunkSummary]:
+    """批次查詢多份文件的 chunk 摘要。
+
+    參數：
+    - `session`：用來查詢 chunk 資料的資料庫 session。
+    - `document_ids`：要查詢的文件識別碼列表。
+
+    回傳：
+    - `dict[str, ChunkSummary]`：以 document id 為鍵的 chunk 摘要映射。
+    """
+
+    if not document_ids:
+        return {}
+
+    documents = {
+        document.id: document
+        for document in session.scalars(select(Document).where(Document.id.in_(document_ids))).all()
+    }
+    rows = session.execute(
+        select(
+            DocumentChunk.document_id,
+            DocumentChunk.chunk_type,
+            func.count(DocumentChunk.id),
+        )
+        .where(DocumentChunk.document_id.in_(document_ids))
+        .group_by(DocumentChunk.document_id, DocumentChunk.chunk_type)
+    ).all()
+
+    counts_by_document_id = {document_id: {"parent": 0, "child": 0} for document_id in document_ids}
+    for document_id, chunk_type, chunk_count in rows:
+        chunk_type_key = chunk_type.value if isinstance(chunk_type, ChunkType) else str(chunk_type)
+        counts_by_document_id.setdefault(document_id, {"parent": 0, "child": 0})[chunk_type_key] = chunk_count
+
+    return {
+        document_id: ChunkSummary(
+            total_chunks=counts["parent"] + counts["child"],
+            parent_chunks=counts["parent"],
+            child_chunks=counts["child"],
+            last_indexed_at=documents[document_id].indexed_at if document_id in documents else None,
+        )
+        for document_id, counts in counts_by_document_id.items()
+    }
+
+
+def _get_authorized_document_for_write(session: Session, principal: CurrentPrincipal, *, document_id: str) -> Document:
+    """讀取可寫文件並套用 same-404 與最小角色檢查。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `document_id`：目標文件識別碼。
+
+    回傳：
+    - `Document`：已通過 maintainter 以上權限檢查的文件。
+    """
+
+    document = session.get(Document, document_id)
+    if document is None:
+        raise _build_document_not_found_error()
+    try:
+        require_minimum_area_role(
+            session=session,
+            principal=principal,
+            area_id=document.area_id,
+            minimum_role=Role.maintainer,
+        )
+    except HTTPException as exc:
+        if exc.status_code in {status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN}:
+            raise _build_document_not_found_error() from exc
+        raise
+    return document
 
 
 def _read_validated_upload(settings: AppSettings, upload: UploadFile) -> tuple[str, str, bytes]:

@@ -7,6 +7,19 @@ from pydantic import BaseModel
 from app.db.models import DocumentStatus, IngestJobStatus
 
 
+class ChunkSummary(BaseModel):
+    """文件或 ingest job 的 chunk 摘要資訊。"""
+
+    # chunk 總數。
+    total_chunks: int
+    # parent chunk 數量。
+    parent_chunks: int
+    # child chunk 數量。
+    child_chunks: int
+    # 最近一次成功完成 indexing 的時間。
+    last_indexed_at: datetime | None
+
+
 class DocumentSummary(BaseModel):
     """文件摘要資料。"""
 
@@ -22,6 +35,8 @@ class DocumentSummary(BaseModel):
     file_size: int
     # 文件目前處理狀態。
     status: DocumentStatus
+    # 文件 chunking 結果摘要。
+    chunk_summary: ChunkSummary
     # 文件建立時間。
     created_at: datetime
     # 文件最後更新時間。
@@ -37,6 +52,10 @@ class IngestJobSummary(BaseModel):
     document_id: str
     # job 目前狀態。
     status: IngestJobStatus
+    # job 目前執行階段。
+    stage: str
+    # 本次 job 產生或觀測到的 chunk 摘要。
+    chunk_summary: ChunkSummary
     # job 失敗時記錄的可讀錯誤訊息。
     error_message: str | None
     # job 建立時間。
@@ -58,4 +77,13 @@ class UploadDocumentResponse(BaseModel):
     # 剛建立的文件摘要。
     document: DocumentSummary
     # 與本次上傳對應的 ingest job 摘要。
+    job: IngestJobSummary
+
+
+class ReindexDocumentResponse(BaseModel):
+    """文件重建索引後回傳的 document 與 job。"""
+
+    # 重新派送後的文件摘要。
+    document: DocumentSummary
+    # 新建立的 ingest job 摘要。
     job: IngestJobSummary

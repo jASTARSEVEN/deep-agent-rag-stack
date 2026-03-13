@@ -45,6 +45,11 @@ This module contains the project's FastAPI service. It currently provides:
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
+- `CHUNK_MIN_PARENT_SECTION_LENGTH`
+- `CHUNK_TARGET_CHILD_SIZE`
+- `CHUNK_CHILD_OVERLAP`
+- `CHUNK_CONTENT_PREVIEW_LENGTH`
+- `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `INGEST_INLINE_MODE`
@@ -80,6 +85,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `POST /areas/{area_id}/documents`
 - `GET /areas/{area_id}/documents`
 - `GET /documents/{document_id}`
+- `POST /documents/{document_id}/reindex`
+- `DELETE /documents/{document_id}`
 - `GET /ingest-jobs/{job_id}`
 
 ## Troubleshooting
@@ -89,4 +96,6 @@ This module contains the project's FastAPI service. It currently provides:
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
+- `TXT/MD` uploads now produce SQL-first parent-child `document_chunks`; custom parent sections are preserved and child chunks are split with `LangChain RecursiveCharacterTextSplitter`.
+- Unsupported formats still move into controlled `failed`.
 - Retrieval and chat are not implemented in this module yet.

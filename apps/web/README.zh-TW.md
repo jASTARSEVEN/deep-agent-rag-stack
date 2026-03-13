@@ -55,7 +55,7 @@
 - 使用 `VITE_API_BASE_URL + /health` 顯示 API health 狀態
 - 使用 `VITE_API_BASE_URL + /auth/context` 建立登入後 principal
 - 使用 `VITE_API_BASE_URL + /areas*` 執行 Area create/list/detail、access management 與 files upload/list
-- 使用 `VITE_API_BASE_URL + /documents/*`、`/ingest-jobs/*` 顯示文件與 job 狀態
+- 使用 `VITE_API_BASE_URL + /documents/*`、`/ingest-jobs/*` 顯示文件狀態、chunk 摘要、reindex、delete 與 job stage
 - `npm run test:e2e`：啟動 Playwright、web dev server 與 test-mode API 自動化驗證
 - `npm run test:smoke:keycloak`：直接對 compose 的真實 Keycloak / callback / logout 流程做 smoke 驗證
 

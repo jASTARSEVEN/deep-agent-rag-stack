@@ -1,11 +1,13 @@
-"""Worker ingest task 測試。"""
+"""Worker ingest task 與 chunk tree 測試。"""
 
 from pathlib import Path
 
+from worker.chunking import ChunkingConfig, build_chunk_tree
 from worker.core.settings import WorkerSettings
 from worker.db import (
     Base,
     Document,
+    DocumentChunk,
     DocumentStatus,
     IngestJob,
     IngestJobStatus,
@@ -36,10 +38,41 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         MINIO_ACCESS_KEY="minio",
         MINIO_SECRET_KEY="minio123",
         MINIO_BUCKET="documents",
+        CHUNK_MIN_PARENT_SECTION_LENGTH=300,
+        CHUNK_TARGET_CHILD_SIZE=800,
+        CHUNK_CHILD_OVERLAP=120,
+        CHUNK_CONTENT_PREVIEW_LENGTH=120,
+        CHUNK_TXT_PARENT_GROUP_SIZE=4,
     )
 
 
-def seed_job(session_factory, *, file_name: str, payload: bytes, status=DocumentStatus.uploaded, job_status=IngestJobStatus.queued):
+def build_chunking_config(settings: WorkerSettings) -> ChunkingConfig:
+    """將 worker 設定轉為 chunking config。
+
+    參數：
+    - `settings`：worker 測試設定。
+
+    回傳：
+    - `ChunkingConfig`：供測試直接呼叫 chunking 使用的參數物件。
+    """
+
+    return ChunkingConfig(
+        min_parent_section_length=settings.chunk_min_parent_section_length,
+        target_child_chunk_size=settings.chunk_target_child_size,
+        child_chunk_overlap=settings.chunk_child_overlap,
+        content_preview_length=settings.chunk_content_preview_length,
+        txt_parent_group_size=settings.chunk_txt_parent_group_size,
+    )
+
+
+def seed_job(
+    session_factory,
+    *,
+    file_name: str,
+    payload: bytes,
+    status=DocumentStatus.uploaded,
+    job_status=IngestJobStatus.queued,
+):
     """建立測試用 document/job 與對應原始檔。
 
     參數：
@@ -69,8 +102,8 @@ def seed_job(session_factory, *, file_name: str, payload: bytes, status=Document
         return document, job
 
 
-def test_process_document_ingest_updates_ready(monkeypatch, tmp_path: Path) -> None:
-    """支援的 md 文件應推進到 ready/succeeded。"""
+def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tmp_path: Path) -> None:
+    """支援的 md 文件應推進到 ready/succeeded，並寫入 parent-child chunks。"""
 
     settings = build_settings(tmp_path)
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
@@ -78,25 +111,32 @@ def test_process_document_ingest_updates_ready(monkeypatch, tmp_path: Path) -> N
     Base.metadata.create_all(bind=engine)
     session_factory = create_session_factory(engine)
 
-    document, job = seed_job(session_factory, file_name="notes.md", payload=b"# Title\ncontent")
+    payload = f"# Title\n{'A' * 320}\n\n## Next\n{'B' * 340}".encode()
+    document, job = seed_job(session_factory, file_name="notes.md", payload=payload)
     storage_path = Path(settings.local_storage_path) / document.storage_key
     storage_path.parent.mkdir(parents=True, exist_ok=True)
-    storage_path.write_bytes(b"# Title\ncontent")
+    storage_path.write_bytes(payload)
 
     result = process_document_ingest(job.id)
 
     with session_factory() as session:
         refreshed_document = session.get(Document, document.id)
         refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.indexed_at is not None
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
+        assert refreshed_job.stage == "succeeded"
+        assert refreshed_job.parent_chunk_count == 2
+        assert refreshed_job.child_chunk_count == 2
+        assert len(refreshed_chunks) == 4
 
 
 def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, tmp_path: Path) -> None:
-    """未支援副檔名應轉為 failed。"""
+    """未支援副檔名應轉為 failed，且沒有 chunks。"""
 
     settings = build_settings(tmp_path)
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
@@ -114,12 +154,14 @@ def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, 
     with session_factory() as session:
         refreshed_document = session.get(Document, document.id)
         refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunk_count = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).count()
         assert result == "failed"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.failed
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
         assert refreshed_job.error_message == "目前尚未支援此檔案類型的解析。"
+        assert refreshed_chunk_count == 0
 
 
 def test_process_document_ingest_skips_non_queued_job(monkeypatch, tmp_path: Path) -> None:
@@ -148,3 +190,85 @@ def test_process_document_ingest_skips_non_queued_job(monkeypatch, tmp_path: Pat
         assert refreshed_document.status == DocumentStatus.uploaded
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.processing
+
+
+def test_reprocessing_replaces_existing_chunks(monkeypatch, tmp_path: Path) -> None:
+    """同一文件再處理時應替換舊 chunks，而不是殘留舊資料。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="notes.md", payload=b"# Title\ncontent")
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(b"# Title\ncontent")
+
+    assert process_document_ingest(job.id) == "succeeded"
+
+    with session_factory() as session:
+        original_chunk_ids = {
+            chunk.id for chunk in session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        }
+        refreshed_document = session.get(Document, document.id)
+        assert refreshed_document is not None
+        refreshed_document.status = DocumentStatus.uploaded
+        second_job = IngestJob(id="job-2", document_id=document.id, status=IngestJobStatus.queued)
+        session.add(second_job)
+        session.commit()
+
+    storage_path.write_bytes(b"# Title\nupdated\n\n## Next\nmore")
+    assert process_document_ingest("job-2") == "succeeded"
+
+    with session_factory() as session:
+        refreshed_chunk_ids = {
+            chunk.id for chunk in session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        }
+        assert original_chunk_ids.isdisjoint(refreshed_chunk_ids)
+
+
+def test_build_chunk_tree_merges_short_parent_with_following_section() -> None:
+    """過短 parent section 應在切 child 前先與後續 section 合併。"""
+
+    text = "# Short\nshort\n\n## Long\n" + ("A" * 400)
+
+    settings = build_settings(Path("/tmp"))
+    result = build_chunk_tree(file_name="notes.md", text=text, config=build_chunking_config(settings))
+
+    assert len(result.parent_chunks) == 1
+    assert result.parent_chunks[0].heading == "Short / Long"
+    assert "short" in result.parent_chunks[0].content
+    assert "A" * 50 in result.parent_chunks[0].content
+    assert len(result.child_chunks) == 1
+
+
+def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() -> None:
+    """LangChain child splitter 應保留穩定順序與正確 offsets。"""
+
+    repeated_sentence = ("alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu " * 20).strip()
+    text = f"# Intro\n{repeated_sentence}"
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_target_child_size = 120
+    settings.chunk_child_overlap = 20
+
+    result = build_chunk_tree(file_name="notes.md", text=text, config=build_chunking_config(settings))
+
+    assert len(result.parent_chunks) == 1
+    assert len(result.child_chunks) >= 2
+
+    parent = result.parent_chunks[0]
+    previous_end = -1
+    for index, child in enumerate(result.child_chunks):
+        assert child.child_index == index
+        assert child.content == child.content.strip()
+        assert child.start_offset < child.end_offset
+        assert child.start_offset >= parent.start_offset
+        assert child.end_offset <= parent.end_offset
+        relative_start = child.start_offset - parent.start_offset
+        relative_end = child.end_offset - parent.start_offset
+        assert parent.content[relative_start:relative_end] == child.content
+        assert child.start_offset > previous_end - settings.chunk_child_overlap
+        previous_end = child.end_offset

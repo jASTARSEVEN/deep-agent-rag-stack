@@ -1,14 +1,25 @@
-"""Documents 上傳、列表與詳情路由。"""
+"""Documents 上傳、重建索引、刪除、列表與詳情路由。"""
 
-from fastapi import APIRouter, Depends, File, UploadFile, status
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_principal
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings, get_app_settings
 from app.db.session import get_database_session
-from app.schemas.documents import DocumentListResponse, DocumentSummary, UploadDocumentResponse
-from app.services.documents import create_document_upload, get_document_detail, list_area_documents
+from app.schemas.documents import (
+    DocumentListResponse,
+    DocumentSummary,
+    ReindexDocumentResponse,
+    UploadDocumentResponse,
+)
+from app.services.documents import (
+    create_document_upload,
+    delete_document,
+    get_document_detail,
+    list_area_documents,
+    reindex_document,
+)
 from app.services.storage import ObjectStorage, build_object_storage
 from app.services.tasks import get_celery_client
 
@@ -109,3 +120,60 @@ def read_document_route(
     """
 
     return get_document_detail(session=session, principal=principal, document_id=document_id)
+
+
+@router.post("/documents/{document_id}/reindex", response_model=ReindexDocumentResponse)
+def reindex_document_route(
+    document_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    settings: AppSettings = Depends(get_app_settings),
+    storage: ObjectStorage = Depends(get_object_storage),
+    celery_client=Depends(get_celery_client),
+    session: Session = Depends(get_database_session),
+) -> ReindexDocumentResponse:
+    """重新建立指定文件的 ingest job 與 chunks。
+
+    參數：
+    - `document_id`：要重建索引的文件識別碼。
+    - `principal`：目前已驗證使用者。
+    - `settings`：目前應用程式設定。
+    - `storage`：原始檔物件儲存介面。
+    - `celery_client`：用來派送 ingest task 的 Celery client。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `ReindexDocumentResponse`：重新派送後的文件與新 ingest job 摘要。
+    """
+
+    document, job = reindex_document(
+        session=session,
+        principal=principal,
+        settings=settings,
+        storage=storage,
+        celery_client=celery_client,
+        document_id=document_id,
+    )
+    return ReindexDocumentResponse(document=document, job=job)
+
+
+@router.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document_route(
+    document_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    storage: ObjectStorage = Depends(get_object_storage),
+    session: Session = Depends(get_database_session),
+) -> Response:
+    """刪除指定文件、相關 jobs、chunks 與原始檔。
+
+    參數：
+    - `document_id`：要刪除的文件識別碼。
+    - `principal`：目前已驗證使用者。
+    - `storage`：原始檔物件儲存介面。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `Response`：成功時回傳無內容回應。
+    """
+
+    delete_document(session=session, principal=principal, storage=storage, document_id=document_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

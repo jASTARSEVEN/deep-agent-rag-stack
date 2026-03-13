@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import create_engine
@@ -30,11 +31,12 @@ def build_engine(database_path: Path):
     )
 
 
-def seed_e2e_database(database_path: Path) -> None:
+def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
     """重建 schema 並寫入 Playwright E2E 固定資料。
 
     參數：
     - `database_path`：E2E SQLite 資料庫檔案路徑。
+    - `storage_path`：E2E 本機物件儲存根目錄。
 
     回傳：
     - `None`：此函式只負責重建 schema 與寫入 seed data。
@@ -43,7 +45,7 @@ def seed_e2e_database(database_path: Path) -> None:
     sys.path.insert(0, str(API_SRC_DIRECTORY))
 
     from app.db.base import Base
-    from app.db.models import Area, AreaGroupRole, AreaUserRole, Document, DocumentStatus, Role
+    from app.db.models import Area, AreaGroupRole, AreaUserRole, ChunkType, Document, DocumentChunk, DocumentStatus, Role
 
     engine = build_engine(database_path)
     Base.metadata.drop_all(bind=engine)
@@ -74,6 +76,7 @@ def seed_e2e_database(database_path: Path) -> None:
                     file_size=128,
                     storage_key="seed/reader-handbook.md",
                     status=DocumentStatus.ready,
+                    indexed_at=datetime(2026, 3, 13, 0, 0, tzinfo=UTC),
                 ),
                 Document(
                     id="document-maintainer-ready",
@@ -83,10 +86,82 @@ def seed_e2e_database(database_path: Path) -> None:
                     file_size=256,
                     storage_key="seed/maintainer-guide.md",
                     status=DocumentStatus.ready,
+                    indexed_at=datetime(2026, 3, 13, 0, 5, tzinfo=UTC),
+                ),
+            ]
+        )
+        session.add_all(
+            [
+                DocumentChunk(
+                    id="chunk-reader-parent",
+                    document_id="document-reader-ready",
+                    parent_chunk_id=None,
+                    chunk_type=ChunkType.parent,
+                    position=0,
+                    section_index=0,
+                    child_index=None,
+                    heading="Reader Intro",
+                    content="Reader intro section",
+                    content_preview="Reader intro section",
+                    char_count=20,
+                    start_offset=0,
+                    end_offset=20,
+                ),
+                DocumentChunk(
+                    id="chunk-reader-child",
+                    document_id="document-reader-ready",
+                    parent_chunk_id="chunk-reader-parent",
+                    chunk_type=ChunkType.child,
+                    position=1,
+                    section_index=0,
+                    child_index=0,
+                    heading="Reader Intro",
+                    content="Reader intro content",
+                    content_preview="Reader intro content",
+                    char_count=20,
+                    start_offset=0,
+                    end_offset=20,
+                ),
+                DocumentChunk(
+                    id="chunk-maintainer-parent",
+                    document_id="document-maintainer-ready",
+                    parent_chunk_id=None,
+                    chunk_type=ChunkType.parent,
+                    position=0,
+                    section_index=0,
+                    child_index=None,
+                    heading="Maintainer Intro",
+                    content="Maintainer intro section",
+                    content_preview="Maintainer intro section",
+                    char_count=24,
+                    start_offset=0,
+                    end_offset=24,
+                ),
+                DocumentChunk(
+                    id="chunk-maintainer-child",
+                    document_id="document-maintainer-ready",
+                    parent_chunk_id="chunk-maintainer-parent",
+                    chunk_type=ChunkType.child,
+                    position=1,
+                    section_index=0,
+                    child_index=0,
+                    heading="Maintainer Intro",
+                    content="Maintainer intro content",
+                    content_preview="Maintainer intro content",
+                    char_count=24,
+                    start_offset=0,
+                    end_offset=24,
                 ),
             ]
         )
         session.commit()
+
+    (storage_path / "seed").mkdir(parents=True, exist_ok=True)
+    (storage_path / "seed" / "reader-handbook.md").write_text("# Reader Intro\nReader intro content\n", encoding="utf-8")
+    (storage_path / "seed" / "maintainer-guide.md").write_text(
+        "# Maintainer Intro\nMaintainer intro content\n",
+        encoding="utf-8",
+    )
 
 
 def main() -> None:
@@ -99,12 +174,14 @@ def main() -> None:
     - `None`：此函式以程序副作用方式完成 seed。
     """
 
-    if len(sys.argv) != 2:
-        raise SystemExit("用法：python seed_e2e_data.py <sqlite_db_path>")
+    if len(sys.argv) != 3:
+        raise SystemExit("用法：python seed_e2e_data.py <sqlite_db_path> <storage_path>")
 
     database_path = Path(sys.argv[1]).resolve()
+    storage_path = Path(sys.argv[2]).resolve()
     database_path.parent.mkdir(parents=True, exist_ok=True)
-    seed_e2e_database(database_path=database_path)
+    storage_path.mkdir(parents=True, exist_ok=True)
+    seed_e2e_database(database_path=database_path, storage_path=storage_path)
 
 
 if __name__ == "__main__":

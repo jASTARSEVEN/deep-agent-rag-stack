@@ -12,7 +12,16 @@ from fastapi import Request
 # 本機開發命令預設使用的環境變數檔名稱。
 ENV_FILE_NAME = ".env"
 
-EMPTY_STRING_ENV_KEYS = {"MINIO_SECURE", "MAX_UPLOAD_SIZE_BYTES", "INGEST_INLINE_MODE"}
+EMPTY_STRING_ENV_KEYS = {
+    "MINIO_SECURE",
+    "MAX_UPLOAD_SIZE_BYTES",
+    "INGEST_INLINE_MODE",
+    "CHUNK_MIN_PARENT_SECTION_LENGTH",
+    "CHUNK_TARGET_CHILD_SIZE",
+    "CHUNK_CHILD_OVERLAP",
+    "CHUNK_CONTENT_PREVIEW_LENGTH",
+    "CHUNK_TXT_PARENT_GROUP_SIZE",
+}
 
 
 def _drop_empty_string_env_values(data: Any) -> Any:
@@ -57,6 +66,11 @@ class AppSettings(BaseSettings):
     minio_bucket: Annotated[str, Field(alias="MINIO_BUCKET")] = "documents"
     local_storage_path: Annotated[Path, Field(alias="LOCAL_STORAGE_PATH")] = Path(".local-storage")
     max_upload_size_bytes: Annotated[int, Field(alias="MAX_UPLOAD_SIZE_BYTES")] = 5 * 1024 * 1024
+    chunk_min_parent_section_length: Annotated[int, Field(alias="CHUNK_MIN_PARENT_SECTION_LENGTH")] = 300
+    chunk_target_child_size: Annotated[int, Field(alias="CHUNK_TARGET_CHILD_SIZE")] = 800
+    chunk_child_overlap: Annotated[int, Field(alias="CHUNK_CHILD_OVERLAP")] = 120
+    chunk_content_preview_length: Annotated[int, Field(alias="CHUNK_CONTENT_PREVIEW_LENGTH")] = 120
+    chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
     celery_broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     celery_result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
     ingest_inline_mode: Annotated[bool, Field(alias="INGEST_INLINE_MODE")] = False

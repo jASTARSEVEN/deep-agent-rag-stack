@@ -32,7 +32,7 @@
 - 物件儲存：`MinIO`
 - 身分與授權：`Keycloak`
 - 前端：`React + Tailwind`
-- 檢索與流程編排：`LangChain loaders`、`LangGraph`
+- 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
 
@@ -124,7 +124,7 @@
 1. API 收檔並存入 MinIO
 2. 建立 `documents` 與 `ingest_jobs`
 3. Worker 解析文件
-4. 做 chunking
+4. 先建立 parent sections，再以 `LangChain RecursiveCharacterTextSplitter` 切分 child chunks
 5. 產生 embedding
 6. 產生 FTS `tsvector`
 7. 寫入 `document_chunks`
