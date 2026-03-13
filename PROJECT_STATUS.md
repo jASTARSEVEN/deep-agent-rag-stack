@@ -39,6 +39,7 @@
 - 專案已開始將 retrieval/assembler 收斂為單一 retrieval tool，供 LangGraph chat runtime 使用
 - 專案已具備 LangGraph Server built-in thread/run chat runtime 與 Web chat UI
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
+- 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -153,6 +154,9 @@
 - 前端已將 chat 拆為獨立 `features/chat`，並將 Assembled Contexts、工具輸入與工具輸出改為可縮放檢視
 - API chat 已收斂到 `app/chat` domain；LangGraph 相關程式僅保留 graph/auth/http app loader 與 runtime glue
 - 已補 `retrieve_area_contexts` 完成事件的 context payload 測試，避免 tool output 與 assembled context contract 再出現欄位不一致
+- 已為 Deep Agents runtime 新增可選 LangSmith tracing，會附帶 `area_id`、`principal_sub`、`groups` 數量、chat provider/model 與問題長度等 metadata
+- 已為 `LANGSMITH_TRACING=true` 但缺少 `LANGSMITH_API_KEY` 的錯誤情境補上明確執行期驗證
+- 已新增 `CHAT_STREAM_DEBUG` 與 `VITE_CHAT_STREAM_DEBUG`，可分別觀測 API 與 Web 端的 stream phase、tool call、values commit 與 token/message delta 時序
 
 ## 目前階段重點
 
@@ -160,6 +164,7 @@
 - 交付 `Phase 5.1` 的 LangGraph Server built-in thread/run chat MVP
 - 將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler 收斂為單一 retrieval tool
 - 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
+- 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
 - 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
 - 穩定 LangGraph 啟動方式與既有 areas/documents 路由的相容性
 
@@ -167,9 +172,9 @@
 
 ### 最適合立即進行的工作
 1. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-2. 穩定 token streaming 的真實 runtime 表現，確認 `messages-tuple` 在 compose 環境下行為一致
-3. 補完 Deep Agents greeting / no-context / tool failure fallback 的更多整合測試
-4. 補齊 built-in thread/run 路徑與前端 tool event UI 的更多 compose smoke 驗證
+2. 在 compose 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+3. 驗證 LangSmith tracing 在真實 provider 下的 trace、tags 與 metadata 是否符合預期
+4. 補完 Deep Agents greeting / no-context / tool failure fallback 的更多整合測試
 5. Chat MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
