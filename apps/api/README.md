@@ -13,6 +13,7 @@ This module contains the project's FastAPI service. It currently provides:
 - An area access-check verification slice
 - Document upload / list / detail APIs
 - Ingest job detail APIs
+- LangGraph Server built-in thread/run chat runtime
 - SQLAlchemy and Alembic migration scaffolding
 
 ## How to Start
@@ -21,7 +22,7 @@ This module contains the project's FastAPI service. It currently provides:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
   - `alembic upgrade head`
-  - `uvicorn app.main:app --app-dir src --reload --host 0.0.0.0 --port 18000`
+  - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Run tests locally:
   - `pytest`
 - Docker Compose:
@@ -78,16 +79,24 @@ This module contains the project's FastAPI service. It currently provides:
 - `KEYCLOAK_JWKS_URL`
 - `KEYCLOAK_GROUPS_CLAIM`
 - `AUTH_TEST_MODE`
+- `CHAT_PROVIDER`
+- `CHAT_MODEL`
+- `CHAT_MAX_OUTPUT_TOKENS`
+- `CHAT_TIMEOUT_SECONDS`
+- `CHAT_INCLUDE_TRACE`
+- `CHAT_STREAM_CHUNK_SIZE`
+- `LANGGRAPH_SERVICE_PORT`
 
 ## Main Directory Structure
 
 - `src/app/main.py`: FastAPI application entry point
 - `src/app/core`: settings and shared runtime helpers
 - `src/app/auth`: JWT validation, principal parsing, and auth dependencies
+- `src/app/chat`: Deep Agents main agent, agent tools, and LangGraph runtime glue
 - `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
-- `src/app/schemas`: response schemas
 - `src/app/services`: authorization, indexing, internal retrieval, and assembler services
+- `langgraph.json`: LangGraph Server loader config for the built-in thread/run runtime
 - `alembic`: migration environment and revision scripts
 - `tests`: authorization and API tests
 
@@ -111,7 +120,7 @@ This module contains the project's FastAPI service. It currently provides:
 
 ## Troubleshooting
 
-- If imports fail, make sure the startup command includes `--app-dir src`.
+- If the API process does not start, verify that `langgraph-cli[inmem]` is installed and `langgraph.json` is present in `apps/api`.
 - If `alembic upgrade head` cannot connect to the database, verify `DATABASE_URL` in the repo root `.env`.
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
@@ -124,4 +133,4 @@ This module contains the project's FastAPI service. It currently provides:
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
 - Unsupported formats still move into controlled `failed`.
-- Chat and citations remain out of scope for this module's current phase.
+- Chat now runs through LangGraph Server built-in thread/run endpoints with custom auth; the retrieval pipeline remains SQL-gated and ready-only before the answer layer.

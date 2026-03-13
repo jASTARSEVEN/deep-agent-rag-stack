@@ -27,7 +27,8 @@ Unlike many RAG demos that focus only on a chat interface or a single vector ret
 - Merges direct roles and `Keycloak groups` to compute an effective area-level `RBAC` role
 - Enforces `deny-by-default` at the data access layer and uses consistent unauthorized `404` responses to avoid resource existence leaks
 - Models the document lifecycle as `uploaded -> processing -> ready|failed` so incomplete data never enters retrieval
-- Plans a `SQL gate + vector recall + FTS recall + RRF + rerank` retrieval path that balances authorization, quality, and cost
+- Implements `SQL gate + vector recall + FTS recall + RRF + rerank + assembled-context citations` as the chat retrieval foundation
+- Uses `Deep Agents` as the formal chat core and `LangGraph Server` built-in `thread/run` as the runtime and streaming layer
 - Builds a locally reproducible vertical slice with `FastAPI + PostgreSQL + Celery + Redis + MinIO + React`
 
 ## What I Personally Owned
@@ -40,7 +41,7 @@ Unlike many RAG demos that focus only on a chat interface or a single vector ret
 
 ## Current Status
 
-The initial vertical slice listed below was assembled within one day of off-hours work through a multi-agent collaborative development workflow. The point was not to maximize feature completeness in a single burst, but to test how quickly a reasonably structured enterprise knowledge system prototype could be composed when task decomposition, implementation ownership, and integration flow were explicitly coordinated.
+The project is currently in `Phase 5.1 — Chat MVP on LangGraph Server`. By the second day of off-hours, multi-agent-driven implementation, the repo had already advanced from the original auth / upload / retrieval foundations to a working area-scoped chat slice on top of `Deep Agents` and `LangGraph Server`.
 
 - Monorepo structure, Docker Compose, and the local development stack
 - Basic wiring across the `FastAPI` API, `Celery` worker, and `React + Tailwind` web app
@@ -51,15 +52,17 @@ The initial vertical slice listed below was assembled within one day of off-hour
 - Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
 - SQL-first `parent -> child` chunk tree generation with `structure_kind=text|table`, covering `TXT`, `Markdown`, and table-aware `HTML`
 - Hybrid chunking: custom parent sectioning plus LangChain-based text child splitting, with dedicated table preserve / row-group split rules
-- Core Areas / Files workflows in the web app plus baseline E2E coverage
+- Ready-only retrieval foundation with SQL gate, vector recall, FTS recall, `RRF`, rerank, and table-aware context assembly
+- `Deep Agents` main agent plus single `retrieve_area_contexts` tool for formal chat execution
+- `LangGraph Server` built-in `thread/run` runtime, custom auth injection, and streaming to the web app
+- Web `Areas` workspace with Files and Chat, including assembled-context references and tool/debug views
 
 ## Not Yet Implemented
 
-- Full indexing pipeline beyond the current SQL-first chunk tree foundation, including embeddings and FTS persistence
-- Retrieval pipeline, including SQL gate, vector recall, FTS recall, `RRF`, and rerank
-- Chat answers, citations, and the full knowledge-chat experience
-- Richer retrieval observability beyond the current document delete, reindex, and chunk/job observability
 - Area rename / delete and related management hardening
+- Broader compose smoke coverage for real `Keycloak + LangGraph + Deep Agents` runtime behavior
+- More end-to-end coverage for tool failure, no-context answers, and streaming edge cases
+- Future `Deep Agents` expansion points such as sub-agents, `MCP`, and reusable `Skill` modules
 
 ## TODO / Future Additions
 
@@ -80,9 +83,9 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
 
 ## Repository Structure
 
-- `apps/api`: FastAPI API, JWT auth, RBAC, and services/routes for areas, documents, and ingest jobs
+- `apps/api`: FastAPI API, JWT auth, RBAC, internal retrieval services, `app/chat` Deep Agents domain, and LangGraph loader/runtime glue
 - `apps/worker`: Celery background jobs for ingest and status transitions
-- `apps/web`: React + Tailwind frontend, login flow, and Areas / Files UI
+- `apps/web`: React + Tailwind frontend, login flow, Areas / Files UI, and `features/chat` LangGraph SDK chat feature
 - `infra`: Docker Compose assets and container build definitions
 - `packages/shared`: Reserved space for shared types and configuration
 
@@ -113,10 +116,12 @@ See `.env.example` for the full local default configuration. The template is gro
   - `curl http://localhost:18000/health`
 - Auth context:
   - `curl -H "Authorization: Bearer <access-token>" http://localhost:18000/auth/context`
+- LangGraph chat runtime:
+  - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task:
   - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
-- Web / Areas / Files:
-  - Open `http://localhost:13000`, sign in, and verify area listing, file upload, and document status behavior
+- Web / Areas / Files / Chat:
+  - Open `http://localhost:13000`, sign in, and verify area listing, file upload, document status, and area-scoped chat behavior
 - Phase 1 auth verification guide:
   - `docs/phase1-auth-verification.md`
 

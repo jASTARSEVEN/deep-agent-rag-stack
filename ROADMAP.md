@@ -129,7 +129,7 @@
 - 視需要補齊完整 Areas CRUD 的 API、UI 與測試
 
 狀態：
-- `未開始`
+- `進行中`
 
 ## Phase 4.1 — Retrieval Foundation
 
@@ -164,20 +164,23 @@
 狀態：
 - `已完成`
 
-## Phase 5 — Chat
+## Phase 5.1 — Chat MVP on LangGraph Server
 
 目標：
-- 使用者可在 area 內問答並看到 citations
+- 使用者可在 area 內問答並看到 citations，且 chat runtime 由 LangGraph Server 承載
 
 內容：
-- chat API
-- retrieval pipeline integration
-- answer generation
-- citations formatting
-- SSE event flow
+- LangGraph Server 啟動與 `langgraph.json`
+- LangGraph built-in thread/run 與 custom auth
+- LangGraph SDK 前端 transport 與 `area_id -> thread_id` 多輪 thread UX
+- Deep Agents 主 agent + 單一 `retrieve_area_contexts` tool
+- assembled-context level citations / references contract
+- `messages-tuple`、`custom`、`values` stream contract
+- `phase` / `tool_call` custom event UI 與 `messages-tuple` token stream
+- tool 輸入/輸出與 assembled contexts 的可縮放檢視
 
 狀態：
-- `未開始`
+- `進行中`
 
 ## Milestone 規則
 
@@ -187,5 +190,5 @@
 
 ## 近期建議順序
 
-1. Phase 5：Chat
+1. Phase 5.1：Chat MVP on LangGraph Server
 2. Post-Phase 3 Backlog：Area Management Hardening

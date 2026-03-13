@@ -13,6 +13,7 @@
 - area access-check 驗證切片
 - documents upload / list / detail API
 - ingest jobs detail API
+- LangGraph Server built-in thread/run chat runtime
 - SQLAlchemy 與 Alembic migration 骨架
 
 ## 啟動方式
@@ -21,7 +22,7 @@
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
   - `alembic upgrade head`
-  - `uvicorn app.main:app --app-dir src --reload --host 0.0.0.0 --port 18000`
+  - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - 本機執行測試：
   - `pytest`
 - Docker Compose：
@@ -78,16 +79,24 @@
 - `KEYCLOAK_JWKS_URL`
 - `KEYCLOAK_GROUPS_CLAIM`
 - `AUTH_TEST_MODE`
+- `CHAT_PROVIDER`
+- `CHAT_MODEL`
+- `CHAT_MAX_OUTPUT_TOKENS`
+- `CHAT_TIMEOUT_SECONDS`
+- `CHAT_INCLUDE_TRACE`
+- `CHAT_STREAM_CHUNK_SIZE`
+- `LANGGRAPH_SERVICE_PORT`
 
 ## 主要目錄結構
 
 - `src/app/main.py`：FastAPI 應用程式進入點
 - `src/app/core`：設定與共用執行期輔助元件
 - `src/app/auth`：JWT 驗證、principal 解析與 auth dependency
+- `src/app/chat`：Deep Agents 主 agent、agent tools 與 LangGraph runtime glue
 - `src/app/db`：SQLAlchemy models、session 與 metadata
 - `src/app/routes`: HTTP routes
-- `src/app/schemas`：回應模型
 - `src/app/services`：授權、indexing、internal retrieval 與 assembler service
+- `langgraph.json`：LangGraph Server 內建 thread/run runtime 的 loader 設定
 - `alembic`：migration 執行環境與版本腳本
 - `tests`：授權與 API 測試
 
@@ -111,7 +120,7 @@
 
 ## 疑難排解
 
-- 若 import 失敗，請確認啟動命令包含 `--app-dir src`。
+- 若 API 行程無法啟動，請先確認已安裝 `langgraph-cli[inmem]`，且 `apps/api` 內存在 `langgraph.json`。
 - 若 `alembic upgrade head` 無法連到資料庫，請先確認根目錄 `.env` 內的 `DATABASE_URL`。
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
 - `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
@@ -124,4 +133,4 @@
 - assembler 會將 rerank 後的 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata，並以 budget guardrails 控制成本。
 - rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
 - 未支援格式仍維持受控 `failed`。
-- chat 與 citations 仍待後續 phase。
+- chat 現已透過 LangGraph Server built-in thread/run endpoints 與 custom auth 提供；retrieval pipeline 仍維持 SQL gate 與 ready-only 邊界後才進入 answer layer。

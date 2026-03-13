@@ -45,7 +45,7 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
     sys.path.insert(0, str(API_SRC_DIRECTORY))
 
     from app.db.base import Base
-    from app.db.models import Area, AreaGroupRole, AreaUserRole, ChunkType, Document, DocumentChunk, DocumentStatus, Role
+    from app.db.models import Area, AreaGroupRole, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
 
     engine = build_engine(database_path)
     Base.metadata.drop_all(bind=engine)
@@ -97,6 +97,7 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     document_id="document-reader-ready",
                     parent_chunk_id=None,
                     chunk_type=ChunkType.parent,
+                    structure_kind=ChunkStructureKind.text,
                     position=0,
                     section_index=0,
                     child_index=None,
@@ -112,21 +113,25 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     document_id="document-reader-ready",
                     parent_chunk_id="chunk-reader-parent",
                     chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.text,
                     position=1,
                     section_index=0,
                     child_index=0,
                     heading="Reader Intro",
-                    content="Reader intro content",
-                    content_preview="Reader intro content",
-                    char_count=20,
+                    content="Reader intro content explains the reader policy and citations behavior.",
+                    content_preview="Reader intro content explains the reader policy",
+                    char_count=68,
                     start_offset=0,
-                    end_offset=20,
+                    end_offset=68,
+                    embedding=[0.2] * 1536,
+                    fts_document="Reader intro content explains the reader policy and citations behavior.",
                 ),
                 DocumentChunk(
                     id="chunk-maintainer-parent",
                     document_id="document-maintainer-ready",
                     parent_chunk_id=None,
                     chunk_type=ChunkType.parent,
+                    structure_kind=ChunkStructureKind.text,
                     position=0,
                     section_index=0,
                     child_index=None,
@@ -142,15 +147,18 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     document_id="document-maintainer-ready",
                     parent_chunk_id="chunk-maintainer-parent",
                     chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.text,
                     position=1,
                     section_index=0,
                     child_index=0,
                     heading="Maintainer Intro",
-                    content="Maintainer intro content",
-                    content_preview="Maintainer intro content",
-                    char_count=24,
+                    content="Maintainer intro content explains upload, reindex, and chat behavior.",
+                    content_preview="Maintainer intro content explains upload",
+                    char_count=69,
                     start_offset=0,
-                    end_offset=24,
+                    end_offset=69,
+                    embedding=[0.21] * 1536,
+                    fts_document="Maintainer intro content explains upload reindex and chat behavior.",
                 ),
             ]
         )

@@ -21,6 +21,7 @@
 - 對外暴露 areas、documents、jobs、chat 相關 API
 - 目前已提供 `auth/context`、`areas` 的 create/list/detail、`areas/{area_id}/access` 管理端點，以及 documents / ingest jobs 最小集合
 - JWT 驗證目前以 Keycloak issuer + JWKS 為基礎，並要求 access token 內存在 `sub` 與 `groups`
+- chat runtime 透過 LangGraph Server 啟動；正式 Web transport 已改為 LangGraph SDK 預設 thread/run 端點，不再維護產品自訂 bridge chat routes
 
 ### Worker
 - Celery
@@ -75,14 +76,15 @@
 7. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
-1. Web 發送 chat request
-2. API 驗證 JWT 與 area scope
-3. Retrieval 先套 SQL gate
-4. 執行 vector recall + FTS recall
-5. 用 RRF 合併候選
-6. 用 Cohere rerank
-7. 用 LLM 生成回答與 citations
-8. API 以 SSE 或 HTTP 回傳前端
+1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run
+2. LangGraph Server 先透過 custom auth 驗證 Bearer token
+3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
+4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
+5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 內固定套用 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler
+6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 assembled contexts 與 references；前端顯示單位與實際送進 LLM 的 context 單位一致
+7. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：最終 state 走 `values`，高層階段與工具呼叫資訊走 `custom`
+8. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
+9. 前端會將 Assembled Contexts、單一 context、工具輸入與工具輸出都以可縮放樹狀結構顯示
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
@@ -143,15 +145,21 @@
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `pg_jieba`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `deep_agent_jieba` text search configuration
-8. retrieval 目前已擴充為 vector recall + FTS recall + `RRF` merge + minimal rerank + table-aware assembler；public chat / citations route 仍留在下一階段
+8. retrieval 目前已擴充為 vector recall + FTS recall + `RRF` merge + minimal rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 筆候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. assembler 會以 `(document_id, parent_chunk_id, structure_kind)` 為聚合邊界，將 rerank 後的 child chunks 組裝為 chat-ready context 與 citation-ready metadata
+11. assembler 會以 `(document_id, parent_chunk_id, structure_kind)` 為聚合邊界，將 rerank 後的 child chunks 組裝為 chat-ready context 與 context-level reference metadata
 12. assembler 不得擴張 SQL gate 後的資料集合；同一 parent 只合併已命中的 child chunks，不主動補前後 sibling
 13. `table` chunks 在 assembler 內維持 Markdown table 文字；同一 parent 多個 row-group child 合併時只保留一次表頭
-14. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制，以避免 prompt 成本失控
+14. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限
 15. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意
 16. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫
+17. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
+18. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
+19. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
+20. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
+21. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
+22. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表
@@ -165,9 +173,9 @@
 ### `apps/api`
 - `core`：settings、runtime helpers
 - `auth`：JWT / Keycloak integration
+- `chat`：Deep Agents 主 agent、agent tools 與 LangGraph runtime glue
 - `db`：session / repository wiring
 - `routes`：HTTP routes
-- `schemas`：Pydantic models
 - `services`：業務邏輯協調
 - `alembic`：migration skeleton 與 schema versioning
 
@@ -179,6 +187,7 @@
 ### `apps/web`
 - `app`：主入口
 - `auth`：Keycloak / test auth mode、session restore、protected route
+- `features/chat`：LangGraph SDK transport、chat state 與 chat/debug UI
 - `pages`：匿名首頁、callback、areas 等路由層頁面
 - `components`：可重用元件
 - `lib`：API / config / types

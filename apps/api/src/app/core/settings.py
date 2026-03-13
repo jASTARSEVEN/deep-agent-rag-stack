@@ -34,6 +34,12 @@ EMPTY_STRING_ENV_KEYS = {
     "ASSEMBLER_MAX_CONTEXTS",
     "ASSEMBLER_MAX_CHARS_PER_CONTEXT",
     "ASSEMBLER_MAX_CHILDREN_PER_PARENT",
+    "CHAT_PROVIDER",
+    "CHAT_MODEL",
+    "CHAT_MAX_OUTPUT_TOKENS",
+    "CHAT_TIMEOUT_SECONDS",
+    "CHAT_STREAM_CHUNK_SIZE",
+    "LANGGRAPH_SERVICE_PORT",
 }
 
 
@@ -114,6 +120,13 @@ class AppSettings(BaseSettings):
     assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 6
     assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 2500
     assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 3
+    chat_provider: Annotated[str, Field(alias="CHAT_PROVIDER")] = "deterministic"
+    chat_model: Annotated[str, Field(alias="CHAT_MODEL")] = "gpt-4.1-mini"
+    chat_max_output_tokens: Annotated[int, Field(alias="CHAT_MAX_OUTPUT_TOKENS")] = 700
+    chat_timeout_seconds: Annotated[int, Field(alias="CHAT_TIMEOUT_SECONDS")] = 30
+    chat_include_trace: Annotated[bool, Field(alias="CHAT_INCLUDE_TRACE")] = False
+    chat_stream_chunk_size: Annotated[int, Field(alias="CHAT_STREAM_CHUNK_SIZE")] = 64
+    langgraph_service_port: Annotated[int, Field(alias="LANGGRAPH_SERVICE_PORT")] = 8000
 
     @model_validator(mode="before")
     @classmethod

@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 4.2 — Retrieval Ranking & Assembly`
+當前主階段：`Phase 5.1 — Chat MVP on LangGraph Server`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -36,6 +36,9 @@
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
 - 專案已具備 internal-only 的 minimal rerank 路徑，涵蓋 Cohere / deterministic rerank provider、retrieval trace metadata 與 fail-open fallback
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
+- 專案已開始將 retrieval/assembler 收斂為單一 retrieval tool，供 LangGraph chat runtime 使用
+- 專案已具備 LangGraph Server built-in thread/run chat runtime 與 Web chat UI
+- 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -138,27 +141,39 @@
 - assembler trace 已補齊 kept/dropped chunk ids、per-context merge 結果與 truncation metadata
 - API 測試已補 text merge、table merge、budget trace、citation offsets、rerank fallback 與 upload -> ingest -> retrieval -> assembly 近似 E2E 驗證
 
+### Phase 5.1 — 進行中的 Chat MVP on LangGraph Server
+- 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
+- 已將 `CHAT_PROVIDER=deepagents` 改為真正使用 `create_deep_agent()` 的主 agent 回答路徑，不再映射為 OpenAI Responses provider
+- 已將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 assembler 收斂為單一 `retrieve_area_contexts` tool，交由主 agent 自行判斷是否呼叫
+- Web `/areas` 已新增多輪 thread chat panel，以 `area_id -> thread_id` 維持同 area 對話脈絡
+- 已將既有 Web chat transport 改為 LangGraph SDK 預設 thread/run 端點，不再以自訂 bridge chat routes 作正式路徑
+- 已將 graph 輸出升級為 assembled-context level contract，前端顯示單位與實際送進 LLM 的 context 單位對齊
+- 已將 Web chat stream 收斂為 LangGraph SDK `messages-tuple`、`custom` 與 `values` 事件；最終 answer / citations / assembled contexts / trace 直接來自 graph state
+- `custom` 事件目前已收斂為 `phase` 與 `tool_call`；token delta 正式透過 `messages-tuple` 傳遞
+- 前端已將 chat 拆為獨立 `features/chat`，並將 Assembled Contexts、工具輸入與工具輸出改為可縮放檢視
+- API chat 已收斂到 `app/chat` domain；LangGraph 相關程式僅保留 graph/auth/http app loader 與 runtime glue
+- 已補 `retrieve_area_contexts` 完成事件的 context payload 測試，避免 tool output 與 assembled context contract 再出現欄位不一致
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 4.2` assembler slice 與 `pg_jieba` 本機啟動路徑
-- 穩定 `hnsw` vector recall、`RRF`、rerank 與 assembler 之間的排序與 budget 語意
-- 穩定 `embedding` / `fts_document` / retrieval trace / assembler trace 與既有 reindex / delete / observability 路徑的相容性
-- 為後續 public chat API、answer generation 與 citations formatting 準備組裝契約
-- 保持 ready-only、deny-by-default、SQL gate 與 rerank fail-open fallback 的 retrieval / assembly 語意
-- area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
+- 交付 `Phase 5.1` 的 LangGraph Server built-in thread/run chat MVP
+- 將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler 收斂為單一 retrieval tool
+- 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
+- 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
+- 穩定 LangGraph 啟動方式與既有 areas/documents 路由的相容性
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 在 API 內將 assembler 輸出串到後續 chat/citations flow
-2. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
-3. 視需要補真實 Cohere compose smoke 驗證，但不作為 MVP 阻擋項
-4. Retrieval ranking / assembly 路徑穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+1. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
+2. 穩定 token streaming 的真實 runtime 表現，確認 `messages-tuple` 在 compose 環境下行為一致
+3. 補完 Deep Agents greeting / no-context / tool failure fallback 的更多整合測試
+4. 補齊 built-in thread/run 路徑與前端 tool event UI 的更多 compose smoke 驗證
+5. Chat MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
-- public chat API 與 citations
 - area rename / delete
 
 ## Agent Rules

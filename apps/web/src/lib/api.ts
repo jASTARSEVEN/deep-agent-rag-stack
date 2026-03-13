@@ -315,3 +315,4 @@ export async function fetchIngestJob(jobId: string): Promise<IngestJobSummary> {
   const response = await fetchProtected(`/ingest-jobs/${jobId}`);
   return (await response.json()) as IngestJobSummary;
 }
+

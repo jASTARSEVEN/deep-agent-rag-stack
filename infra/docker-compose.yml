@@ -139,6 +139,13 @@ services:
       ASSEMBLER_MAX_CONTEXTS: ${ASSEMBLER_MAX_CONTEXTS:-6}
       ASSEMBLER_MAX_CHARS_PER_CONTEXT: ${ASSEMBLER_MAX_CHARS_PER_CONTEXT:-2500}
       ASSEMBLER_MAX_CHILDREN_PER_PARENT: ${ASSEMBLER_MAX_CHILDREN_PER_PARENT:-3}
+      CHAT_PROVIDER: ${CHAT_PROVIDER:-deterministic}
+      CHAT_MODEL: ${CHAT_MODEL:-gpt-4.1-mini}
+      CHAT_MAX_OUTPUT_TOKENS: ${CHAT_MAX_OUTPUT_TOKENS:-700}
+      CHAT_TIMEOUT_SECONDS: ${CHAT_TIMEOUT_SECONDS:-30}
+      CHAT_INCLUDE_TRACE: ${CHAT_INCLUDE_TRACE:-false}
+      CHAT_STREAM_CHUNK_SIZE: ${CHAT_STREAM_CHUNK_SIZE:-64}
+      LANGGRAPH_SERVICE_PORT: ${LANGGRAPH_SERVICE_PORT:-8000}
       TEXT_SEARCH_CONFIG: ${TEXT_SEARCH_CONFIG:-deep_agent_jieba}
       RETRIEVAL_VECTOR_TOP_K: ${RETRIEVAL_VECTOR_TOP_K:-8}
       RETRIEVAL_FTS_TOP_K: ${RETRIEVAL_FTS_TOP_K:-8}
@@ -161,7 +168,7 @@ services:
     ports:
       - "${API_PORT}:8000"
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 8000), 5).close()"]
       interval: 10s
       timeout: 5s
       retries: 10

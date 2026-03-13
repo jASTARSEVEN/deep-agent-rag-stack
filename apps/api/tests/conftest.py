@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
 from app.db.base import Base
-from app.main import create_app
+from app.chat.runtime.langgraph_http_app import create_langgraph_http_app
 
 
 @pytest.fixture()
@@ -67,6 +67,13 @@ def app_settings(tmp_path: Path) -> AppSettings:
         ASSEMBLER_MAX_CONTEXTS=6,
         ASSEMBLER_MAX_CHARS_PER_CONTEXT=2500,
         ASSEMBLER_MAX_CHILDREN_PER_PARENT=3,
+        CHAT_PROVIDER="deterministic",
+        CHAT_MODEL="deterministic-chat",
+        CHAT_MAX_OUTPUT_TOKENS=700,
+        CHAT_TIMEOUT_SECONDS=30,
+        CHAT_INCLUDE_TRACE=True,
+        CHAT_STREAM_CHUNK_SIZE=24,
+        LANGGRAPH_SERVICE_PORT=18000,
         KEYCLOAK_URL="http://keycloak:8080",
         KEYCLOAK_ISSUER="http://localhost:18080/realms/deep-agent-dev",
         KEYCLOAK_JWKS_URL="http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs",
@@ -86,7 +93,7 @@ def app(app_settings: AppSettings):
     - 測試用 `FastAPI` 應用程式 fixture。
     """
 
-    application = create_app(app_settings)
+    application = create_langgraph_http_app(app_settings)
     Base.metadata.create_all(bind=application.state.engine)
     try:
         yield application

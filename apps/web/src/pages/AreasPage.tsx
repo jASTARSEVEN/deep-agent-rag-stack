@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthProvider";
+import { ChatPanel } from "../features/chat/components/ChatPanel";
 import {
   createArea,
   deleteDocument,
@@ -44,7 +45,6 @@ const EMPTY_ACCESS_STATE = {
 const EMPTY_UPLOAD_STATE = {
   file: null as File | null,
 };
-
 
 /**
  * 將 API 時間字串格式化為較易讀的本地時間。
@@ -151,7 +151,7 @@ function buildEditableAccessState(accessPayload: AreaAccessPayload): { usersText
 
 /** 登入後的 Areas 管理頁。 */
 export function AreasPage(): JSX.Element {
-  const { principal, logout } = useAuth();
+  const { principal, logout, ensureFreshToken } = useAuth();
   const [healthState, setHealthState] = useState<ApiHealthState>({ status: "loading" });
   const [areas, setAreas] = useState<AreaSummary[]>([]);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
@@ -834,6 +834,13 @@ export function AreasPage(): JSX.Element {
                       )}
                     </div>
                   </div>
+
+                  <ChatPanel
+                    areaId={selectedAreaId}
+                    accessTokenGetter={ensureFreshToken}
+                    onError={setWorkspaceError}
+                    onNoticeClear={() => setWorkspaceNotice(null)}
+                  />
                 </div>
               ) : (
                 <div className="mt-5 rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-12 text-center text-sm text-stone-500">

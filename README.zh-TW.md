@@ -27,7 +27,8 @@
 - 以 `Keycloak groups` 與 direct role 合併計算 effective role，落實 area-level `RBAC`
 - 在資料存取層維持 `deny-by-default`，並用一致的未授權 `404` 避免暴露受保護資源存在性
 - 將文件生命週期拆為 `uploaded -> processing -> ready|failed`，避免未完成資料進入檢索
-- 規劃 `SQL gate + vector recall + FTS recall + RRF + rerank` 的多策略搜尋路徑，兼顧授權、安全與檢索品質
+- 已實作 `SQL gate + vector recall + FTS recall + RRF + rerank + assembled-context citations` 的聊天檢索基礎
+- 以 `Deep Agents` 作為正式 chat 核心，並以 `LangGraph Server` 內建 `thread/run` 作為 runtime 與 streaming 承載層
 - 以 `FastAPI + PostgreSQL + Celery + Redis + MinIO + React` 建立可本機重現的完整垂直切片
 
 ## 我主導的內容
@@ -40,7 +41,7 @@
 
 ## 目前已完成
 
-以下列出的初始垂直切片，是在下班後與零碎閒暇時間中，透過 multi-agent 協作開發流程於一天內完成初步組裝。重點不是在短時間內堆疊功能數量，而是驗證在任務拆分、角色分工與整合節奏明確的前提下，能否快速建立一個具備基本工程結構的企業知識系統雛形。
+目前專案處於 `Phase 5.1 — Chat MVP on LangGraph Server`。在下班後與零碎閒暇時間進行的 multi-agent 協作開發中，到了第二天，整個倉庫已從原本的 auth / upload / retrieval foundation 進一步推進到可運作的 `Deep Agents + LangGraph Server` area-scoped chat 垂直切片。
 
 - Monorepo、Docker Compose 與本機開發環境骨架
 - `FastAPI` API、`Celery` worker、`React + Tailwind` Web 應用基本串接
@@ -51,15 +52,17 @@
 - 文件上傳、物件儲存、ingest job 建立與 `uploaded -> processing -> ready|failed` 狀態轉換
 - 已建立 SQL-first 的 `parent -> child` chunk tree，並以 `structure_kind=text|table` 支援 `TXT`、`Markdown` 與表格感知 `HTML`
 - 採 hybrid chunking：保留 custom parent section，文字 child 使用 LangChain，表格則採整表保留 / row-group split
-- Web 端 Areas / Files 基本操作流程與最小 E2E 驗證基礎
+- ready-only retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall、`RRF`、rerank 與 table-aware context assembly
+- 正式以 `Deep Agents` 主 agent 加上單一 `retrieve_area_contexts` tool 執行 chat
+- `LangGraph Server` 內建 `thread/run` runtime、custom auth principal 注入與 Web streaming
+- Web `Areas` workspace 已整合 Files 與 Chat，並顯示 assembled-context references 與工具/debug 檢視
 
 ## 目前尚未完成
 
-- 超出目前 SQL-first chunk tree 基礎之上的正式 indexing pipeline，包括 embedding 與 FTS 寫入
-- Retrieval pipeline，包括 SQL gate、vector recall、FTS recall、`RRF` 與 rerank
-- Chat 問答、citations 與完整知識聊天體驗
-- 超出目前 document delete、reindex 與 chunk/job 觀測能力之上的更完整 retrieval 觀測
 - area rename / delete 等管理補強功能
+- 真實 `Keycloak + LangGraph + Deep Agents` compose smoke 的更完整覆蓋
+- tool failure、no-context answers 與 streaming edge cases 的更多整合驗證
+- 未來 `Deep Agents` 擴充點，例如 sub-agents、`MCP` 與可重用 `Skill`
 
 ## TODO / 未來補充
 
@@ -80,9 +83,9 @@
 
 ## 倉庫結構
 
-- `apps/api`：FastAPI API、JWT 驗證、RBAC、areas / documents / ingest jobs 路由與服務
+- `apps/api`：FastAPI API、JWT 驗證、RBAC、internal retrieval services、`app/chat` Deep Agents domain 與 LangGraph loader/runtime glue
 - `apps/worker`：Celery 背景工作、文件 ingest 與狀態轉換流程
-- `apps/web`：React + Tailwind 前端、登入流程、areas / files 操作介面
+- `apps/web`：React + Tailwind 前端、登入流程、areas / files 操作介面，以及 `features/chat` LangGraph SDK chat feature
 - `infra`：Docker Compose 與容器建置資產
 - `packages/shared`：共用型別與設定的預留模組
 
@@ -113,10 +116,12 @@
   - `curl http://localhost:18000/health`
 - Auth context：
   - `curl -H "Authorization: Bearer <access-token>" http://localhost:18000/auth/context`
+- LangGraph chat runtime：
+  - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task：
   - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
-- Web / Areas / Files：
-  - 開啟 `http://localhost:13000`，登入後驗證 area 與文件列表、上傳與狀態顯示流程
+- Web / Areas / Files / Chat：
+  - 開啟 `http://localhost:13000`，登入後驗證 area、文件列表、上傳、狀態顯示與 area-scoped chat 流程
 - Phase 1 auth 驗證手冊：
   - `docs/phase1-auth-verification.md`
 

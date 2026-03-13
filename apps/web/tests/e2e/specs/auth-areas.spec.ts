@@ -85,8 +85,27 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
   await expect(page.getByText("目前角色只能檢視 area detail。若需要管理 access，必須使用 admin 身分。")).toBeVisible();
   await expect(page.getByTestId("documents-list")).toContainText("reader-handbook.md");
   await expect(page.getByTestId("documents-list")).toContainText("2 chunks (1 parent / 1 child)");
+  await page.getByTestId("chat-question").fill("reader policy");
+  await page.getByTestId("chat-submit").click();
+  await expect(page.getByTestId("chat-messages")).toContainText("reader policy");
+  await expect(page.getByTestId("chat-messages")).toContainText("Reader Intro");
+  await expect(page.getByTestId("chat-citations")).toContainText("Assembled Contexts");
+  await expect(page.getByTestId("chat-citations")).toContainText("chunk-reader-parent");
+  await expect(page.getByTestId("chat-citations")).toContainText("chunk-reader-child");
   await expect(page.getByTestId("document-upload")).toHaveCount(0);
   await expect(page.getByTestId("reindex-document-document-reader-ready")).toHaveCount(0);
+});
+
+
+test("chat 會顯示 assembled context 而不是 child-level citations", async ({ page }) => {
+  await loginAs(page, "reader");
+
+  await page.getByTestId("chat-question").fill("reader policy");
+  await page.getByTestId("chat-submit").click();
+
+  await expect(page.getByTestId("chat-citations")).toContainText("Assembled Contexts");
+  await expect(page.getByTestId("chat-citations")).toContainText("parent: chunk-reader-parent");
+  await expect(page.getByTestId("chat-citations")).toContainText("children: chunk-reader-child");
 });
 
 

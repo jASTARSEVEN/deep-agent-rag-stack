@@ -42,6 +42,7 @@
 - `src/app/App.tsx`：router 與 auth provider 入口
 - `src/auth`: Keycloak / test auth mode、session persistence 與 protected route
 - `src/pages`: 匿名首頁、callback 與 Areas 頁
+- `src/features/chat`：LangGraph SDK transport、chat state 與 chat/debug UI
 - `src/components`: Reusable UI blocks
 - `src/lib`: Environment and API helpers
 - `tests/e2e`: Playwright E2E 測試、bootstrap 與本機 test-mode API 啟動腳本
@@ -67,7 +68,7 @@
 - 若 area API 一直出現 `401`，請確認 Keycloak token 內仍含 `groups` claim，且 API issuer / JWKS 設定正確。
 - `VITE_AUTH_MODE=test` 僅供 Playwright 與本機測試，不可當成正式登入驗證結論。
 - `npm run test:e2e` 使用 test auth mode，不會覆蓋真實 Keycloak issuer、callback、logout 與 SSO 行為；這些問題需由 `npm run test:smoke:keycloak` 補驗。
-- files 已整合到 `/areas` 頁；activity、chat 與 citations 頁面目前仍未實作。
+- files 仍整合在 `/areas` 頁；chat 則透過 `src/features/chat` 掛載，並使用 LangGraph SDK 預設 thread/run 端點串接。UI 會顯示 Deep Agents 任務進度，並顯示 assembler 後的 contexts，而不是 child-level citations。
 - 若 `npm run test:e2e` 失敗於瀏覽器缺失，請先執行 `npx playwright install chromium`。
 - 若 `npm run test:smoke:keycloak` 失敗，請先確認 compose stack 已完成啟動，且 `deep-agent-dev` realm 仍可用 `alice / alice123` 登入。
 - 若 E2E 啟動失敗，請先確認 `python`、`uvicorn` 與 `apps/api` 依賴已可在本機 shell 執行。

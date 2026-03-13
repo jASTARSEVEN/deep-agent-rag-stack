@@ -194,6 +194,89 @@ export interface ReindexDocumentPayload {
 }
 
 
+/** chat citation 內容結構型別。 */
+export type ChatStructureKind = "text" | "table";
+
+
+/** 單一 assembled context reference。 */
+export interface ChatContextReference {
+  /** context 在回傳列表中的順序。 */
+  context_index: number;
+  /** context 所屬文件識別碼。 */
+  document_id: string;
+  /** context 所屬 parent chunk 識別碼。 */
+  parent_chunk_id: string | null;
+  /** 合併進此 context 的 child chunk 識別碼。 */
+  child_chunk_ids: string[];
+  /** context 所屬段落標題。 */
+  heading: string | null;
+  /** context 內容結構型別。 */
+  structure_kind: ChatStructureKind;
+  /** context 在 normalized text 的起始 offset。 */
+  start_offset: number;
+  /** context 在 normalized text 的結束 offset。 */
+  end_offset: number;
+  /** context 組裝後文字摘要。 */
+  excerpt: string;
+  /** context 組裝後全文；若未提供則回退使用 excerpt。 */
+  assembled_text?: string;
+  /** context 來源，可能為 vector、fts 或 hybrid。 */
+  source: string;
+  /** 此 context 是否已被裁切。 */
+  truncated: boolean;
+}
+
+
+/** LangGraph custom event 對應的高層 chat 階段。 */
+export type ChatPhase = "thinking" | "searching" | "tool_calling";
+
+
+/** 前端顯示用的 chat 階段狀態。 */
+export interface ChatPhaseState {
+  /** 目前階段。 */
+  phase: ChatPhase;
+  /** 階段狀態。 */
+  status: "started" | "completed";
+  /** 對應 UI 顯示訊息。 */
+  message: string;
+}
+
+
+/** 前端顯示用的工具呼叫事件。 */
+export interface ChatToolCallState {
+  /** 工具名稱。 */
+  name: string;
+  /** 工具狀態。 */
+  status: "started" | "completed";
+  /** 工具輸入參數。 */
+  input: Record<string, unknown>;
+  /** 工具輸出摘要。 */
+  output: Record<string, unknown> | null;
+}
+
+/** 前端 chat 訊息 view model。 */
+export interface ChatMessageViewModel {
+  /** 訊息唯一識別碼。 */
+  id: string;
+  /** 訊息角色。 */
+  role: "user" | "assistant";
+  /** 訊息內容。 */
+  content: string;
+  /** 助理訊息對應的 assembled context references。 */
+  citations: ChatContextReference[];
+  /** 助理目前所處的高層階段。 */
+  phaseState: ChatPhaseState | null;
+  /** 助理本輪工具呼叫摘要。 */
+  toolCalls: ChatToolCallState[];
+  /** 是否仍在串流中。 */
+  isStreaming: boolean;
+  /** 是否為錯誤訊息。 */
+  isError: boolean;
+  /** 本輪是否使用知識庫 references。 */
+  usedKnowledgeBase: boolean | null;
+}
+
+
 /** API health 請求生命週期使用的本機元件狀態。 */
 export type ApiHealthState =
   | { status: "loading" }

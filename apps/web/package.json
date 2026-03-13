@@ -18,6 +18,7 @@
     "test:e2e:ui": "npm run test:e2e:prepare && playwright test --ui"
   },
   "dependencies": {
+    "@langchain/langgraph-sdk": "^0.1.1",
     "keycloak-js": "^26.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
