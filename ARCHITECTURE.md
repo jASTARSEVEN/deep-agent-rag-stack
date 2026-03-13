@@ -115,20 +115,30 @@
 1. `POST /areas/{area_id}/documents` 僅允許 `maintainer` 以上上傳單一文件
 2. API 先將原始檔寫入物件儲存，再建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`
 3. 正式環境由 Celery worker 執行 ingest；測試模式可走 inline ingest 以維持本機驗證可重跑
-4. Worker 目前僅真正解析 `TXT/MD`，並為其建立固定 `parent -> child` chunk tree；其餘產品範圍內格式目前統一進入受控 `failed`
+4. Worker 目前真正解析 `TXT`、`Markdown` 與 `HTML`；其中 `Markdown / HTML` 已支援表格感知 chunking
 5. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks，再建立新 ingest job 重建 chunk tree
 6. `DELETE /documents/{document_id}` 會移除 document、相關 jobs、document chunks 與原始檔
 7. `GET /areas/{area_id}/documents`、`GET /documents/{document_id}`、`GET /ingest-jobs/{job_id}` 都必須先套 area access 邊界
 
 ### Document chunk tree
 1. `document_chunks` 採固定兩層結構：`parent -> child`
-2. `parent` chunk 由 custom section builder 建立，Markdown 以 heading 邊界為主，TXT 以段落群組為主
-3. 過短 parent section 會先與相鄰 section 合併，再進入 child chunk 切分
-4. `child` chunk 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
-5. `child` chunk 才是後續 retrieval 的最小候選單位
-6. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
-7. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
-8. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+2. parser 與 chunker 之間使用 block-aware contract：`ParsedDocument(normalized_text, source_format, blocks)` 與 `ParsedBlock(block_kind, heading, content, start_offset, end_offset)`
+3. `document_chunks` 除 `chunk_type` 外，另有 `structure_kind=text|table`，供後續 retrieval、citation 與 observability 直接辨識內容結構
+4. `parent` chunk 由 custom section builder 建立；TXT 以段落群組為主，Markdown 先以 heading 分界，再切出 `text/table` blocks，HTML 則由最小 parser 輸出 `text/table` blocks
+5. `table parent` 不與前後 `text parent` 合併；只有 `text parent` 會套用最小長度合併規則
+6. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
+7. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
+8. `child` chunk 才是後續 retrieval 的最小候選單位
+9. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
+10. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
+11. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+
+### Table-aware chunking 規則
+1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表
+2. HTML parser 目前僅處理 `h1~h3`、段落 / list 文字與 `<table>` 的最小結構，不做 `rowspan/colspan` 高保真還原
+3. `CHUNK_TABLE_PRESERVE_MAX_CHARS` 控制整表可否保留為單一 child
+4. 超過 preserve 上限的表格以 `CHUNK_TABLE_MAX_ROWS_PER_CHILD` 分組；每個 child 只允許在 row boundary 切分
+5. `table child.content` 允許重複表頭，因此可比 `normalized_text[start:end]` 多出 header，但 row payload 必須能回對原始 normalized text
 
 ## 預期模組邊界
 

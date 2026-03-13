@@ -35,6 +35,8 @@
 - `CHUNK_CHILD_OVERLAP`
 - `CHUNK_CONTENT_PREVIEW_LENGTH`
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
+- `CHUNK_TABLE_PRESERVE_MAX_CHARS`
+- `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 
 ## 主要目錄結構
 
@@ -58,6 +60,8 @@
 - 若 ingest task 無法更新資料庫，請確認 `DATABASE_URL` 指向與 API 相同的資料庫。
 - 若正式環境無法讀取文件內容，請確認 `MINIO_*` 與 `MINIO_BUCKET` 一致。
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。
-- `TXT/MD` 目前會建立 SQL-first 的 parent-child chunks；parent section 維持 custom 規則，child chunk 則改由 `LangChain RecursiveCharacterTextSplitter` 切分。
+- `TXT`、`Markdown` 與 `HTML` 目前都會建立 SQL-first 的 parent-child chunks。
+- `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
+- 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
 - 其餘檔案型別仍維持受控 `failed`。
 - 此模組目前尚未實作 embedding、FTS preparation 或 retrieval indexing。

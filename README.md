@@ -49,7 +49,8 @@ The initial vertical slice listed below was assembled within one day of off-hour
 - `deny-by-default` protection for area and document access with consistent `404` behavior
 - Knowledge Area create/list/detail/access-management MVP
 - Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
-- SQL-first `parent -> child` chunk tree generation for `TXT/MD`, with custom parent sections and LangChain-based child splitting
+- SQL-first `parent -> child` chunk tree generation with `structure_kind=text|table`, covering `TXT`, `Markdown`, and table-aware `HTML`
+- Hybrid chunking: custom parent sectioning plus LangChain-based text child splitting, with dedicated table preserve / row-group split rules
 - Core Areas / Files workflows in the web app plus baseline E2E coverage
 
 ## Not Yet Implemented

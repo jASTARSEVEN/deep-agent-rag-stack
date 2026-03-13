@@ -49,7 +49,8 @@
 - `deny-by-default` 的 area / document 存取控制與未授權 `404` 保護
 - Knowledge Area 的 create / list / detail / access management MVP
 - 文件上傳、物件儲存、ingest job 建立與 `uploaded -> processing -> ready|failed` 狀態轉換
-- `TXT/MD` 的 SQL-first `parent -> child` chunk tree 建立，保留 custom parent section 並以 LangChain 處理 child split
+- 已建立 SQL-first 的 `parent -> child` chunk tree，並以 `structure_kind=text|table` 支援 `TXT`、`Markdown` 與表格感知 `HTML`
+- 採 hybrid chunking：保留 custom parent section，文字 child 使用 LangChain，表格則採整表保留 / row-group split
 - Web 端 Areas / Files 基本操作流程與最小 E2E 驗證基礎
 
 ## 目前尚未完成

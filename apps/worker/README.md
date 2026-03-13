@@ -35,6 +35,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CHUNK_CHILD_OVERLAP`
 - `CHUNK_CONTENT_PREVIEW_LENGTH`
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
+- `CHUNK_TABLE_PRESERVE_MAX_CHARS`
+- `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 
 ## Main Directory Structure
 
@@ -58,6 +60,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - If ingest tasks cannot update the database, make sure `DATABASE_URL` points to the same database used by the API.
 - If the runtime cannot read document content, confirm that `MINIO_*` and `MINIO_BUCKET` match the deployment settings.
 - If no tasks are registered, make sure the `worker.tasks` package is loaded by Celery.
-- `TXT/MD` files now produce SQL-first parent-child chunks; parent sections stay custom while child chunks are split by `LangChain RecursiveCharacterTextSplitter`.
-- File types other than `TXT/MD` still move into controlled `failed` status.
+- `TXT`, `Markdown`, and `HTML` files now produce SQL-first parent-child chunks.
+- `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
+- Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
+- File types other than `TXT` / `Markdown` / `HTML` still move into controlled `failed` status.
 - Embeddings, FTS preparation, and retrieval indexing are not implemented in this module yet.

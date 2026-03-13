@@ -2,7 +2,17 @@
 
 from pathlib import Path
 
-from app.db.models import Area, AreaUserRole, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
+from app.db.models import (
+    Area,
+    AreaUserRole,
+    ChunkStructureKind,
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    IngestJob,
+    IngestJobStatus,
+    Role,
+)
 
 
 # 管理者測試 token。
@@ -59,6 +69,7 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
     assert stored_job.parent_chunk_count == 2
     assert stored_job.child_chunk_count == 2
     assert len(stored_chunks) == 4
+    assert {chunk.structure_kind for chunk in stored_chunks} == {ChunkStructureKind.text}
     assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
 
 
@@ -102,6 +113,85 @@ def test_upload_document_preserves_langchain_child_offsets(client, db_session) -
         relative_start = child.start_offset - parent.start_offset
         relative_end = child.end_offset - parent.start_offset
         assert parent.content[relative_start:relative_end] == child.content
+
+
+def test_upload_markdown_table_creates_table_chunks(client, db_session) -> None:
+    """含 Markdown table 的文件應建立 table structure_kind chunks。"""
+
+    area = Area(id="area-maintainer-table-md", name="Maintainer Markdown Tables")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    file_payload = "\n".join(
+        [
+            "# Report",
+            "Summary paragraph",
+            "",
+            "| Name | Score |",
+            "| --- | ---: |",
+            "| Alice | 95 |",
+            "| Bob | 88 |",
+            "",
+            "Closing paragraph",
+        ]
+    ).encode()
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("report.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
+    table_parent = next(
+        chunk
+        for chunk in stored_chunks
+        if chunk.chunk_type == "parent" and chunk.structure_kind == ChunkStructureKind.table
+    )
+    assert "| Alice | 95 |" in table_parent.content
+
+
+def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
+    """含 HTML table 的文件應建立 table structure_kind chunks。"""
+
+    area = Area(id="area-maintainer-table-html", name="Maintainer HTML Tables")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    file_payload = b"""
+    <h1>Quarterly Report</h1>
+    <p>Summary paragraph</p>
+    <table>
+      <tr><th>Name</th><th>Score</th></tr>
+      <tr><td>Alice</td><td>95</td></tr>
+      <tr><td>Bob</td><td>88</td></tr>
+    </table>
+    <p>Closing note</p>
+    """
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("report.html", file_payload, "text/html")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
 
 
 def test_upload_document_rejects_reader(client, db_session) -> None:
@@ -252,6 +342,7 @@ def test_list_documents_returns_only_area_documents_with_chunk_summary(client, d
                 document_id="document-visible",
                 parent_chunk_id=None,
                 chunk_type="parent",
+                structure_kind=ChunkStructureKind.text,
                 position=0,
                 section_index=0,
                 child_index=None,

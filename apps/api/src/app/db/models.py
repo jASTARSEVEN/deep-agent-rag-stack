@@ -59,6 +59,13 @@ class ChunkType(str, Enum):
     child = "child"
 
 
+class ChunkStructureKind(str, Enum):
+    """文件 chunk 的內容結構型別。"""
+
+    text = "text"
+    table = "table"
+
+
 class Area(Base):
     """Knowledge Area 基本資料。"""
 
@@ -184,6 +191,12 @@ class DocumentChunk(Base):
     )
     # chunk 型別。
     chunk_type: Mapped[ChunkType] = mapped_column(SqlEnum(ChunkType, native_enum=False), nullable=False)
+    # chunk 內容結構型別。
+    structure_kind: Mapped[ChunkStructureKind] = mapped_column(
+        SqlEnum(ChunkStructureKind, native_enum=False),
+        nullable=False,
+        default=ChunkStructureKind.text,
+    )
     # chunk 在整份文件中的穩定排序位置。
     position: Mapped[int] = mapped_column(Integer(), nullable=False)
     # parent section 順序。

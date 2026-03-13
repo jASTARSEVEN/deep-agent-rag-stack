@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 3.5 — Document Lifecycle Hardening & Chunk Tree Foundation`
+當前主階段：`Phase 3.6 — Table-Aware Chunking for Markdown + HTML`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -26,6 +26,7 @@
 - `Phase 2` Areas 垂直切片 MVP 已完成
 - `Phase 3` Documents & Ingestion 垂直切片 MVP 已完成
 - `Phase 3.5` Document lifecycle hardening 與 chunk tree foundation 已完成
+- `Phase 3.6` Markdown / HTML 表格感知 chunking 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
@@ -94,12 +95,23 @@
 - API、worker 與 Playwright E2E 已補 chunk tree、reindex、delete、same-404 與 read-only 驗證
 - API 在 inline ingest 模式下已可於缺少 celery 套件的本機環境啟動與測試
 
+### Phase 3.6 — 已完成的表格感知 chunking
+- 已將 parser / chunking contract 升級為 block-aware，新增 `ParsedDocument` 與 `ParsedBlock`
+- 已為 `document_chunks` 新增 SQL-first `structure_kind` 欄位，支援 `text | table`
+- 已支援 Markdown table 辨識，並將同一 heading 內的 `text` 與 `table` blocks 拆開處理
+- 已支援最小 HTML parser，可辨識 `h1~h3`、段落 / list 文字與 `<table>` 結構
+- `table parent` 已明確獨立，不會與前後文字 parent 合併
+- 小型表格會保留整表為單一 `child + table`
+- 超大型表格會依 row groups 切分，並在每個 child 重複表頭
+- 已新增 `CHUNK_TABLE_PRESERVE_MAX_CHARS` 與 `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- API 與 worker 測試已補 Markdown table、HTML table 與 table row-group split 驗證
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 3.5` 的 chunk tree foundation 與 lifecycle hardening
-- 穩定 LangChain child splitter 與既有 SQL-first chunk 欄位映射的一致性
-- 穩定 document delete / reindex / chunk summary 的 API、worker 與 UI 驗證路徑
+- 穩定 `Phase 3.6` 的 table-aware chunking 與 block-aware parser contract
+- 穩定 `structure_kind`、table offsets 與 row-group split 的一致性
+- 穩定 Markdown / HTML table chunking 與既有 reindex / delete / observability 路徑的相容性
 - 為 `Phase 4` 準備 ready-only retrieval contract、SQL gate 與 retrieval query 組裝
 - 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
 - area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
@@ -108,9 +120,10 @@
 
 ### 最適合立即進行的工作
 1. 為 Phase 4 建立 `ready-only` 文件限定、SQL gate 與 retrieval query contract
-2. 以既有 `document_chunks` 為基礎補 FTS builder、candidate 組裝與 retrieval trace metadata
-3. 補 embeddings / vector recall / FTS recall / RRF merge / rerank integration
-4. Retrieval foundation 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+2. 以既有 `document_chunks` 與 `structure_kind` 為基礎補 FTS builder、candidate 組裝與 retrieval trace metadata
+3. 定義 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
+4. 補 embeddings / vector recall / FTS recall / RRF merge / rerank integration
+5. Retrieval foundation 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 

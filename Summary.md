@@ -124,11 +124,19 @@
 1. API 收檔並存入 MinIO
 2. 建立 `documents` 與 `ingest_jobs`
 3. Worker 解析文件
-4. 先建立 parent sections，再以 `LangChain RecursiveCharacterTextSplitter` 切分 child chunks
-5. 產生 embedding
-6. 產生 FTS `tsvector`
-7. 寫入 `document_chunks`
-8. 更新文件狀態
+4. Worker 先輸出 block-aware `ParsedDocument / ParsedBlock`，區分 `text` 與 `table`
+5. 先建立 parent sections，再依內容型別切分 child chunks
+6. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
+7. `table` child 優先保留整表，超大表格才依 row groups 切分
+8. 產生 embedding
+9. 產生 FTS `tsvector`
+10. 寫入 `document_chunks`
+11. 更新文件狀態
+
+補充約束：
+- `document_chunks` 必須以 SQL-first 欄位保存 `chunk_type` 與 `structure_kind`
+- `Markdown + HTML` 本輪支援表格感知 chunking
+- `TXT` 不做表格感知
 
 ## 前端需求
 

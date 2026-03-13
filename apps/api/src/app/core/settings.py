@@ -21,6 +21,8 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_CHILD_OVERLAP",
     "CHUNK_CONTENT_PREVIEW_LENGTH",
     "CHUNK_TXT_PARENT_GROUP_SIZE",
+    "CHUNK_TABLE_PRESERVE_MAX_CHARS",
+    "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
 }
 
 
@@ -71,6 +73,8 @@ class AppSettings(BaseSettings):
     chunk_child_overlap: Annotated[int, Field(alias="CHUNK_CHILD_OVERLAP")] = 120
     chunk_content_preview_length: Annotated[int, Field(alias="CHUNK_CONTENT_PREVIEW_LENGTH")] = 120
     chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
+    chunk_table_preserve_max_chars: Annotated[int, Field(alias="CHUNK_TABLE_PRESERVE_MAX_CHARS")] = 4000
+    chunk_table_max_rows_per_child: Annotated[int, Field(alias="CHUNK_TABLE_MAX_ROWS_PER_CHILD")] = 20
     celery_broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     celery_result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
     ingest_inline_mode: Annotated[bool, Field(alias="INGEST_INLINE_MODE")] = False

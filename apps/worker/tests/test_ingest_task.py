@@ -6,6 +6,7 @@ from worker.chunking import ChunkingConfig, build_chunk_tree
 from worker.core.settings import WorkerSettings
 from worker.db import (
     Base,
+    ChunkStructureKind,
     Document,
     DocumentChunk,
     DocumentStatus,
@@ -14,6 +15,7 @@ from worker.db import (
     create_database_engine,
     create_session_factory,
 )
+from worker.parsers import parse_document
 from worker.tasks.ingest import process_document_ingest
 
 
@@ -43,6 +45,8 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         CHUNK_CHILD_OVERLAP=120,
         CHUNK_CONTENT_PREVIEW_LENGTH=120,
         CHUNK_TXT_PARENT_GROUP_SIZE=4,
+        CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
+        CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
     )
 
 
@@ -62,6 +66,8 @@ def build_chunking_config(settings: WorkerSettings) -> ChunkingConfig:
         child_chunk_overlap=settings.chunk_child_overlap,
         content_preview_length=settings.chunk_content_preview_length,
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
+        table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
+        table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
     )
 
 
@@ -133,6 +139,7 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_job.parent_chunk_count == 2
         assert refreshed_job.child_chunk_count == 2
         assert len(refreshed_chunks) == 4
+        assert {chunk.structure_kind for chunk in refreshed_chunks} == {ChunkStructureKind.text}
 
 
 def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, tmp_path: Path) -> None:
@@ -235,13 +242,33 @@ def test_build_chunk_tree_merges_short_parent_with_following_section() -> None:
     text = "# Short\nshort\n\n## Long\n" + ("A" * 400)
 
     settings = build_settings(Path("/tmp"))
-    result = build_chunk_tree(file_name="notes.md", text=text, config=build_chunking_config(settings))
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="notes.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
 
     assert len(result.parent_chunks) == 1
     assert result.parent_chunks[0].heading == "Short / Long"
     assert "short" in result.parent_chunks[0].content
     assert "A" * 50 in result.parent_chunks[0].content
     assert len(result.child_chunks) == 1
+
+
+def test_build_chunk_tree_keeps_merging_until_parent_reaches_threshold() -> None:
+    """過短 parent 應持續合併，而不是只做一次相鄰合併。"""
+
+    text = "# One\n" + ("A" * 260) + "\n\n## Two\n" + ("B" * 280) + "\n\n## Three\n" + ("C" * 300)
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 800
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="notes.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert len(result.parent_chunks) == 1
+    assert result.parent_chunks[0].heading == "One / Two / Three"
+    assert len(result.parent_chunks[0].content) >= 800
 
 
 def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() -> None:
@@ -254,7 +281,10 @@ def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() ->
     settings.chunk_target_child_size = 120
     settings.chunk_child_overlap = 20
 
-    result = build_chunk_tree(file_name="notes.md", text=text, config=build_chunking_config(settings))
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="notes.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
 
     assert len(result.parent_chunks) == 1
     assert len(result.child_chunks) >= 2
@@ -272,3 +302,103 @@ def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() ->
         assert parent.content[relative_start:relative_end] == child.content
         assert child.start_offset > previous_end - settings.chunk_child_overlap
         previous_end = child.end_offset
+
+
+def test_build_chunk_tree_preserves_markdown_table_as_table_parent() -> None:
+    """Markdown table 應形成獨立 table parent，且不與前後文字合併。"""
+
+    text = "\n".join(
+        [
+            "# Report",
+            "Summary paragraph",
+            "",
+            "| Name | Score |",
+            "| --- | ---: |",
+            "| Alice | 95 |",
+            "| Bob | 88 |",
+            "",
+            "Closing paragraph",
+        ]
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 500
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="report.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert len(result.parent_chunks) == 3
+    assert [chunk.structure_kind for chunk in result.parent_chunks] == ["text", "table", "text"]
+    table_parent = result.parent_chunks[1]
+    assert table_parent.heading == "Report"
+    assert "| Alice | 95 |" in table_parent.content
+
+
+def test_build_chunk_tree_splits_large_table_by_row_group_and_repeats_header() -> None:
+    """大型表格應依 row groups 切成多個 table child，且每個 child 重複表頭。"""
+
+    rows = [f"| item-{index} | value-{index} |" for index in range(5)]
+    table_text = "\n".join(
+        [
+            "| Name | Value |",
+            "| --- | --- |",
+            *rows,
+        ]
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_table_preserve_max_chars = 10
+    settings.chunk_table_max_rows_per_child = 2
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="table.md", payload=table_text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert len(result.parent_chunks) == 1
+    assert result.parent_chunks[0].structure_kind == "table"
+    assert len(result.child_chunks) == 3
+    for child in result.child_chunks:
+        assert child.structure_kind == "table"
+        assert child.content.splitlines()[0] == "| Name | Value |"
+        assert child.content.splitlines()[1] == "| --- | --- |"
+    assert "| item-0 | value-0 |" in result.child_chunks[0].content
+    assert "| item-2 | value-2 |" in result.child_chunks[1].content
+    assert "| item-4 | value-4 |" in result.child_chunks[2].content
+
+
+def test_process_document_ingest_supports_html_table_blocks(monkeypatch, tmp_path: Path) -> None:
+    """HTML 文件中的 table 應被辨識為 table structure_kind。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"""
+    <h1>Quarterly Report</h1>
+    <p>Summary paragraph</p>
+    <table>
+      <tr><th>Name</th><th>Score</th></tr>
+      <tr><td>Alice</td><td>95</td></tr>
+      <tr><td>Bob</td><td>88</td></tr>
+    </table>
+    <p>Closing note</p>
+    """
+    document, job = seed_job(session_factory, file_name="report.html", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_chunks = (
+            session.query(DocumentChunk)
+            .filter(DocumentChunk.document_id == document.id)
+            .order_by(DocumentChunk.position.asc())
+            .all()
+        )
+        assert result == "succeeded"
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)

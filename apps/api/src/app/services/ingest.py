@@ -7,13 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
 from app.services.chunking import ChunkingConfig
-from app.db.models import ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus
+from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus
 from app.services.chunking import ChunkingResult, build_chunk_tree
+from app.services.parsers import parse_document
 from app.services.storage import ObjectStorage, StorageError
-
-
-# Phase 3.5 真正支援 chunking 的副檔名。
-SUPPORTED_INLINE_EXTENSIONS = {".txt", ".md"}
 
 
 def process_ingest_job_inline(
@@ -48,12 +45,11 @@ def process_ingest_job_inline(
         payload = storage.get_object(object_key=document.storage_key)
         job.stage = "parsing"
         session.commit()
-        text = _parse_document(file_name=document.file_name, payload=payload)
+        parsed_document = parse_document(file_name=document.file_name, payload=payload)
         job.stage = "chunking"
         session.commit()
         chunking_result = build_chunk_tree(
-            file_name=document.file_name,
-            text=text,
+            parsed_document=parsed_document,
             config=_build_chunking_config(settings),
         )
         _replace_document_chunks(session=session, document=document, chunking_result=chunking_result)
@@ -62,28 +58,6 @@ def process_ingest_job_inline(
         return
 
     _mark_succeeded(session=session, document=document, job=job, chunking_result=chunking_result)
-
-
-def _parse_document(*, file_name: str, payload: bytes) -> str:
-    """執行最小 parser routing。
-
-    參數：
-    - `file_name`：使用者上傳時的原始檔名。
-    - `payload`：從物件儲存讀出的原始檔內容。
-
-    回傳：
-    - `str`：解析後的最小文字內容。
-    """
-
-    lower_name = file_name.lower()
-    if any(lower_name.endswith(extension) for extension in SUPPORTED_INLINE_EXTENSIONS):
-        text = payload.decode("utf-8")
-        if not text.strip():
-            raise ValueError("文件內容不可為空白。")
-        return text
-    raise ValueError("目前尚未支援此檔案類型的解析。")
-
-
 def _mark_processing(*, session: Session, document: Document, job: IngestJob) -> None:
     """將 document 與 job 標記為 processing。
 
@@ -125,6 +99,7 @@ def _replace_document_chunks(*, session: Session, document: Document, chunking_r
             document_id=document.id,
             parent_chunk_id=None,
             chunk_type=ChunkType.parent,
+            structure_kind=ChunkStructureKind(draft.structure_kind),
             position=draft.position,
             section_index=draft.section_index,
             child_index=None,
@@ -145,6 +120,7 @@ def _replace_document_chunks(*, session: Session, document: Document, chunking_r
                 document_id=document.id,
                 parent_chunk_id=parent_id_by_section[draft.section_index],
                 chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind(draft.structure_kind),
                 position=draft.position,
                 section_index=draft.section_index,
                 child_index=draft.child_index,
@@ -226,4 +202,6 @@ def _build_chunking_config(settings: AppSettings) -> ChunkingConfig:
         child_chunk_overlap=settings.chunk_child_overlap,
         content_preview_length=settings.chunk_content_preview_length,
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
+        table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
+        table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
     )

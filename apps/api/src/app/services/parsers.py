@@ -1,4 +1,4 @@
-"""Worker ingest 流程使用的 block-aware parser。"""
+"""API inline ingest 使用的 block-aware parser。"""
 
 from __future__ import annotations
 

@@ -101,6 +101,23 @@
 狀態：
 - `已完成`
 
+## Phase 3.6 — Table-Aware Chunking for Markdown + HTML
+
+目標：
+- 讓 `document_chunks` 能辨識表格結構，而不是把表格當一般文字切分
+
+內容：
+- block-aware parser / chunking contract（`ParsedDocument`、`ParsedBlock`）
+- `document_chunks.structure_kind` SQL-first 欄位
+- Markdown table-aware parent sectioning
+- 最小 HTML parser 與 HTML table-aware chunking
+- table preserve / row-group split 策略
+- `CHUNK_TABLE_PRESERVE_MAX_CHARS`、`CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- API / worker table-aware 回歸測試
+
+狀態：
+- `已完成`
+
 ## Post-Phase 3 Backlog — Area Management Hardening
 
 目標：

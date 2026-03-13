@@ -50,6 +50,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `CHUNK_CHILD_OVERLAP`
 - `CHUNK_CONTENT_PREVIEW_LENGTH`
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
+- `CHUNK_TABLE_PRESERVE_MAX_CHARS`
+- `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `INGEST_INLINE_MODE`
@@ -96,6 +98,8 @@ This module contains the project's FastAPI service. It currently provides:
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
-- `TXT/MD` uploads now produce SQL-first parent-child `document_chunks`; custom parent sections are preserved and child chunks are split with `LangChain RecursiveCharacterTextSplitter`.
+- `TXT`, `Markdown`, and `HTML` uploads now produce SQL-first parent-child `document_chunks`.
+- `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
+- Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - Unsupported formats still move into controlled `failed`.
 - Retrieval and chat are not implemented in this module yet.

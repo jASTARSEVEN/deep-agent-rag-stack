@@ -8,6 +8,7 @@ from worker.celery_app import celery_app
 from worker.chunking import ChunkingConfig, ChunkingResult, build_chunk_tree
 from worker.core.settings import get_settings
 from worker.db import (
+    ChunkStructureKind,
     ChunkType,
     Document,
     DocumentChunk,
@@ -60,12 +61,11 @@ def process_document_ingest(job_id: str) -> str:
             payload = storage.get_object(object_key=document.storage_key)
             job.stage = "parsing"
             session.commit()
-            text = parse_document(file_name=document.file_name, payload=payload)
+            parsed_document = parse_document(file_name=document.file_name, payload=payload)
             job.stage = "chunking"
             session.commit()
             chunking_result = build_chunk_tree(
-                file_name=document.file_name,
-                text=text,
+                parsed_document=parsed_document,
                 config=_build_chunking_config(settings),
             )
             _replace_document_chunks(session=session, document=document, chunking_result=chunking_result)
@@ -118,6 +118,7 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
             document_id=document.id,
             parent_chunk_id=None,
             chunk_type=ChunkType.parent,
+            structure_kind=ChunkStructureKind(draft.structure_kind),
             position=draft.position,
             section_index=draft.section_index,
             child_index=None,
@@ -138,6 +139,7 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
                 document_id=document.id,
                 parent_chunk_id=parent_id_by_section[draft.section_index],
                 chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind(draft.structure_kind),
                 position=draft.position,
                 section_index=draft.section_index,
                 child_index=draft.child_index,
@@ -219,4 +221,6 @@ def _build_chunking_config(settings) -> ChunkingConfig:
         child_chunk_overlap=settings.chunk_child_overlap,
         content_preview_length=settings.chunk_content_preview_length,
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
+        table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
+        table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
     )
