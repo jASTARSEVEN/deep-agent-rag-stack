@@ -23,6 +23,12 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_TXT_PARENT_GROUP_SIZE",
     "CHUNK_TABLE_PRESERVE_MAX_CHARS",
     "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
+    "EMBEDDING_DIMENSIONS",
+    "RETRIEVAL_VECTOR_TOP_K",
+    "RETRIEVAL_FTS_TOP_K",
+    "RETRIEVAL_MAX_CANDIDATES",
+    "RETRIEVAL_RRF_K",
+    "RETRIEVAL_HNSW_EF_SEARCH",
 }
 
 
@@ -85,6 +91,16 @@ class AppSettings(BaseSettings):
     )
     keycloak_groups_claim: Annotated[str, Field(alias="KEYCLOAK_GROUPS_CLAIM")] = "groups"
     auth_test_mode: Annotated[bool, Field(alias="AUTH_TEST_MODE")] = False
+    embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
+    embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
+    embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
+    openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
+    text_search_config: Annotated[str, Field(alias="TEXT_SEARCH_CONFIG")] = "deep_agent_jieba"
+    retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 8
+    retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 8
+    retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 12
+    retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
+    retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
 
     @model_validator(mode="before")
     @classmethod

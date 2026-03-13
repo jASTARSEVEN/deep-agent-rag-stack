@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 3.6 — Table-Aware Chunking for Markdown + HTML`
+當前主階段：`Phase 4.1 — Retrieval Foundation`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -27,9 +27,11 @@
 - `Phase 3` Documents & Ingestion 垂直切片 MVP 已完成
 - `Phase 3.5` Document lifecycle hardening 與 chunk tree foundation 已完成
 - `Phase 3.6` Markdown / HTML 表格感知 chunking 已完成
+- `Phase 4.1` Retrieval foundation 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
+- 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -106,32 +108,40 @@
 - 已新增 `CHUNK_TABLE_PRESERVE_MAX_CHARS` 與 `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 - API 與 worker 測試已補 Markdown table、HTML table 與 table row-group split 驗證
 
+### Phase 4.1 — 已完成的 retrieval foundation
+- 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` 與 `fts_document` SQL-first 欄位
+- 已補 worker 與 inline ingest 的 indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
+- 已導入 embedding provider abstraction，初版支援 `openai`，並保留 `deterministic` 供離線測試
+- 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall 與 `RRF` merge
+- 已補 PostgreSQL `pg_jieba` extension、繁體中文詞庫固定化與 `deep_agent_jieba` text search configuration
+- 已將 vector ANN index 由 `ivfflat` 切換為 `hnsw`，並補上 `documents(area_id, status)` retrieval filter index
+- API 與 worker 測試已補 embeddings/FTS payload、retrieval same-404、FTS builder 與 hybrid recall 驗證
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 3.6` 的 table-aware chunking 與 block-aware parser contract
-- 穩定 `structure_kind`、table offsets 與 row-group split 的一致性
-- 穩定 Markdown / HTML table chunking 與既有 reindex / delete / observability 路徑的相容性
-- 為 `Phase 4` 準備 ready-only retrieval contract、SQL gate 與 retrieval query 組裝
+- 穩定 `Phase 4.1` 的 retrieval foundation 與 `pg_jieba` 本機啟動路徑
+- 穩定 `hnsw` vector recall 與 `pgvector >= 0.8.0` 查詢參數設定
+- 穩定 `embedding` / `fts_document` 與既有 reindex / delete / observability 路徑的相容性
+- 穩定 ready-only、deny-by-default 與 SQL gate 的 retrieval 語意
+- 為 `Phase 4.2` 準備 rerank、retrieval trace metadata 與 table-aware retrieval assembler
 - 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
 - area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 為 Phase 4 建立 `ready-only` 文件限定、SQL gate 與 retrieval query contract
-2. 以既有 `document_chunks` 與 `structure_kind` 為基礎補 FTS builder、candidate 組裝與 retrieval trace metadata
-3. 定義 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
-4. 補 embeddings / vector recall / FTS recall / RRF merge / rerank integration
+1. 為 `Phase 4.2` 接上 Cohere rerank、retrieval trace metadata 與 candidate 組裝細節
+2. 定義 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
+3. 在 API 內將 internal retrieval service 串到後續 chat/citations flow
+4. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
 5. Retrieval foundation 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
-- embedding / vector indexing 正式流程
-- retrieval pipeline
-- chat 與 citations
-- SQL gate
-- FTS / RRF / rerank 實作
+- Cohere rerank 正式整合
+- public chat API 與 citations
+- retrieval trace metadata
 - area rename / delete
 
 ## Agent Rules

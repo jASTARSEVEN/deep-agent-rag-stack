@@ -37,11 +37,16 @@
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CHUNK_TABLE_PRESERVE_MAX_CHARS`
 - `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- `EMBEDDING_PROVIDER`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
+- `OPENAI_API_KEY`
+- `TEXT_SEARCH_CONFIG`
 
 ## 主要目錄結構
 
 - `src/worker/celery_app.py`：Celery 應用程式進入點
-- `src/worker/tasks`：health 與 ingest task 模組
+- `src/worker/tasks`：health、ingest 與 indexing task 模組
 - `src/worker/core`：worker 設定與共用輔助元件
 - `src/worker/db.py`：worker 使用的最小 DB model 與 session helper
 - `src/worker/storage.py`：物件儲存讀取抽象
@@ -63,5 +68,7 @@
 - `TXT`、`Markdown` 與 `HTML` 目前都會建立 SQL-first 的 parent-child chunks。
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
+- `ready` 現在代表 chunking、embedding 與 FTS payload 都已完成。
+- worker 目前已負責 child chunk 的 embedding 與 FTS preparation。
 - 其餘檔案型別仍維持受控 `failed`。
-- 此模組目前尚未實作 embedding、FTS preparation 或 retrieval indexing。
+- retrieval API、rerank 與 chat orchestration 不在此模組內實作。

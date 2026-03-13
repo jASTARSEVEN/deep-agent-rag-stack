@@ -6,6 +6,7 @@ from app.db.models import (
     Area,
     AreaUserRole,
     ChunkStructureKind,
+    ChunkType,
     Document,
     DocumentChunk,
     DocumentStatus,
@@ -70,6 +71,10 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
     assert stored_job.child_chunk_count == 2
     assert len(stored_chunks) == 4
     assert {chunk.structure_kind for chunk in stored_chunks} == {ChunkStructureKind.text}
+    child_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.child]
+    assert child_chunks
+    assert all(chunk.embedding is not None for chunk in child_chunks)
+    assert all(chunk.fts_document for chunk in child_chunks)
     assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
 
 

@@ -22,7 +22,7 @@
 - `api`: FastAPI container image
 - `worker`: Celery worker container image
 - `web`: React frontend container image
-- `postgres`: Postgres base image with future pg_jieba build hooks
+- `postgres`: Postgres image with built-in `pg_jieba`, pinned Traditional Chinese dictionary, and init SQL
 
 ## 對外介面
 

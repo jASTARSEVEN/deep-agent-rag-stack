@@ -37,11 +37,16 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CHUNK_TABLE_PRESERVE_MAX_CHARS`
 - `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- `EMBEDDING_PROVIDER`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
+- `OPENAI_API_KEY`
+- `TEXT_SEARCH_CONFIG`
 
 ## Main Directory Structure
 
 - `src/worker/celery_app.py`: Celery application entry point
-- `src/worker/tasks`: health and ingest task modules
+- `src/worker/tasks`: health, ingest, and indexing task modules
 - `src/worker/core`: worker settings and shared helpers
 - `src/worker/db.py`: minimal DB models and session helpers used by the worker
 - `src/worker/storage.py`: object storage access abstraction
@@ -63,5 +68,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - `TXT`, `Markdown`, and `HTML` files now produce SQL-first parent-child chunks.
 - `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
+- `ready` now means chunking, embeddings, and FTS payloads have all been completed.
+- The worker is now responsible for child-chunk embeddings and FTS preparation.
 - File types other than `TXT` / `Markdown` / `HTML` still move into controlled `failed` status.
-- Embeddings, FTS preparation, and retrieval indexing are not implemented in this module yet.
+- Public retrieval APIs, rerank, and chat orchestration remain outside this module.

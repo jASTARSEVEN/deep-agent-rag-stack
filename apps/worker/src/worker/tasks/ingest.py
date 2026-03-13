@@ -21,6 +21,7 @@ from worker.db import (
 )
 from worker.parsers import parse_document
 from worker.storage import StorageError, build_object_storage_reader
+from worker.tasks.indexing import index_document_chunks
 
 
 @celery_app.task(name="worker.tasks.ingest.process_document_ingest")
@@ -69,6 +70,9 @@ def process_document_ingest(job_id: str) -> str:
                 config=_build_chunking_config(settings),
             )
             _replace_document_chunks(session=session, document=document, chunking_result=chunking_result)
+            job.stage = "indexing"
+            session.commit()
+            index_document_chunks(session=session, document=document, settings=settings)
         except (StorageError, ValueError, UnicodeDecodeError) as exc:
             _mark_failed(session=session, document=document, job=job, message=str(exc))
             return "failed"

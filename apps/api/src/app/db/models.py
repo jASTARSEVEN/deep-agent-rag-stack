@@ -1,4 +1,4 @@
-"""授權、文件與 chunking 流程使用的 ORM models。"""
+"""授權、文件、chunking 與 retrieval foundation 使用的 ORM models。"""
 
 from datetime import UTC, datetime
 from enum import Enum
@@ -8,6 +8,7 @@ from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Integer, String, T
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.db.sql_types import build_embedding_type, build_fts_document_type
 
 
 # 所有主鍵預設使用 UUID 字串，避免在 SQLite 測試與 PostgreSQL 間切換時額外處理型別差異。
@@ -215,6 +216,10 @@ class DocumentChunk(Base):
     start_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
     # chunk 在 normalize 後文字內容中的結束 offset。
     end_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # 僅 child chunk 使用的 embedding 向量；parent 固定為空值。
+    embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
+    # chunk 的全文檢索 payload；SQLite 測試環境退回保存原始文字。
+    fts_document: Mapped[str | dict[str, object] | None] = mapped_column(build_fts_document_type(), nullable=True)
     # chunk 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # chunk 最後更新時間。

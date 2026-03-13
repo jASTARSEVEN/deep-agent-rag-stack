@@ -22,7 +22,7 @@ This directory contains the container build definitions used by the local Docker
 - `api`: FastAPI container image
 - `worker`: Celery worker container image
 - `web`: React frontend container image
-- `postgres`: Postgres base image with future `pg_jieba` build hooks
+- `postgres`: Postgres image with built-in `pg_jieba`, a pinned Traditional Chinese dictionary, and init SQL
 
 ## Public Interfaces
 

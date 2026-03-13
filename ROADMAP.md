@@ -131,17 +131,33 @@
 狀態：
 - `未開始`
 
-## Phase 4 — Retrieval
+## Phase 4.1 — Retrieval Foundation
 
 目標：
-- 可針對已授權且 ready 的資料做檢索
+- 建立可驗證的 ready-only hybrid recall foundation
 
 內容：
 - SQL authorization gate
-- vector recall
+- `pg_jieba` 與繁體中文詞庫固定化
+- `document_chunks.embedding` / `fts_document` schema
+- worker / inline ingest indexing
+- HNSW-backed vector recall
 - FTS recall
 - RRF merge
+- internal retrieval service
+
+狀態：
+- `已完成`
+
+## Phase 4.2 — Retrieval Ranking & Assembly
+
+目標：
+- 讓 recall 結果能進一步收斂為可供 chat 使用的高品質候選
+
+內容：
 - rerank integration
+- retrieval trace metadata
+- table-aware retrieval assembler
 
 狀態：
 - `未開始`
@@ -169,6 +185,6 @@
 
 ## 近期建議順序
 
-1. Phase 4：Retrieval
+1. Phase 4.2：Retrieval Ranking & Assembly
 2. Post-Phase 3 Backlog：Area Management Hardening
 3. Phase 5：Chat

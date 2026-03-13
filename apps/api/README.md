@@ -55,6 +55,16 @@ This module contains the project's FastAPI service. It currently provides:
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `INGEST_INLINE_MODE`
+- `EMBEDDING_PROVIDER`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
+- `OPENAI_API_KEY`
+- `TEXT_SEARCH_CONFIG`
+- `RETRIEVAL_VECTOR_TOP_K`
+- `RETRIEVAL_FTS_TOP_K`
+- `RETRIEVAL_MAX_CANDIDATES`
+- `RETRIEVAL_RRF_K`
+- `RETRIEVAL_HNSW_EF_SEARCH`
 - `KEYCLOAK_URL`
 - `KEYCLOAK_ISSUER`
 - `KEYCLOAK_JWKS_URL`
@@ -69,7 +79,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
 - `src/app/schemas`: response schemas
-- `src/app/services`: authorization and runtime services
+- `src/app/services`: authorization, indexing, and internal retrieval services
 - `alembic`: migration environment and revision scripts
 - `tests`: authorization and API tests
 
@@ -101,5 +111,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `TXT`, `Markdown`, and `HTML` uploads now produce SQL-first parent-child `document_chunks`.
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
+- `ready` now means chunk tree, embeddings, and FTS payloads have all been written.
+- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, and `RRF` merge, but it is not exposed as a public HTTP route yet.
 - Unsupported formats still move into controlled `failed`.
-- Retrieval and chat are not implemented in this module yet.
+- Chat, citations, and rerank remain out of scope for this module's current phase.

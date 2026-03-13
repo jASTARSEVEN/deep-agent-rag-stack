@@ -25,7 +25,7 @@
 ### Worker
 - Celery
 - 負責背景 ingest / indexing 工作
-- 目前已處理 parse routing、parent-child chunk tree 寫入與狀態轉換；embed、FTS preparation 與 retrieval indexing 仍待後續 phase
+- 目前已處理 parse routing、parent-child chunk tree、embedding、FTS payload 寫入與狀態轉換
 
 ### Infra
 - PostgreSQL：主要資料庫
@@ -33,6 +33,7 @@
 - MinIO：原始檔案儲存
 - Keycloak：身分與群組來源
 - Alembic：資料庫 schema versioning 與 migration 執行入口
+- PostgreSQL 容器目前已內建 `pg_jieba` 與固定版本繁體中文詞庫
 
 ## 關鍵架構原則
 
@@ -70,7 +71,8 @@
 3. API 將原始檔存入 MinIO
 4. Worker 執行 parse routing、parent section 建立與 child chunk 切分
 5. Worker 以 replace-all 方式重建 `document_chunks`
-6. Worker 更新 document/job 狀態為 `ready` 或 `failed`
+6. Worker 為 child chunks 寫入 `embedding` 與 `fts_document`
+7. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
 1. Web 發送 chat request
@@ -132,6 +134,16 @@
 9. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
 10. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
 11. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+
+### Retrieval foundation
+1. retrieval 目前先作為 API 內部 service，不提供 public route
+2. SQL gate 先以 area scope + effective role 驗證完成，之後才進入 recall
+3. 只有 `documents.status=ready` 且 `chunk_type=child` 的 chunk 會進入 recall
+4. `document_chunks.embedding` 與 `document_chunks.fts_document` 都屬於 retrieval 的 SQL-first 欄位
+5. PostgreSQL 正式路徑使用 `pgvector` 與 `pg_jieba`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
+6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
+7. FTS 固定使用 `deep_agent_jieba` text search configuration
+8. 初版 retrieval 只做到 vector recall + FTS recall + `RRF` merge；rerank 與 citations 留在下一階段
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

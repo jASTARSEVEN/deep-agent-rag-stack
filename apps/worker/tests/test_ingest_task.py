@@ -7,6 +7,7 @@ from worker.core.settings import WorkerSettings
 from worker.db import (
     Base,
     ChunkStructureKind,
+    ChunkType,
     Document,
     DocumentChunk,
     DocumentStatus,
@@ -47,6 +48,10 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         CHUNK_TXT_PARENT_GROUP_SIZE=4,
         CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
         CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
+        EMBEDDING_PROVIDER="deterministic",
+        EMBEDDING_MODEL="text-embedding-3-small",
+        EMBEDDING_DIMENSIONS=1536,
+        TEXT_SEARCH_CONFIG="deep_agent_jieba",
     )
 
 
@@ -140,6 +145,10 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_job.child_chunk_count == 2
         assert len(refreshed_chunks) == 4
         assert {chunk.structure_kind for chunk in refreshed_chunks} == {ChunkStructureKind.text}
+        child_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.child]
+        assert child_chunks
+        assert all(chunk.embedding is not None for chunk in child_chunks)
+        assert all(chunk.fts_document for chunk in child_chunks)
 
 
 def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, tmp_path: Path) -> None:

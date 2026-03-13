@@ -9,6 +9,7 @@ from app.core.settings import AppSettings
 from app.services.chunking import ChunkingConfig
 from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus
 from app.services.chunking import ChunkingResult, build_chunk_tree
+from app.services.indexing import index_document_chunks
 from app.services.parsers import parse_document
 from app.services.storage import ObjectStorage, StorageError
 
@@ -53,6 +54,9 @@ def process_ingest_job_inline(
             config=_build_chunking_config(settings),
         )
         _replace_document_chunks(session=session, document=document, chunking_result=chunking_result)
+        job.stage = "indexing"
+        session.commit()
+        index_document_chunks(session=session, document=document, settings=settings)
     except (StorageError, ValueError, UnicodeDecodeError) as exc:
         _mark_failed(session=session, document=document, job=job, message=str(exc))
         return

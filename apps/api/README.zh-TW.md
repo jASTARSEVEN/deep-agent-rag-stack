@@ -55,6 +55,16 @@
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
 - `INGEST_INLINE_MODE`
+- `EMBEDDING_PROVIDER`
+- `EMBEDDING_MODEL`
+- `EMBEDDING_DIMENSIONS`
+- `OPENAI_API_KEY`
+- `TEXT_SEARCH_CONFIG`
+- `RETRIEVAL_VECTOR_TOP_K`
+- `RETRIEVAL_FTS_TOP_K`
+- `RETRIEVAL_MAX_CANDIDATES`
+- `RETRIEVAL_RRF_K`
+- `RETRIEVAL_HNSW_EF_SEARCH`
 - `KEYCLOAK_URL`
 - `KEYCLOAK_ISSUER`
 - `KEYCLOAK_JWKS_URL`
@@ -69,7 +79,7 @@
 - `src/app/db`：SQLAlchemy models、session 與 metadata
 - `src/app/routes`: HTTP routes
 - `src/app/schemas`：回應模型
-- `src/app/services`：授權與 runtime service
+- `src/app/services`：授權、indexing 與 internal retrieval service
 - `alembic`：migration 執行環境與版本腳本
 - `tests`：授權與 API 測試
 
@@ -101,5 +111,7 @@
 - `TXT`、`Markdown` 與 `HTML` 上傳目前都會建立 SQL-first 的 parent-child `document_chunks`。
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
+- `ready` 現在代表 chunk tree、embedding 與 FTS payload 都已完成。
+- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall 與 `RRF` merge，但尚未公開為 HTTP API。
 - 未支援格式仍維持受控 `failed`。
-- 此模組目前尚未實作 retrieval 或 chat。
+- chat、citations 與 rerank 仍待後續 phase。

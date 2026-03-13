@@ -4,7 +4,7 @@
 
 ## Purpose
 
-This module contains the local Docker Compose stack and the container build assets required to run the Areas + Documents & Ingestion MVP.
+This module contains the local Docker Compose stack and the container build assets required to run the Documents + Retrieval Foundation stack.
 
 ## How to Start
 
@@ -26,6 +26,10 @@ This module contains the local Docker Compose stack and the container build asse
 - `MAX_UPLOAD_SIZE_BYTES`
 - `CELERY_*`
 - `INGEST_INLINE_MODE`
+- `EMBEDDING_*`
+- `OPENAI_API_KEY`
+- `TEXT_SEARCH_CONFIG`
+- `RETRIEVAL_*`
 - `VITE_*`
 - `PG_JIEBA_REPO_URL`
 - `PG_JIEBA_REF`
@@ -33,7 +37,7 @@ This module contains the local Docker Compose stack and the container build asse
 ## Main Directory Structure
 
 - `docker-compose.yml`: local service orchestration
-- `docker/postgres`: Postgres base image with future `pg_jieba` build hooks
+- `docker/postgres`: Postgres image with built-in `pg_jieba`, a pinned Traditional Chinese dictionary, and init SQL
 - `docker/api`: API container image
 - `docker/worker`: worker container image
 - `docker/web`: web container image
@@ -52,7 +56,7 @@ This module contains the local Docker Compose stack and the container build asse
 
 ## Troubleshooting
 
-- `PG_JIEBA_REF` is still only a placeholder at this stage. Pin it to a fixed commit SHA before implementing FTS.
+- The `postgres` service starts with `shared_preload_libraries=pg_jieba` and uses the repository-pinned Traditional Chinese base dictionary.
 - Keycloak automatically imports the `deep-agent-dev` realm, the `deep-agent-web` client, the groups mapper, and default users/groups on first startup.
 - To restore the default Keycloak identity data, remove the `keycloak-db` volume and restart the stack.
 - Current compose health checks only verify stack readiness, not complete business correctness.
