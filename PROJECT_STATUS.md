@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 4.1 — Retrieval Foundation`
+當前主階段：`Phase 4.2 — Retrieval Ranking & Assembly`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -28,10 +28,12 @@
 - `Phase 3.5` Document lifecycle hardening 與 chunk tree foundation 已完成
 - `Phase 3.6` Markdown / HTML 表格感知 chunking 已完成
 - `Phase 4.1` Retrieval foundation 已完成
+- `Phase 4.2` minimal rerank slice 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
+- 專案已具備 internal-only 的 minimal rerank 路徑，涵蓋 Cohere / deterministic rerank provider、retrieval trace metadata 與 fail-open fallback
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 
 ## 已完成功能
@@ -117,31 +119,39 @@
 - 已將 vector ANN index 由 `ivfflat` 切換為 `hnsw`，並補上 `documents(area_id, status)` retrieval filter index
 - API 與 worker 測試已補 embeddings/FTS payload、retrieval same-404、FTS builder 與 hybrid recall 驗證
 
+### Phase 4.2 — 已完成的 minimal rerank slice
+- 已在 API 端加入 rerank provider abstraction，支援 `deterministic` 與 `cohere`
+- 已在 internal retrieval service 將流程擴充為 SQL gate -> vector recall / FTS recall -> `RRF` -> rerank
+- 已為 retrieval candidates 補上 `rrf_rank`、`rerank_rank`、`rerank_score` 與 `rerank_applied`
+- 已新增 in-memory retrieval trace metadata，保留 query、top-k 設定與每筆 candidate 的 ranking trace
+- 已實作 rerank 成本控制：僅重排前 `RERANK_TOP_N` 筆候選，且每筆文件內容受 `RERANK_MAX_CHARS_PER_DOC` 限制
+- 已落實 rerank runtime failure 的 fail-open fallback，不影響 deny-by-default、same-404 與 ready-only 邊界
+- API 測試已補 rerank provider factory、runtime fallback、rerank metadata 與 upload -> ingest -> retrieval 的近似 E2E 驗證
+
 ## 目前階段重點
 
 ### Current Focus
-- 穩定 `Phase 4.1` 的 retrieval foundation 與 `pg_jieba` 本機啟動路徑
-- 穩定 `hnsw` vector recall 與 `pgvector >= 0.8.0` 查詢參數設定
-- 穩定 `embedding` / `fts_document` 與既有 reindex / delete / observability 路徑的相容性
-- 穩定 ready-only、deny-by-default 與 SQL gate 的 retrieval 語意
-- 為 `Phase 4.2` 準備 rerank、retrieval trace metadata 與 table-aware retrieval assembler
+- 穩定 `Phase 4.2` minimal rerank slice 與 `pg_jieba` 本機啟動路徑
+- 穩定 `hnsw` vector recall、`RRF` 與 rerank 之間的排序語意
+- 穩定 `embedding` / `fts_document` / rerank trace 與既有 reindex / delete / observability 路徑的相容性
+- 穩定 ready-only、deny-by-default、SQL gate 與 rerank fail-open fallback 的 retrieval 語意
+- 為後續 table-aware retrieval assembler 與 chat/citations flow 準備組裝契約
 - 保持 deny-by-default 與不暴露受保護資源存在性的錯誤語意
 - area rename / delete 不列為 retrieval 前的阻擋項目，維持在 documents 主流程之後評估
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 為 `Phase 4.2` 接上 Cohere rerank、retrieval trace metadata 與 candidate 組裝細節
-2. 定義 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
-3. 在 API 內將 internal retrieval service 串到後續 chat/citations flow
-4. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
-5. Retrieval foundation 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+1. 完成 table-aware retrieval assembler，避免把整批 parent / table chunks 無控制地塞進 LLM prompt
+2. 在 API 內將 internal retrieval service 與 trace 串到後續 chat/citations flow
+3. 補 `pg_jieba` 本機 compose 啟動與 migration 的整合驗證
+4. 視需要補真實 Cohere compose smoke 驗證，但不作為 MVP 阻擋項
+5. Retrieval ranking 路徑穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
 
 ## 尚未開始的功能
 
-- Cohere rerank 正式整合
 - public chat API 與 citations
-- retrieval trace metadata
+- table-aware retrieval assembler
 - area rename / delete
 
 ## Agent Rules

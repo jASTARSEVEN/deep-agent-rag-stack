@@ -160,7 +160,7 @@
 - table-aware retrieval assembler
 
 狀態：
-- `未開始`
+- `進行中（minimal rerank slice 已完成）`
 
 ## Phase 5 — Chat
 

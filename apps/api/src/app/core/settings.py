@@ -29,6 +29,8 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_MAX_CANDIDATES",
     "RETRIEVAL_RRF_K",
     "RETRIEVAL_HNSW_EF_SEARCH",
+    "RERANK_TOP_N",
+    "RERANK_MAX_CHARS_PER_DOC",
 }
 
 
@@ -101,6 +103,11 @@ class AppSettings(BaseSettings):
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 12
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
+    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "deterministic"
+    rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "rerank-v3.5"
+    cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
+    rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 6
+    rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
 
     @model_validator(mode="before")
     @classmethod

@@ -28,6 +28,8 @@
 - `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
+- `RERANK_*`
+- `COHERE_API_KEY`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_*`
 - `VITE_*`
@@ -61,3 +63,4 @@
 - 若要回到預設 Keycloak 身份資料，請刪除 `keycloak-db` volume 後重新啟動 stack。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
 - 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。
+- 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。

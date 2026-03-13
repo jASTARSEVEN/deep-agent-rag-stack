@@ -17,6 +17,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
         CHUNK_TXT_PARENT_GROUP_SIZE="",
         CHUNK_TABLE_PRESERVE_MAX_CHARS="",
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
+        RERANK_TOP_N="",
+        RERANK_MAX_CHARS_PER_DOC="",
     )
 
     assert settings.minio_secure is False
@@ -29,3 +31,5 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.chunk_txt_parent_group_size == 4
     assert settings.chunk_table_preserve_max_chars == 4000
     assert settings.chunk_table_max_rows_per_child == 20
+    assert settings.rerank_top_n == 6
+    assert settings.rerank_max_chars_per_doc == 2000

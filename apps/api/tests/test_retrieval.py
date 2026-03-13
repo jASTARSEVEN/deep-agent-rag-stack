@@ -1,19 +1,69 @@
-"""Internal retrieval service 測試。"""
+"""Internal retrieval service 與 rerank provider 測試。"""
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 
 from app.auth.verifier import CurrentPrincipal
+from app.core.settings import AppSettings
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
+from app.services.reranking import (
+    CohereRerankProvider,
+    DeterministicRerankProvider,
+    RerankInputDocument,
+    build_rerank_provider,
+)
 from app.services.retrieval import (
+    _build_rerank_document_text,
     _configure_postgres_hnsw_search,
     build_postgres_fts_recall_statement,
     retrieve_area_candidates,
 )
 
 
+def test_build_rerank_provider_supports_deterministic_and_cohere(app_settings) -> None:
+    """rerank provider factory 應支援 deterministic 與 Cohere。"""
+
+    deterministic_settings = app_settings.model_copy(update={"rerank_provider": "deterministic"})
+    cohere_settings = app_settings.model_copy(
+        update={"rerank_provider": "cohere", "cohere_api_key": "test-key", "rerank_model": "rerank-v3.5"}
+    )
+
+    deterministic_provider = build_rerank_provider(deterministic_settings)
+    cohere_provider = build_rerank_provider(cohere_settings)
+
+    assert isinstance(deterministic_provider, DeterministicRerankProvider)
+    assert isinstance(cohere_provider, CohereRerankProvider)
+
+
+def test_build_rerank_provider_rejects_unsupported_provider(app_settings) -> None:
+    """不支援的 rerank provider 應明確失敗。"""
+
+    settings = app_settings.model_copy(update={"rerank_provider": "unsupported"})
+
+    try:
+        build_rerank_provider(settings)
+    except ValueError as exc:
+        assert "不支援的 rerank provider" in str(exc)
+    else:  # pragma: no cover - 失敗時才會進來。
+        raise AssertionError("預期 build_rerank_provider 應拋出 ValueError。")
+
+
+def test_build_rerank_provider_requires_cohere_api_key(app_settings) -> None:
+    """使用 Cohere rerank 前必須提供 API key。"""
+
+    settings = app_settings.model_copy(update={"rerank_provider": "cohere", "cohere_api_key": None})
+
+    try:
+        build_rerank_provider(settings)
+    except ValueError as exc:
+        assert "COHERE_API_KEY" in str(exc)
+    else:  # pragma: no cover - 失敗時才會進來。
+        raise AssertionError("預期缺少 COHERE_API_KEY 時應拋出 ValueError。")
+
+
 def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session, app_settings) -> None:
-    """retrieval 應只回 ready 文件的 child chunks。"""
+    """retrieval 應只回 ready 文件的 child chunks，並保留 rerank metadata。"""
 
     area = Area(id="area-retrieval-ready", name="Retrieval Ready")
     db_session.add(area)
@@ -65,13 +115,13 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
                 section_index=0,
                 child_index=0,
                 heading="Ready Child",
-                content="這是一段中文檢索內容",
-                content_preview="這是一段中文檢索內容",
-                char_count=10,
+                content="這是一段中文檢索內容 中文檢索",
+                content_preview="這是一段中文檢索內容 中文檢索",
+                char_count=15,
                 start_offset=0,
-                end_offset=10,
+                end_offset=15,
                 embedding=[0.1] * app_settings.embedding_dimensions,
-                fts_document="這是一段中文檢索內容",
+                fts_document="這是一段中文檢索內容 中文檢索",
             ),
             DocumentChunk(
                 id="chunk-uploaded-child",
@@ -95,7 +145,7 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
     )
     db_session.commit()
 
-    candidates = retrieve_area_candidates(
+    result = retrieve_area_candidates(
         session=db_session,
         principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
         settings=app_settings,
@@ -103,8 +153,179 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
         query="中文檢索",
     )
 
-    assert [candidate.chunk_id for candidate in candidates] == ["chunk-ready-child"]
-    assert candidates[0].source == "hybrid"
+    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-ready-child"]
+    assert result.candidates[0].source == "hybrid"
+    assert result.candidates[0].rrf_rank == 1
+    assert result.candidates[0].rerank_rank == 1
+    assert result.candidates[0].rerank_applied is True
+    assert result.trace.query == "中文檢索"
+    assert result.trace.candidates[0].chunk_id == "chunk-ready-child"
+
+
+def test_retrieve_area_candidates_reranks_only_top_n_and_keeps_rest_in_rrf_order(db_session, app_settings) -> None:
+    """rerank 應只重排前 top-n 筆，其他結果維持原 RRF 順序。"""
+
+    settings = app_settings.model_copy(update={"rerank_top_n": 2})
+    area = Area(id="area-retrieval-rerank", name="Retrieval Rerank")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id="document-rerank",
+        area_id=area.id,
+        file_name="rerank.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-rerank/rerank.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+    db_session.add_all(
+        [
+            DocumentChunk(
+                id="chunk-alpha",
+                document_id=document.id,
+                parent_chunk_id=None,
+                chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind.text,
+                position=1,
+                section_index=0,
+                child_index=0,
+                heading="Alpha",
+                content="alpha",
+                content_preview="alpha",
+                char_count=5,
+                start_offset=0,
+                end_offset=5,
+                embedding=[0.1] * settings.embedding_dimensions,
+                fts_document="alpha",
+            ),
+            DocumentChunk(
+                id="chunk-beta",
+                document_id=document.id,
+                parent_chunk_id=None,
+                chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind.text,
+                position=2,
+                section_index=0,
+                child_index=1,
+                heading="Beta",
+                content="alpha alpha alpha",
+                content_preview="alpha alpha alpha",
+                char_count=17,
+                start_offset=6,
+                end_offset=23,
+                embedding=[0.11] * settings.embedding_dimensions,
+                fts_document="alpha alpha alpha",
+            ),
+            DocumentChunk(
+                id="chunk-gamma",
+                document_id=document.id,
+                parent_chunk_id=None,
+                chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind.table,
+                position=3,
+                section_index=0,
+                child_index=2,
+                heading="Gamma",
+                content="| item | value |\n| --- | --- |\n| alpha | 1 |",
+                content_preview="| item | value |",
+                char_count=46,
+                start_offset=24,
+                end_offset=70,
+                embedding=[0.12] * settings.embedding_dimensions,
+                fts_document="alpha",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="alpha",
+    )
+
+    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-beta", "chunk-alpha", "chunk-gamma"]
+    assert result.candidates[0].rerank_rank == 1
+    assert result.candidates[1].rerank_rank == 2
+    assert result.candidates[2].rerank_rank is None
+    assert result.candidates[2].rerank_applied is False
+    assert result.trace.rerank_top_n == 2
+
+
+def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """rerank runtime 失敗時，retrieval 應回退到 RRF 結果。"""
+
+    area = Area(id="area-retrieval-fallback", name="Retrieval Fallback")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id="document-fallback",
+        area_id=area.id,
+        file_name="fallback.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-fallback/fallback.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+    db_session.add(
+        DocumentChunk(
+            id="chunk-fallback",
+            document_id=document.id,
+            parent_chunk_id=None,
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind.text,
+            position=1,
+            section_index=0,
+            child_index=0,
+            heading="Fallback",
+            content="fallback alpha",
+            content_preview="fallback alpha",
+            char_count=14,
+            start_offset=0,
+            end_offset=14,
+            embedding=[0.2] * app_settings.embedding_dimensions,
+            fts_document="fallback alpha",
+        )
+    )
+    db_session.commit()
+
+    class FailingRerankProvider:
+        """固定拋錯的 rerank provider 測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int):
+            """模擬 provider runtime failure。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 provider 的文件清單。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - 不會回傳；固定拋出錯誤。
+            """
+
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: FailingRerankProvider())
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="alpha",
+    )
+
+    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-fallback"]
+    assert result.candidates[0].rerank_applied is False
+    assert result.candidates[0].rerank_rank is None
+    assert result.trace.candidates[0].rerank_applied is False
 
 
 def test_retrieve_area_candidates_returns_same_404_for_missing_and_unauthorized(db_session, app_settings) -> None:
@@ -188,3 +409,65 @@ def test_configure_postgres_hnsw_search_sets_iterative_scan_and_ef_search(app_se
         ("SET LOCAL hnsw.iterative_scan = 'strict_order'", None),
         ("SET LOCAL hnsw.ef_search = :ef_search", {"ef_search": app_settings.retrieval_hnsw_ef_search}),
     ]
+
+
+def test_build_rerank_document_text_truncates_to_cost_guardrail() -> None:
+    """rerank 文件文字應受最大字元數限制。"""
+
+    assert _build_rerank_document_text(content="  abcdef  ", max_chars=4) == "abcd"
+
+
+def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:
+    """deterministic rerank provider 應回傳可重現且排序穩定的結果。"""
+
+    provider = DeterministicRerankProvider()
+    documents = [
+        RerankInputDocument(candidate_id="a", text="alpha"),
+        RerankInputDocument(candidate_id="b", text="alpha alpha"),
+    ]
+
+    first_scores = provider.rerank(query="alpha", documents=documents, top_n=2)
+    second_scores = provider.rerank(query="alpha", documents=documents, top_n=2)
+
+    assert [item.candidate_id for item in first_scores] == ["b", "a"]
+    assert first_scores == second_scores
+
+
+def test_internal_retrieval_pipeline_from_upload_to_rerank(client, app, db_session, app_settings) -> None:
+    """upload -> inline ingest -> retrieval rerank 的近似 E2E 路徑應可重跑。"""
+
+    area = Area(id="area-retrieval-e2e", name="Retrieval E2E")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    db_session.commit()
+
+    file_payload = b"# Intro\nalpha\n\n## Deep Dive\nalpha alpha alpha alpha\n"
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": "Bearer test::user-maintainer::/group/maintainer"},
+        files={"file": ("retrieval-e2e.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    document_id = response.json()["document"]["id"]
+
+    session = app.state.session_factory()
+    try:
+        stored_children = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
+        assert any(chunk.embedding is not None for chunk in stored_children if chunk.chunk_type == ChunkType.child)
+        assert any(chunk.fts_document for chunk in stored_children if chunk.chunk_type == ChunkType.child)
+
+        result = retrieve_area_candidates(
+            session=session,
+            principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+            settings=app_settings,
+            area_id=area.id,
+            query="alpha",
+        )
+    finally:
+        session.close()
+
+    assert result.candidates
+    assert result.trace.candidates
+    assert any(candidate.rerank_applied for candidate in result.candidates[: app_settings.rerank_top_n])

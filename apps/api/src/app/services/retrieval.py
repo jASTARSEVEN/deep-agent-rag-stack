@@ -13,6 +13,7 @@ from app.core.settings import AppSettings
 from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
+from app.services.reranking import RerankInputDocument, RerankScore, build_rerank_provider
 
 
 @dataclass(slots=True)
@@ -41,13 +42,73 @@ class RetrievalCandidate:
     vector_rank: int | None
     # FTS recall 排名；未命中時為空值。
     fts_rank: int | None
+    # RRF 排名。
+    rrf_rank: int
     # RRF 合併後分數。
     rrf_score: float
+    # rerank 排名；未套用或未命中時為空值。
+    rerank_rank: int | None
+    # rerank 分數；未套用或未命中時為空值。
+    rerank_score: float | None
+    # 此 candidate 是否成功套用 rerank 結果。
+    rerank_applied: bool
+
+
+@dataclass(slots=True)
+class RetrievalTraceEntry:
+    """單一 retrieval candidate 的 trace metadata。"""
+
+    # candidate 對應的 chunk 識別碼。
+    chunk_id: str
+    # candidate 來源。
+    source: str
+    # vector recall 排名。
+    vector_rank: int | None
+    # FTS recall 排名。
+    fts_rank: int | None
+    # RRF 排名。
+    rrf_rank: int
+    # RRF 分數。
+    rrf_score: float
+    # rerank 排名。
+    rerank_rank: int | None
+    # rerank 分數。
+    rerank_score: float | None
+    # 是否成功套用 rerank。
+    rerank_applied: bool
+
+
+@dataclass(slots=True)
+class RetrievalTrace:
+    """單次 retrieval 的 trace metadata。"""
+
+    # 使用者查詢文字。
+    query: str
+    # vector recall top-k。
+    vector_top_k: int
+    # FTS recall top-k。
+    fts_top_k: int
+    # RRF 後最多保留的 candidates 數量。
+    max_candidates: int
+    # 實際送進 rerank 的前幾名 candidates。
+    rerank_top_n: int
+    # 此次 retrieval 的 candidate traces。
+    candidates: list[RetrievalTraceEntry]
+
+
+@dataclass(slots=True)
+class RetrievalResult:
+    """internal retrieval service 的回傳結構。"""
+
+    # retrieval 後的最終 candidates。
+    candidates: list[RetrievalCandidate]
+    # 供後續 chat / citations 使用的 trace metadata。
+    trace: RetrievalTrace
 
 
 @dataclass(slots=True)
 class RankedChunkMatch:
-    """合併 vector / FTS recall 前使用的中間結構。"""
+    """合併 vector / FTS recall 與 rerank 前使用的中間結構。"""
 
     # 命中的 chunk ORM 物件。
     chunk: DocumentChunk
@@ -55,8 +116,16 @@ class RankedChunkMatch:
     vector_rank: int | None = None
     # FTS recall 排名；未命中時為空值。
     fts_rank: int | None = None
+    # RRF 排名。
+    rrf_rank: int | None = None
     # RRF 合併後分數。
     rrf_score: float = 0.0
+    # rerank 排名；未套用或未命中時為空值。
+    rerank_rank: int | None = None
+    # rerank 分數；未套用或未命中時為空值。
+    rerank_score: float | None = None
+    # 此 candidate 是否成功套用 rerank。
+    rerank_applied: bool = False
 
 
 def retrieve_area_candidates(
@@ -66,8 +135,8 @@ def retrieve_area_candidates(
     settings: AppSettings,
     area_id: str,
     query: str,
-) -> list[RetrievalCandidate]:
-    """在指定 area 內取得 ready-only 的 hybrid recall candidates。
+) -> RetrievalResult:
+    """在指定 area 內取得 ready-only 的 hybrid recall 與 rerank candidates。
 
     參數：
     - `session`：目前資料庫 session。
@@ -77,7 +146,7 @@ def retrieve_area_candidates(
     - `query`：使用者查詢文字。
 
     回傳：
-    - `list[RetrievalCandidate]`：已完成 SQL gate、vector recall、FTS recall 與 RRF merge 的 candidates。
+    - `RetrievalResult`：已完成 SQL gate、vector recall、FTS recall、RRF 與 rerank 的結果與 trace。
     """
 
     require_area_access(session=session, principal=principal, area_id=area_id)
@@ -89,23 +158,32 @@ def retrieve_area_candidates(
         rrf_k=settings.retrieval_rrf_k,
         max_candidates=settings.retrieval_max_candidates,
     )
-    return [
-        RetrievalCandidate(
-            document_id=match.chunk.document_id,
-            chunk_id=match.chunk.id,
-            parent_chunk_id=match.chunk.parent_chunk_id,
-            structure_kind=match.chunk.structure_kind,
-            heading=match.chunk.heading,
-            content=match.chunk.content,
-            start_offset=match.chunk.start_offset,
-            end_offset=match.chunk.end_offset,
-            source=_resolve_candidate_source(match),
-            vector_rank=match.vector_rank,
-            fts_rank=match.fts_rank,
-            rrf_score=match.rrf_score,
-        )
-        for match in merged_matches
-    ]
+    reranked_matches = _apply_rerank(matches=merged_matches, query=query, settings=settings)
+    candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
+    return RetrievalResult(
+        candidates=candidates,
+        trace=RetrievalTrace(
+            query=query,
+            vector_top_k=settings.retrieval_vector_top_k,
+            fts_top_k=settings.retrieval_fts_top_k,
+            max_candidates=settings.retrieval_max_candidates,
+            rerank_top_n=min(settings.rerank_top_n, len(reranked_matches)),
+            candidates=[
+                RetrievalTraceEntry(
+                    chunk_id=candidate.chunk_id,
+                    source=candidate.source,
+                    vector_rank=candidate.vector_rank,
+                    fts_rank=candidate.fts_rank,
+                    rrf_rank=candidate.rrf_rank,
+                    rrf_score=candidate.rrf_score,
+                    rerank_rank=candidate.rerank_rank,
+                    rerank_score=candidate.rerank_score,
+                    rerank_applied=candidate.rerank_applied,
+                )
+                for candidate in candidates
+            ],
+        ),
+    )
 
 
 def build_postgres_fts_recall_statement(*, settings: AppSettings, area_id: str, query: str) -> Select:
@@ -303,10 +381,119 @@ def _merge_ranked_matches(
         current.fts_rank = match.fts_rank
         current.rrf_score += 1.0 / (rrf_k + (match.fts_rank or 0))
 
-    return sorted(
+    merged_matches = sorted(
         merged_by_chunk_id.values(),
         key=lambda item: (-item.rrf_score, item.chunk.position),
     )[:max_candidates]
+    for index, match in enumerate(merged_matches, start=1):
+        match.rrf_rank = index
+    return merged_matches
+
+
+def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:
+    """將 RRF 後的 candidates 再送入 rerank，並保留 fail-open fallback。
+
+    參數：
+    - `matches`：RRF 後的候選結果。
+    - `query`：使用者查詢文字。
+    - `settings`：API 執行期設定。
+
+    回傳：
+    - `list[RankedChunkMatch]`：套用 rerank 或 fallback 後的最終排序結果。
+
+    風險：
+    - rerank 僅可重排已通過 SQL gate 的結果，不得擴大可見資料集合。
+    """
+
+    rerank_limit = min(settings.rerank_top_n, len(matches))
+    if rerank_limit <= 0:
+        return matches
+
+    rerank_inputs = [
+        RerankInputDocument(
+            candidate_id=match.chunk.id,
+            text=_build_rerank_document_text(content=match.chunk.content, max_chars=settings.rerank_max_chars_per_doc),
+        )
+        for match in matches[:rerank_limit]
+    ]
+
+    try:
+        rerank_provider = build_rerank_provider(settings)
+        rerank_scores = rerank_provider.rerank(query=query, documents=rerank_inputs, top_n=rerank_limit)
+    except Exception:
+        return matches
+
+    rerank_score_by_chunk_id = {item.candidate_id: item for item in rerank_scores}
+    top_matches = matches[:rerank_limit]
+    for match in top_matches:
+        score = rerank_score_by_chunk_id.get(match.chunk.id)
+        if score is None:
+            match.rerank_applied = False
+            match.rerank_score = None
+            match.rerank_rank = None
+            continue
+        match.rerank_applied = True
+        match.rerank_score = score.score
+
+    reranked_top_matches = sorted(
+        top_matches,
+        key=lambda item: (
+            0 if item.rerank_applied else 1,
+            -(item.rerank_score if item.rerank_score is not None else float("-inf")),
+            item.rrf_rank or 0,
+        ),
+    )
+    for index, match in enumerate(reranked_top_matches, start=1):
+        if match.rerank_applied:
+            match.rerank_rank = index
+    return reranked_top_matches + matches[rerank_limit:]
+
+
+def _build_rerank_document_text(*, content: str, max_chars: int) -> str:
+    """建立送進 rerank 的文件文字。
+
+    參數：
+    - `content`：child chunk 原始內容。
+    - `max_chars`：每筆 rerank 文件允許的最大字元數。
+
+    回傳：
+    - `str`：已套成本上限的 rerank 文件文字。
+    """
+
+    normalized_content = content.strip()
+    if len(normalized_content) <= max_chars:
+        return normalized_content
+    return normalized_content[:max_chars]
+
+
+def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
+    """將中間結構轉為對外使用的 retrieval candidate。
+
+    參數：
+    - `match`：合併與 rerank 後的 chunk match。
+
+    回傳：
+    - `RetrievalCandidate`：供 internal caller 使用的 candidate。
+    """
+
+    return RetrievalCandidate(
+        document_id=match.chunk.document_id,
+        chunk_id=match.chunk.id,
+        parent_chunk_id=match.chunk.parent_chunk_id,
+        structure_kind=match.chunk.structure_kind,
+        heading=match.chunk.heading,
+        content=match.chunk.content,
+        start_offset=match.chunk.start_offset,
+        end_offset=match.chunk.end_offset,
+        source=_resolve_candidate_source(match),
+        vector_rank=match.vector_rank,
+        fts_rank=match.fts_rank,
+        rrf_rank=match.rrf_rank or 0,
+        rrf_score=match.rrf_score,
+        rerank_rank=match.rerank_rank,
+        rerank_score=match.rerank_score,
+        rerank_applied=match.rerank_applied,
+    )
 
 
 def _resolve_candidate_source(match: RankedChunkMatch) -> str:

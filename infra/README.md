@@ -28,6 +28,8 @@ This module contains the local Docker Compose stack and the container build asse
 - `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
+- `RERANK_*`
+- `COHERE_API_KEY`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_*`
 - `VITE_*`
@@ -61,3 +63,4 @@ This module contains the local Docker Compose stack and the container build asse
 - To restore the default Keycloak identity data, remove the `keycloak-db` volume and restart the stack.
 - Current compose health checks only verify stack readiness, not complete business correctness.
 - The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and pair it with `INGEST_INLINE_MODE=true`.
+- To enable Cohere rerank in compose, provide `COHERE_API_KEY` in `.env` and keep `RERANK_PROVIDER=cohere`.

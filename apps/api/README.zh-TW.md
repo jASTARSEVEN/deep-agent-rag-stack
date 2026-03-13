@@ -59,6 +59,11 @@
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
+- `RERANK_PROVIDER`
+- `RERANK_MODEL`
+- `COHERE_API_KEY`
+- `RERANK_TOP_N`
+- `RERANK_MAX_CHARS_PER_DOC`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
@@ -112,6 +117,7 @@
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
 - `ready` 現在代表 chunk tree、embedding 與 FTS payload 都已完成。
-- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall 與 `RRF` merge，但尚未公開為 HTTP API。
+- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall、`RRF` merge 與 minimal rerank，但尚未公開為 HTTP API。
+- rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
 - 未支援格式仍維持受控 `failed`。
-- chat、citations 與 rerank 仍待後續 phase。
+- chat 與 citations 仍待後續 phase。

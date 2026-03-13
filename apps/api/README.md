@@ -59,6 +59,11 @@ This module contains the project's FastAPI service. It currently provides:
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
+- `RERANK_PROVIDER`
+- `RERANK_MODEL`
+- `COHERE_API_KEY`
+- `RERANK_TOP_N`
+- `RERANK_MAX_CHARS_PER_DOC`
 - `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
@@ -112,6 +117,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and FTS payloads have all been written.
-- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, and `RRF` merge, but it is not exposed as a public HTTP route yet.
+- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, `RRF` merge, and minimal rerank, but it is not exposed as a public HTTP route yet.
+- Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
 - Unsupported formats still move into controlled `failed`.
-- Chat, citations, and rerank remain out of scope for this module's current phase.
+- Chat and citations remain out of scope for this module's current phase.

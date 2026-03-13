@@ -143,7 +143,11 @@
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `pg_jieba`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `deep_agent_jieba` text search configuration
-8. 初版 retrieval 只做到 vector recall + FTS recall + `RRF` merge；rerank 與 citations 留在下一階段
+8. retrieval 目前已擴充為 vector recall + FTS recall + `RRF` merge + minimal rerank；citations 仍留在下一階段
+9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
+10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 筆候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
+11. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意
+12. retrieval trace metadata 目前只存在記憶體回傳結構，不落資料庫
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表
