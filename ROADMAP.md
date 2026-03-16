@@ -183,6 +183,33 @@
 狀態：
 - `進行中 (UI 重構已完成)`
 
+## Phase 6 — Cloud Migration & Supabase Transition (Planned)
+
+目標：
+- 將專案從本機 Docker Compose 完整遷移至雲端 Serverless / Managed 環境。
+- 以 Supabase 為核心架構，利用其 **SaaS 官方原生支援 PGroonga** 的優勢，解決雲端託管資料庫無法安裝 `pg_jieba` 的限制。
+
+預期效果：
+- **高品質中文檢索 (SaaS 支援)**：Supabase Cloud 內建 PGroonga，可提供比 N-gram 更精準的繁體中文分詞檢索，且無需自行維護詞庫檔。
+- **大幅降低維運成本**：移除本機維護 Keycloak、Postgres (pg_jieba) 與 MinIO 的複雜度與資源消耗。
+- **檢索效能極大化**：將 Python 層的 RRF 合併邏輯下放到資料庫層 (RPC)，實現「單次查詢 = 條件 + 向量 + 全文 + 排序」。
+- **架構彈性**：核心綁定 Supabase，但可透過 Auth Hooks 相容 Auth0/Keycloak，並透過 S3 協定兼容 MinIO/AWS S3。
+
+里程碑內容 (Milestones)：
+1. **Database & Retrieval 重構 (Supabase Core)**
+   - 引入 Supabase PostgreSQL 並啟用 `pgvector` 與 `PGroonga`。
+   - 捨棄自編譯的 `pg_jieba`，將 FTS 語法轉換為 PGroonga `&@~` 運算子。
+   - 撰寫 Supabase RPC (PostgreSQL Function)，將 `Metadata Filtering` + `Vector Search` + `FTS` + `RRF` 封裝為單次執行。
+2. **Storage 漸進式切換 (Supabase Storage / S3)**
+   - API 層相容 Supabase Storage Client，並保留對 AWS S3 協定的支援。
+3. **Auth 漸進式切換 (Supabase Auth / 第三方 IdP)**
+   - 使用 Supabase Auth 簡化架構，並透過 **Auth Hooks** 動態轉換外部 JWT (Auth0/Keycloak) 以驅動 RLS。
+4. **前端與 Worker 部署**
+   - Web 部署至 Vercel/Netlify；API 與 Worker 容器化部署至 AWS Fargate 或 Cloud Run。
+5. **環境清理與解耦完成 (Final Cleanup)**
+   - **移除純 PostgreSQL 依賴**：在遷移測試完成後，完整移除現有 `infra/docker/postgres` 中維護成本極高的自編譯 `pg_jieba` 映像檔與相關 Dockerfile。
+   - **簡化 Infra 管理**：從 `docker-compose.yml` 中正式剔除 local Postgres 服務，達成 100% 雲端原生/地端 Supabase CLI 驅動的輕量化架構。
+
 ## Milestone 規則
 
 - 每個 phase 至少要有一個可驗證的垂直切片

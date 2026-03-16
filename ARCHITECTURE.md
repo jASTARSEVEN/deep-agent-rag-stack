@@ -31,10 +31,10 @@
 - 目前已處理 parse routing、parent-child chunk tree、embedding、FTS payload 寫入與狀態轉換
 
 ### Infra
-- PostgreSQL：主要資料庫
+- PostgreSQL：主要資料庫 (未來遷移至 Supabase SaaS，改用官方支援的 **PGroonga** 替代 `pg_jieba`)
 - Redis：Celery broker/result backend
-- MinIO：原始檔案儲存
-- Keycloak：身分與群組來源
+- MinIO：原始檔案儲存 (未來兼容 AWS S3)
+- Keycloak：身分與群組來源 (未來可透過 Auth Hooks 解耦)
 - Alembic：資料庫 schema versioning 與 migration 執行入口
 - PostgreSQL 容器目前已內建 `pg_jieba` 與固定版本繁體中文詞庫
 
@@ -169,6 +169,25 @@
 3. `CHUNK_TABLE_PRESERVE_MAX_CHARS` 控制整表可否保留為單一 child
 4. 超過 preserve 上限的表格以 `CHUNK_TABLE_MAX_ROWS_PER_CHILD` 分組；每個 child 只允許在 row boundary 切分
 5. `table child.content` 允許重複表頭，因此可比 `normalized_text[start:end]` 多出 header，但 row payload 必須能回對原始 normalized text
+
+## 未來雲端架構演進 (Supabase Migration)
+
+本專案計畫在 MVP 穩定後，遷移至以 Supabase 為核心的雲端架構，重點包含：
+
+### 1. 資料庫層的混合搜尋封裝 (Hybrid Search RPC)
+- **捨棄 Python 層 RRF**：將目前在 FastAPI 記憶體內進行的 RRF 合併邏輯，改寫為 PostgreSQL RPC (Stored Procedure)。
+- **PGroonga 支援 (SaaS 官方內建)**：利用 Supabase Cloud 官方支援的 PGroonga 擴充功能，在雲端環境獲得比 `pg_jieba` 更高效、且無需維護字典檔的繁體中文分詞檢索。
+- **單次查詢效能**：透過單一 RPC 呼叫，在資料庫內一次性完成「條件過濾 + 向量相似度搜尋 + 中文全文檢索 + RRF 排序」，極大化檢索速度與減少延遲。
+
+### 2. 認證與儲存的漸進式解耦 (Decoupling)
+- **混合認證 (Hybrid Auth)**：核心支援一站式 Supabase Auth。針對未來支援 Auth0 或 Keycloak 的需求，將透過 **Supabase Auth Hooks (Custom Access Token)**，動態攔截並將外部 JWT 的 `groups/roles` Claims 注入至 RLS Context，實現 BYO-JWT (Bring Your Own JWT) 的無縫整合。
+- **儲存彈性**：API 層保持 S3 API 相容性，可視成本與隱私需求，在 Supabase Storage 與外部 AWS S3 / MinIO 之間自由切換。
+
+### 3. 開發環境的一致性 (Local Development Parity)
+- **Supabase Local Docker CLI**：為了利於開發與離線測試，開發環境將採用 Supabase CLI 提供的本地 Docker Stack。這套工具能完整重現雲端的 PostgreSQL (含 PGroonga)、Auth 與 Storage 環境。
+- **完整移除純 PostgreSQL 依賴**：轉換完成後，系統將不再依賴於專案內自建的 `infra/docker/postgres` 及其複雜的 C-extension 編譯過程。現有的 PostgreSQL 容器與相關資產將正式退役，簡化基礎設施的維護鏈。
+- **地端部署支援**：此設計確保專案在遷移到雲端的同時，依然保有「地端自架 (Self-hosted)」的完整能力。
+開發者可以選擇在本機 Docker 中運行完整架構，或僅連接到雲端 Supabase 生態系，維持高度的環境一致性。
 
 ## 預期模組邊界
 

@@ -155,6 +155,16 @@
 3. 在中央 `ChatPanel` 進行即時對話，並可隨時檢視檢索路徑與引用來源。
 4. 若需上傳或管理文件，點擊右上角按鈕開啟 `DocumentsDrawer`，操作過程中對話不中斷。
 
+## 未來雲端部署策略 (Supabase)
+
+為降低維運成本並提升擴充性，專案計畫支援基於 Supabase 的雲端託管架構。此策略的核心為 **「SaaS 驅動的高效架構 + 本地 Docker 開發一致性」**：
+
+- **高效檢索 (PGroonga + RPC)**：利用 Supabase Cloud 原生支援的 **PGroonga** 擴充，將向量、條件過濾與中文分詞檢索合併在資料庫層 single RPC 完成，取代原本分散在 Python 層的檢索邏輯。
+- **混合認證彈性 (Auth Hooks)**：預設使用一站式 Supabase Auth，亦可透過 **Auth Hooks** 無縫介接外部 Keycloak 或 Auth0 作為 IdP。
+- **儲存抽換**：相容標準 S3 協定，支援在 Supabase Storage 與 AWS S3 / MinIO 間快速切換。
+- **本地/地端支援**：開發階段將改用 **Supabase Local CLI**。這確保了開發者在離線環境中，依然能透過 Docker 運行一個與雲端生產環境行為一致的本地 Stack。
+- **基礎設施簡化**：遷移完成後，將**完整移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴**，大幅降低基礎設施的維護難度與映像檔體積。
+
 ## 非功能性要求
 
 ### 文件與註解
