@@ -138,16 +138,22 @@
 - `Markdown + HTML` 本輪支援表格感知 chunking
 - `TXT` 不做表格感知
 
-## 前端需求
+## 前端需求 (One-Page Dashboard)
 
-目標頁面：
-- Login / Callback
-- Areas List
-- Area Detail
-- Files Tab
-- Access Tab
-- Activity Tab
-- Chat
+佈局架構：
+- **Login / Callback**: 基礎登入與 Session 恢復頁面。
+- **DashboardLayout**: 全螢幕戰情室佈局，整合頂部全局狀態。
+- **AreaSidebar**: 側邊區域導覽，提供快速切換、搜尋與建立 Area。
+- **ChatPanel**: 中央主視窗，提供串流對話、檢索追蹤與引用來源顯示。
+- **DocumentsDrawer**: 右側滑出式文件管理，不中斷對話即可管理文件。
+- **AccessModal**: 彈窗式權限設定，集中管理區域成員與角色。
+- **HomePage**: 匿名入口與產品簡介。
+
+核心流程：
+1. 登入後進入 Dashboard 並自動加載最近使用的區域。
+2. 透過左側 `AreaSidebar` 快速切換不同知識庫。
+3. 在中央 `ChatPanel` 進行即時對話，並可隨時檢視檢索路徑與引用來源。
+4. 若需上傳或管理文件，點擊右上角按鈕開啟 `DocumentsDrawer`，操作過程中對話不中斷。
 
 ## 非功能性要求
 

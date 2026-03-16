@@ -1,5 +1,7 @@
 # Deep Agent RAG Stack
 
+![Actual Dashboard Live](actual-dashboard-live.png)
+
 An enterprise knowledge assistant prototype with OAuth2-based authentication, RBAC, and multi-strategy retrieval.
 
 [繁體中文版本](README.zh-TW.md)
@@ -53,9 +55,10 @@ The project is currently in `Phase 5.1 — Chat MVP on LangGraph Server`. By the
 - SQL-first `parent -> child` chunk tree generation with `structure_kind=text|table`, covering `TXT`, `Markdown`, and table-aware `HTML`
 - Hybrid chunking: custom parent sectioning plus LangChain-based text child splitting, with dedicated table preserve / row-group split rules
 - Ready-only retrieval foundation with SQL gate, vector recall, FTS recall, `RRF`, rerank, and table-aware context assembly
+- Modernized One-Page Dashboard: A unified workspace featuring fixed sidebar navigation for Knowledge Areas, a full-height center chat as the primary workspace, and a slide-out drawer for non-interruptive file management.
 - `Deep Agents` main agent plus single `retrieve_area_contexts` tool for formal chat execution
 - `LangGraph Server` built-in `thread/run` runtime, custom auth injection, and streaming to the web app
-- Web `Areas` workspace with Files and Chat, including assembled-context references and tool/debug views
+- Real-time chat features including assembled-context references, tool-call tracking, and interactive debug views
 
 ## Not Yet Implemented
 
@@ -85,7 +88,7 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
 
 - `apps/api`: FastAPI API, JWT auth, RBAC, internal retrieval services, `app/chat` Deep Agents domain, and LangGraph loader/runtime glue
 - `apps/worker`: Celery background jobs for ingest and status transitions
-- `apps/web`: React + Tailwind frontend, login flow, Areas / Files UI, and `features/chat` LangGraph SDK chat feature
+- `apps/web`: React + Tailwind frontend, modernized one-page dashboard (integrated area navigation, chat center, and file management drawers)
 - `infra`: Docker Compose assets and container build definitions
 - `packages/shared`: Reserved space for shared types and configuration
 

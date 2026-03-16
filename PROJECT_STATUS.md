@@ -41,6 +41,7 @@
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
 - 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
+- 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 
 ## 已完成功能
 
@@ -142,6 +143,14 @@
 - assembler trace 已補齊 kept/dropped chunk ids、per-context merge 結果與 truncation metadata
 - API 測試已補 text merge、table merge、budget trace、citation offsets、rerank fallback 與 upload -> ingest -> retrieval -> assembly 近似 E2E 驗證
 
+### Phase 5.1 — 已完成的 一頁式戰情室 (Dashboard) UI 重構
+- 已實作 `DashboardLayout` 全螢幕網格與頂部全局狀態管理
+- 已實作 `AreaSidebar` 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺
+- 已實作 `ChatPanel` 作為中央視窗核心，負責多輪對話、串流狀態顯示與工具調用檢視
+- 已實作 `DocumentsDrawer` 負責右側滑出式文件管理，支援在不中斷對話的情況下上傳、編輯與刪除文件
+- 已實作 `AccessModal` 負責區域權限管理，提供彈窗式角色與權限設定介面
+- 已完成從「單純 Chat MVP」向「現代化 RAG 戰情室體驗」的 UI/UX 轉型
+
 ### Phase 5.1 — 進行中的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
 - 已將 `CHAT_PROVIDER=deepagents` 改為真正使用 `create_deep_agent()` 的主 agent 回答路徑，不再映射為 OpenAI Responses provider
@@ -162,7 +171,7 @@
 
 ### Current Focus
 - 交付 `Phase 5.1` 的 LangGraph Server built-in thread/run chat MVP
-- 將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler 收斂為單一 retrieval tool
+- 完善一頁式戰情室 (Dashboard) 的各項組件互動細節，實現「現代化 RAG 戰情室體驗」
 - 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
 - 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
 - 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化

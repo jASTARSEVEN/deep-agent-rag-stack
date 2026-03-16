@@ -164,12 +164,13 @@
 狀態：
 - `已完成`
 
-## Phase 5.1 — Chat MVP on LangGraph Server
+## Phase 5.1 — Chat MVP & One-Page Dashboard
 
 目標：
-- 使用者可在 area 內問答並看到 citations，且 chat runtime 由 LangGraph Server 承載
+- 使用者可在一頁式戰情室 (Dashboard) 內進行多輪問答，並即時管理文件與權限。
 
 內容：
+- **一頁式戰情室 (Dashboard) UI 重構 (已完成)**
 - LangGraph Server 啟動與 `langgraph.json`
 - LangGraph built-in thread/run 與 custom auth
 - LangGraph SDK 前端 transport 與 `area_id -> thread_id` 多輪 thread UX
@@ -180,7 +181,7 @@
 - tool 輸入/輸出與 assembled contexts 的可縮放檢視
 
 狀態：
-- `進行中`
+- `進行中 (UI 重構已完成)`
 
 ## Milestone 規則
 

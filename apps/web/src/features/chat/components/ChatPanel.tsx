@@ -86,79 +86,110 @@ export function ChatPanel({
   }
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Chat</h3>
-        <span className="text-sm text-stone-500">reader 以上可提問</span>
+    <div className="flex flex-col h-full overflow-hidden rounded-[2rem] border border-stone-900/10 bg-white shadow-[0_18px_50px_rgba(47,39,24,0.04)]">
+      <div className="flex items-center justify-between border-b border-stone-900/5 px-8 py-4">
+        <h3 className="text-lg font-semibold text-stone-900">Area Chat</h3>
+        <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">
+          {areaId ? "Active Session" : "No Area Selected"}
+        </span>
       </div>
 
-      <form className="mt-4 space-y-4" onSubmit={handleChatSubmit}>
-        <div>
-          <label className="block text-sm font-medium text-stone-700" htmlFor="chat-question">
-            Question
-          </label>
-          <textarea
-            id="chat-question"
-            data-testid="chat-question"
-            className="mt-2 min-h-28 w-full rounded-2xl border border-stone-300 bg-stone-50 px-4 py-3 text-sm outline-none transition focus:border-amber-600 focus:bg-white"
-            placeholder="輸入要在此 area 內提問的問題。"
-            value={chatQuestion}
-            onChange={(event) => setChatQuestion(event.target.value)}
-          />
-        </div>
-        <button
-          data-testid="chat-submit"
-          className="rounded-full bg-stone-900 px-5 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isSubmittingChat}
-          type="submit"
-        >
-          {isSubmittingChat ? "回答中..." : "送出問題"}
-        </button>
-      </form>
-
-      <div className="mt-5 grid gap-3" data-testid="chat-messages">
-        {chatMessages.length > 0 ? (
-          chatMessages.map((message) => (
-            <article
-              key={message.id}
-              data-testid={`chat-message-${message.role}`}
-              className={`rounded-2xl border px-4 py-4 ${
-                message.role === "user"
-                  ? "border-stone-200 bg-stone-50"
-                  : message.isError
-                    ? "border-red-200 bg-red-50"
-                    : "border-amber-200 bg-amber-50"
-              }`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-stone-900">
-                  {message.role === "user" ? "User" : "Assistant"}
-                </p>
-                {message.isStreaming ? (
-                  <span className="text-xs font-medium text-amber-700">streaming...</span>
-                ) : null}
-              </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-stone-700">
-                {message.content || (message.isStreaming ? "正在生成回答..." : "尚無內容")}
-              </p>
-              {message.role === "assistant" && message.phaseState ? (
-                <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-stone-900 px-3 py-1 text-xs font-medium text-stone-100">
-                  <span className="h-2 w-2 rounded-full bg-amber-400" />
-                  <span>{message.phaseState.message}</span>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Messages Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6" data-testid="chat-messages">
+          {chatMessages.length > 0 ? (
+            chatMessages.map((message) => (
+              <article
+                key={message.id}
+                data-testid={`chat-message-${message.role}`}
+                className={`max-w-[85%] rounded-2xl px-5 py-4 ${
+                  message.role === "user"
+                    ? "ml-auto bg-stone-900 text-white"
+                    : message.isError
+                      ? "mr-auto border border-red-200 bg-red-50 text-red-900"
+                      : "mr-auto border border-amber-100 bg-amber-50/50 text-stone-800"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                    message.role === "user" ? "text-stone-400" : "text-amber-700"
+                  }`}>
+                    {message.role === "user" ? "You" : "Assistant"}
+                  </p>
+                  {message.isStreaming ? (
+                    <span className="text-[10px] font-medium text-amber-600 animate-pulse">Streaming...</span>
+                  ) : null}
                 </div>
-              ) : null}
-              {message.role === "assistant" ? <ToolCallViewer toolCalls={message.toolCalls} /> : null}
-              {message.role === "assistant" && message.usedKnowledgeBase === false && !message.isStreaming ? (
-                <p className="mt-3 text-xs font-medium text-stone-500">本輪未使用知識庫 references。</p>
-              ) : null}
-              {message.role === "assistant" ? <ContextViewer citations={message.citations} /> : null}
-            </article>
-          ))
-        ) : (
-          <div className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-8 text-center text-sm text-stone-500">
-            尚未提問。送出第一個問題後，這裡會顯示回答與 assembled contexts。
-          </div>
-        )}
+                
+                <p className="whitespace-pre-wrap text-sm leading-7">
+                  {message.content || (message.isStreaming ? "Generating response..." : "No content")}
+                </p>
+
+                {message.role === "assistant" && message.phaseState ? (
+                  <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-stone-900/5 px-3 py-1 text-[10px] font-medium text-stone-600">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                    <span>{message.phaseState.message}</span>
+                  </div>
+                ) : null}
+
+                {message.role === "assistant" && (
+                  <div className="mt-4 space-y-3">
+                    <ToolCallViewer toolCalls={message.toolCalls} />
+                    {message.usedKnowledgeBase === false && !message.isStreaming && (
+                      <p className="text-[10px] font-medium text-stone-400 italic">No knowledge base references used in this turn.</p>
+                    )}
+                    <ContextViewer citations={message.citations} />
+                  </div>
+                )}
+              </article>
+            ))
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center text-center opacity-40">
+              <div className="mb-4 h-12 w-12 rounded-2xl bg-stone-100" />
+              <p className="text-sm font-medium text-stone-500">
+                Ask a question to start the conversation.<br />
+                The assistant will search the knowledge base for answers.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Input Area - Fixed at bottom */}
+        <div className="border-t border-stone-900/5 bg-stone-50/50 p-6">
+          <form className="relative" onSubmit={handleChatSubmit}>
+            <textarea
+              id="chat-question"
+              data-testid="chat-question"
+              rows={1}
+              className="w-full resize-none rounded-2xl border border-stone-200 bg-white px-5 py-4 pr-32 text-sm shadow-sm outline-none transition focus:border-amber-600 focus:ring-1 focus:ring-amber-600/20"
+              placeholder="Type your question here..."
+              value={chatQuestion}
+              onChange={(event) => setChatQuestion(event.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleChatSubmit(e as unknown as FormEvent<HTMLFormElement>);
+                }
+              }}
+            />
+            <div className="absolute right-3 top-3">
+              <button
+                data-testid="chat-submit"
+                className="flex items-center gap-2 rounded-xl bg-stone-900 px-5 py-2 text-xs font-bold text-white transition hover:bg-stone-700 disabled:opacity-40"
+                disabled={isSubmittingChat || !chatQuestion.trim()}
+                type="submit"
+              >
+                {isSubmittingChat ? "Thinking..." : "Send"}
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </form>
+          <p className="mt-3 text-center text-[10px] text-stone-400">
+            Press Enter to send, Shift + Enter for new line.
+          </p>
+        </div>
       </div>
     </div>
   );

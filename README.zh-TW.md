@@ -1,5 +1,7 @@
 # Deep Agent RAG Stack
 
+![實際畫面預覽](actual-dashboard-live.png)
+
 具備 OAuth2 認證、RBAC 與多策略檢索設計的企業知識助理雛形。
 
 [English README](README.md)
@@ -55,7 +57,7 @@
 - ready-only retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall、`RRF`、rerank 與 table-aware context assembly
 - 正式以 `Deep Agents` 主 agent 加上單一 `retrieve_area_contexts` tool 執行 chat
 - `LangGraph Server` 內建 `thread/run` runtime、custom auth principal 注入與 Web streaming
-- Web `Areas` workspace 已整合 Files 與 Chat，並顯示 assembled-context references 與工具/debug 檢視
+- 已實作一頁式戰情室 (Dashboard)，整合左側區域導覽、中央即時對話、右側文件管理抽屜與彈窗式權限設定，提供流暢的 RAG 操作體驗
 
 ## 目前尚未完成
 
@@ -85,7 +87,7 @@
 
 - `apps/api`：FastAPI API、JWT 驗證、RBAC、internal retrieval services、`app/chat` Deep Agents domain 與 LangGraph loader/runtime glue
 - `apps/worker`：Celery 背景工作、文件 ingest 與狀態轉換流程
-- `apps/web`：React + Tailwind 前端、登入流程、areas / files 操作介面，以及 `features/chat` LangGraph SDK chat feature
+- `apps/web`：React + Tailwind 前端、登入流程、一頁式 Dashboard 戰情室 (整合區域導覽、對話中心與文件抽屜)
 - `infra`：Docker Compose 與容器建置資產
 - `packages/shared`：共用型別與設定的預留模組
 
@@ -121,7 +123,7 @@
 - Worker ping task：
   - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
 - Web / Areas / Files / Chat：
-  - 開啟 `http://localhost:13000`，登入後驗證 area、文件列表、上傳、狀態顯示與 area-scoped chat 流程
+  - 開啟 `http://localhost:13000`，登入後進入一頁式 Dashboard，驗證區域切換、對話串流、點擊右上角按鈕開啟文件抽屜並進行管理
 - Phase 1 auth 驗證手冊：
   - `docs/phase1-auth-verification.md`
 

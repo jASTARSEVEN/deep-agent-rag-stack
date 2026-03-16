@@ -7,12 +7,14 @@
 
 ## 系統組成
 
-### Web
-- React + Tailwind
-- 提供登入後的操作介面
-- 顯示 areas、files、access、activity、chat
-- 不承擔真正授權判斷
-- 目前以匿名首頁 + Keycloak callback + 受保護的 `/areas` 路由組成最小登入體驗
+### Web (One-Page Dashboard)
+- React + Tailwind / Shadcn UI
+- **DashboardLayout**: 負責全螢幕網格佈局與頂部全局狀態管理。
+- **AreaSidebar**: 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺以最大化對話空間。
+- **ChatPanel**: 視窗核心，負責多輪對話、串流狀態顯示與工具調用 (Retrieval/Reasoning) 的透明化檢視。
+- **DocumentsDrawer**: 負責不中斷對話的文件生命週期管理，透過右側滑出式抽屜提供文件上傳、列表與狀態追蹤。
+- **AccessModal**: 彈窗式權限管理，確保區域權限與角色設定不干擾主對話流程。
+- 提供「登入 -> 側邊欄選取區域 -> 中央即時對話」的流暢戰情室體驗。
 
 ### API
 - FastAPI
@@ -185,13 +187,15 @@
 - `scripts`：操作用腳本
 
 ### `apps/web`
-- `app`：主入口
+- `app`：主入口與 `DashboardLayout`
 - `auth`：Keycloak / test auth mode、session restore、protected route
-- `features/chat`：LangGraph SDK transport、chat state 與 chat/debug UI
-- `pages`：匿名首頁、callback、areas 等路由層頁面
-- `components`：可重用元件
+- `features/chat`：LangGraph SDK transport、`ChatPanel` 與對話狀態管理
+- `features/areas`：`AreaSidebar` 與區域管理邏輯
+- `features/documents`：`DocumentsDrawer` 與文件管理邏輯
+- `pages`：匿名首頁、callback、`AreasPage` (Dashboard 主頁)
+- `components`：可重用元件與 `AccessModal`
 - `lib`：API / config / types
-- 目前已接上正式 login / callback flow，並以 test auth mode 維持 Playwright E2E 可重跑性
+- 目前已接上正式 login / callback flow，並以一頁式 Dashboard 提供完整 RAG 操作體驗
 
 ### `infra`
 - `docker-compose.yml`
