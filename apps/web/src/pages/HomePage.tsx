@@ -66,7 +66,11 @@ export function HomePage(): JSX.Element {
             <div className="mt-5 rounded-2xl bg-white/10 p-4 text-sm leading-7 text-stone-200">
               {isAuthenticated && principal ? (
                 <>
-                  <p className="font-medium text-white">sub: {principal.sub}</p>
+                  <p className="font-medium text-white">
+                    {principal.name && principal.preferred_username
+                      ? `${principal.name} (${principal.preferred_username})`
+                      : `sub: ${principal.sub}`}
+                  </p>
                   <p>groups: {principal.groups.length > 0 ? principal.groups.join(", ") : "(無)"}</p>
                 </>
               ) : (

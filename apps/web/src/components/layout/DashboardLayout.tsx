@@ -51,7 +51,11 @@ export function DashboardLayout({ children, sidebar, headerActions }: DashboardL
             
             <div className="flex items-center gap-4 border-l border-stone-900/10 pl-6">
               <div className="text-right" data-testid="auth-context-panel">
-                <p className="text-sm font-semibold text-stone-900">sub: {principal?.sub ?? "unknown-user"}</p>
+                <p className="text-sm font-semibold text-stone-900">
+                  {principal?.name && principal?.preferred_username
+                    ? `${principal.name} (${principal.preferred_username})`
+                    : `sub: ${principal?.sub ?? "unknown-user"}`}
+                </p>
                 <p className="text-[10px] font-mono text-stone-500 uppercase">
                   groups: {principal?.groups?.join(", ") || "no-group"}
                 </p>

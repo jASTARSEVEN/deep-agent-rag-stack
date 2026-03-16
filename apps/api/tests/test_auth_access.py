@@ -95,6 +95,8 @@ def test_auth_context_returns_principal(client) -> None:
         "sub": "user-1",
         "groups": ["/group/a", "/group/b"],
         "authenticated": True,
+        "name": None,
+        "preferred_username": None,
     }
 
 

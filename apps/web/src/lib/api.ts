@@ -316,3 +316,25 @@ export async function fetchIngestJob(jobId: string): Promise<IngestJobSummary> {
   return (await response.json()) as IngestJobSummary;
 }
 
+/**
+ * 依據關鍵字搜尋系統使用者。
+ *
+ * @param query 要搜尋的關鍵字。
+ * @returns 符合條件的使用者清單。
+ */
+export async function searchUsers(query: string) {
+  const response = await fetchProtected(`/directory/users?q=${encodeURIComponent(query)}`);
+  return await response.json();
+}
+
+/**
+ * 依據關鍵字搜尋系統群組。
+ *
+ * @param query 要搜尋的關鍵字。
+ * @returns 符合條件的群組清單。
+ */
+export async function searchGroups(query: string) {
+  const response = await fetchProtected(`/directory/groups?q=${encodeURIComponent(query)}`);
+  return await response.json();
+}
+

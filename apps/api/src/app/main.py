@@ -8,6 +8,7 @@ from app.core.settings import AppSettings, get_settings
 from app.db.session import create_database_engine, create_session_factory
 from app.routes.areas import router as areas_router
 from app.routes.auth import router as auth_router
+from app.routes.directory import router as directory_router
 from app.routes.documents import router as documents_router
 from app.routes.jobs import router as jobs_router
 from app.routes.root import router as root_router
@@ -44,6 +45,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     )
     application.include_router(root_router)
     application.include_router(auth_router)
+    application.include_router(directory_router)
     application.include_router(areas_router)
     application.include_router(documents_router)
     application.include_router(jobs_router)

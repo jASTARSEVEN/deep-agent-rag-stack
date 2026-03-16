@@ -1,5 +1,6 @@
 # Deep Agent RAG Stack
 
+![權限管理介面測試](access-modal-test.png)
 ![實際畫面預覽](actual-dashboard-live.png)
 
 具備 OAuth2 認證、RBAC 與多策略檢索設計的企業知識助理雛形。
@@ -49,8 +50,10 @@
 - `FastAPI` API、`Celery` worker、`React + Tailwind` Web 應用基本串接
 - `Keycloak` OAuth2 登入流程、JWT claims 解析與 auth context 驗證
 - 以使用者角色與群組角色整合的 area-level `RBAC`
-- `deny-by-default` 的 area / document 存取控制與未授權 `404` 保護
+- `deny-by-default` 的 area / document 存存控制與未授權 `404` 保護
+- **友善的權限管理介面**：整合 `@` 關鍵字觸發使用者與群組的自動完成功能 (Autocomplete)，並統一以 `username` 進行識別與顯示，提供更直覺的操作體驗。
 - Knowledge Area 的 create / list / detail / access management MVP
+
 - 文件上傳、物件儲存、ingest job 建立與 `uploaded -> processing -> ready|failed` 狀態轉換
 - 已建立 SQL-first 的 `parent -> child` chunk tree，並以 `structure_kind=text|table` 支援 `TXT`、`Markdown` 與表格感知 `HTML`
 - 採 hybrid chunking：保留 custom parent section，文字 child 使用 LangChain，表格則採整表保留 / row-group split

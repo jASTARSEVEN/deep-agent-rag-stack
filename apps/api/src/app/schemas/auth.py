@@ -9,3 +9,5 @@ class AuthContextResponse(BaseModel):
     sub: str
     groups: list[str]
     authenticated: bool
+    name: str | None = None
+    preferred_username: str | None = None

@@ -19,4 +19,6 @@ def read_auth_context(principal: CurrentPrincipal = Depends(get_current_principa
         sub=principal.sub,
         groups=list(principal.groups),
         authenticated=principal.authenticated,
+        name=principal.name,
+        preferred_username=principal.preferred_username,
     )

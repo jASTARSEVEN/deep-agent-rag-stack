@@ -24,6 +24,8 @@ class CurrentPrincipal:
     sub: str
     groups: tuple[str, ...]
     authenticated: bool = True
+    name: str | None = None
+    preferred_username: str | None = None
 
 
 class TokenVerifier:
@@ -153,7 +155,15 @@ def _build_principal_from_payload(payload: dict[str, object], groups_claim: str)
     if not isinstance(raw_groups, list) or any(not isinstance(item, str) for item in raw_groups):
         raise InvalidTokenError("Token 的 groups claim 格式不正確。")
 
-    return CurrentPrincipal(sub=subject, groups=tuple(raw_groups))
+    name = payload.get("name")
+    preferred_username = payload.get("preferred_username")
+
+    return CurrentPrincipal(
+        sub=subject,
+        groups=tuple(raw_groups),
+        name=name if isinstance(name, str) else None,
+        preferred_username=preferred_username if isinstance(preferred_username, str) else None,
+    )
 
 
 def build_token_verifier(settings: AppSettings) -> TokenVerifier:

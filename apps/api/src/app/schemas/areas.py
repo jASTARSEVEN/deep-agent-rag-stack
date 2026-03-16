@@ -44,17 +44,17 @@ class AreaListResponse(BaseModel):
 class AccessUserEntry(BaseModel):
     """Area direct user role 映射。"""
 
-    user_sub: str = Field(min_length=1, max_length=255)
+    username: str = Field(min_length=1, max_length=255)
     role: Role
 
-    @field_validator("user_sub")
+    @field_validator("username")
     @classmethod
-    def validate_user_sub(cls, value: str) -> str:
-        """拒絕只有空白的 user_sub。"""
+    def validate_username(cls, value: str) -> str:
+        """拒絕只有空白的 username。"""
 
         stripped = value.strip()
         if not stripped:
-            raise ValueError("user_sub 不可為空白。")
+            raise ValueError("username 不可為空白。")
         return stripped
 
 

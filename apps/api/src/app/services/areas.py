@@ -16,6 +16,7 @@ from app.schemas.areas import (
     ReplaceAreaAccessRequest,
 )
 from app.services.access import ROLE_PRIORITY, require_area_access, require_area_admin
+from app.services.directory import get_sub_by_username, get_usernames_by_subs
 
 
 def create_area(
@@ -135,10 +136,17 @@ def replace_area_access_management(
     session.execute(delete(AreaUserRole).where(AreaUserRole.area_id == area_id))
     session.execute(delete(AreaGroupRole).where(AreaGroupRole.area_id == area_id))
 
-    user_roles = [
-        AreaUserRole(area_id=area_id, user_sub=entry.user_sub.strip(), role=entry.role)
-        for entry in _deduplicate_user_entries(payload.users)
-    ]
+    user_roles = []
+    for entry in _deduplicate_user_entries(payload.users):
+        username = entry.username.strip()
+        sub = get_sub_by_username(username)
+        if not sub:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"找不到使用者: {username}",
+            )
+        user_roles.append(AreaUserRole(area_id=area_id, user_sub=sub, role=entry.role))
+
     group_roles = [
         AreaGroupRole(area_id=area_id, group_path=entry.group_path.strip(), role=entry.role)
         for entry in _deduplicate_group_entries(payload.groups)
@@ -206,18 +214,18 @@ def _normalize_optional_text(value: str | None) -> str | None:
 
 
 def _deduplicate_user_entries(entries: list[AccessUserEntry]) -> Iterable[AccessUserEntry]:
-    """以最後一次輸入為準去除重複的 user_sub。
+    """以最後一次輸入為準去除重複的 username。
 
     參數：
     - `entries`：原始 direct user role 輸入列表。
 
     回傳：
-    - `Iterable[AccessUserEntry]`：已去除重複 user_sub 的條目集合。
+    - `Iterable[AccessUserEntry]`：已去除重複 username 的條目集合。
     """
 
     deduplicated: dict[str, AccessUserEntry] = {}
     for entry in entries:
-        deduplicated[entry.user_sub.strip()] = entry
+        deduplicated[entry.username.strip()] = entry
     return deduplicated.values()
 
 
@@ -267,8 +275,18 @@ def _load_area_access_management(session: Session, area_id: str) -> AreaAccessMa
     group_rows = session.scalars(
         select(AreaGroupRole).where(AreaGroupRole.area_id == area_id).order_by(AreaGroupRole.group_path.asc())
     ).all()
+    
+    subs = [row.user_sub for row in user_rows]
+    username_map = get_usernames_by_subs(subs)
+
     return AreaAccessManagementResponse(
         area_id=area_id,
-        users=[AccessUserEntry(user_sub=row.user_sub, role=row.role) for row in user_rows],
+        users=[
+            AccessUserEntry(
+                username=username_map.get(row.user_sub, row.user_sub),
+                role=row.role
+            )
+            for row in user_rows
+        ],
         groups=[AccessGroupEntry(group_path=row.group_path, role=row.role) for row in group_rows],
     )

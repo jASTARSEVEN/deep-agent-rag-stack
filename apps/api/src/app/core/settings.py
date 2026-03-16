@@ -106,6 +106,9 @@ class AppSettings(BaseSettings):
         "http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs"
     )
     keycloak_groups_claim: Annotated[str, Field(alias="KEYCLOAK_GROUPS_CLAIM")] = "groups"
+    keycloak_admin_user: Annotated[str, Field(alias="KEYCLOAK_ADMIN")] = "admin"
+    keycloak_admin_password: Annotated[str, Field(alias="KEYCLOAK_ADMIN_PASSWORD")] = "admin"
+    keycloak_realm: Annotated[str, Field(alias="KEYCLOAK_REALM")] = "deep-agent-dev"
     auth_test_mode: Annotated[bool, Field(alias="AUTH_TEST_MODE")] = False
     embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
     embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"

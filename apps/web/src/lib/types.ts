@@ -31,6 +31,10 @@ export interface AuthContextPayload {
   groups: string[];
   /** 是否已通過驗證。 */
   authenticated: boolean;
+  /** 使用者姓名。 */
+  name?: string | null;
+  /** 使用者偏好帳號名稱。 */
+  preferred_username?: string | null;
 }
 
 
@@ -46,6 +50,20 @@ export interface AuthSessionState {
   principal: AuthContextPayload | null;
 }
 
+
+/** 使用者搜尋結果。 */
+export interface UserSearchResult {
+  username: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+}
+
+/** 群組搜尋結果。 */
+export interface GroupSearchResult {
+  path: string;
+  name: string;
+}
 
 /** Area 角色型別。 */
 export type AreaRole = "reader" | "maintainer" | "admin";
@@ -77,8 +95,8 @@ export interface AreaListPayload {
 
 /** 單一 user access entry。 */
 export interface AccessUserEntry {
-  /** 被授權使用者的 `sub`。 */
-  user_sub: string;
+  /** 被授權使用者的 username。 */
+  username: string;
   /** 指派給該使用者的角色。 */
   role: AreaRole;
 }

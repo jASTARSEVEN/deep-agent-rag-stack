@@ -1,5 +1,6 @@
 """Knowledge Area CRUD 與 access management API 測試。"""
 
+from unittest.mock import patch
 from sqlalchemy import select
 
 from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
@@ -121,7 +122,8 @@ def test_get_area_access_returns_same_404_for_unauthorized_and_missing_area(clie
     assert unauthorized_response.json() == missing_response.json()
 
 
-def test_get_area_access_returns_users_and_groups_for_admin(client, db_session) -> None:
+@patch("app.services.areas.get_usernames_by_subs")
+def test_get_area_access_returns_users_and_groups_for_admin(mock_get_usernames, client, db_session) -> None:
     """admin 應可讀取完整 access 規則。"""
 
     area = Area(id="area-admin-access", name="Admin Access Area")
@@ -135,14 +137,19 @@ def test_get_area_access_returns_users_and_groups_for_admin(client, db_session) 
     )
     db_session.commit()
 
+    mock_get_usernames.return_value = {
+        "user-admin": "user-admin",
+        "user-reader": "user-reader",
+    }
+
     response = client.get(f"/areas/{area.id}/access", headers={"Authorization": ADMIN_TOKEN})
 
     assert response.status_code == 200
     assert response.json() == {
         "area_id": area.id,
         "users": [
-            {"user_sub": "user-admin", "role": "admin"},
-            {"user_sub": "user-reader", "role": "reader"},
+            {"username": "user-admin", "role": "admin"},
+            {"username": "user-reader", "role": "reader"},
         ],
         "groups": [{"group_path": "/group/editor", "role": "maintainer"}],
     }
@@ -159,13 +166,15 @@ def test_replace_area_access_requires_admin_role(client, db_session) -> None:
     response = client.put(
         f"/areas/{area.id}/access",
         headers={"Authorization": MAINTAINER_TOKEN},
-        json={"users": [{"user_sub": "user-maintainer", "role": "admin"}], "groups": []},
+        json={"users": [{"username": "user-maintainer", "role": "admin"}], "groups": []},
     )
 
     assert response.status_code == 403
 
 
-def test_replace_area_access_replaces_existing_rules_for_admin(client, db_session) -> None:
+@patch("app.services.areas.get_sub_by_username")
+@patch("app.services.areas.get_usernames_by_subs")
+def test_replace_area_access_replaces_existing_rules_for_admin(mock_get_usernames, mock_get_sub, client, db_session) -> None:
     """admin 應可整體替換 area access 規則。"""
 
     area = Area(id="area-replace", name="Replace Area")
@@ -179,13 +188,22 @@ def test_replace_area_access_replaces_existing_rules_for_admin(client, db_sessio
     )
     db_session.commit()
 
+    def mock_get_sub_fn(username):
+        return username
+    mock_get_sub.side_effect = mock_get_sub_fn
+
+    mock_get_usernames.return_value = {
+        "user-admin": "user-admin",
+        "user-next": "user-next",
+    }
+
     response = client.put(
         f"/areas/{area.id}/access",
         headers={"Authorization": ADMIN_TOKEN},
         json={
             "users": [
-                {"user_sub": "user-admin", "role": "admin"},
-                {"user_sub": "user-next", "role": "maintainer"},
+                {"username": "user-admin", "role": "admin"},
+                {"username": "user-next", "role": "maintainer"},
             ],
             "groups": [{"group_path": "/group/new", "role": "reader"}],
         },
@@ -195,8 +213,8 @@ def test_replace_area_access_replaces_existing_rules_for_admin(client, db_sessio
     assert response.json() == {
         "area_id": area.id,
         "users": [
-            {"user_sub": "user-admin", "role": "admin"},
-            {"user_sub": "user-next", "role": "maintainer"},
+            {"username": "user-admin", "role": "admin"},
+            {"username": "user-next", "role": "maintainer"},
         ],
         "groups": [{"group_path": "/group/new", "role": "reader"}],
     }

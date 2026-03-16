@@ -1,5 +1,6 @@
 # Deep Agent RAG Stack
 
+![Access Modal Test](access-modal-test.png)
 ![Actual Dashboard Live](actual-dashboard-live.png)
 
 An enterprise knowledge assistant prototype with OAuth2-based authentication, RBAC, and multi-strategy retrieval.
@@ -50,6 +51,7 @@ The project is currently in `Phase 5.1 — Chat MVP on LangGraph Server`. By the
 - `Keycloak` OAuth2 login flow, JWT claim parsing, and auth context verification
 - Area-level `RBAC` based on merged user roles and group roles
 - `deny-by-default` protection for area and document access with consistent `404` behavior
+- **User-friendly Access Management**: Integrated `@` mentions for users and groups with autocomplete, consistently using `username` for identification and display.
 - Knowledge Area create/list/detail/access-management MVP
 - Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
 - SQL-first `parent -> child` chunk tree generation with `structure_kind=text|table`, covering `TXT`, `Markdown`, and table-aware `HTML`
