@@ -354,7 +354,7 @@ class DeepAgentsChatRuntime:
             model=self.model,
             api_key=self._api_key,
             timeout=self._timeout_seconds,
-            max_tokens=min(self._max_output_tokens, 1200),
+            max_tokens=self._max_output_tokens,
             streaming=True,
         )
         tracing_manager = nullcontext()
