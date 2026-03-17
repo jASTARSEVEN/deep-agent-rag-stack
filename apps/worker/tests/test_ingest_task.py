@@ -51,7 +51,6 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
         EMBEDDING_DIMENSIONS=1536,
-        TEXT_SEARCH_CONFIG="deep_agent_jieba",
     )
 
 
@@ -148,7 +147,6 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         child_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.child]
         assert child_chunks
         assert all(chunk.embedding is not None for chunk in child_chunks)
-        assert all(chunk.fts_document for chunk in child_chunks)
 
 
 def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, tmp_path: Path) -> None:

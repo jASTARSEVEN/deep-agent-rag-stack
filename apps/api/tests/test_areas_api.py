@@ -1,6 +1,8 @@
 """Knowledge Area CRUD 與 access management API 測試。"""
 
 from unittest.mock import patch
+from uuid import uuid4
+
 from sqlalchemy import select
 
 from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
@@ -14,6 +16,12 @@ MAINTAINER_TOKEN = "Bearer test::user-maintainer::/group/maintainer"
 
 # 無授權測試 token。
 OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
 
 
 def test_create_area_assigns_creator_as_admin(client, db_session) -> None:
@@ -39,9 +47,9 @@ def test_create_area_assigns_creator_as_admin(client, db_session) -> None:
 def test_list_areas_returns_only_accessible_areas_with_highest_role(client, db_session) -> None:
     """area list 只應回傳有權限的 area，且 role 應取最大值。"""
 
-    accessible_area = Area(id="area-visible", name="Visible Area")
-    stronger_area = Area(id="area-strong", name="Strong Area")
-    hidden_area = Area(id="area-hidden", name="Hidden Area")
+    accessible_area = Area(id=_uuid(), name="Visible Area")
+    stronger_area = Area(id=_uuid(), name="Strong Area")
+    hidden_area = Area(id=_uuid(), name="Hidden Area")
     db_session.add_all([accessible_area, stronger_area, hidden_area])
     db_session.add_all(
         [
@@ -57,7 +65,7 @@ def test_list_areas_returns_only_accessible_areas_with_highest_role(client, db_s
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["id"] for item in payload["items"]] == ["area-strong", "area-visible"]
+    assert [item["id"] for item in payload["items"]] == [stronger_area.id, accessible_area.id]
     assert payload["items"][0]["effective_role"] == "admin"
     assert payload["items"][1]["effective_role"] == "reader"
 
@@ -65,7 +73,7 @@ def test_list_areas_returns_only_accessible_areas_with_highest_role(client, db_s
 def test_read_area_returns_404_for_unauthorized_and_missing_area(client, db_session) -> None:
     """未授權與不存在的 area 都應回相同 404。"""
 
-    area = Area(id="area-secret", name="Secret Area")
+    area = Area(id=_uuid(), name="Secret Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -81,7 +89,7 @@ def test_read_area_returns_404_for_unauthorized_and_missing_area(client, db_sess
 def test_read_area_returns_detail_for_authorized_user(client, db_session) -> None:
     """有權限的使用者應可讀取 area 詳細資料。"""
 
-    area = Area(id="area-detail", name="Detail Area", description="Area Description")
+    area = Area(id=_uuid(), name="Detail Area", description="Area Description")
     db_session.add(area)
     db_session.add(AreaGroupRole(area_id=area.id, group_path="/group/admin", role=Role.maintainer))
     db_session.commit()
@@ -96,7 +104,7 @@ def test_read_area_returns_detail_for_authorized_user(client, db_session) -> Non
 def test_get_area_access_requires_admin_role(client, db_session) -> None:
     """maintainer 不可讀取 area access 管理內容。"""
 
-    area = Area(id="area-access", name="Access Area")
+    area = Area(id=_uuid(), name="Access Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -109,7 +117,7 @@ def test_get_area_access_requires_admin_role(client, db_session) -> None:
 def test_get_area_access_returns_same_404_for_unauthorized_and_missing_area(client, db_session) -> None:
     """未授權與不存在的 access API 都應回相同 404。"""
 
-    area = Area(id="area-hidden-access", name="Hidden Access Area")
+    area = Area(id=_uuid(), name="Hidden Access Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -126,7 +134,7 @@ def test_get_area_access_returns_same_404_for_unauthorized_and_missing_area(clie
 def test_get_area_access_returns_users_and_groups_for_admin(mock_get_usernames, client, db_session) -> None:
     """admin 應可讀取完整 access 規則。"""
 
-    area = Area(id="area-admin-access", name="Admin Access Area")
+    area = Area(id=_uuid(), name="Admin Access Area")
     db_session.add(area)
     db_session.add_all(
         [
@@ -158,7 +166,7 @@ def test_get_area_access_returns_users_and_groups_for_admin(mock_get_usernames, 
 def test_replace_area_access_requires_admin_role(client, db_session) -> None:
     """maintainer 不可更新 area access。"""
 
-    area = Area(id="area-maintainer-update", name="Maintainer Update Area")
+    area = Area(id=_uuid(), name="Maintainer Update Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -177,7 +185,7 @@ def test_replace_area_access_requires_admin_role(client, db_session) -> None:
 def test_replace_area_access_replaces_existing_rules_for_admin(mock_get_usernames, mock_get_sub, client, db_session) -> None:
     """admin 應可整體替換 area access 規則。"""
 
-    area = Area(id="area-replace", name="Replace Area")
+    area = Area(id=_uuid(), name="Replace Area")
     db_session.add(area)
     db_session.add_all(
         [

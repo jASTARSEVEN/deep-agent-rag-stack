@@ -31,12 +31,11 @@
 - 目前已處理 parse routing、parent-child chunk tree、embedding、FTS payload 寫入與狀態轉換
 
 ### Infra
-- PostgreSQL：主要資料庫 (未來遷移至 Supabase SaaS，改用官方支援的 **PGroonga** 替代 `pg_jieba`)
+- PostgreSQL：主要資料庫 (使用 Supabase / PGroonga 支援繁體中文檢索)
 - Redis：Celery broker/result backend
 - MinIO：原始檔案儲存 (未來兼容 AWS S3)
-- Keycloak：身分與群組來源 (未來可透過 Auth Hooks 解耦)
-- Alembic：資料庫 schema versioning 與 migration 執行入口
-- PostgreSQL 容器目前已內建 `pg_jieba` 與固定版本繁體中文詞庫
+- Keycloak：目前正式的身分與群組來源
+- Supabase Migrations：位於 `supabase/migrations/`，是目前的 schema 正式來源
 
 ## 關鍵架構原則
 
@@ -74,7 +73,7 @@
 3. API 將原始檔存入 MinIO
 4. Worker 執行 parse routing、parent section 建立與 child chunk 切分
 5. Worker 以 replace-all 方式重建 `document_chunks`
-6. Worker 為 child chunks 寫入 `embedding` 與 `fts_document`
+6. Worker 為 child chunks 寫入 `embedding`
 7. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
@@ -143,11 +142,11 @@
 1. retrieval 目前先作為 API 內部 service，不提供 public route
 2. SQL gate 先以 area scope + effective role 驗證完成，之後才進入 recall
 3. 只有 `documents.status=ready` 且 `chunk_type=child` 的 chunk 會進入 recall
-4. `document_chunks.embedding` 與 `document_chunks.fts_document` 都屬於 retrieval 的 SQL-first 欄位
-5. PostgreSQL 正式路徑使用 `pgvector` 與 `pg_jieba`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
+4. `document_chunks.embedding` 與 `content` (經 PGroonga 索引) 都屬於 retrieval 的 SQL-first 欄位
+5. PostgreSQL 正式路徑使用 `pgvector` 與 `PGroonga`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
-7. FTS 固定使用 `deep_agent_jieba` text search configuration
-8. retrieval 目前已擴充為 vector recall + FTS recall + `RRF` merge + minimal rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
+7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
+8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + minimal rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 筆候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
 11. assembler 會以 `(document_id, parent_chunk_id, structure_kind)` 為聚合邊界，將 rerank 後的 child chunks 組裝為 chat-ready context 與 context-level reference metadata
@@ -170,24 +169,24 @@
 4. 超過 preserve 上限的表格以 `CHUNK_TABLE_MAX_ROWS_PER_CHILD` 分組；每個 child 只允許在 row boundary 切分
 5. `table child.content` 允許重複表頭，因此可比 `normalized_text[start:end]` 多出 header，但 row payload 必須能回對原始 normalized text
 
-## 未來雲端架構演進 (Supabase Migration)
+## 雲端架構演進 (Supabase Migration) - 已完成
 
-本專案計畫在 MVP 穩定後，遷移至以 Supabase 為核心的雲端架構，重點包含：
+本專案在 Phase 6 遷移至以 Supabase 為核心的架構：
 
 ### 1. 資料庫層的混合搜尋封裝 (Hybrid Search RPC)
-- **捨棄 Python 層 RRF**：將目前在 FastAPI 記憶體內進行的 RRF 合併邏輯，改寫為 PostgreSQL RPC (Stored Procedure)。
+- **資料庫職責收斂**：`match_chunks` RPC 只負責 SQL gate 所需的 area/status/filter、向量召回、PGroonga 全文召回，以及回傳 `vector_rank` / `fts_rank` 等最小排序輸入；它不是最終 ranking policy 的真理來源。
 - **PGroonga 支援 (SaaS 官方內建)**：利用 Supabase Cloud 官方支援的 PGroonga 擴充功能，在雲端環境獲得比 `pg_jieba` 更高效、且無需維護字典檔的繁體中文分詞檢索。
-- **單次查詢效能**：透過單一 RPC 呼叫，在資料庫內一次性完成「條件過濾 + 向量相似度搜尋 + 中文全文檢索 + RRF 排序」，極大化檢索速度與減少延遲。
+- **Python ranking layer**：最終 `RRF`、未來 business rules、source priors、freshness、section boosts、rerank 與 assembler 都保留在 Python 層，避免把常變邏輯鎖死在 SQL/RPC。
 
-### 2. 認證與儲存的漸進式解耦 (Decoupling)
-- **混合認證 (Hybrid Auth)**：核心支援一站式 Supabase Auth。針對未來支援 Auth0 或 Keycloak 的需求，將透過 **Supabase Auth Hooks (Custom Access Token)**，動態攔截並將外部 JWT 的 `groups/roles` Claims 注入至 RLS Context，實現 BYO-JWT (Bring Your Own JWT) 的無縫整合。
-- **儲存彈性**：API 層保持 S3 API 相容性，可視成本與隱私需求，在 Supabase Storage 與外部 AWS S3 / MinIO 之間自由切換。
+### 2. Runtime 收斂
+- **正式 auth 路徑**：目前正式支援 `Keycloak` issuer + JWKS 驗證與 `sub/groups` claims。
+- **正式 storage 路徑**：目前正式支援 `MinIO` 與 `filesystem`。
+- **既有 DB 升級策略**：`supabase/migrations/` 是新環境 schema 的正式來源，但在專用 migration runner 落地前，既有資料庫仍由 Alembic 升級。
 
 ### 3. 開發環境的一致性 (Local Development Parity)
-- **Supabase Local Docker CLI**：為了利於開發與離線測試，開發環境將採用 Supabase CLI 提供的本地 Docker Stack。這套工具能完整重現雲端的 PostgreSQL (含 PGroonga)、Auth 與 Storage 環境。
-- **完整移除純 PostgreSQL 依賴**：轉換完成後，系統將不再依賴於專案內自建的 `infra/docker/postgres` 及其複雜的 C-extension 編譯過程。現有的 PostgreSQL 容器與相關資產將正式退役，簡化基礎設施的維護鏈。
-- **地端部署支援**：此設計確保專案在遷移到雲端的同時，依然保有「地端自架 (Self-hosted)」的完整能力。
-開發者可以選擇在本機 Docker 中運行完整架構，或僅連接到雲端 Supabase 生態系，維持高度的環境一致性。
+- **Supabase Docker Stack**：開發環境直接採用 Docker Compose 提供的 Supabase Postgres 容器。這套配置能重現 PGroonga / pgvector 能力，且不需要安裝額外 CLI 工具。
+- **完整移除純 PostgreSQL 依賴**：轉換已完成，系統不再依賴於專案內自建的 `infra/docker/postgres` 及其複雜的 C-extension 編譯過程。現有的 PostgreSQL 容器與相關資產已正式退役，簡化了基礎設施的維護鏈。
+- **地端部署支援**：此設計確保專案在遷移到雲端的同時，依然保有「地端自架 (Self-hosted)」的完整能力。開發者可以選擇在本機 Docker 中運行完整架構，或連接到雲端 Supabase 資料層，維持高度的環境一致性。
 
 ## 預期模組邊界
 
@@ -198,7 +197,6 @@
 - `db`：session / repository wiring
 - `routes`：HTTP routes
 - `services`：業務邏輯協調
-- `alembic`：migration skeleton 與 schema versioning
 
 ### `apps/worker`
 - `core`：worker settings

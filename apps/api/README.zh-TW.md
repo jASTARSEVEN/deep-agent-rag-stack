@@ -14,14 +14,14 @@
 - documents upload / list / detail API
 - ingest jobs detail API
 - LangGraph Server built-in thread/run chat runtime
-- SQLAlchemy 與 Alembic migration 骨架
+- SQLAlchemy ORM 模型與 metadata
 
 ## 啟動方式
 
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - `alembic upgrade head`
+  - (註：`supabase/migrations/` 是新環境的 schema 正式來源；既有資料庫升級在專用 migration runner 落地前仍使用 Alembic)
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - 本機執行測試：
   - `pytest`
@@ -68,7 +68,6 @@
 - `ASSEMBLER_MAX_CONTEXTS`
 - `ASSEMBLER_MAX_CHARS_PER_CONTEXT`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT`
-- `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
 - `RETRIEVAL_MAX_CANDIDATES`
@@ -103,7 +102,6 @@
 - `src/app/routes`: HTTP routes
 - `src/app/services`：授權、indexing、internal retrieval 與 assembler service
 - `langgraph.json`：LangGraph Server 內建 thread/run runtime 的 loader 設定
-- `alembic`：migration 執行環境與版本腳本
 - `tests`：授權與 API 測試
 
 ## 對外介面
@@ -127,15 +125,14 @@
 ## 疑難排解
 
 - 若 API 行程無法啟動，請先確認已安裝 `langgraph-cli[inmem]`，且 `apps/api` 內存在 `langgraph.json`。
-- 若 `alembic upgrade head` 無法連到資料庫，請先確認根目錄 `.env` 內的 `DATABASE_URL`。
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
 - `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
 - `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 與 `INGEST_INLINE_MODE=true`，供 API 測試與 Playwright E2E 使用。
 - `TXT`、`Markdown` 與 `HTML` 上傳目前都會建立 SQL-first 的 parent-child `document_chunks`。
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
-- `ready` 現在代表 chunk tree、embedding 與 FTS payload 都已完成。
-- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、HNSW-backed vector recall、FTS recall、`RRF` merge、minimal rerank 與 table-aware retrieval assembler，但尚未公開為 HTTP API。
+- `ready` 現在代表 chunk tree、embedding 與可供 PGroonga 使用的 retrieval content 都已完成。
+- 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、vector recall、PGroonga FTS recall、Python 層 `RRF`、minimal rerank 與 table-aware retrieval assembler，但尚未公開為 HTTP API。
 - assembler 會將 rerank 後的 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata，並以 budget guardrails 控制成本。
 - rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
 - 未支援格式仍維持受控 `failed`。

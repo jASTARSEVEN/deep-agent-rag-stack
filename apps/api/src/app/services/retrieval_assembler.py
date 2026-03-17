@@ -214,8 +214,12 @@ def assemble_retrieval_result(
 
         assembled_contexts.append(
             AssembledContext(
-                document_id=kept_records[0].candidate.document_id,
-                parent_chunk_id=kept_records[0].candidate.parent_chunk_id,
+                document_id=str(kept_records[0].candidate.document_id),
+                parent_chunk_id=(
+                    str(kept_records[0].candidate.parent_chunk_id)
+                    if kept_records[0].candidate.parent_chunk_id is not None
+                    else None
+                ),
                 chunk_ids=chunk_ids,
                 structure_kind=kept_records[0].candidate.structure_kind,
                 heading=heading,
@@ -227,9 +231,9 @@ def assemble_retrieval_result(
         )
         citations.extend(
             Citation(
-                document_id=record.candidate.document_id,
-                parent_chunk_id=record.candidate.parent_chunk_id,
-                chunk_id=record.candidate.chunk_id,
+                document_id=str(record.candidate.document_id),
+                parent_chunk_id=str(record.candidate.parent_chunk_id) if record.candidate.parent_chunk_id is not None else None,
+                chunk_id=str(record.candidate.chunk_id),
                 heading=record.candidate.heading or heading,
                 structure_kind=record.candidate.structure_kind,
                 start_offset=record.candidate.start_offset,
@@ -243,7 +247,11 @@ def assemble_retrieval_result(
         context_traces.append(
             AssemblerContextTrace(
                 context_index=len(assembled_contexts) - 1,
-                parent_chunk_id=kept_records[0].candidate.parent_chunk_id,
+                parent_chunk_id=(
+                    str(kept_records[0].candidate.parent_chunk_id)
+                    if kept_records[0].candidate.parent_chunk_id is not None
+                    else None
+                ),
                 kept_chunk_ids=chunk_ids,
                 dropped_chunk_ids=[record.candidate.chunk_id for record in dropped_records],
                 truncated=truncated,
@@ -287,7 +295,7 @@ def _load_child_chunks(*, session: Session, chunk_ids: list[str]) -> dict[str, D
             DocumentChunk.chunk_type == ChunkType.child,
         )
     ).all()
-    return {chunk.id: chunk for chunk in chunks}
+    return {str(chunk.id): chunk for chunk in chunks}
 
 
 def _load_parent_chunks(*, session: Session, parent_chunk_ids: list[str]) -> dict[str, DocumentChunk]:
@@ -310,7 +318,7 @@ def _load_parent_chunks(*, session: Session, parent_chunk_ids: list[str]) -> dic
             DocumentChunk.chunk_type == ChunkType.parent,
         )
     ).all()
-    return {chunk.id: chunk for chunk in parent_chunks}
+    return {str(chunk.id): chunk for chunk in parent_chunks}
 
 
 def _build_assembled_text(*, records: list[_CandidateRecord], max_chars: int) -> tuple[str, bool]:

@@ -5,52 +5,38 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from sqlalchemy import Float, Select, func, select, text
+from sqlalchemy import Integer, String, bindparam, select, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
 from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus
+from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
-from app.services.reranking import RerankInputDocument, RerankScore, build_rerank_provider
+from app.services.reranking import RerankInputDocument, build_rerank_provider
 
 
 @dataclass(slots=True)
 class RetrievalCandidate:
     """內部 retrieval candidate 結構。"""
 
-    # candidate 所屬文件識別碼。
     document_id: str
-    # candidate 對應的 child chunk 識別碼。
     chunk_id: str
-    # candidate 對應的 parent chunk 識別碼。
     parent_chunk_id: str | None
-    # candidate 的內容結構型別。
     structure_kind: ChunkStructureKind
-    # candidate 所屬段落標題。
     heading: str | None
-    # candidate 內容文字。
     content: str
-    # candidate 在 normalized 文字中的起始 offset。
     start_offset: int
-    # candidate 在 normalized 文字中的結束 offset。
     end_offset: int
-    # candidate 來源，可能為 vector、fts 或 hybrid。
     source: str
-    # vector recall 排名；未命中時為空值。
     vector_rank: int | None
-    # FTS recall 排名；未命中時為空值。
     fts_rank: int | None
-    # RRF 排名。
     rrf_rank: int
-    # RRF 合併後分數。
     rrf_score: float
-    # rerank 排名；未套用或未命中時為空值。
     rerank_rank: int | None
-    # rerank 分數；未套用或未命中時為空值。
     rerank_score: float | None
-    # 此 candidate 是否成功套用 rerank 結果。
     rerank_applied: bool
 
 
@@ -58,23 +44,14 @@ class RetrievalCandidate:
 class RetrievalTraceEntry:
     """單一 retrieval candidate 的 trace metadata。"""
 
-    # candidate 對應的 chunk 識別碼。
     chunk_id: str
-    # candidate 來源。
     source: str
-    # vector recall 排名。
     vector_rank: int | None
-    # FTS recall 排名。
     fts_rank: int | None
-    # RRF 排名。
     rrf_rank: int
-    # RRF 分數。
     rrf_score: float
-    # rerank 排名。
     rerank_rank: int | None
-    # rerank 分數。
     rerank_score: float | None
-    # 是否成功套用 rerank。
     rerank_applied: bool
 
 
@@ -82,50 +59,58 @@ class RetrievalTraceEntry:
 class RetrievalTrace:
     """單次 retrieval 的 trace metadata。"""
 
-    # 使用者查詢文字。
     query: str
-    # vector recall top-k。
     vector_top_k: int
-    # FTS recall top-k。
     fts_top_k: int
-    # RRF 後最多保留的 candidates 數量。
     max_candidates: int
-    # 實際送進 rerank 的前幾名 candidates。
     rerank_top_n: int
-    # 此次 retrieval 的 candidate traces。
     candidates: list[RetrievalTraceEntry]
 
 
 @dataclass(slots=True)
 class RetrievalResult:
-    """internal retrieval service 的回傳結構。"""
+    """Internal retrieval service 的回傳結構。"""
 
-    # retrieval 後的最終 candidates。
     candidates: list[RetrievalCandidate]
-    # 供後續 chat / citations 使用的 trace metadata。
     trace: RetrievalTrace
 
 
 @dataclass(slots=True)
 class RankedChunkMatch:
-    """合併 vector / FTS recall 與 rerank 前使用的中間結構。"""
+    """合併與 rerank 前使用的中間結構。"""
 
-    # 命中的 chunk ORM 物件。
     chunk: DocumentChunk
-    # vector recall 排名；未命中時為空值。
     vector_rank: int | None = None
-    # FTS recall 排名；未命中時為空值。
     fts_rank: int | None = None
-    # RRF 排名。
     rrf_rank: int | None = None
-    # RRF 合併後分數。
     rrf_score: float = 0.0
-    # rerank 排名；未套用或未命中時為空值。
     rerank_rank: int | None = None
-    # rerank 分數；未套用或未命中時為空值。
     rerank_score: float | None = None
-    # 此 candidate 是否成功套用 rerank。
     rerank_applied: bool = False
+
+
+def _build_match_chunks_rpc_statement():
+    """建立具備 PostgreSQL 明確 bind type 的 `match_chunks` RPC statement。
+
+    參數：
+    - 無
+
+    回傳：
+    - `TextClause`：已綁定 vector/text/uuid/int 型別的 SQL statement。
+    """
+
+    if Vector is None:  # pragma: no cover - PostgreSQL 正式路徑應固定安裝 pgvector。
+        raise RuntimeError("PostgreSQL retrieval 路徑需要 `pgvector` SQLAlchemy 型別支援。")
+
+    return text(
+        "SELECT * FROM match_chunks(:query_embedding, :query_text, :area_id, :vector_top_k, :fts_top_k)"
+    ).bindparams(
+        bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
+        bindparam("query_text", type_=String()),
+        bindparam("area_id", type_=UUID(as_uuid=False)),
+        bindparam("vector_top_k", type_=Integer()),
+        bindparam("fts_top_k", type_=Integer()),
+    )
 
 
 def retrieve_area_candidates(
@@ -136,7 +121,7 @@ def retrieve_area_candidates(
     area_id: str,
     query: str,
 ) -> RetrievalResult:
-    """在指定 area 內取得 ready-only 的 hybrid recall 與 rerank candidates。
+    """在指定 area 內取得 hybrid recall、Python RRF 與 rerank candidates。
 
     參數：
     - `session`：目前資料庫 session。
@@ -146,20 +131,22 @@ def retrieve_area_candidates(
     - `query`：使用者查詢文字。
 
     回傳：
-    - `RetrievalResult`：已完成 SQL gate、vector recall、FTS recall、RRF 與 rerank 的結果與 trace。
+    - `RetrievalResult`：已完成 recall、RRF、ranking hook 與 rerank 的候選集合。
     """
 
     require_area_access(session=session, principal=principal, area_id=area_id)
-    vector_matches = _run_vector_recall(session=session, settings=settings, area_id=area_id, query=query)
-    fts_matches = _run_fts_recall(session=session, settings=settings, area_id=area_id, query=query)
-    merged_matches = _merge_ranked_matches(
-        vector_matches=vector_matches,
-        fts_matches=fts_matches,
-        rrf_k=settings.retrieval_rrf_k,
-        max_candidates=settings.retrieval_max_candidates,
+
+    recalled_matches = _recall_ranked_candidates(
+        session=session,
+        settings=settings,
+        area_id=area_id,
+        query=query,
     )
-    reranked_matches = _apply_rerank(matches=merged_matches, query=query, settings=settings)
+    rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=settings)
+    ranked_matches = _apply_ranking_policy(matches=rrf_matches, query=query, settings=settings)
+    reranked_matches = _apply_rerank(matches=ranked_matches, query=query, settings=settings)
     candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
+
     return RetrievalResult(
         candidates=candidates,
         trace=RetrievalTrace(
@@ -186,159 +173,91 @@ def retrieve_area_candidates(
     )
 
 
-def build_postgres_fts_recall_statement(*, settings: AppSettings, area_id: str, query: str) -> Select:
-    """建立 PostgreSQL 專用的 FTS recall statement。
+def _recall_ranked_candidates(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[RankedChunkMatch]:
+    """依資料庫方言取得已套用 area/ready 邊界的 ranked candidates。"""
 
-    參數：
-    - `settings`：API 執行期設定。
-    - `area_id`：要檢索的 area 識別碼。
-    - `query`：使用者查詢文字。
-
-    回傳：
-    - `Select`：可直接給 PostgreSQL 執行的 FTS recall query。
-    """
-
-    ts_query = build_postgres_fts_query(settings=settings, query=query)
-    rank_expr = func.ts_rank_cd(DocumentChunk.fts_document, ts_query).label("fts_score")
-    return (
-        select(DocumentChunk, rank_expr)
-        .join(Document, Document.id == DocumentChunk.document_id)
-        .where(
-            Document.area_id == area_id,
-            Document.status == DocumentStatus.ready,
-            DocumentChunk.chunk_type == ChunkType.child,
-            DocumentChunk.fts_document.is_not(None),
-            DocumentChunk.fts_document.op("@@")(ts_query),
+    dialect_name = session.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        return _run_postgres_candidate_generation(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
         )
-        .order_by(rank_expr.desc(), DocumentChunk.position.asc())
-        .limit(settings.retrieval_fts_top_k)
+    return _run_sqlite_candidate_generation(
+        session=session,
+        settings=settings,
+        area_id=area_id,
+        query=query,
     )
 
 
-def build_postgres_fts_query(*, settings: AppSettings, query: str):
-    """建立 PostgreSQL 專用的 `websearch_to_tsquery` expression。
-
-    參數：
-    - `settings`：API 執行期設定。
-    - `query`：使用者查詢文字。
-
-    回傳：
-    - SQLAlchemy expression：對應 PostgreSQL `websearch_to_tsquery()` 的查詢 expression。
-    """
-
-    return func.websearch_to_tsquery(settings.text_search_config, query)
-
-
-def _run_vector_recall(*, session: Session, settings: AppSettings, area_id: str, query: str) -> list[RankedChunkMatch]:
-    """執行 vector recall，並回傳帶 rank 的 chunk 結果。
+def _run_postgres_candidate_generation(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[RankedChunkMatch]:
+    """透過 PostgreSQL RPC 取得 recall 候選與其排序輸入。
 
     參數：
     - `session`：目前資料庫 session。
     - `settings`：API 執行期設定。
-    - `area_id`：要檢索的 area 識別碼。
+    - `area_id`：受 SQL gate 保護的 area 識別碼。
     - `query`：使用者查詢文字。
 
     回傳：
-    - `list[RankedChunkMatch]`：依向量相似度排序後的結果。
+    - `list[RankedChunkMatch]`：已帶回 vector / FTS rank 的 recall 候選。
     """
 
-    dialect_name = session.get_bind().dialect.name
     provider = build_embedding_provider(settings)
     query_embedding = provider.embed_texts([query])[0]
+    rpc_stmt = _build_match_chunks_rpc_statement()
+    rows = session.execute(
+        rpc_stmt,
+        {
+            "query_embedding": query_embedding,
+            "query_text": query,
+            "area_id": area_id,
+            "vector_top_k": settings.retrieval_vector_top_k,
+            "fts_top_k": settings.retrieval_fts_top_k,
+        },
+    ).all()
 
-    if dialect_name == "postgresql":
-        _configure_postgres_hnsw_search(session=session, settings=settings)
-        distance_expr = DocumentChunk.embedding.op("<=>")(query_embedding).cast(Float).label("vector_distance")
-        rows = session.execute(
-            select(DocumentChunk, distance_expr)
-            .join(Document, Document.id == DocumentChunk.document_id)
-            .where(
-                Document.area_id == area_id,
-                Document.status == DocumentStatus.ready,
-                DocumentChunk.chunk_type == ChunkType.child,
-                DocumentChunk.embedding.is_not(None),
+    matches: list[RankedChunkMatch] = []
+    for row in rows:
+        chunk = session.get(DocumentChunk, str(row.id))
+        if chunk is None:
+            continue
+        matches.append(
+            RankedChunkMatch(
+                chunk=chunk,
+                vector_rank=row.vector_rank,
+                fts_rank=row.fts_rank,
             )
-            .order_by(distance_expr.asc(), DocumentChunk.position.asc())
-            .limit(settings.retrieval_vector_top_k)
-        ).all()
-        return [RankedChunkMatch(chunk=chunk, vector_rank=index) for index, (chunk, _) in enumerate(rows, start=1)]
-
-    chunks = _load_sql_gated_ready_child_chunks(session=session, area_id=area_id)
-    scored_chunks = sorted(
-        (
-            (_cosine_distance(query_embedding, chunk.embedding), chunk)
-            for chunk in chunks
-            if chunk.embedding is not None
-        ),
-        key=lambda item: (item[0], item[1].position),
-    )[: settings.retrieval_vector_top_k]
-    return [RankedChunkMatch(chunk=chunk, vector_rank=index) for index, (_, chunk) in enumerate(scored_chunks, start=1)]
+        )
+    return matches
 
 
-def _configure_postgres_hnsw_search(*, session: Session, settings: AppSettings) -> None:
-    """設定 PostgreSQL HNSW 查詢期參數。
+def _run_sqlite_candidate_generation(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[RankedChunkMatch]:
+    """SQLite 本機測試專用的 candidate generation 路徑。"""
 
-    參數：
-    - `session`：目前資料庫 session。
-    - `settings`：API 執行期設定。
-
-    回傳：
-    - `None`：僅在目前 transaction 內設定 HNSW 搜尋參數。
-
-    前置條件：
-    - 目前資料庫需為 PostgreSQL，且 `pgvector >= 0.8.0` 支援 `hnsw.iterative_scan`。
-
-    風險：
-    - 若日後 pgvector 版本降級，這些參數可能失效，需在 infra 升降版時同步驗證。
-    """
-
-    session.execute(text("SET LOCAL hnsw.iterative_scan = 'strict_order'"))
-    session.execute(text("SET LOCAL hnsw.ef_search = :ef_search"), {"ef_search": settings.retrieval_hnsw_ef_search})
-
-
-def _run_fts_recall(*, session: Session, settings: AppSettings, area_id: str, query: str) -> list[RankedChunkMatch]:
-    """執行 FTS recall，並回傳帶 rank 的 chunk 結果。
-
-    參數：
-    - `session`：目前資料庫 session。
-    - `settings`：API 執行期設定。
-    - `area_id`：要檢索的 area 識別碼。
-    - `query`：使用者查詢文字。
-
-    回傳：
-    - `list[RankedChunkMatch]`：依 FTS 分數排序後的結果。
-    """
-
-    dialect_name = session.get_bind().dialect.name
-    if dialect_name == "postgresql":
-        rows = session.execute(build_postgres_fts_recall_statement(settings=settings, area_id=area_id, query=query)).all()
-        return [RankedChunkMatch(chunk=chunk, fts_rank=index) for index, (chunk, _) in enumerate(rows, start=1)]
-
-    chunks = _load_sql_gated_ready_child_chunks(session=session, area_id=area_id)
-    scored_chunks = sorted(
-        (
-            (_sqlite_fts_score(query=query, content=chunk.content), chunk)
-            for chunk in chunks
-            if chunk.fts_document
-        ),
-        key=lambda item: (-item[0], item[1].position),
-    )
-    scored_chunks = [item for item in scored_chunks if item[0] > 0][: settings.retrieval_fts_top_k]
-    return [RankedChunkMatch(chunk=chunk, fts_rank=index) for index, (_, chunk) in enumerate(scored_chunks, start=1)]
-
-
-def _load_sql_gated_ready_child_chunks(*, session: Session, area_id: str) -> list[DocumentChunk]:
-    """在 SQLite fallback 路徑載入已套 SQL gate 的 ready child chunks。
-
-    參數：
-    - `session`：目前資料庫 session。
-    - `area_id`：要檢索的 area 識別碼。
-
-    回傳：
-    - `list[DocumentChunk]`：指定 area 內 ready-only 的 child chunks。
-    """
-
-    return session.scalars(
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_texts([query])[0]
+    chunks = session.scalars(
         select(DocumentChunk)
         .join(Document, Document.id == DocumentChunk.document_id)
         .where(
@@ -349,61 +268,122 @@ def _load_sql_gated_ready_child_chunks(*, session: Session, area_id: str) -> lis
         .order_by(DocumentChunk.position.asc())
     ).all()
 
-
-def _merge_ranked_matches(
-    *,
-    vector_matches: list[RankedChunkMatch],
-    fts_matches: list[RankedChunkMatch],
-    rrf_k: int,
-    max_candidates: int,
-) -> list[RankedChunkMatch]:
-    """將 vector 與 FTS recall 結果以 RRF 合併。
-
-    參數：
-    - `vector_matches`：vector recall 結果。
-    - `fts_matches`：FTS recall 結果。
-    - `rrf_k`：RRF 使用的平滑常數。
-    - `max_candidates`：最多保留的候選數量。
-
-    回傳：
-    - `list[RankedChunkMatch]`：依 RRF 分數排序後的結果。
-    """
-
     merged_by_chunk_id: dict[str, RankedChunkMatch] = {}
 
-    for match in vector_matches:
-        current = merged_by_chunk_id.setdefault(match.chunk.id, RankedChunkMatch(chunk=match.chunk))
-        current.vector_rank = match.vector_rank
-        current.rrf_score += 1.0 / (rrf_k + (match.vector_rank or 0))
+    vector_scored = sorted(
+        (
+            (_cosine_distance(query_embedding, chunk.embedding), chunk)
+            for chunk in chunks
+            if chunk.embedding is not None
+        ),
+        key=lambda item: (item[0], item[1].position),
+    )[: settings.retrieval_vector_top_k]
+    for index, (_, chunk) in enumerate(vector_scored, start=1):
+        current = merged_by_chunk_id.setdefault(chunk.id, RankedChunkMatch(chunk=chunk))
+        current.vector_rank = index
 
-    for match in fts_matches:
-        current = merged_by_chunk_id.setdefault(match.chunk.id, RankedChunkMatch(chunk=match.chunk))
-        current.fts_rank = match.fts_rank
-        current.rrf_score += 1.0 / (rrf_k + (match.fts_rank or 0))
+    fts_scored = sorted(
+        (
+            (_sqlite_fts_score(query=query, content=chunk.content), chunk)
+            for chunk in chunks
+            if chunk.content
+        ),
+        key=lambda item: (-item[0], item[1].position),
+    )
+    for index, (_, chunk) in enumerate((item for item in fts_scored if item[0] > 0), start=1):
+        if index > settings.retrieval_fts_top_k:
+            break
+        current = merged_by_chunk_id.setdefault(chunk.id, RankedChunkMatch(chunk=chunk))
+        current.fts_rank = index
+
+    return list(merged_by_chunk_id.values())
+
+
+def _apply_python_rrf(*, matches: list[RankedChunkMatch], settings: AppSettings) -> list[RankedChunkMatch]:
+    """在 Python 層對 recall 候選套用 RRF。"""
+
+    for match in matches:
+        match.rrf_score = _compute_rrf_score(match=match, rrf_k=settings.retrieval_rrf_k)
 
     merged_matches = sorted(
-        merged_by_chunk_id.values(),
-        key=lambda item: (-item.rrf_score, item.chunk.position),
-    )[:max_candidates]
+        matches,
+        key=lambda item: (
+            -item.rrf_score,
+            _best_rank(item),
+            item.chunk.position,
+            item.chunk.id,
+        ),
+    )[: settings.retrieval_max_candidates]
+
     for index, match in enumerate(merged_matches, start=1):
         match.rrf_rank = index
     return merged_matches
 
 
-def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:
-    """將 RRF 後的 candidates 再送入 rerank，並保留 fail-open fallback。
+def _apply_ranking_policy(
+    *,
+    matches: list[RankedChunkMatch],
+    query: str,
+    settings: AppSettings,
+) -> list[RankedChunkMatch]:
+    """未來 business rules 的預留擴充點。
 
     參數：
-    - `matches`：RRF 後的候選結果。
+    - `matches`：已完成 Python RRF 的候選。
     - `query`：使用者查詢文字。
     - `settings`：API 執行期設定。
 
     回傳：
-    - `list[RankedChunkMatch]`：套用 rerank 或 fallback 後的最終排序結果。
-
-    風險：
-    - rerank 僅可重排已通過 SQL gate 的結果，不得擴大可見資料集合。
+    - `list[RankedChunkMatch]`：目前維持原排序；後續可在此加入 ranking rules。
     """
+
+    del query
+    del settings
+    return matches
+
+
+def _compute_rrf_score(*, match: RankedChunkMatch, rrf_k: int) -> float:
+    """依 vector/FTS rank 計算單一候選的 RRF 分數。"""
+
+    score = 0.0
+    if match.vector_rank is not None:
+        score += 1.0 / (rrf_k + match.vector_rank)
+    if match.fts_rank is not None:
+        score += 1.0 / (rrf_k + match.fts_rank)
+    return score
+
+
+def _best_rank(match: RankedChunkMatch) -> int:
+    """回傳候選可用 rank 中最好的那個，用於 tie-break。"""
+
+    available_ranks = [rank for rank in (match.vector_rank, match.fts_rank) if rank is not None]
+    return min(available_ranks) if available_ranks else 1_000_000
+
+
+def _cosine_distance(left: list[float], right: list[float] | None) -> float:
+    """計算兩個向量的 cosine distance。"""
+
+    if right is None:
+        return 1.0
+    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
+    left_norm = math.sqrt(sum(value * value for value in left)) or 1.0
+    right_norm = math.sqrt(sum(value * value for value in right)) or 1.0
+    cosine_similarity = dot_product / (left_norm * right_norm)
+    return 1.0 - cosine_similarity
+
+
+def _sqlite_fts_score(*, query: str, content: str) -> int:
+    """SQLite 測試 fallback 的簡化 FTS 分數。"""
+
+    tokens = [token.strip().lower() for token in query.split() if token.strip()]
+    if not tokens:
+        tokens = [query.strip().lower()]
+    lowered_content = content.lower()
+    return sum(lowered_content.count(token) for token in tokens if token)
+
+
+def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:
+    """將 RRF 後的 candidates 再送入 rerank，並保留 fail-open fallback。"""
 
     rerank_limit = min(settings.rerank_top_n, len(matches))
     if rerank_limit <= 0:
@@ -450,15 +430,7 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
 
 
 def _build_rerank_document_text(*, content: str, max_chars: int) -> str:
-    """建立送進 rerank 的文件文字。
-
-    參數：
-    - `content`：child chunk 原始內容。
-    - `max_chars`：每筆 rerank 文件允許的最大字元數。
-
-    回傳：
-    - `str`：已套成本上限的 rerank 文件文字。
-    """
+    """建立送進 rerank 的文件文字。"""
 
     normalized_content = content.strip()
     if len(normalized_content) <= max_chars:
@@ -467,19 +439,12 @@ def _build_rerank_document_text(*, content: str, max_chars: int) -> str:
 
 
 def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
-    """將中間結構轉為對外使用的 retrieval candidate。
-
-    參數：
-    - `match`：合併與 rerank 後的 chunk match。
-
-    回傳：
-    - `RetrievalCandidate`：供 internal caller 使用的 candidate。
-    """
+    """將中間結構轉為對外使用的 retrieval candidate。"""
 
     return RetrievalCandidate(
-        document_id=match.chunk.document_id,
-        chunk_id=match.chunk.id,
-        parent_chunk_id=match.chunk.parent_chunk_id,
+        document_id=str(match.chunk.document_id),
+        chunk_id=str(match.chunk.id),
+        parent_chunk_id=str(match.chunk.parent_chunk_id) if match.chunk.parent_chunk_id is not None else None,
         structure_kind=match.chunk.structure_kind,
         heading=match.chunk.heading,
         content=match.chunk.content,
@@ -497,55 +462,10 @@ def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
 
 
 def _resolve_candidate_source(match: RankedChunkMatch) -> str:
-    """根據 rank 來源決定 candidate source 欄位。
-
-    參數：
-    - `match`：合併後的 chunk match。
-
-    回傳：
-    - `str`：`vector`、`fts` 或 `hybrid`。
-    """
+    """根據 rank 來源決定 candidate source 欄位。"""
 
     if match.vector_rank is not None and match.fts_rank is not None:
         return "hybrid"
     if match.vector_rank is not None:
         return "vector"
     return "fts"
-
-
-def _cosine_distance(left: list[float], right: list[float] | None) -> float:
-    """計算兩個向量的 cosine distance。
-
-    參數：
-    - `left`：左側向量。
-    - `right`：右側向量。
-
-    回傳：
-    - `float`：cosine distance，數值越小越相近。
-    """
-
-    if right is None:
-        return 1.0
-    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right, strict=True))
-    left_norm = math.sqrt(sum(value * value for value in left)) or 1.0
-    right_norm = math.sqrt(sum(value * value for value in right)) or 1.0
-    cosine_similarity = dot_product / (left_norm * right_norm)
-    return 1.0 - cosine_similarity
-
-
-def _sqlite_fts_score(*, query: str, content: str) -> int:
-    """SQLite 測試 fallback 的簡化 FTS 分數。
-
-    參數：
-    - `query`：使用者查詢文字。
-    - `content`：chunk 內容。
-
-    回傳：
-    - `int`：命中的 token 次數總和。
-    """
-
-    tokens = [token.strip().lower() for token in query.split() if token.strip()]
-    if not tokens:
-        tokens = [query.strip().lower()]
-    lowered_content = content.lower()
-    return sum(lowered_content.count(token) for token in tokens if token)

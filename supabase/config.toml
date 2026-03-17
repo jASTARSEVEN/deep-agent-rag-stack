@@ -1,0 +1,40 @@
+# Supabase 本地開發環境設定
+
+project_id = "deep-agent-rag-stack"
+
+[api]
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+# 啟用必要擴充功能
+# 注意：pgroonga 通常需要 Supabase 官方映像檔支援
+major_version = 15
+
+[db.pooler]
+enabled = false
+
+[realtime]
+enabled = false
+
+[storage]
+enabled = true
+# 預設建立的 Bucket
+# 註：Supabase CLI 啟動後需手動或透過 SQL 確保 bucket 存在
+# 這裡我們透過 API 邏輯自動處理
+
+[auth]
+enabled = true
+site_url = "http://localhost:13000"
+additional_redirect_urls = ["http://localhost:13000/auth/callback"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.external.keycloak]
+enabled = false # Phase 6 採插件化，此處維持預設
+
+[analytics]
+enabled = false

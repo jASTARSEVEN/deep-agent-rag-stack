@@ -102,7 +102,9 @@
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
 3. 建置並啟動本機 stack：
-   - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
+   - `./scripts/compose.sh up --build`
+   - 此 wrapper 會固定使用 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行時，`OPENAI_API_KEY` 之類的敏感設定被悄悄帶成空值。
+   - Compose project name 已固定為 `deep-agent-rag-stack`，可避免 container 名稱漂移成 `infra-*` 這類 fallback 名稱。
 4. 開啟本機服務：
    - Web: `http://localhost:13000`
    - API: `http://localhost:18000`
@@ -110,6 +112,15 @@
    - Keycloak: `http://localhost:18080`
    - MinIO API: `http://localhost:19000`
    - MinIO Console: `http://localhost:19001`
+
+## 資料庫初始化與升級
+
+- 全新的資料庫 volume 會透過 `supabase/migrations/` 自動初始化，因為該目錄會掛載到 Supabase container 的 `/docker-entrypoint-initdb.d`。
+- 已存在的資料庫 volume 在重啟後不會重新執行這些初始化 SQL，因此重啟 `docker compose` 不是 schema upgrade 機制。
+- 既有環境需要手動使用 Alembic 升級：
+  - `./scripts/compose.sh exec api alembic upgrade head`
+- 若 retrieval SQL 或 PostgreSQL RPC 有變更，必須確認 Alembic 也有同步表達該變更，不能只依賴 `supabase/migrations/`，除非你能保證目標環境一定是全新 volume。
+- 升級完成後，應重新驗證 API 與 retrieval 路徑，再判定環境是否健康。
 
 ## 環境變數
 
@@ -124,7 +135,7 @@
 - LangGraph chat runtime：
   - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task：
-  - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
+  - `./scripts/compose.sh exec worker python -m worker.scripts.healthcheck`
 - Web / Areas / Files / Chat：
   - 開啟 `http://localhost:13000`，登入後進入一頁式 Dashboard，驗證區域切換、對話串流、點擊右上角按鈕開啟文件抽屜並進行管理
 - Phase 1 auth 驗證手冊：
@@ -135,3 +146,4 @@
 - 若 Docker 映像建置失敗，請確認 Docker Desktop 正在執行，且能存取套件來源。
 - 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
 - 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
+- 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先確認是否已執行 `alembic upgrade head`，不要假設重啟 Compose 就會自動套用 schema 與 RPC 升級。

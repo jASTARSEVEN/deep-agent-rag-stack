@@ -1,6 +1,6 @@
 """API inline ingest 使用的 chunk indexing 與 retrieval preparation。"""
 
-from sqlalchemy import func, select, update
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
@@ -34,37 +34,3 @@ def index_document_chunks(*, session: Session, document: Document, settings: App
         chunk.embedding = embedding
 
     session.flush()
-    _write_fts_payload(session=session, document=document, settings=settings, child_chunks=child_chunks)
-    session.flush()
-
-
-def _write_fts_payload(
-    *,
-    session: Session,
-    document: Document,
-    settings: AppSettings,
-    child_chunks: list[DocumentChunk],
-) -> None:
-    """依資料庫方言寫入 chunk 的 FTS payload。
-
-    參數：
-    - `session`：目前資料庫 session。
-    - `document`：要更新的文件。
-    - `settings`：API 執行期設定。
-    - `child_chunks`：已查出的 child chunk 清單。
-
-    回傳：
-    - `None`：此函式只負責更新 FTS 欄位。
-    """
-
-    dialect_name = session.get_bind().dialect.name
-    if dialect_name == "postgresql":
-        session.execute(
-            update(DocumentChunk)
-            .where(DocumentChunk.document_id == document.id, DocumentChunk.chunk_type == ChunkType.child)
-            .values(fts_document=func.to_tsvector(settings.text_search_config, DocumentChunk.content))
-        )
-        return
-
-    for chunk in child_chunks:
-        chunk.fts_document = chunk.content

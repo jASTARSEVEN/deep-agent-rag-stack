@@ -1,0 +1,27 @@
+# Git metadata
+.git
+.gitignore
+.gitattributes
+
+# Python caches and local build artifacts
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/*.egg-info/
+**/.mypy_cache/
+**/.ruff_cache/
+
+# Local runtime artifacts
+**/*.log
+**/.env
+**/.env.*
+**/.langgraph_api/
+
+# Frontend build artifacts
+**/node_modules/
+**/dist/
+**/build/
+
+# OS/editor noise
+.DS_Store
+**/.DS_Store

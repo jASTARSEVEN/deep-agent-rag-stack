@@ -4,28 +4,14 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# Alembic revision 唯一識別碼。
 revision = "20260313_0003"
-
-# 本次 migration 的前一版。
 down_revision = "20260312_0002"
-
-# Alembic branch labels 預留欄位。
 branch_labels = None
-
-# Alembic dependency 預留欄位。
 depends_on = None
 
 
 def _get_column_names(table_name: str) -> set[str]:
-    """讀取指定資料表目前欄位名稱集合。
-
-    參數：
-    - `table_name`：要檢查的資料表名稱。
-
-    回傳：
-    - `set[str]`：資料表目前存在的欄位名稱集合。
-    """
+    """讀取指定資料表目前欄位名稱集合。"""
 
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -33,14 +19,7 @@ def _get_column_names(table_name: str) -> set[str]:
 
 
 def _get_table_names() -> set[str]:
-    """讀取目前資料庫中的資料表名稱集合。
-
-    參數：
-    - 無
-
-    回傳：
-    - `set[str]`：目前資料庫中的資料表名稱集合。
-    """
+    """讀取目前資料庫中的資料表名稱集合。"""
 
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -56,10 +35,7 @@ def upgrade() -> None:
 
     ingest_job_columns = _get_column_names("ingest_jobs")
     if "stage" not in ingest_job_columns:
-        op.add_column(
-            "ingest_jobs",
-            sa.Column("stage", sa.String(length=32), nullable=False, server_default="queued"),
-        )
+        op.add_column("ingest_jobs", sa.Column("stage", sa.String(length=32), nullable=False, server_default="queued"))
         op.alter_column("ingest_jobs", "stage", server_default=None)
     if "parent_chunk_count" not in ingest_job_columns:
         op.add_column(
@@ -80,12 +56,7 @@ def upgrade() -> None:
             "document_chunks",
             sa.Column("id", sa.String(length=36), primary_key=True, nullable=False),
             sa.Column("document_id", sa.String(length=36), sa.ForeignKey("documents.id", ondelete="CASCADE"), nullable=False),
-            sa.Column(
-                "parent_chunk_id",
-                sa.String(length=36),
-                sa.ForeignKey("document_chunks.id", ondelete="CASCADE"),
-                nullable=True,
-            ),
+            sa.Column("parent_chunk_id", sa.String(length=36), sa.ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=True),
             sa.Column("chunk_type", chunk_type_enum, nullable=False),
             sa.Column("position", sa.Integer(), nullable=False),
             sa.Column("section_index", sa.Integer(), nullable=False),
@@ -99,12 +70,7 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.UniqueConstraint("document_id", "position", name="uq_document_chunks_document_position"),
-            sa.UniqueConstraint(
-                "document_id",
-                "section_index",
-                "child_index",
-                name="uq_document_chunks_document_section_child",
-            ),
+            sa.UniqueConstraint("document_id", "section_index", "child_index", name="uq_document_chunks_document_section_child"),
         )
 
 

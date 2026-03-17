@@ -102,7 +102,9 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
 3. Build and start the local stack:
-   - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
+   - `./scripts/compose.sh up --build`
+   - The wrapper always uses the repository root `.env` and `infra/docker-compose.yml`, which prevents secrets such as `OPENAI_API_KEY` from silently becoming empty when the command is run from a different working directory.
+   - The Compose project name is pinned to `deep-agent-rag-stack`, so container names stay stable and do not drift to fallback names such as `infra-*`.
 4. Open the local services:
    - Web: `http://localhost:13000`
    - API: `http://localhost:18000`
@@ -110,6 +112,15 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
    - Keycloak: `http://localhost:18080`
    - MinIO API: `http://localhost:19000`
    - MinIO Console: `http://localhost:19001`
+
+## Database Init and Upgrade
+
+- Fresh database volumes initialize automatically through `supabase/migrations/` because the folder is mounted into the Supabase container's `/docker-entrypoint-initdb.d`.
+- Existing database volumes do not re-run those init scripts on restart. Restarting `docker compose` is not a schema upgrade mechanism.
+- Existing environments must be upgraded manually with Alembic:
+  - `./scripts/compose.sh exec api alembic upgrade head`
+- If retrieval SQL or PostgreSQL RPCs change, make sure the change is also represented in Alembic. Do not rely only on `supabase/migrations/` unless the target environment is guaranteed to be a fresh volume.
+- After an upgrade, verify the API and retrieval path before assuming the environment is healthy.
 
 ## Environment Variables
 
@@ -124,7 +135,7 @@ See `.env.example` for the full local default configuration. The template is gro
 - LangGraph chat runtime:
   - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task:
-  - `docker compose -f infra/docker-compose.yml exec worker python -m worker.scripts.healthcheck`
+  - `./scripts/compose.sh exec worker python -m worker.scripts.healthcheck`
 - Web / Areas / Files / Chat:
   - Open `http://localhost:13000`, sign in, and verify area listing, file upload, document status, and area-scoped chat behavior
 - Phase 1 auth verification guide:
@@ -135,3 +146,4 @@ See `.env.example` for the full local default configuration. The template is gro
 - If Docker image builds fail, confirm Docker Desktop is running and can reach package registries.
 - If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
 - If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.
+- If the API starts but Deep Agents retrieval fails only on an existing database, verify that the PostgreSQL schema and RPCs were upgraded with `alembic upgrade head` instead of assuming Compose restart applied them.

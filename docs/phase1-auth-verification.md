@@ -55,21 +55,16 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 ### API schema 已建立
 
-在容器內執行 migration：
-
-```bash
-docker compose -f infra/docker-compose.yml --env-file .env exec api alembic upgrade head
-```
+本 repo 採用 Supabase migrations，schema 會在資料庫啟動時自動建立。
 
 成功後可確認資料表：
 
 ```bash
-docker compose -f infra/docker-compose.yml --env-file .env exec -T postgres \
+docker compose -f infra/docker-compose.yml --env-file .env exec -T supabase-db \
   psql -U app -d deep_agent_rag -c "\dt"
 ```
 
 至少應看到：
-- `alembic_version`
 - `areas`
 - `area_user_roles`
 - `area_group_roles`
@@ -262,7 +257,7 @@ curl -sS \
 建立測試 area：
 
 ```bash
-docker compose -f infra/docker-compose.yml --env-file .env exec -T postgres \
+docker compose -f infra/docker-compose.yml --env-file .env exec -T supabase-db \
   psql -U app -d deep_agent_rag -c "
   insert into areas (id, name, description, created_at, updated_at)
   values (
@@ -282,7 +277,7 @@ docker compose -f infra/docker-compose.yml --env-file .env exec -T postgres \
 建立 `/reader -> reader` access mapping：
 
 ```bash
-docker compose -f infra/docker-compose.yml --env-file .env exec -T postgres \
+docker compose -f infra/docker-compose.yml --env-file .env exec -T supabase-db \
   psql -U app -d deep_agent_rag -c "
   insert into area_group_roles (id, area_id, group_path, role, created_at)
   values (

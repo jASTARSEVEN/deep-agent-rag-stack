@@ -1,14 +1,30 @@
 """授權與 access-check API 測試。"""
 
+import asyncio
+from types import SimpleNamespace
+from uuid import uuid4
+
+import jwt
+
+from app.auth.dependencies import get_token_verifier
+from app.auth.verifier import AuthServiceUnavailableError
 from app.auth.verifier import CurrentPrincipal
 from app.auth.verifier import InvalidTokenError
+from app.auth.verifier import KeycloakJwtVerifier
 from app.auth.verifier import _build_principal_from_payload
+from app.chat.runtime import langgraph_auth as langgraph_auth_runtime
 from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
 from app.services.access import resolve_effective_role_for_area, resolve_highest_role
 
 
 # 測試模式使用的 Bearer token，格式由 TestModeTokenVerifier 定義。
 READER_TOKEN = "Bearer test::user-reader::/group/reader"
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
 
 
 def test_resolve_highest_role_prefers_stronger_role() -> None:
@@ -26,7 +42,7 @@ def test_resolve_highest_role_returns_none_when_empty() -> None:
 def test_effective_role_uses_direct_role(db_session) -> None:
     """只有 direct role 時應正確回傳。"""
 
-    area = Area(id="area-direct", name="Direct Area")
+    area = Area(id=_uuid(), name="Direct Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-direct", role=Role.maintainer))
     db_session.commit()
@@ -38,7 +54,7 @@ def test_effective_role_uses_direct_role(db_session) -> None:
 def test_effective_role_uses_group_role(db_session) -> None:
     """只有 group role 時應正確回傳。"""
 
-    area = Area(id="area-group", name="Group Area")
+    area = Area(id=_uuid(), name="Group Area")
     db_session.add(area)
     db_session.add(AreaGroupRole(area_id=area.id, group_path="/group/reader", role=Role.reader))
     db_session.commit()
@@ -50,7 +66,7 @@ def test_effective_role_uses_group_role(db_session) -> None:
 def test_effective_role_uses_maximum_of_direct_and_group_roles(db_session) -> None:
     """direct 與 group 同時存在時應取最大值。"""
 
-    area = Area(id="area-max", name="Max Area")
+    area = Area(id=_uuid(), name="Max Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-max", role=Role.reader))
     db_session.add(AreaGroupRole(area_id=area.id, group_path="/group/admin", role=Role.admin))
@@ -107,10 +123,157 @@ def test_auth_context_rejects_invalid_groups_claim_shape(client) -> None:
     assert response.status_code == 401
 
 
+def test_auth_context_returns_503_when_auth_service_is_unavailable(client) -> None:
+    """當外部驗證服務暫時不可用時，auth context 應回 503 而非 500。"""
+
+    class UnavailableVerifier:
+        """固定模擬外部驗證服務失敗的 verifier。"""
+
+        def verify(self, token: str) -> CurrentPrincipal:
+            """驗證 token 並固定拋出服務不可用錯誤。
+
+            參數：
+            - `token`：待驗證 token；此測試不實際使用其內容。
+
+            回傳：
+            - `CurrentPrincipal`：此測試路徑不會成功回傳。
+            """
+
+            raise AuthServiceUnavailableError("目前無法連線到 Keycloak 驗證服務，請稍後再試。")
+
+    client.app.dependency_overrides[get_token_verifier] = lambda: UnavailableVerifier()
+    try:
+        response = client.get("/auth/context", headers={"Authorization": "Bearer test::user-1::/group/a"})
+    finally:
+        client.app.dependency_overrides.pop(get_token_verifier, None)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "目前無法連線到 Keycloak 驗證服務，請稍後再試。"}
+
+
+def test_langgraph_authenticate_reuses_module_level_token_verifier(monkeypatch) -> None:
+    """LangGraph custom auth 應重用模組層級 verifier，而非每次 request 重建。"""
+
+    class RecordingVerifier:
+        """記錄 verify 呼叫次數的測試 verifier。"""
+
+        def __init__(self) -> None:
+            """建立可觀測的測試 verifier。
+
+            參數：
+            - 無
+
+            回傳：
+            - `None`：僅初始化內部狀態。
+            """
+
+            self.calls: list[str] = []
+
+        def verify(self, token: str) -> CurrentPrincipal:
+            """記錄 token 並回傳固定 principal。
+
+            參數：
+            - `token`：待驗證 token。
+
+            回傳：
+            - `CurrentPrincipal`：固定的測試 principal。
+            """
+
+            self.calls.append(token)
+            return CurrentPrincipal(sub="user-langgraph", groups=("/group/a",), preferred_username="alice")
+
+    verifier = RecordingVerifier()
+    monkeypatch.setattr(langgraph_auth_runtime, "AUTH_TOKEN_VERIFIER", verifier)
+
+    payload_one = asyncio.run(langgraph_auth_runtime.authenticate("Bearer token-one"))
+    payload_two = asyncio.run(langgraph_auth_runtime.authenticate("Bearer token-two"))
+
+    assert verifier.calls == ["token-one", "token-two"]
+    assert payload_one == {
+        "identity": "user-langgraph",
+        "sub": "user-langgraph",
+        "groups": ["/group/a"],
+    }
+    assert payload_two == payload_one
+
+
+def test_keycloak_verifier_rebuilds_jwks_client_after_connection_error(monkeypatch) -> None:
+    """JWKS client 第一次連線失敗時應重建 client 後再成功驗證。"""
+
+    class FakeSigningKey:
+        """模擬 PyJWT signing key 結果。"""
+
+        key = "fake-key"
+
+    class FakeJwksClient:
+        """模擬會在第一次失敗、第二次成功的 JWKS client。"""
+
+        def __init__(self, url: str) -> None:
+            """建立測試用 client。
+
+            參數：
+            - `url`：JWKS endpoint；此測試只保留供斷言用途。
+
+            回傳：
+            - `None`：僅建立測試狀態。
+            """
+
+            self.url = url
+            self.calls = 0
+
+        def get_signing_key_from_jwt(self, token: str) -> FakeSigningKey:
+            """模擬第一次連線失敗、之後成功回傳 signing key。
+
+            參數：
+            - `token`：待驗證 token；此測試不解析內容。
+
+            回傳：
+            - `FakeSigningKey`：第二次起回傳的簽章金鑰。
+            """
+
+            self.calls += 1
+            if fail_once_state["pending"]:
+                fail_once_state["pending"] = False
+                raise jwt.exceptions.PyJWKClientConnectionError("connection refused")
+            return FakeSigningKey()
+
+    created_clients: list[FakeJwksClient] = []
+    fail_once_state = {"pending": True}
+
+    def fake_jwks_client_factory(url: str) -> FakeJwksClient:
+        """建立可觀測的假 JWKS client。"""
+
+        client = FakeJwksClient(url)
+        created_clients.append(client)
+        return client
+
+    def fake_decode(*args, **kwargs) -> dict[str, object]:
+        """回傳固定 payload，避免依賴真實 JWT 驗章。"""
+
+        return {"sub": "user-1", "groups": ["/group/a"], "preferred_username": "alice"}
+
+    monkeypatch.setattr("app.auth.verifier.PyJWKClient", fake_jwks_client_factory)
+    monkeypatch.setattr("app.auth.verifier.jwt.decode", fake_decode)
+
+    settings = SimpleNamespace(
+        keycloak_jwks_url="http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs",
+        keycloak_issuer="http://localhost:18080/realms/deep-agent-dev",
+        keycloak_groups_claim="groups",
+    )
+    verifier = KeycloakJwtVerifier(settings=settings)
+
+    principal = verifier.verify("fake-token")
+
+    assert principal == CurrentPrincipal(sub="user-1", groups=("/group/a",), preferred_username="alice")
+    assert len(created_clients) == 2
+    assert created_clients[0].calls == 1
+    assert created_clients[1].calls == 1
+
+
 def test_access_check_returns_effective_role_for_authorized_user(client, db_session) -> None:
     """已授權使用者應取得 effective role。"""
 
-    area = Area(id="area-access", name="Access Area")
+    area = Area(id=_uuid(), name="Access Area")
     db_session.add(area)
     db_session.add(AreaGroupRole(area_id=area.id, group_path="/group/reader", role=Role.reader))
     db_session.commit()
@@ -127,7 +290,7 @@ def test_access_check_returns_effective_role_for_authorized_user(client, db_sess
 def test_access_check_returns_404_for_unauthorized_area(client, db_session) -> None:
     """沒有有效角色時應以 404 隱藏 area。"""
 
-    area = Area(id="area-hidden", name="Hidden Area")
+    area = Area(id=_uuid(), name="Hidden Area")
     db_session.add(area)
     db_session.commit()
 

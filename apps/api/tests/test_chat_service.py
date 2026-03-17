@@ -4,12 +4,35 @@ import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
+from uuid import uuid4
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import ChunkStructureKind
+from app.db.models import (
+    Area,
+    AreaUserRole,
+    ChunkStructureKind,
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    Role,
+)
 from app.chat.agent.runtime import DeepAgentsChatRuntime, DeterministicChatRuntime, build_chat_runtime
 from app.services.retrieval_assembler import AssembledContext
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。
+
+    參數：
+    - 無
+
+    回傳：
+    - `str`：新的 UUID 字串。
+    """
+
+    return str(uuid4())
 
 
 def test_deterministic_runtime_factory_returns_deterministic_runtime() -> None:
@@ -559,6 +582,242 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             "assembled_text": "這是一段組裝後的內容。",
         }
     ]
+
+
+def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contract(
+    db_session,
+    app_settings,
+    monkeypatch,
+) -> None:
+    """Deep Agents runtime 應可走真實 retrieval tool 並回傳 assembled-context contract。
+
+    參數：
+    - `db_session`：測試資料庫 session fixture。
+    - `app_settings`：測試設定 fixture。
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 Deep Agents 與 retrieval tool 的整合契約。
+    """
+
+    area = Area(id=_uuid(), name="Deep Agents Tool Integration")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="reader-policy.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-reader-policy/reader-policy.md",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Reader Policy",
+        content="alpha intro\n\nalpha details",
+        content_preview="alpha intro",
+        char_count=27,
+        start_offset=0,
+        end_offset=27,
+    )
+    child_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Reader Policy",
+        content="alpha intro",
+        content_preview="alpha intro",
+        char_count=11,
+        start_offset=0,
+        end_offset=11,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    child_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Reader Policy",
+        content="alpha details",
+        content_preview="alpha details",
+        char_count=13,
+        start_offset=13,
+        end_offset=26,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            document,
+            parent,
+            child_one,
+            child_two,
+        ]
+    )
+    db_session.commit()
+
+    captured_tool_result: dict[str, object] = {}
+    emitted_events: list[dict[str, object]] = []
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    class FakeAgent:
+        """模擬主 agent，並主動呼叫真實 retrieval tool。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。
+
+            參數：
+            - `tools`：主 agent 可用工具列表。
+
+            回傳：
+            - `None`：僅保存工具列表。
+            """
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先執行 retrieval tool，再回傳固定回答。
+
+            參數：
+            - `_input`：agent 輸入。
+            - `stream_mode`：要求的 stream modes。
+
+            回傳：
+            - `Iterator[tuple[str, object]]`：固定 messages/values 串流片段。
+            """
+
+            assert stream_mode == ["messages", "values"]
+            captured_tool_result.update(json.loads(self.tools[0]("alpha")))
+            return iter(
+                [
+                    ("messages", ({"content": "這是帶真實檢索的回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是帶真實檢索的回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = app_settings.model_copy(
+        update={
+            "chat_provider": "deepagents",
+            "chat_model": "gpt-5-mini",
+            "chat_max_output_tokens": 512,
+            "chat_timeout_seconds": 30,
+            "openai_api_key": "test-key",
+        }
+    )
+
+    result = provider.run(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id=area.id,
+        question="請根據文件回答 alpha",
+        writer=emitted_events.append,
+    )
+
+    assert result["answer"] == "這是帶真實檢索的回答。"
+    assert result["citations"] == [
+        {
+            "context_index": 0,
+            "document_id": document.id,
+            "parent_chunk_id": parent.id,
+            "child_chunk_ids": [child_one.id, child_two.id],
+            "heading": "Reader Policy",
+            "structure_kind": "text",
+            "start_offset": 0,
+            "end_offset": 26,
+            "excerpt": "alpha intro\n\nalpha details",
+            "source": "hybrid",
+            "truncated": False,
+        }
+    ]
+    assert result["assembled_contexts"] == [
+        {
+            "context_index": 0,
+            "document_id": document.id,
+            "parent_chunk_id": parent.id,
+            "child_chunk_ids": [child_one.id, child_two.id],
+            "structure_kind": "text",
+            "heading": "Reader Policy",
+            "excerpt": "alpha intro\n\nalpha details",
+            "assembled_text": "alpha intro\n\nalpha details",
+            "source": "hybrid",
+            "start_offset": 0,
+            "end_offset": 26,
+            "truncated": False,
+        }
+    ]
+    assert result["trace"]["retrieval"]["query"] == "alpha"
+    assert result["trace"]["assembler"]["kept_chunk_ids"] == [child_one.id, child_two.id]
+    assert result["trace"]["agent"]["retrieval_invoked"] is True
+    assert result["trace"]["agent"]["contexts_count"] == 1
+    assert captured_tool_result == {
+        "assembled_contexts": [
+            {
+                "heading": "Reader Policy",
+                "assembled_text": "alpha intro\n\nalpha details",
+            }
+        ]
+    }
+    completed_tool_event = [
+        event for event in emitted_events if event["type"] == "tool_call" and event["status"] == "completed"
+    ][0]
+    assert completed_tool_event["output"] == {
+        "contexts_count": 1,
+        "citations_count": 1,
+        "contexts": [
+            {
+                "context_index": 0,
+                "document_id": document.id,
+                "parent_chunk_id": parent.id,
+                "child_chunk_ids": [child_one.id, child_two.id],
+                "heading": "Reader Policy",
+                "structure_kind": "text",
+                "source": "hybrid",
+                "truncated": False,
+                "excerpt": "alpha intro\n\nalpha details",
+            }
+        ],
+    }
 
 
 def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkeypatch) -> None:

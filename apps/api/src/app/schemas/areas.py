@@ -1,5 +1,6 @@
 """Knowledge Area CRUD 與 access management API schema。"""
 
+from uuid import UUID
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
@@ -27,7 +28,9 @@ class CreateAreaRequest(BaseModel):
 class AreaSummaryResponse(BaseModel):
     """Area list 與 detail 共用的最小 area 表示。"""
 
-    id: str
+    model_config = {"from_attributes": True}
+
+    id: UUID
     name: str
     description: str | None
     effective_role: Role
@@ -78,7 +81,9 @@ class AccessGroupEntry(BaseModel):
 class AreaAccessManagementResponse(BaseModel):
     """Area access 管理內容。"""
 
-    area_id: str
+    model_config = {"from_attributes": True}
+
+    area_id: UUID
     users: list[AccessUserEntry]
     groups: list[AccessGroupEntry]
 

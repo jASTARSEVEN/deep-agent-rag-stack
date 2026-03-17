@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from tempfile import mkdtemp
+from uuid import uuid4, UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -12,7 +13,18 @@ from app.db.base import Base
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
 from app.main import create_app
 from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace, retrieve_area_candidates
-from app.services.retrieval_assembler import AssembledRetrievalResult, assemble_retrieval_result
+from app.services.retrieval_assembler import (
+    AssembledRetrievalResult,
+    _load_child_chunks,
+    _load_parent_chunks,
+    assemble_retrieval_result,
+)
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
 
 
 def test_assemble_retrieval_result_merges_text_children_with_same_parent(db_session, app_settings) -> None:
@@ -60,7 +72,6 @@ def test_assemble_retrieval_result_merges_text_children_with_same_parent(db_sess
         start_offset=0,
         end_offset=11,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="alpha intro",
     )
     child_two = DocumentChunk(
         id="child-assemble-text-2",
@@ -78,7 +89,6 @@ def test_assemble_retrieval_result_merges_text_children_with_same_parent(db_sess
         start_offset=13,
         end_offset=26,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="alpha details",
     )
     db_session.add_all([area, document, parent, child_one, child_two])
     db_session.commit()
@@ -98,6 +108,84 @@ def test_assemble_retrieval_result_merges_text_children_with_same_parent(db_sess
     assert assembled.assembled_contexts[0].assembled_text == "alpha intro\n\nalpha details"
     assert [citation.chunk_id for citation in assembled.citations] == [child_one.id, child_two.id]
     assert assembled.trace.assembler.kept_chunk_ids == [child_one.id, child_two.id]
+
+
+def test_load_chunk_helpers_normalize_uuid_keys_to_strings(monkeypatch) -> None:
+    """chunk 補查 helper 應將 ORM 的 UUID 識別碼正規化為字串 key。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 UUID/string lookup 相容性。
+    """
+
+    child_id = uuid4()
+    parent_id = uuid4()
+
+    class _FakeScalarResult:
+        """模擬 SQLAlchemy scalar result。"""
+
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            """回傳預設 values。"""
+
+            return self._values
+
+    class _FakeSession:
+        """模擬僅支援 scalars() 的 session。"""
+
+        def __init__(self, values):
+            self._values = values
+
+        def scalars(self, _statement):
+            """忽略 statement，直接回傳預設 chunks。"""
+
+            return _FakeScalarResult(self._values)
+
+    child = DocumentChunk(
+        id=child_id,  # type: ignore[arg-type]
+        document_id=uuid4(),  # type: ignore[arg-type]
+        parent_chunk_id=parent_id,  # type: ignore[arg-type]
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="UUID Section",
+        content="uuid content",
+        content_preview="uuid content",
+        char_count=12,
+        start_offset=0,
+        end_offset=12,
+        embedding=[0.1] * 8,
+    )
+    parent = DocumentChunk(
+        id=parent_id,  # type: ignore[arg-type]
+        document_id=uuid4(),  # type: ignore[arg-type]
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="UUID Section",
+        content="uuid content",
+        content_preview="uuid content",
+        char_count=12,
+        start_offset=0,
+        end_offset=12,
+    )
+
+    child_lookup = _load_child_chunks(session=_FakeSession([child]), chunk_ids=[str(child_id)])
+    parent_lookup = _load_parent_chunks(session=_FakeSession([parent]), parent_chunk_ids=[str(parent_id)])
+
+    assert list(child_lookup.keys()) == [str(child_id)]
+    assert list(parent_lookup.keys()) == [str(parent_id)]
+    assert child_lookup[str(child_id)] is child
+    assert parent_lookup[str(parent_id)] is parent
 
 
 def test_assemble_retrieval_result_merges_table_children_with_single_header(db_session, app_settings) -> None:
@@ -145,7 +233,6 @@ def test_assemble_retrieval_result_merges_table_children_with_single_header(db_s
         start_offset=0,
         end_offset=46,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="alpha",
     )
     child_two = DocumentChunk(
         id="child-assemble-table-2",
@@ -163,7 +250,6 @@ def test_assemble_retrieval_result_merges_table_children_with_single_header(db_s
         start_offset=47,
         end_offset=92,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="beta",
     )
     db_session.add_all([area, document, parent, child_one, child_two])
     db_session.commit()
@@ -246,7 +332,6 @@ def test_assemble_retrieval_result_keeps_text_and_table_separate(db_session, app
         start_offset=0,
         end_offset=15,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="alpha paragraph",
     )
     table_child = DocumentChunk(
         id="child-assemble-table-mixed",
@@ -264,7 +349,6 @@ def test_assemble_retrieval_result_keeps_text_and_table_separate(db_session, app
         start_offset=17,
         end_offset=63,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document="alpha",
     )
     db_session.add_all([area, document, text_parent, table_parent, text_child, table_child])
     db_session.commit()
@@ -696,7 +780,6 @@ def _build_ready_child(
         start_offset=start_offset,
         end_offset=end_offset,
         embedding=[0.1] * app_settings.embedding_dimensions,
-        fts_document=content,
     )
 
 
@@ -740,7 +823,6 @@ def _build_pipeline_settings(**updates: object) -> AppSettings:
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
         EMBEDDING_DIMENSIONS=1536,
-        TEXT_SEARCH_CONFIG="deep_agent_jieba",
         RETRIEVAL_VECTOR_TOP_K=8,
         RETRIEVAL_FTS_TOP_K=8,
         RETRIEVAL_MAX_CANDIDATES=12,
@@ -787,7 +869,7 @@ def _run_upload_to_assembly_flow(
     Base.metadata.create_all(bind=application.state.engine)
     try:
         session = application.state.session_factory()
-        area = Area(id="area-pipeline", name="Pipeline")
+        area = Area(id=_uuid(), name="Pipeline")
         area_id = area.id
         session.add(area)
         session.add(AreaUserRole(area_id=area_id, user_sub="user-maintainer", role=Role.maintainer))

@@ -12,7 +12,7 @@
 
 ## 固定技術棧
 - 後端：Python + FastAPI
-- 資料庫：PostgreSQL + pgvector + pg_jieba
+- 資料庫：PostgreSQL + pgvector + PGroonga (Supabase)
 - 背景工作：Celery + Redis
 - 物件儲存：MinIO
 - 身分與授權：Keycloak
@@ -47,7 +47,6 @@
 - 只有 `status = 'ready'` 的文件可以參與檢索與問答。
 - SQL gate 必須在檢索結果回傳給使用者前執行。
 - 不得引入 `pg_trgm`。
-- `pg_jieba` 必須使用專案要求的固定 fork / commit。
 - Rerank 候選數與 chunk 大小必須受控，以限制成本。
 
 ## 倉庫結構

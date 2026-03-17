@@ -1,6 +1,7 @@
 """Documents、chunks 與 ingest jobs API 測試。"""
 
 from pathlib import Path
+from uuid import uuid4
 
 from app.db.models import (
     Area,
@@ -29,10 +30,16 @@ READER_TOKEN = "Bearer test::user-reader::/group/reader"
 OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
 
 
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
+
+
 def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app_settings) -> None:
     """maintainer 上傳 md 後應建立 parent-child chunks，並在 inline ingest 下轉為 ready。"""
 
-    area = Area(id="area-maintainer-docs", name="Maintainer Docs")
+    area = Area(id=_uuid(), name="Maintainer Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -74,14 +81,13 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
     child_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.child]
     assert child_chunks
     assert all(chunk.embedding is not None for chunk in child_chunks)
-    assert all(chunk.fts_document for chunk in child_chunks)
     assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
 
 
 def test_upload_document_preserves_langchain_child_offsets(client, db_session) -> None:
     """inline ingest 應將 LangChain child splitter 的 offsets 正確寫入資料庫。"""
 
-    area = Area(id="area-maintainer-offsets", name="Maintainer Offsets")
+    area = Area(id=_uuid(), name="Maintainer Offsets")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -123,7 +129,7 @@ def test_upload_document_preserves_langchain_child_offsets(client, db_session) -
 def test_upload_markdown_table_creates_table_chunks(client, db_session) -> None:
     """含 Markdown table 的文件應建立 table structure_kind chunks。"""
 
-    area = Area(id="area-maintainer-table-md", name="Maintainer Markdown Tables")
+    area = Area(id=_uuid(), name="Maintainer Markdown Tables")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -167,7 +173,7 @@ def test_upload_markdown_table_creates_table_chunks(client, db_session) -> None:
 def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
     """含 HTML table 的文件應建立 table structure_kind chunks。"""
 
-    area = Area(id="area-maintainer-table-html", name="Maintainer HTML Tables")
+    area = Area(id=_uuid(), name="Maintainer HTML Tables")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.commit()
@@ -202,7 +208,7 @@ def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
 def test_upload_document_rejects_reader(client, db_session) -> None:
     """reader 不可上傳文件。"""
 
-    area = Area(id="area-reader-docs", name="Reader Docs")
+    area = Area(id=_uuid(), name="Reader Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
     db_session.commit()
@@ -219,7 +225,7 @@ def test_upload_document_rejects_reader(client, db_session) -> None:
 def test_upload_document_returns_same_404_for_unauthorized_and_missing_area(client, db_session) -> None:
     """outsider 對既有與不存在 area 上傳都應回相同 404。"""
 
-    area = Area(id="area-secret-docs", name="Secret Docs")
+    area = Area(id=_uuid(), name="Secret Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -243,7 +249,7 @@ def test_upload_document_returns_same_404_for_unauthorized_and_missing_area(clie
 def test_upload_document_rejects_empty_file(client, db_session) -> None:
     """空檔案應被 upload validator 擋下。"""
 
-    area = Area(id="area-empty-docs", name="Empty Docs")
+    area = Area(id=_uuid(), name="Empty Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -261,7 +267,7 @@ def test_upload_document_rejects_empty_file(client, db_session) -> None:
 def test_upload_document_rejects_oversized_file(client, db_session) -> None:
     """超過大小限制的檔案應被拒絕。"""
 
-    area = Area(id="area-large-docs", name="Large Docs")
+    area = Area(id=_uuid(), name="Large Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -278,7 +284,7 @@ def test_upload_document_rejects_oversized_file(client, db_session) -> None:
 def test_upload_document_rejects_unknown_extension(client, db_session) -> None:
     """未知副檔名應在 API 驗證階段被拒絕。"""
 
-    area = Area(id="area-unknown-docs", name="Unknown Docs")
+    area = Area(id=_uuid(), name="Unknown Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -296,7 +302,7 @@ def test_upload_document_rejects_unknown_extension(client, db_session) -> None:
 def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db_session) -> None:
     """產品範圍內但本 phase 未支援的副檔名應進入 failed 且沒有 chunks。"""
 
-    area = Area(id="area-pdf-docs", name="PDF Docs")
+    area = Area(id=_uuid(), name="PDF Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -318,15 +324,17 @@ def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db
 def test_list_documents_returns_only_area_documents_with_chunk_summary(client, db_session) -> None:
     """area 文件列表只應回傳指定 area 內的文件與其 chunk 摘要。"""
 
-    visible_area = Area(id="area-doc-visible", name="Visible")
-    hidden_area = Area(id="area-doc-hidden", name="Hidden")
+    visible_area = Area(id=_uuid(), name="Visible")
+    hidden_area = Area(id=_uuid(), name="Hidden")
+    visible_document_id = _uuid()
+    hidden_document_id = _uuid()
     db_session.add_all([visible_area, hidden_area])
     db_session.add_all(
         [
             AreaUserRole(area_id=visible_area.id, user_sub="user-reader", role=Role.reader),
             AreaUserRole(area_id=hidden_area.id, user_sub="user-admin", role=Role.admin),
             Document(
-                id="document-visible",
+                id=visible_document_id,
                 area_id=visible_area.id,
                 file_name="visible.md",
                 content_type="text/markdown",
@@ -335,7 +343,7 @@ def test_list_documents_returns_only_area_documents_with_chunk_summary(client, d
                 status=DocumentStatus.ready,
             ),
             Document(
-                id="document-hidden",
+                id=hidden_document_id,
                 area_id=hidden_area.id,
                 file_name="hidden.md",
                 content_type="text/markdown",
@@ -344,7 +352,7 @@ def test_list_documents_returns_only_area_documents_with_chunk_summary(client, d
                 status=DocumentStatus.ready,
             ),
             DocumentChunk(
-                document_id="document-visible",
+                document_id=visible_document_id,
                 parent_chunk_id=None,
                 chunk_type="parent",
                 structure_kind=ChunkStructureKind.text,
@@ -365,16 +373,16 @@ def test_list_documents_returns_only_area_documents_with_chunk_summary(client, d
     response = client.get(f"/areas/{visible_area.id}/documents", headers={"Authorization": READER_TOKEN})
 
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()["items"]] == ["document-visible"]
+    assert [item["id"] for item in response.json()["items"]] == [visible_document_id]
     assert response.json()["items"][0]["chunk_summary"]["parent_chunks"] == 1
 
 
 def test_document_detail_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
     """未授權與不存在的 document 都應回相同 404。"""
 
-    area = Area(id="area-document-secret", name="Secret")
+    area = Area(id=_uuid(), name="Secret")
     document = Document(
-        id="document-secret",
+        id=_uuid(),
         area_id=area.id,
         file_name="secret.md",
         content_type="text/markdown",
@@ -398,9 +406,9 @@ def test_document_detail_returns_same_404_for_unauthorized_and_missing(client, d
 def test_ingest_job_detail_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
     """未授權與不存在的 ingest job 都應回相同 404。"""
 
-    area = Area(id="area-job-secret", name="Secret Job")
+    area = Area(id=_uuid(), name="Secret Job")
     document = Document(
-        id="document-job-secret",
+        id=_uuid(),
         area_id=area.id,
         file_name="secret.md",
         content_type="text/markdown",
@@ -408,7 +416,7 @@ def test_ingest_job_detail_returns_same_404_for_unauthorized_and_missing(client,
         storage_key="secret",
         status=DocumentStatus.ready,
     )
-    job = IngestJob(id="job-secret", document_id=document.id, status=IngestJobStatus.succeeded)
+    job = IngestJob(id=_uuid(), document_id=document.id, status=IngestJobStatus.succeeded)
     db_session.add_all([area, document, job])
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -424,7 +432,7 @@ def test_ingest_job_detail_returns_same_404_for_unauthorized_and_missing(client,
 def test_reindex_document_replaces_existing_chunks(client, db_session, app_settings) -> None:
     """reindex 應清掉舊 chunks，並以新內容重建 chunk tree。"""
 
-    area = Area(id="area-reindex-docs", name="Reindex Docs")
+    area = Area(id=_uuid(), name="Reindex Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -464,9 +472,9 @@ def test_reindex_document_replaces_existing_chunks(client, db_session, app_setti
 def test_reindex_document_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
     """未授權與不存在的 reindex 操作都應回相同 404。"""
 
-    area = Area(id="area-reindex-secret", name="Reindex Secret")
+    area = Area(id=_uuid(), name="Reindex Secret")
     document = Document(
-        id="document-reindex-secret",
+        id=_uuid(),
         area_id=area.id,
         file_name="secret.md",
         content_type="text/markdown",
@@ -489,7 +497,7 @@ def test_reindex_document_returns_same_404_for_unauthorized_and_missing(client, 
 def test_delete_document_removes_storage_chunks_and_record(client, db_session, app_settings) -> None:
     """刪除文件時應一併移除 storage、chunks 與 document record。"""
 
-    area = Area(id="area-delete-docs", name="Delete Docs")
+    area = Area(id=_uuid(), name="Delete Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -518,9 +526,9 @@ def test_delete_document_removes_storage_chunks_and_record(client, db_session, a
 def test_delete_document_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
     """未授權與不存在的 delete 操作都應回相同 404。"""
 
-    area = Area(id="area-delete-secret", name="Delete Secret")
+    area = Area(id=_uuid(), name="Delete Secret")
     document = Document(
-        id="document-delete-secret",
+        id=_uuid(),
         area_id=area.id,
         file_name="secret.md",
         content_type="text/markdown",

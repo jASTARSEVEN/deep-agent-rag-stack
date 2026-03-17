@@ -10,7 +10,9 @@ This module contains the local Docker Compose stack and the container build asse
 
 - From the repository root:
   - `cp .env.example .env`
-  - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
+  - `./scripts/compose.sh up --build`
+  - The wrapper script always injects the repository root `.env` and `infra/docker-compose.yml`, which prevents empty `OPENAI_API_KEY` / `COHERE_API_KEY` values when Compose is invoked from a different working directory.
+  - The Compose file pins the project name to `deep-agent-rag-stack` and uses repo-standard fallback host ports (`13000/18000/18080/19000/19001/15432/16379`) so accidental omission of `--env-file` is less likely to create port drift.
 
 ## Environment Variables
 
@@ -31,16 +33,12 @@ This module contains the local Docker Compose stack and the container build asse
 - `RERANK_*`
 - `COHERE_API_KEY`
 - `LANGSMITH_*`
-- `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_*`
 - `VITE_*`
-- `PG_JIEBA_REPO_URL`
-- `PG_JIEBA_REF`
 
 ## Main Directory Structure
 
 - `docker-compose.yml`: local service orchestration
-- `docker/postgres`: Postgres image with built-in `pg_jieba`, a pinned Traditional Chinese dictionary, and init SQL
 - `docker/api`: API container image
 - `docker/worker`: worker container image
 - `docker/web`: web container image
@@ -54,14 +52,15 @@ This module contains the local Docker Compose stack and the container build asse
   - Keycloak: `18080`
   - MinIO API: `19000`
   - MinIO Console: `19001`
-  - Postgres: `15432`
+  - Postgres (Supabase): `15432`
   - Redis: `16379`
 
 ## Troubleshooting
 
-- The `postgres` service starts with `shared_preload_libraries=pg_jieba` and uses the repository-pinned Traditional Chinese base dictionary.
+- If you previously started the stack before the pinned project name was added, you may still have older containers such as `infra-*`. Clean them up before assuming the current stack is serving the expected ports.
+- The `supabase-db` service uses the `supabase/postgres` image with built-in PGroonga for Traditional Chinese search.
 - Keycloak automatically imports the `deep-agent-dev` realm, the `deep-agent-web` client, the groups mapper, and default users/groups on first startup.
-- To restore the default Keycloak identity data, remove the `keycloak-db` volume and restart the stack.
+- `supabase/migrations/` is mounted into `/docker-entrypoint-initdb.d` only for fresh database volumes. Existing databases still need Alembic-based upgrades until a dedicated migration runner lands.
 - Current compose health checks only verify stack readiness, not complete business correctness.
 - The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and pair it with `INGEST_INLINE_MODE=true`.
 - To enable Cohere rerank in compose, provide `COHERE_API_KEY` in `.env` and keep `RERANK_PROVIDER=cohere`.

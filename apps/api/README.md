@@ -14,14 +14,14 @@ This module contains the project's FastAPI service. It currently provides:
 - Document upload / list / detail APIs
 - Ingest job detail APIs
 - LangGraph Server built-in thread/run chat runtime
-- SQLAlchemy and Alembic migration scaffolding
+- SQLAlchemy ORM models and metadata
 
 ## How to Start
 
 - Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - `alembic upgrade head`
+  - (Note: `supabase/migrations/` is the schema source of truth for new environments; existing database upgrades still use Alembic until a dedicated migration runner is in place.)
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Run tests locally:
   - `pytest`
@@ -68,7 +68,6 @@ This module contains the project's FastAPI service. It currently provides:
 - `ASSEMBLER_MAX_CONTEXTS`
 - `ASSEMBLER_MAX_CHARS_PER_CONTEXT`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT`
-- `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
 - `RETRIEVAL_MAX_CANDIDATES`
@@ -103,7 +102,6 @@ This module contains the project's FastAPI service. It currently provides:
 - `src/app/routes`: HTTP routes
 - `src/app/services`: authorization, indexing, internal retrieval, and assembler services
 - `langgraph.json`: LangGraph Server loader config for the built-in thread/run runtime
-- `alembic`: migration environment and revision scripts
 - `tests`: authorization and API tests
 
 ## Public Interfaces
@@ -127,15 +125,14 @@ This module contains the project's FastAPI service. It currently provides:
 ## Troubleshooting
 
 - If the API process does not start, verify that `langgraph-cli[inmem]` is installed and `langgraph.json` is present in `apps/api`.
-- If `alembic upgrade head` cannot connect to the database, verify `DATABASE_URL` in the repo root `.env`.
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
 - `TXT`, `Markdown`, and `HTML` uploads now produce SQL-first parent-child `document_chunks`.
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
-- `ready` now means chunk tree, embeddings, and FTS payloads have all been written.
-- This module now includes an internal retrieval foundation with SQL gate, HNSW-backed vector recall, FTS recall, `RRF` merge, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
+- `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
+- This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
 - Unsupported formats still move into controlled `failed`.

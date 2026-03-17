@@ -10,7 +10,9 @@
 
 - 在專案根目錄執行：
   - `cp .env.example .env`
-  - `docker compose -f infra/docker-compose.yml --env-file .env up --build`
+  - `./scripts/compose.sh up --build`
+  - wrapper 會固定注入 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行 Compose 時把 `OPENAI_API_KEY` / `COHERE_API_KEY` 等值帶成空字串。
+  - Compose 檔已固定 project name 為 `deep-agent-rag-stack`，且 fallback host ports 也改為 repo 標準值（`13000/18000/18080/19000/19001/15432/16379`），降低漏帶 `--env-file` 時的漂移風險。
 
 ## 環境變數
 
@@ -31,16 +33,12 @@
 - `RERANK_*`
 - `COHERE_API_KEY`
 - `LANGSMITH_*`
-- `TEXT_SEARCH_CONFIG`
 - `RETRIEVAL_*`
 - `VITE_*`
-- `PG_JIEBA_REPO_URL`
-- `PG_JIEBA_REF`
 
 ## 主要目錄結構
 
 - `docker-compose.yml`：本機服務編排設定
-- `docker/postgres`：內建 `pg_jieba`、繁體中文詞庫與 init SQL 的 Postgres 映像
 - `docker/api`：API container 映像
 - `docker/worker`：Worker container 映像
 - `docker/web`：Web container 映像
@@ -54,14 +52,15 @@
   - Keycloak: `18080`
   - MinIO API: `19000`
   - MinIO Console: `19001`
-  - Postgres: `15432`
+  - Postgres (Supabase): `15432`
   - Redis: `16379`
 
 ## 疑難排解
 
-- `postgres` 服務啟動時會以 `shared_preload_libraries=pg_jieba` 載入 extension，並使用 repo 內固定的繁體中文詞庫。
+- 若你曾在固定 project name 前啟動過 stack，可能仍殘留 `infra-*` 之類的舊 container；在判斷目前是哪一組服務佔用 port 前，應先清理這些舊 container。
+- `supabase-db` 服務使用 `supabase/postgres` 映像，內建 PGroonga 支援繁體中文檢索。
 - Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
-- 若要回到預設 Keycloak 身份資料，請刪除 `keycloak-db` volume 後重新啟動 stack。
+- `supabase/migrations/` 掛載到 `/docker-entrypoint-initdb.d` 只適用全新資料庫 volume；既有資料庫在專用 migration runner 落地前仍需走 Alembic 升級。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
 - 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。
 - 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。

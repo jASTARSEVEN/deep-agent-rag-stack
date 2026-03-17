@@ -73,7 +73,6 @@ class WorkerSettings(BaseSettings):
     embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
     embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
     openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
-    text_search_config: Annotated[str, Field(alias="TEXT_SEARCH_CONFIG")] = "deep_agent_jieba"
 
     @model_validator(mode="before")
     @classmethod

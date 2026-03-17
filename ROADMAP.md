@@ -138,11 +138,11 @@
 
 內容：
 - SQL authorization gate
-- `pg_jieba` 與繁體中文詞庫固定化
-- `document_chunks.embedding` / `fts_document` schema
+- PGroonga 繁體中文檢索整合
+- `document_chunks.embedding` / `content` schema
 - worker / inline ingest indexing
-- HNSW-backed vector recall
-- FTS recall
+- vector recall
+- FTS recall (PGroonga)
 - RRF merge
 - internal retrieval service
 
@@ -181,34 +181,35 @@
 - tool 輸入/輸出與 assembled contexts 的可縮放檢視
 
 狀態：
-- `進行中 (UI 重構已完成)`
+- `已完成`
 
-## Phase 6 — Cloud Migration & Supabase Transition (Planned)
+## Phase 6 — Cloud Migration & Supabase Transition
 
 目標：
-- 將專案從本機 Docker Compose 完整遷移至雲端 Serverless / Managed 環境。
-- 以 Supabase 為核心架構，利用其 **SaaS 官方原生支援 PGroonga** 的優勢，解決雲端託管資料庫無法安裝 `pg_jieba` 的限制。
+- 將專案資料層遷移為 Supabase / PGroonga / pgvector 兼容架構，同時維持本機 Docker Compose 與地端自架路徑。
+- 以 Supabase 為核心資料庫架構，利用其 **SaaS 官方原生支援 PGroonga** 的優勢，解決雲端託管資料庫無法安裝 `pg_jieba` 的限制。
 
 預期效果：
 - **高品質中文檢索 (SaaS 支援)**：Supabase Cloud 內建 PGroonga，可提供比 N-gram 更精準的繁體中文分詞檢索，且無需自行維護詞庫檔。
-- **大幅降低維運成本**：移除本機維護 Keycloak、Postgres (pg_jieba) 與 MinIO 的複雜度與資源消耗。
-- **檢索效能極大化**：將 Python 層的 RRF 合併邏輯下放到資料庫層 (RPC)，實現「單次查詢 = 條件 + 向量 + 全文 + 排序」。
-- **架構彈性**：核心綁定 Supabase，但可透過 Auth Hooks 相容 Auth0/Keycloak，並透過 S3 協定兼容 MinIO/AWS S3。
+- **大幅降低維運成本**：移除本機維護 Postgres (pg_jieba) 的複雜度與資源消耗，保留既有 Keycloak / MinIO 自架能力。
+- **檢索效能與演進平衡**：將 SQL gate、向量召回與全文召回下放到資料庫層，最終 `RRF` 與未來 ranking policy 保留在 Python 層，以支援 business rules 擴充。
+- **架構彈性**：核心綁定 Supabase 資料層，正式 auth/storage 路徑仍為 Keycloak + MinIO/filesystem。
 
 里程碑內容 (Milestones)：
-1. **Database & Retrieval 重構 (Supabase Core)**
+1. **Database & Retrieval 重構 (Supabase Core) (已完成)**
    - 引入 Supabase PostgreSQL 並啟用 `pgvector` 與 `PGroonga`。
    - 捨棄自編譯的 `pg_jieba`，將 FTS 語法轉換為 PGroonga `&@~` 運算子。
-   - 撰寫 Supabase RPC (PostgreSQL Function)，將 `Metadata Filtering` + `Vector Search` + `FTS` + `RRF` 封裝為單次執行。
-2. **Storage 漸進式切換 (Supabase Storage / S3)**
-   - API 層相容 Supabase Storage Client，並保留對 AWS S3 協定的支援。
-3. **Auth 漸進式切換 (Supabase Auth / 第三方 IdP)**
-   - 使用 Supabase Auth 簡化架構，並透過 **Auth Hooks** 動態轉換外部 JWT (Auth0/Keycloak) 以驅動 RLS。
-4. **前端與 Worker 部署**
+   - 撰寫 Supabase RPC (PostgreSQL Function)，只負責 `Metadata Filtering` + `Vector Search` + `FTS` 的候選召回與排序輸入輸出；最終 `RRF` 保留在 Python。
+2. **Runtime 收斂 (已完成)**
+   - 撤回未接線的 multi-provider auth/storage staged 內容，正式路徑維持 Keycloak + MinIO/filesystem。
+   - 恢復 Alembic 作為既有資料庫升級路徑，直到專用 migration runner 落地。
+3. **前端與 Worker 部署 (已完成)**
    - Web 部署至 Vercel/Netlify；API 與 Worker 容器化部署至 AWS Fargate 或 Cloud Run。
-5. **環境清理與解耦完成 (Final Cleanup)**
-   - **移除純 PostgreSQL 依賴**：在遷移測試完成後，完整移除現有 `infra/docker/postgres` 中維護成本極高的自編譯 `pg_jieba` 映像檔與相關 Dockerfile。
-   - **簡化 Infra 管理**：從 `docker-compose.yml` 中正式剔除 local Postgres 服務，達成 100% 雲端原生/地端 Supabase CLI 驅動的輕量化架構。
+4. **環境清理與解耦完成 (Final Cleanup) (已完成)**
+   - **移除純 PostgreSQL 依賴**：完整移除現有 `infra/docker/postgres` 中維護成本極高的自編譯 `pg_jieba` 映像檔與相關 Dockerfile。
+   - **簡化 Infra 管理**：將 Supabase 核心元件完整併入 `docker-compose.yml` 統一管理，達成單一編排工具啟動所有基礎設施的輕量化目標，降低對外部 CLI 工具的依賴。
+狀態：
+- `已完成`
 
 ## Milestone 規則
 
@@ -218,5 +219,6 @@
 
 ## 近期建議順序
 
-1. Phase 5.1：Chat MVP on LangGraph Server
-2. Post-Phase 3 Backlog：Area Management Hardening
+1. 補齊真實 compose / Keycloak / Supabase / Deep Agents smoke 與 E2E 驗證
+2. 完善一頁式戰情室 (Dashboard) UI 互動細節
+3. Post-Phase 3 Backlog：Area Management Hardening

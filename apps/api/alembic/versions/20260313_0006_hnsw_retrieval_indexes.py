@@ -1,19 +1,11 @@
 """將 retrieval vector index 切換為 HNSW，並補齊 documents filter index。"""
 
 from alembic import op
-import sqlalchemy as sa
 
 
-# Alembic revision 唯一識別碼。
 revision = "20260313_0006"
-
-# 本次 migration 的前一版。
 down_revision = "20260313_0005"
-
-# Alembic branch labels 預留欄位。
 branch_labels = None
-
-# Alembic dependency 預留欄位。
 depends_on = None
 
 

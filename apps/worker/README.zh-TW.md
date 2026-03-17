@@ -41,7 +41,6 @@
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
-- `TEXT_SEARCH_CONFIG`
 
 ## 主要目錄結構
 
@@ -68,7 +67,7 @@
 - `TXT`、`Markdown` 與 `HTML` 目前都會建立 SQL-first 的 parent-child chunks。
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
-- `ready` 現在代表 chunking、embedding 與 FTS payload 都已完成。
-- worker 目前已負責 child chunk 的 embedding 與 FTS preparation。
+- `ready` 現在代表 chunking 與 embedding 都已完成。
+- worker 目前已負責 child chunk 的 embedding。
 - 其餘檔案型別仍維持受控 `failed`。
 - retrieval API、rerank 與 chat orchestration 不在此模組內實作。

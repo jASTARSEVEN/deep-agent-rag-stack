@@ -4,28 +4,14 @@ from alembic import op
 import sqlalchemy as sa
 
 
-# Alembic revision 唯一識別碼。
 revision = "20260313_0005"
-
-# 本次 migration 的前一版。
 down_revision = "20260313_0004"
-
-# Alembic branch labels 預留欄位。
 branch_labels = None
-
-# Alembic dependency 預留欄位。
 depends_on = None
 
 
 def _get_column_names(table_name: str) -> set[str]:
-    """讀取指定資料表目前欄位名稱集合。
-
-    參數：
-    - `table_name`：要檢查的資料表名稱。
-
-    回傳：
-    - `set[str]`：資料表目前存在的欄位名稱集合。
-    """
+    """讀取指定資料表目前欄位名稱集合。"""
 
     bind = op.get_bind()
     inspector = sa.inspect(bind)

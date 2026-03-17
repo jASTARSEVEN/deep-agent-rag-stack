@@ -3,7 +3,7 @@
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.auth.verifier import CurrentPrincipal, InvalidTokenError, TokenVerifier
+from app.auth.verifier import AuthServiceUnavailableError, CurrentPrincipal, InvalidTokenError, TokenVerifier
 
 
 # Bearer token 方案，所有受保護路由都使用同一套安全依賴。
@@ -64,3 +64,5 @@ def get_current_principal(
         return verifier.verify(token)
     except InvalidTokenError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="無法驗證存取 token。") from exc
+    except AuthServiceUnavailableError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc

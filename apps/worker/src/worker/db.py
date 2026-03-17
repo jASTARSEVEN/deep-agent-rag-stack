@@ -11,7 +11,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from worker.core.settings import WorkerSettings
-from worker.db_types import build_embedding_type, build_fts_document_type
+from worker.db_types import build_embedding_type
 
 
 # 主鍵統一使用 UUID 字串，與 API schema 保持一致。
@@ -178,10 +178,9 @@ class DocumentChunk(Base):
     end_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
     # 僅 child chunk 使用的 embedding 向量；parent 固定為空值。
     embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
-    # chunk 的全文檢索 payload；SQLite 測試環境退回保存原始文字。
-    fts_document: Mapped[str | dict[str, object] | None] = mapped_column(build_fts_document_type(), nullable=True)
     # chunk 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
     # chunk 最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 

@@ -1,5 +1,6 @@
 """Documents 與 ingest jobs API schema。"""
 
+from uuid import UUID
 from datetime import datetime
 
 from pydantic import BaseModel
@@ -23,10 +24,12 @@ class ChunkSummary(BaseModel):
 class DocumentSummary(BaseModel):
     """文件摘要資料。"""
 
+    model_config = {"from_attributes": True}
+
     # 文件唯一識別碼。
-    id: str
+    id: UUID
     # 文件所屬 Knowledge Area 識別碼。
-    area_id: str
+    area_id: UUID
     # 使用者上傳時的原始檔名。
     file_name: str
     # 上傳時記錄的 MIME 類型。
@@ -46,10 +49,12 @@ class DocumentSummary(BaseModel):
 class IngestJobSummary(BaseModel):
     """背景 ingest job 摘要資料。"""
 
+    model_config = {"from_attributes": True}
+
     # 背景 job 唯一識別碼。
-    id: str
+    id: UUID
     # 此 job 對應的文件識別碼。
-    document_id: str
+    document_id: UUID
     # job 目前狀態。
     status: IngestJobStatus
     # job 目前執行階段。

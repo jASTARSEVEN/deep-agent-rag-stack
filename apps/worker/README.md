@@ -41,7 +41,6 @@ This module contains the project's Celery worker. It currently provides the mini
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
-- `TEXT_SEARCH_CONFIG`
 
 ## Main Directory Structure
 
@@ -68,7 +67,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - `TXT`, `Markdown`, and `HTML` files now produce SQL-first parent-child chunks.
 - `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
-- `ready` now means chunking, embeddings, and FTS payloads have all been completed.
-- The worker is now responsible for child-chunk embeddings and FTS preparation.
+- `ready` now means chunking and embeddings have been completed.
+- The worker is now responsible for child-chunk embeddings.
 - File types other than `TXT` / `Markdown` / `HTML` still move into controlled `failed` status.
 - Public retrieval APIs, rerank, and chat orchestration remain outside this module.

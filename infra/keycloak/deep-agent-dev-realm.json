@@ -30,9 +30,8 @@
         "http://localhost:13000/*"
       ],
       "webOrigins": [
-        "http://localhost:13000"
-      ],
-      "defaultClientScopes": [
+        "+"
+      ],      "defaultClientScopes": [
         "web-origins",
         "profile",
         "roles",

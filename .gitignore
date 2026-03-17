@@ -63,3 +63,6 @@ apps/web/test-results/
 # Build outputs
 *.egg-info/
 .eggs/
+
+# LangGraph
+**/.langgraph_api/**

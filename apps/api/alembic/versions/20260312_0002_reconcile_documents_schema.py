@@ -18,14 +18,7 @@ depends_on = None
 
 
 def _get_column_names() -> set[str]:
-    """讀取目前 documents 資料表欄位名稱集合。
-
-    Args:
-        無。
-
-    Returns:
-        `set[str]`：目前資料庫中 `documents` 欄位名稱集合。
-    """
+    """讀取目前 documents 資料表欄位名稱集合。"""
 
     bind = op.get_bind()
     inspector = sa.inspect(bind)
@@ -33,14 +26,7 @@ def _get_column_names() -> set[str]:
 
 
 def upgrade() -> None:
-    """補上舊資料庫缺失的 documents 欄位，避免現行 API 查詢失敗。
-
-    Args:
-        無。
-
-    Returns:
-        無。
-    """
+    """補上舊資料庫缺失的 documents 欄位，避免現行 API 查詢失敗。"""
 
     column_names = _get_column_names()
 
@@ -65,14 +51,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    """回滾 schema 修復欄位。
-
-    Args:
-        無。
-
-    Returns:
-        無。
-    """
+    """回滾 schema 修復欄位。"""
 
     column_names = _get_column_names()
 

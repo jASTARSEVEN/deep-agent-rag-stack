@@ -27,7 +27,7 @@
 ## 固定技術棧
 
 - 後端：`Python + FastAPI`
-- 資料庫：`PostgreSQL + pgvector + pg_jieba`
+- 資料庫：`PostgreSQL + pgvector + PGroonga (Supabase)`
 - 背景工作：`Celery + Redis`
 - 物件儲存：`MinIO`
 - 身分與授權：`Keycloak`
@@ -90,8 +90,8 @@
 
 ### 關鍵字檢索
 - 使用 Postgres FTS
-- 使用 `pg_jieba` 支援中文斷詞
-- 查詢使用 `websearch_to_tsquery()`
+- 使用 `PGroonga` 支援中文斷詞
+- 查詢使用 `&@~` 運算子或 `pgroonga.match_search`
 
 ### RRF 規則
 - 採用 `Reciprocal Rank Fusion`
@@ -129,7 +129,7 @@
 6. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
 7. `table` child 優先保留整表，超大表格才依 row groups 切分
 8. 產生 embedding
-9. 產生 FTS `tsvector`
+9. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
 10. 寫入 `document_chunks`
 11. 更新文件狀態
 
@@ -157,13 +157,12 @@
 
 ## 未來雲端部署策略 (Supabase)
 
-為降低維運成本並提升擴充性，專案計畫支援基於 Supabase 的雲端託管架構。此策略的核心為 **「SaaS 驅動的高效架構 + 本地 Docker 開發一致性」**：
+為降低維運成本並提升擴充性，專案計畫支援基於 Supabase 的雲端託管架構。此策略的核心為 **「SaaS 驅動的高效資料層 + 本地 Docker 開發一致性」**：
 
-- **高效檢索 (PGroonga + RPC)**：利用 Supabase Cloud 原生支援的 **PGroonga** 擴充，將向量、條件過濾與中文分詞檢索合併在資料庫層 single RPC 完成，取代原本分散在 Python 層的檢索邏輯。
-- **混合認證彈性 (Auth Hooks)**：預設使用一站式 Supabase Auth，亦可透過 **Auth Hooks** 無縫介接外部 Keycloak 或 Auth0 作為 IdP。
-- **儲存抽換**：相容標準 S3 協定，支援在 Supabase Storage 與 AWS S3 / MinIO 間快速切換。
-- **本地/地端支援**：開發階段將改用 **Supabase Local CLI**。這確保了開發者在離線環境中，依然能透過 Docker 運行一個與雲端生產環境行為一致的本地 Stack。
-- **基礎設施簡化**：遷移完成後，將**完整移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴**，大幅降低基礎設施的維護難度與映像檔體積。
+- **高效檢索資料層 (PGroonga + pgvector + candidate RPC)**：利用 Supabase Cloud 原生支援的 **PGroonga** 與 `pgvector`，將 SQL gate 所需過濾、向量召回與中文全文召回放在資料庫側完成；最終 `RRF`、未來 ranking rules、rerank 與 assembler 仍保留在 Python 層，以維持可測試性與規則擴充彈性。
+- **單一路徑認證與儲存**：目前正式支援 `Keycloak` 作為身分來源，`MinIO / filesystem` 作為儲存後端；多 provider auth/storage 不在本輪完成範圍。
+- **本地/地端支援**：開發階段優先採用 **Docker Compose** 直接啟動 Supabase Postgres、API、Worker、Keycloak、MinIO 與 Web，降低額外 CLI 安裝門檻，並維持地端自架一致性。
+- **基礎設施簡化**：遷移完成後，將**完整移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴**，大幅降低基礎設施維護難度與映像檔體積。
 
 ## 非功能性要求
 
@@ -180,7 +179,6 @@
 
 ## 風險與假設
 
-- `pg_jieba` 必須使用指定 fork，並固定到 commit SHA
 - Keycloak token 中需穩定提供 `groups` claim；若 client mapper 缺失，group-based access 將無法成立
 - Rerank 候選數與 chunk 長度必須受控，避免成本失控
 - 本專案預設為單一組織、單 realm

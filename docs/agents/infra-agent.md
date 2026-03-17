@@ -16,7 +16,7 @@
 - 可重現建置所需的固定輸入
 
 ## 範圍內服務
-- postgres（自訂 image，含 pgvector + pg_jieba）
+- postgres (使用 Supabase / PGroonga 支援繁體中文)
 - redis
 - minio
 - keycloak
@@ -26,7 +26,6 @@
 - web
 
 ## 關鍵業務 / 穩定性規則
-- pg_jieba 必須使用指定 fork 與固定 commit SHA
 - build 必須可重現
 - 啟動方式要清楚且可文件化
 - 本機開發流程應接近一鍵啟動
@@ -44,7 +43,6 @@
 ## 禁止事項
 - MVP 階段不要導入 Kubernetes 或更重的基礎設施。
 - 不要隱藏必要 credentials 或 bootstrap 步驟。
-- 不要讓 pg_jieba 的來源與版本漂移。
 - 未被要求時，不要把部署平台決策混進本機開發基礎設施。
 
 ## 部署建議

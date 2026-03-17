@@ -1,12 +1,14 @@
 """Internal retrieval service 與 rerank provider 測試。"""
 
+from uuid import uuid4
+
 from fastapi import HTTPException
-from sqlalchemy import select
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import Integer, String, select
+from sqlalchemy.dialects.postgresql import UUID
 
 from app.auth.verifier import CurrentPrincipal
-from app.core.settings import AppSettings
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
+from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.reranking import (
     CohereRerankProvider,
     DeterministicRerankProvider,
@@ -14,11 +16,19 @@ from app.services.reranking import (
     build_rerank_provider,
 )
 from app.services.retrieval import (
+    _build_match_chunks_rpc_statement,
+    _apply_python_rrf,
+    _apply_ranking_policy,
     _build_rerank_document_text,
-    _configure_postgres_hnsw_search,
-    build_postgres_fts_recall_statement,
+    RankedChunkMatch,
     retrieve_area_candidates,
 )
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
 
 
 def test_build_rerank_provider_supports_deterministic_and_cohere(app_settings) -> None:
@@ -62,14 +72,30 @@ def test_build_rerank_provider_requires_cohere_api_key(app_settings) -> None:
         raise AssertionError("預期缺少 COHERE_API_KEY 時應拋出 ValueError。")
 
 
+def test_build_match_chunks_rpc_statement_uses_postgres_bind_types() -> None:
+    """`match_chunks` RPC statement 應明確綁定 PostgreSQL 參數型別。"""
+
+    statement = _build_match_chunks_rpc_statement()
+    bind_params = statement._bindparams
+    query_embedding_type = bind_params["query_embedding"].type
+
+    assert Vector is not None
+    assert isinstance(query_embedding_type, Vector)
+    assert getattr(query_embedding_type, "dim", None) == DEFAULT_EMBEDDING_DIMENSIONS
+    assert isinstance(bind_params["query_text"].type, String)
+    assert isinstance(bind_params["area_id"].type, UUID)
+    assert isinstance(bind_params["vector_top_k"].type, Integer)
+    assert isinstance(bind_params["fts_top_k"].type, Integer)
+
+
 def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session, app_settings) -> None:
     """retrieval 應只回 ready 文件的 child chunks，並保留 rerank metadata。"""
 
-    area = Area(id="area-retrieval-ready", name="Retrieval Ready")
+    area = Area(id=_uuid(), name="Retrieval Ready")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
     ready_document = Document(
-        id="document-ready",
+        id=_uuid(),
         area_id=area.id,
         file_name="ready.md",
         content_type="text/markdown",
@@ -78,7 +104,7 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
         status=DocumentStatus.ready,
     )
     uploaded_document = Document(
-        id="document-uploaded",
+        id=_uuid(),
         area_id=area.id,
         file_name="uploaded.md",
         content_type="text/markdown",
@@ -87,62 +113,57 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
         status=DocumentStatus.uploaded,
     )
     db_session.add_all([ready_document, uploaded_document])
-    db_session.add_all(
-        [
-            DocumentChunk(
-                id="chunk-parent",
-                document_id=ready_document.id,
-                parent_chunk_id=None,
-                chunk_type=ChunkType.parent,
-                structure_kind=ChunkStructureKind.text,
-                position=0,
-                section_index=0,
-                child_index=None,
-                heading="Parent",
-                content="中文檢索 parent",
-                content_preview="中文檢索 parent",
-                char_count=11,
-                start_offset=0,
-                end_offset=11,
-            ),
-            DocumentChunk(
-                id="chunk-ready-child",
-                document_id=ready_document.id,
-                parent_chunk_id="chunk-parent",
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind.text,
-                position=1,
-                section_index=0,
-                child_index=0,
-                heading="Ready Child",
-                content="這是一段中文檢索內容 中文檢索",
-                content_preview="這是一段中文檢索內容 中文檢索",
-                char_count=15,
-                start_offset=0,
-                end_offset=15,
-                embedding=[0.1] * app_settings.embedding_dimensions,
-                fts_document="這是一段中文檢索內容 中文檢索",
-            ),
-            DocumentChunk(
-                id="chunk-uploaded-child",
-                document_id=uploaded_document.id,
-                parent_chunk_id=None,
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind.text,
-                position=0,
-                section_index=0,
-                child_index=0,
-                heading="Uploaded Child",
-                content="這是一段不該被看到的內容",
-                content_preview="這是一段不該被看到的內容",
-                char_count=12,
-                start_offset=0,
-                end_offset=12,
-                embedding=[0.2] * app_settings.embedding_dimensions,
-                fts_document="這是一段不該被看到的內容",
-            ),
-        ]
+    ready_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=ready_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Parent",
+        content="中文檢索 parent",
+        content_preview="中文檢索 parent",
+        char_count=11,
+        start_offset=0,
+        end_offset=11,
     )
+    ready_child = DocumentChunk(
+        id=_uuid(),
+        document_id=ready_document.id,
+        parent_chunk_id=ready_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Ready Child",
+        content="這是一段中文檢索內容 中文檢索",
+        content_preview="這是一段中文檢索內容 中文檢索",
+        char_count=15,
+        start_offset=0,
+        end_offset=15,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    uploaded_child = DocumentChunk(
+        id=_uuid(),
+        document_id=uploaded_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=0,
+        heading="Uploaded Child",
+        content="這是一段不該被看到的內容",
+        content_preview="這是一段不該被看到的內容",
+        char_count=12,
+        start_offset=0,
+        end_offset=12,
+        embedding=[0.2] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([ready_parent, ready_child, uploaded_child])
     db_session.commit()
 
     result = retrieve_area_candidates(
@@ -153,24 +174,24 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
         query="中文檢索",
     )
 
-    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-ready-child"]
+    assert [candidate.chunk_id for candidate in result.candidates] == [ready_child.id]
     assert result.candidates[0].source == "hybrid"
     assert result.candidates[0].rrf_rank == 1
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[0].rerank_applied is True
     assert result.trace.query == "中文檢索"
-    assert result.trace.candidates[0].chunk_id == "chunk-ready-child"
+    assert result.trace.candidates[0].chunk_id == ready_child.id
 
 
 def test_retrieve_area_candidates_reranks_only_top_n_and_keeps_rest_in_rrf_order(db_session, app_settings) -> None:
     """rerank 應只重排前 top-n 筆，其他結果維持原 RRF 順序。"""
 
     settings = app_settings.model_copy(update={"rerank_top_n": 2})
-    area = Area(id="area-retrieval-rerank", name="Retrieval Rerank")
+    area = Area(id=_uuid(), name="Retrieval Rerank")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
     document = Document(
-        id="document-rerank",
+        id=_uuid(),
         area_id=area.id,
         file_name="rerank.md",
         content_type="text/markdown",
@@ -179,64 +200,58 @@ def test_retrieve_area_candidates_reranks_only_top_n_and_keeps_rest_in_rrf_order
         status=DocumentStatus.ready,
     )
     db_session.add(document)
-    db_session.add_all(
-        [
-            DocumentChunk(
-                id="chunk-alpha",
-                document_id=document.id,
-                parent_chunk_id=None,
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind.text,
-                position=1,
-                section_index=0,
-                child_index=0,
-                heading="Alpha",
-                content="alpha",
-                content_preview="alpha",
-                char_count=5,
-                start_offset=0,
-                end_offset=5,
-                embedding=[0.1] * settings.embedding_dimensions,
-                fts_document="alpha",
-            ),
-            DocumentChunk(
-                id="chunk-beta",
-                document_id=document.id,
-                parent_chunk_id=None,
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind.text,
-                position=2,
-                section_index=0,
-                child_index=1,
-                heading="Beta",
-                content="alpha alpha alpha",
-                content_preview="alpha alpha alpha",
-                char_count=17,
-                start_offset=6,
-                end_offset=23,
-                embedding=[0.11] * settings.embedding_dimensions,
-                fts_document="alpha alpha alpha",
-            ),
-            DocumentChunk(
-                id="chunk-gamma",
-                document_id=document.id,
-                parent_chunk_id=None,
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind.table,
-                position=3,
-                section_index=0,
-                child_index=2,
-                heading="Gamma",
-                content="| item | value |\n| --- | --- |\n| alpha | 1 |",
-                content_preview="| item | value |",
-                char_count=46,
-                start_offset=24,
-                end_offset=70,
-                embedding=[0.12] * settings.embedding_dimensions,
-                fts_document="alpha",
-            ),
-        ]
+    alpha_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Alpha",
+        content="alpha",
+        content_preview="alpha",
+        char_count=5,
+        start_offset=0,
+        end_offset=5,
+        embedding=[0.1] * settings.embedding_dimensions,
     )
+    beta_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Beta",
+        content="alpha alpha alpha",
+        content_preview="alpha alpha alpha",
+        char_count=17,
+        start_offset=6,
+        end_offset=23,
+        embedding=[0.11] * settings.embedding_dimensions,
+    )
+    gamma_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.table,
+        position=3,
+        section_index=0,
+        child_index=2,
+        heading="Gamma",
+        content="| item | value |\n| --- | --- |\n| alpha | 1 |",
+        content_preview="| item | value |",
+        char_count=46,
+        start_offset=24,
+        end_offset=70,
+        embedding=[0.12] * settings.embedding_dimensions,
+    )
+    db_session.add_all([alpha_chunk, beta_chunk, gamma_chunk])
     db_session.commit()
 
     result = retrieve_area_candidates(
@@ -247,7 +262,7 @@ def test_retrieve_area_candidates_reranks_only_top_n_and_keeps_rest_in_rrf_order
         query="alpha",
     )
 
-    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-beta", "chunk-alpha", "chunk-gamma"]
+    assert [candidate.chunk_id for candidate in result.candidates] == [beta_chunk.id, alpha_chunk.id, gamma_chunk.id]
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[1].rerank_rank == 2
     assert result.candidates[2].rerank_rank is None
@@ -260,11 +275,11 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
 ) -> None:
     """rerank runtime 失敗時，retrieval 應回退到 RRF 結果。"""
 
-    area = Area(id="area-retrieval-fallback", name="Retrieval Fallback")
+    area = Area(id=_uuid(), name="Retrieval Fallback")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
     document = Document(
-        id="document-fallback",
+        id=_uuid(),
         area_id=area.id,
         file_name="fallback.md",
         content_type="text/markdown",
@@ -273,26 +288,24 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
         status=DocumentStatus.ready,
     )
     db_session.add(document)
-    db_session.add(
-        DocumentChunk(
-            id="chunk-fallback",
-            document_id=document.id,
-            parent_chunk_id=None,
-            chunk_type=ChunkType.child,
-            structure_kind=ChunkStructureKind.text,
-            position=1,
-            section_index=0,
-            child_index=0,
-            heading="Fallback",
-            content="fallback alpha",
-            content_preview="fallback alpha",
-            char_count=14,
-            start_offset=0,
-            end_offset=14,
-            embedding=[0.2] * app_settings.embedding_dimensions,
-            fts_document="fallback alpha",
-        )
+    fallback_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Fallback",
+        content="fallback alpha",
+        content_preview="fallback alpha",
+        char_count=14,
+        start_offset=0,
+        end_offset=14,
+        embedding=[0.2] * app_settings.embedding_dimensions,
     )
+    db_session.add(fallback_chunk)
     db_session.commit()
 
     class FailingRerankProvider:
@@ -322,7 +335,7 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
         query="alpha",
     )
 
-    assert [candidate.chunk_id for candidate in result.candidates] == ["chunk-fallback"]
+    assert [candidate.chunk_id for candidate in result.candidates] == [fallback_chunk.id]
     assert result.candidates[0].rerank_applied is False
     assert result.candidates[0].rerank_rank is None
     assert result.trace.candidates[0].rerank_applied is False
@@ -331,7 +344,7 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
 def test_retrieve_area_candidates_returns_same_404_for_missing_and_unauthorized(db_session, app_settings) -> None:
     """未授權 area 與不存在 area 的 retrieval 都應回相同 404。"""
 
-    area = Area(id="area-retrieval-secret", name="Retrieval Secret")
+    area = Area(id=_uuid(), name="Retrieval Secret")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -369,48 +382,6 @@ def test_retrieve_area_candidates_returns_same_404_for_missing_and_unauthorized(
     assert getattr(unauthorized_error, "detail", None) == getattr(missing_error, "detail", None)
 
 
-def test_build_postgres_fts_recall_statement_uses_project_text_search_config(app_settings) -> None:
-    """FTS query builder 應使用專案指定的 text search config。"""
-
-    statement = build_postgres_fts_recall_statement(settings=app_settings, area_id="area-1", query="中文 檢索")
-    compiled = statement.compile(dialect=postgresql.dialect())
-    compiled_sql = str(compiled)
-
-    assert "websearch_to_tsquery" in compiled_sql
-    assert "deep_agent_jieba" in str(compiled.params.values())
-    assert "ts_rank_cd" in compiled_sql
-    assert "@@" in compiled_sql
-
-
-def test_configure_postgres_hnsw_search_sets_iterative_scan_and_ef_search(app_settings) -> None:
-    """HNSW 查詢前應設定 iterative scan 與 ef_search。"""
-
-    statements: list[tuple[str, dict[str, object] | None]] = []
-
-    class FakeSession:
-        """記錄 SQL 設定語句的最小 session 替身。"""
-
-        def execute(self, statement, params=None) -> None:
-            """記錄 execute 呼叫內容。
-
-            參數：
-            - `statement`：待執行 SQLAlchemy statement。
-            - `params`：statement 綁定參數。
-
-            回傳：
-            - `None`：此替身只記錄呼叫，不實際執行 SQL。
-            """
-
-            statements.append((str(statement), params))
-
-    _configure_postgres_hnsw_search(session=FakeSession(), settings=app_settings)  # type: ignore[arg-type]
-
-    assert statements == [
-        ("SET LOCAL hnsw.iterative_scan = 'strict_order'", None),
-        ("SET LOCAL hnsw.ef_search = :ef_search", {"ef_search": app_settings.retrieval_hnsw_ef_search}),
-    ]
-
-
 def test_build_rerank_document_text_truncates_to_cost_guardrail() -> None:
     """rerank 文件文字應受最大字元數限制。"""
 
@@ -433,10 +404,120 @@ def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:
     assert first_scores == second_scores
 
 
+def test_apply_python_rrf_merges_vector_and_fts_ranks_stably(app_settings) -> None:
+    """Python RRF 應能穩定合併 vector 與 FTS ranks。"""
+
+    document = Document(
+        id=_uuid(),
+        area_id=_uuid(),
+        file_name="rrf.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="area/rrf/rrf.md",
+        status=DocumentStatus.ready,
+    )
+    vector_only = RankedChunkMatch(
+        chunk=DocumentChunk(
+            id=_uuid(),
+            document_id=document.id,
+            parent_chunk_id=None,
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind.text,
+            position=2,
+            section_index=0,
+            child_index=1,
+            heading="Vector",
+            content="vector",
+            content_preview="vector",
+            char_count=6,
+            start_offset=0,
+            end_offset=6,
+        ),
+        vector_rank=1,
+    )
+    hybrid = RankedChunkMatch(
+        chunk=DocumentChunk(
+            id=_uuid(),
+            document_id=document.id,
+            parent_chunk_id=None,
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind.text,
+            position=1,
+            section_index=0,
+            child_index=0,
+            heading="Hybrid",
+            content="hybrid",
+            content_preview="hybrid",
+            char_count=6,
+            start_offset=7,
+            end_offset=13,
+        ),
+        vector_rank=3,
+        fts_rank=1,
+    )
+    fts_only = RankedChunkMatch(
+        chunk=DocumentChunk(
+            id=_uuid(),
+            document_id=document.id,
+            parent_chunk_id=None,
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind.text,
+            position=3,
+            section_index=0,
+            child_index=2,
+            heading="FTS",
+            content="fts",
+            content_preview="fts",
+            char_count=3,
+            start_offset=14,
+            end_offset=17,
+        ),
+        fts_rank=2,
+    )
+
+    merged = _apply_python_rrf(matches=[vector_only, hybrid, fts_only], settings=app_settings)
+
+    assert [match.chunk.heading for match in merged] == ["Hybrid", "Vector", "FTS"]
+    assert [match.rrf_rank for match in merged] == [1, 2, 3]
+    assert merged[0].rrf_score > merged[1].rrf_score > merged[2].rrf_score
+
+
+def test_apply_ranking_policy_is_currently_pass_through(app_settings) -> None:
+    """ranking policy hook 在本輪應維持 pass-through。"""
+
+    matches = [
+        RankedChunkMatch(
+            chunk=DocumentChunk(
+                id=_uuid(),
+                document_id=_uuid(),
+                parent_chunk_id=None,
+                chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind.text,
+                position=1,
+                section_index=0,
+                child_index=0,
+                heading="Policy",
+                content="policy",
+                content_preview="policy",
+                char_count=6,
+                start_offset=0,
+                end_offset=6,
+            ),
+            vector_rank=1,
+            rrf_rank=1,
+            rrf_score=0.9,
+        )
+    ]
+
+    ranked = _apply_ranking_policy(matches=matches, query="policy", settings=app_settings)
+
+    assert ranked is matches
+
+
 def test_internal_retrieval_pipeline_from_upload_to_rerank(client, app, db_session, app_settings) -> None:
     """upload -> inline ingest -> retrieval rerank 的近似 E2E 路徑應可重跑。"""
 
-    area = Area(id="area-retrieval-e2e", name="Retrieval E2E")
+    area = Area(id=_uuid(), name="Retrieval E2E")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
@@ -456,7 +537,6 @@ def test_internal_retrieval_pipeline_from_upload_to_rerank(client, app, db_sessi
     try:
         stored_children = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
         assert any(chunk.embedding is not None for chunk in stored_children if chunk.chunk_type == ChunkType.child)
-        assert any(chunk.fts_document for chunk in stored_children if chunk.chunk_type == ChunkType.child)
 
         result = retrieve_area_candidates(
             session=session,

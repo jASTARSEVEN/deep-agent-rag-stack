@@ -124,7 +124,6 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     start_offset=0,
                     end_offset=68,
                     embedding=[0.2] * 1536,
-                    fts_document="Reader intro content explains the reader policy and citations behavior.",
                 ),
                 DocumentChunk(
                     id="chunk-maintainer-parent",
@@ -158,7 +157,6 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     start_offset=0,
                     end_offset=69,
                     embedding=[0.21] * 1536,
-                    fts_document="Maintainer intro content explains upload reindex and chat behavior.",
                 ),
             ]
         )

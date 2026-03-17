@@ -1,10 +1,12 @@
 """JWT 驗證與 principal 解析元件。"""
 
 from dataclasses import dataclass
+from threading import Lock
 
 import jwt
 from jwt import InvalidTokenError as JwtLibraryInvalidTokenError
 from jwt import PyJWKClient
+from jwt.exceptions import PyJWKClientConnectionError
 
 from app.core.settings import AppSettings
 
@@ -15,6 +17,10 @@ TEST_TOKEN_PREFIX = "test::"
 
 class InvalidTokenError(ValueError):
     """代表 token 無法通過驗證或缺少必要 claims。"""
+
+
+class AuthServiceUnavailableError(RuntimeError):
+    """代表外部驗證服務暫時不可用，無法完成 token 驗證。"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,9 +63,63 @@ class KeycloakJwtVerifier(TokenVerifier):
         - `None`：此建構子只負責初始化 verifier 狀態。
         """
 
-        self._jwks_client = PyJWKClient(settings.keycloak_jwks_url)
+        self._jwks_url = settings.keycloak_jwks_url
         self._issuer = settings.keycloak_issuer
         self._groups_claim = settings.keycloak_groups_claim
+        self._jwks_client_lock = Lock()
+        self._jwks_client = self._build_jwks_client()
+
+    def _build_jwks_client(self) -> PyJWKClient:
+        """建立新的 JWKS client。
+
+        參數：
+        - 無
+
+        回傳：
+        - `PyJWKClient`：用來抓取與快取 Keycloak 簽章金鑰的 client。
+        """
+
+        return PyJWKClient(self._jwks_url)
+
+    def _refresh_jwks_client(self) -> PyJWKClient:
+        """在 JWKS 連線異常時重建 client。
+
+        參數：
+        - 無
+
+        回傳：
+        - `PyJWKClient`：重建後的 JWKS client。
+        """
+
+        with self._jwks_client_lock:
+            self._jwks_client = self._build_jwks_client()
+            return self._jwks_client
+
+    def _get_signing_key(self, token: str):
+        """取得 token 對應的簽章金鑰，必要時重建 JWKS client 後重試一次。
+
+        參數：
+        - `token`：待驗證的 Keycloak access token。
+
+        回傳：
+        - `PyJWK`：可供 JWT 驗證使用的簽章金鑰。
+
+        風險：
+        - 若 Keycloak JWKS endpoint 暫時不可用，這裡只會重試一次，避免在驗證路徑無限阻塞。
+        """
+
+        last_error: PyJWKClientConnectionError | None = None
+        for attempt in range(2):
+            try:
+                return self._jwks_client.get_signing_key_from_jwt(token)
+            except PyJWKClientConnectionError as exc:
+                last_error = exc
+                if attempt == 0:
+                    self._refresh_jwks_client()
+                    continue
+                raise AuthServiceUnavailableError("目前無法連線到 Keycloak 驗證服務，請稍後再試。") from exc
+
+        raise AuthServiceUnavailableError("目前無法連線到 Keycloak 驗證服務，請稍後再試。") from last_error
 
     def verify(self, token: str) -> CurrentPrincipal:
         """驗證 Keycloak JWT 並解析 principal。
@@ -78,7 +138,7 @@ class KeycloakJwtVerifier(TokenVerifier):
         """
 
         try:
-            signing_key = self._jwks_client.get_signing_key_from_jwt(token)
+            signing_key = self._get_signing_key(token)
             payload = jwt.decode(
                 token,
                 signing_key.key,

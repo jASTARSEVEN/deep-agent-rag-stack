@@ -6,7 +6,7 @@
 目前定位：分階段實作中的 MVP  
 固定技術棧：
 - FastAPI
-- PostgreSQL + pgvector + pg_jieba
+- PostgreSQL + pgvector + PGroonga (Supabase)
 - Celery + Redis
 - MinIO
 - Keycloak
@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 5.1 — Chat MVP on LangGraph Server`
+當前主階段：`Phase 6 — Supabase & PGroonga Migration (Completed)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -30,6 +30,8 @@
 - `Phase 4.1` Retrieval foundation 已完成
 - `Phase 4.2` minimal rerank slice 已完成
 - `Phase 4.2` table-aware retrieval assembler slice 已完成
+- `Phase 5.1` Chat MVP on LangGraph Server 已完成
+- `Phase 6` Supabase & PGroonga Migration 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
@@ -42,6 +44,8 @@
 - 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
+- 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
+- 已完成將 `match_chunks` 收斂為資料庫候選召回 RPC；最終 `RRF`、ranking policy、rerank 與 assembler 由 Python 層負責
 
 ## 已完成功能
 
@@ -62,7 +66,7 @@
 
 ### Phase 1 — 已完成的 MVP 基礎
 - API settings 已延伸為 app / auth / db 所需的最小設定集
-- `apps/api` 已加入 SQLAlchemy 與 Alembic migration skeleton
+- `apps/api` 已加入 SQLAlchemy ORM 模型與 metadata
 - 已建立 `areas`、`area_user_roles`、`area_group_roles`、`documents`、`ingest_jobs` 最小資料模型
 - 已建立 Bearer token 驗證介面與 `sub` / `groups` principal 解析
 - 已建立 effective role 計算與 deny-by-default area access-check service
@@ -118,13 +122,13 @@
 - API 與 worker 測試已補 Markdown table、HTML table 與 table row-group split 驗證
 
 ### Phase 4.1 — 已完成的 retrieval foundation
-- 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` 與 `fts_document` SQL-first 欄位
+- 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
 - 已補 worker 與 inline ingest 的 indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
 - 已導入 embedding provider abstraction，初版支援 `openai`，並保留 `deterministic` 供離線測試
-- 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall 與 `RRF` merge
-- 已補 PostgreSQL `pg_jieba` extension、繁體中文詞庫固定化與 `deep_agent_jieba` text search configuration
+- 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
+- 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba
 - 已將 vector ANN index 由 `ivfflat` 切換為 `hnsw`，並補上 `documents(area_id, status)` retrieval filter index
-- API 與 worker 測試已補 embeddings/FTS payload、retrieval same-404、FTS builder 與 hybrid recall 驗證
+- API 與 worker 測試已補 embeddings、retrieval same-404 與 hybrid recall (PGroonga) 驗證
 
 ### Phase 4.2 — 已完成的 minimal rerank slice
 - 已在 API 端加入 rerank provider abstraction，支援 `deterministic` 與 `cohere`
@@ -151,7 +155,16 @@
 - 已實作 `AccessModal` 負責區域權限管理，提供彈窗式角色與權限設定介面
 - 已完成從「單純 Chat MVP」向「現代化 RAG 戰情室體驗」的 UI/UX 轉型
 
-### Phase 5.1 — 進行中的 Chat MVP on LangGraph Server
+### Phase 6 — 已完成的 Supabase & PGroonga Migration
+- 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba
+- 已實作 `match_chunks` candidate-generation RPC，供 PostgreSQL 路徑回傳受 SQL gate 保護的 vector/FTS 候選與排序輸入
+- 已將最終 `RRF`、未來 ranking policy、rerank 與 assembler 保留在 Python 層，為後續 business rules 預留擴充點
+- 已移除未接線的 multi-provider auth/storage staged 內容，正式路徑維持 Keycloak + MinIO/filesystem
+- 已恢復 Alembic 作為既有資料庫升級路徑，直到專用 migration runner 落地
+- 已移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴，簡化基礎設施
+- 已更新相關環境變數範本與系統文件
+
+### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
 - 已將 `CHAT_PROVIDER=deepagents` 改為真正使用 `create_deep_agent()` 的主 agent 回答路徑，不再映射為 OpenAI Responses provider
 - 已將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 assembler 收斂為單一 `retrieve_area_contexts` tool，交由主 agent 自行判斷是否呼叫

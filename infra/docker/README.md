@@ -13,8 +13,6 @@ This directory contains the container build definitions used by the local Docker
 
 ## Environment Variables
 
-- `PG_JIEBA_REPO_URL`
-- `PG_JIEBA_REF`
 - App-level variables are injected through Compose rather than hardcoded here.
 
 ## Main Directory Structure
@@ -22,7 +20,6 @@ This directory contains the container build definitions used by the local Docker
 - `api`: FastAPI container image
 - `worker`: Celery worker container image
 - `web`: React frontend container image
-- `postgres`: Postgres image with built-in `pg_jieba`, a pinned Traditional Chinese dictionary, and init SQL
 
 ## Public Interfaces
 

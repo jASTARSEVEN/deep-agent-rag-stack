@@ -1,7 +1,7 @@
 # worker-agent
 
 ## 目的
-負責背景 ingest 與索引流程，包含 parsing、chunking、embeddings、FTS `tsvector` 生成、狀態轉換與 reindex 流程。
+負責背景 ingest 與索引流程，包含 parsing、chunking、embeddings、狀態轉換與 reindex 流程。
 
 ## 負責範圍
 - Celery tasks
@@ -9,7 +9,6 @@
 - 依副檔名選擇 loader
 - chunking pipeline
 - embedding 生成
-- 使用 pg_jieba 相容策略建立 FTS `tsvector`
 - 寫入 `document_chunks`
 - document / job status 更新
 - retry / reindex 流程

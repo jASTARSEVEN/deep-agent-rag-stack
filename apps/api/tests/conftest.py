@@ -53,7 +53,6 @@ def app_settings(tmp_path: Path) -> AppSettings:
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
         EMBEDDING_DIMENSIONS=1536,
-        TEXT_SEARCH_CONFIG="deep_agent_jieba",
         RETRIEVAL_VECTOR_TOP_K=8,
         RETRIEVAL_FTS_TOP_K=8,
         RETRIEVAL_MAX_CANDIDATES=12,

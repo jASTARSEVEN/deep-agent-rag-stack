@@ -89,9 +89,9 @@ def build_assembled_context_payload(retrieval_result: RetrievalToolResult | None
     return [
         {
             "context_index": index,
-            "document_id": context.document_id,
-            "parent_chunk_id": context.parent_chunk_id,
-            "child_chunk_ids": context.chunk_ids,
+            "document_id": str(context.document_id),
+            "parent_chunk_id": str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
+            "child_chunk_ids": [str(chunk_id) for chunk_id in context.chunk_ids],
             "structure_kind": context.structure_kind.value,
             "heading": context.heading,
             "excerpt": context.assembled_text,
@@ -182,9 +182,9 @@ def build_chat_citations(*, assembled_result: AssembledRetrievalResult, max_item
         references.append(
             ChatCitation(
                 context_index=index,
-                document_id=context.document_id,
-                parent_chunk_id=context.parent_chunk_id,
-                child_chunk_ids=context.chunk_ids,
+                document_id=str(context.document_id),
+                parent_chunk_id=str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
+                child_chunk_ids=[str(chunk_id) for chunk_id in context.chunk_ids],
                 heading=context.heading,
                 structure_kind=context.structure_kind,
                 start_offset=context.start_offset,
