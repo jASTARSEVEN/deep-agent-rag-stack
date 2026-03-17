@@ -3,11 +3,20 @@
 import type { ChatMessageViewModel, ChatToolCallState } from "../../../lib/types";
 import type { LangGraphChatStreamUpdate } from "../transport/langgraph";
 
+/** 可覆寫的助理訊息預設值。 */
+interface AssistantMessageOverrides {
+  /** 訊息 id。 */
+  id?: string;
+  /** 初始內容。 */
+  content?: string;
+  /** 是否正在串流。 */
+  isStreaming?: boolean;
+}
 
 /** 建立新的使用者訊息。 */
-export function createUserMessage(question: string): ChatMessageViewModel {
+export function createUserMessage(question: string, id?: string): ChatMessageViewModel {
   return {
-    id: `user-${Date.now()}`,
+    id: id ?? `user-${Date.now()}`,
     role: "user",
     content: question,
     citations: [],
@@ -21,15 +30,15 @@ export function createUserMessage(question: string): ChatMessageViewModel {
 
 
 /** 建立新的助理 placeholder 訊息。 */
-export function createAssistantMessage(): ChatMessageViewModel {
+export function createAssistantMessage(overrides: AssistantMessageOverrides = {}): ChatMessageViewModel {
   return {
-    id: `assistant-${Date.now()}`,
+    id: overrides.id ?? `assistant-${Date.now()}`,
     role: "assistant",
-    content: "",
+    content: overrides.content ?? "",
     citations: [],
     phaseState: null,
     toolCalls: [],
-    isStreaming: true,
+    isStreaming: overrides.isStreaming ?? true,
     isError: false,
     usedKnowledgeBase: null,
   };

@@ -175,6 +175,7 @@
 - 已將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 assembler 收斂為單一 `retrieve_area_contexts` tool，交由主 agent 自行判斷是否呼叫
 - Web `/areas` 已新增多輪 thread chat panel，以 `area_id -> thread_id` 維持同 area 對話脈絡
 - 已將既有 Web chat transport 改為 LangGraph SDK 預設 thread/run 端點，不再以自訂 bridge chat routes 作正式路徑
+- 已將 LangGraph built-in thread state 正式接上 `messages` 累積記憶；同一 area thread 的多輪對話可延續先前上下文，前端切回既有 thread 時也會回填歷史訊息
 - 已將 graph 輸出升級為 assembled-context level contract，前端顯示單位與實際送進 LLM 的 context 單位對齊
 - 已將 Web chat stream 收斂為 LangGraph SDK `messages-tuple`、`custom` 與 `values` 事件；最終 answer / citations / assembled contexts / trace 直接來自 graph state
 - `custom` 事件目前已收斂為 `phase` 與 `tool_call`；token delta 正式透過 `messages-tuple` 傳遞

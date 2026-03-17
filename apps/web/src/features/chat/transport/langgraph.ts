@@ -15,6 +15,15 @@ const ASSISTANT_ID_STORAGE_KEY = "deep-agent.langgraph.assistant-id";
 /** LangGraph graph id；對應 `apps/api/langgraph.json` 的公開 graph 名稱。 */
 const GRAPH_ID = "agent";
 
+/** LangGraph thread state 內會出現的最小 message payload。 */
+interface LangGraphStateMessage {
+  /** LangChain / LangGraph message type。 */
+  type?: string;
+  /** OpenAI 風格 message role。 */
+  role?: string;
+  /** 訊息內容。 */
+  content?: unknown;
+}
 
 /** LangGraph chat stream 的單次更新。 */
 export interface LangGraphChatStreamUpdate {
@@ -159,6 +168,12 @@ function clearAssistantId(): void {
 }
 
 
+/** 讀取指定 area 目前 session 內的 thread id。 */
+function getAreaThreadId(areaId: string): string | null {
+  return readAreaThreadMap()[areaId] ?? null;
+}
+
+
 /** 確保目前 session 內有合法的 assistant UUID。 */
 function ensureAssistantId(): string {
   const existingValue = window.sessionStorage.getItem(ASSISTANT_ID_STORAGE_KEY);
@@ -173,7 +188,7 @@ function ensureAssistantId(): string {
 
 /** 確保指定 area 有對應的 thread id。 */
 async function ensureAreaThreadId(areaId: string, accessTokenGetter: AccessTokenGetter): Promise<string> {
-  const existingThreadId = readAreaThreadMap()[areaId];
+  const existingThreadId = getAreaThreadId(areaId);
   if (existingThreadId) {
     return existingThreadId;
   }
@@ -213,6 +228,91 @@ async function ensureAssistant(client: Client): Promise<string> {
 }
 
 
+/** 將 LangGraph thread state message 轉成純文字。 */
+function flattenStateMessageContent(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return "";
+  }
+  return content
+    .flatMap((item) => {
+      if (typeof item === "string") {
+        return [item];
+      }
+      if (!isRecord(item)) {
+        return [];
+      }
+      if (typeof item.text === "string") {
+        return [item.text];
+      }
+      if (item.type === "text" && typeof item.content === "string") {
+        return [item.content];
+      }
+      return [];
+    })
+    .join("");
+}
+
+
+/** 將 LangGraph thread state messages 轉成前端 chat message view models。 */
+export function mapThreadStateMessagesToChatMessages(
+  messages: LangGraphStateMessage[],
+): Array<{ id: string; role: "user" | "assistant"; content: string }> {
+  return messages.flatMap((message, index) => {
+    const role =
+      message.type === "human" || message.role === "user"
+        ? "user"
+        : (message.type === "ai" || message.role === "assistant" ? "assistant" : null);
+    const content = flattenStateMessageContent(message.content).trim();
+    if (!role || !content) {
+      return [];
+    }
+    return [
+      {
+        id: `thread-${index}-${role}`,
+        role,
+        content,
+      },
+    ];
+  });
+}
+
+
+/** 讀取指定 area 目前 thread 的對話歷史。 */
+export async function loadAreaThreadHistory(
+  areaId: string,
+  accessTokenGetter: AccessTokenGetter,
+): Promise<Array<{ id: string; role: "user" | "assistant"; content: string }>> {
+  const threadId = getAreaThreadId(areaId);
+  if (!threadId) {
+    return [];
+  }
+
+  const token = await accessTokenGetter();
+  if (!token) {
+    return [];
+  }
+
+  const client = createLangGraphClient(token);
+  try {
+    const threadState = await client.threads.getState<{
+      messages?: LangGraphStateMessage[];
+    }>(threadId);
+    const stateMessages = Array.isArray(threadState.values?.messages) ? threadState.values.messages : [];
+    return mapThreadStateMessagesToChatMessages(stateMessages);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Thread") && message.includes("not found")) {
+      clearAreaThreadId(areaId);
+      return [];
+    }
+    throw error;
+  }
+}
+
+
 /** 以 LangGraph SDK stream 指定 area 的多輪 chat。 */
 export async function streamAreaThreadChat(
   areaId: string,
@@ -247,6 +347,12 @@ async function streamAreaThreadChatInternal(
       input: {
         area_id: areaId,
         question,
+        messages: [
+          {
+            role: "user",
+            content: question,
+          },
+        ],
       },
       streamMode: ["messages-tuple", "custom", "values"],
     } as never) as AsyncIterable<{ event?: string; data?: unknown }>;

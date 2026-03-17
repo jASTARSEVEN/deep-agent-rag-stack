@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable, Iterator
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.agent.deep_agents import build_main_agent
@@ -209,6 +210,7 @@ class DeepAgentsChatRuntime:
         settings: AppSettings,
         area_id: str,
         question: str,
+        conversation_messages: list[object] | None = None,
         writer: Callable[[dict[str, object]], None] | None = None,
     ) -> dict[str, object]:
         """執行 Deep Agents 回答，並回傳最終 graph state payload。
@@ -219,6 +221,7 @@ class DeepAgentsChatRuntime:
         - `settings`：API 執行期設定。
         - `area_id`：目標 area。
         - `question`：使用者提問。
+        - `conversation_messages`：目前 thread 已累積的對話訊息；若無則回退為單輪輸入。
         - `writer`：LangGraph custom event writer。
 
         回傳：
@@ -368,7 +371,12 @@ class DeepAgentsChatRuntime:
         streamed_answer_parts: list[str] = []
         with tracing_manager:
             for stream_item in main_agent.stream(
-                {"messages": [{"role": "user", "content": question}]},
+                {
+                    "messages": _build_agent_input_messages(
+                        question=question,
+                        conversation_messages=conversation_messages,
+                    )
+                },
                 stream_mode=["messages", "values"],
             ):
                 stream_mode, stream_payload = _normalize_agent_stream_item(stream_item)
@@ -425,6 +433,7 @@ class DeepAgentsChatRuntime:
             "citations": citations_payload,
             "assembled_contexts": assembled_contexts_payload,
             "trace": trace,
+            "raw_result": result,
         }
 
 
@@ -453,6 +462,22 @@ def build_chat_runtime(settings: AppSettings) -> DeterministicChatRuntime | Deep
     raise ValueError(f"不支援的 chat provider：{settings.chat_provider}；僅支援 deterministic 與 deepagents。")
 
 
+def _build_agent_input_messages(*, question: str, conversation_messages: list[object] | None) -> list[object]:
+    """建立送進 Deep Agents 的對話訊息列表。
+
+    參數：
+    - `question`：目前這一輪的使用者問題。
+    - `conversation_messages`：thread 內已累積的訊息列表。
+
+    回傳：
+    - `list[object]`：可直接送入 Deep Agents 的 message payload。
+    """
+
+    if isinstance(conversation_messages, list) and conversation_messages:
+        return conversation_messages
+    return [{"role": "user", "content": question}]
+
+
 def _extract_final_answer_text(result: object) -> str:
     """依官方建議，從 agent 最終 `messages` 取最後一則回答文字。"""
 
@@ -471,6 +496,40 @@ def _extract_final_answer_text(result: object) -> str:
     if isinstance(content, list):
         return _flatten_message_content(content)
     return ""
+
+
+def extract_final_assistant_message(result: object) -> dict[str, Any] | None:
+    """從 Deep Agents 最終結果擷取最後一則助理訊息。
+
+    參數：
+    - `result`：Deep Agents `values` stream 最終 payload。
+
+    回傳：
+    - `dict[str, Any] | None`：可回寫到 LangGraph thread state 的助理訊息；若不存在則回傳 `None`。
+    """
+
+    if not isinstance(result, dict):
+        return None
+    messages = result.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+    final_message = messages[-1]
+    if isinstance(final_message, dict):
+        message_type = final_message.get("type")
+        role = final_message.get("role")
+        if message_type == "ai" or role == "assistant":
+            return final_message
+        return None
+
+    message_type = getattr(final_message, "type", None)
+    message_content = getattr(final_message, "content", None)
+    if message_type != "ai":
+        return None
+    return {
+        "type": "ai",
+        "role": "assistant",
+        "content": message_content,
+    }
 
 
 def _normalize_agent_stream_item(stream_item: object) -> tuple[str | None, object]:

@@ -79,15 +79,16 @@
 9. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
-1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run
+1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run；每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
 2. LangGraph Server 先透過 custom auth 驗證 Bearer token
 3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
 4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
 5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 內固定套用 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler
 6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 assembled contexts 與 references；前端顯示單位與實際送進 LLM 的 context 單位一致
-7. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：最終 state 走 `values`，高層階段與工具呼叫資訊走 `custom`
-8. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
-9. 前端會將 Assembled Contexts、單一 context、工具輸入與工具輸出都以可縮放樹狀結構顯示
+7. LangGraph thread state 以 `messages` 作為正式的多輪記憶欄位；graph 會把本輪 assistant message 回寫到同一 thread，前端也可用 `threads.getState()` 恢復既有歷史
+8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：最終 state 走 `values`，高層階段與工具呼叫資訊走 `custom`
+9. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
+10. 前端會將 Assembled Contexts、單一 context、工具輸入與工具輸出都以可縮放樹狀結構顯示
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
@@ -164,11 +165,12 @@
 15. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意
 16. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫
 17. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
-18. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
-19. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
-20. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
-21. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
-22. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
+18. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
+19. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
+20. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
+21. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
+22. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
+23. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

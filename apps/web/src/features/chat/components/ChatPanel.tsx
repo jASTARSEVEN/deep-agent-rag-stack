@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { AccessTokenGetter } from "../../../lib/api";
 import type { ChatMessageViewModel } from "../../../lib/types";
 import { applyStreamUpdate, createAssistantMessage, createUserMessage, updateLastAssistantMessage } from "../state/messages";
-import { streamAreaThreadChat } from "../transport/langgraph";
+import { loadAreaThreadHistory, streamAreaThreadChat } from "../transport/langgraph";
 import { ContextViewer } from "./ContextViewer";
 import { ToolCallViewer } from "./ToolCallViewer";
 
@@ -39,8 +39,44 @@ export function ChatPanel({
 
   useEffect(() => {
     setChatQuestion(EMPTY_CHAT_INPUT);
-    setChatMessages([]);
-  }, [areaId]);
+    setIsSubmittingChat(false);
+
+    if (!areaId) {
+      setChatMessages([]);
+      return;
+    }
+
+    let isActive = true;
+    void loadAreaThreadHistory(areaId, accessTokenGetter)
+      .then((historyMessages) => {
+        if (!isActive) {
+          return;
+        }
+        setChatMessages(
+          historyMessages.map((message) =>
+            message.role === "user"
+              ? createUserMessage(message.content, message.id)
+              : createAssistantMessage({
+                  id: message.id,
+                  content: message.content,
+                  isStreaming: false,
+                }),
+          ),
+        );
+      })
+      .catch((historyError) => {
+        if (!isActive) {
+          return;
+        }
+        const errorMessage = historyError instanceof Error ? historyError.message : "無法載入對話歷史。";
+        setChatMessages([]);
+        onError(errorMessage);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [accessTokenGetter, areaId, onError]);
 
   async function handleChatSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();

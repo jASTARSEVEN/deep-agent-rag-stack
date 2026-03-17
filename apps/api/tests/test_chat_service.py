@@ -18,7 +18,12 @@ from app.db.models import (
     DocumentStatus,
     Role,
 )
-from app.chat.agent.runtime import DeepAgentsChatRuntime, DeterministicChatRuntime, build_chat_runtime
+from app.chat.agent.runtime import (
+    DeepAgentsChatRuntime,
+    DeterministicChatRuntime,
+    _build_agent_input_messages,
+    build_chat_runtime,
+)
 from app.services.retrieval_assembler import AssembledContext
 
 
@@ -172,6 +177,116 @@ def test_deepagents_runtime_exposes_single_retrieval_tool_without_keyword_gate(m
     assert result["trace"]["agent"]["retrieval_invoked"] is False
 
 
+def test_build_agent_input_messages_prefers_thread_history() -> None:
+    """Deep Agents 輸入應優先使用 LangGraph thread 已累積的歷史訊息。
+
+    參數：
+    - 無
+
+    回傳：
+    - `None`：僅驗證歷史訊息優先順序。
+    """
+
+    history_messages = [
+        {"role": "user", "content": "第一輪問題"},
+        {"role": "assistant", "content": "第一輪回答"},
+        {"role": "user", "content": "第二輪追問"},
+    ]
+
+    assert (
+        _build_agent_input_messages(
+            question="這個欄位不應被拿來覆蓋 history",
+            conversation_messages=history_messages,
+        )
+        == history_messages
+    )
+
+
+def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch) -> None:
+    """Deep Agents runtime 應把 LangGraph thread 累積的 messages 傳給主 agent。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：僅驗證多輪對話輸入來源。
+    """
+
+    captured_inputs: list[object] = []
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    class FakeAgent:
+        """記錄 agent 輸入並回傳固定答案。"""
+
+        def stream(self, agent_input, *, stream_mode):
+            """記錄主 agent 取得的輸入內容。
+
+            參數：
+            - `agent_input`：主 agent 的輸入 payload。
+            - `stream_mode`：要求的 stream modes。
+
+            回傳：
+            - `list[tuple[str, object]]`：固定串流結果。
+            """
+
+            captured_inputs.append(agent_input)
+            assert stream_mode == ["messages", "values"]
+            return iter(
+                [
+                    ("messages", ({"content": "這是多輪回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是多輪回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent())
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+    conversation_messages = [
+        {"role": "user", "content": "第一輪：知識區域是什麼？"},
+        {"role": "assistant", "content": "第一輪：知識區域是文件集合。"},
+        {"role": "user", "content": "第二輪：那它的權限怎麼控管？"},
+    ]
+
+    result = provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="第二輪：那它的權限怎麼控管？",
+        conversation_messages=conversation_messages,
+    )
+
+    assert result["answer"] == "這是多輪回答。"
+    assert captured_inputs == [{"messages": conversation_messages}]
+
+
 def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch) -> None:
     """Deep Agents 應透過 writer 發出階段與工具呼叫事件。
 
@@ -312,7 +427,7 @@ def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch)
         "contexts": [],
     }
     token_events = [event for event in emitted_events if event["type"] == "token"]
-    assert token_events == [{"type": "token", "delta": "這是帶搜尋流程的回答。"}]
+    assert token_events == []
 
 
 def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypatch) -> None:

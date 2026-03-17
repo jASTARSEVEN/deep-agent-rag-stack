@@ -1,14 +1,19 @@
-"""LangGraph public graph，僅負責將輸入交給 Deep Agents chat runtime。"""
+"""LangGraph public graph，負責將 thread state 交給正式 Deep Agents chat runtime。"""
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+from typing import Annotated, NotRequired, TypedDict
 
+from langgraph.graph.message import add_messages
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from app.auth.verifier import CurrentPrincipal
-from app.chat.agent.runtime import DeepAgentsChatRuntime, build_chat_runtime
+from app.chat.agent.runtime import (
+    DeepAgentsChatRuntime,
+    build_chat_runtime,
+    extract_final_assistant_message,
+)
 from app.chat.tools.retrieval import retrieve_area_contexts_tool
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
@@ -25,6 +30,8 @@ GRAPH_SESSION_FACTORY = create_session_factory(GRAPH_ENGINE)
 class ChatGraphState(TypedDict):
     """單輪 chat graph state。"""
 
+    # LangGraph thread 持久化的完整對話訊息列表。
+    messages: Annotated[list[dict[str, object]], add_messages]
     # 要提問的 area 識別碼。
     area_id: str
     # 使用者提問。
@@ -66,10 +73,13 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
                 settings=runtime_settings,
                 area_id=state["area_id"],
                 question=state["question"],
+                conversation_messages=list(state.get("messages", [])),
                 writer=get_stream_writer(),
             )
+            final_assistant_message = extract_final_assistant_message(result.get("raw_result"))
             return {
                 **state,
+                "messages": [final_assistant_message] if final_assistant_message is not None else [],
                 "answer": str(result.get("answer", "")),
                 "citations": list(result.get("citations", [])),
                 "assembled_contexts": list(result.get("assembled_contexts", [])),
@@ -89,6 +99,7 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
         )
         return {
             **state,
+            "messages": [{"role": "assistant", "content": answer}],
             "answer": answer,
             "citations": [item.model_dump(mode="json") for item in retrieval_tool_result.citations],
             "assembled_contexts": [
