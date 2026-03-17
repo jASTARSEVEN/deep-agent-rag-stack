@@ -289,21 +289,6 @@ class DeepAgentsChatRuntime:
                 }
             )
 
-        def emit_token_delta(*, delta: str) -> None:
-            """透過 LangGraph custom stream 發送回答 token 增量事件。
-
-            參數：
-            - `delta`：本次新增的回答文字片段。
-
-            回傳：
-            - `None`：僅透過 writer 發送事件。
-            """
-
-            log_stream_debug(event="token_emit", delta_preview=delta[:80], delta_length=len(delta))
-            if writer is None or not delta:
-                return
-            writer({"type": "token", "delta": delta})
-
         @tool
         def retrieve_area_contexts(focus_query: str | None = None) -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。"""
@@ -398,7 +383,6 @@ class DeepAgentsChatRuntime:
                                 delta_length=len(text_delta),
                             )
                         streamed_answer_parts.append(text_delta)
-                        emit_token_delta(delta=text_delta)
                     continue
                 if stream_mode == "values" and isinstance(stream_payload, dict):
                     log_stream_debug(

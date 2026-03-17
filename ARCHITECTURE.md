@@ -71,10 +71,12 @@
 1. Web 上傳檔案
 2. API 驗證請求並建立 `documents` / `ingest_jobs`
 3. API 將原始檔存入 MinIO
-4. Worker 執行 parse routing、parent section 建立與 child chunk 切分
-5. Worker 以 replace-all 方式重建 `document_chunks`
-6. Worker 為 child chunks 寫入 `embedding`
-7. Worker 更新 document/job 狀態為 `ready` 或 `failed`
+4. Worker 執行 parse routing；其中 `PDF` 會先經 provider-based parsing：`local` 走 LangChain PDF loader，`llamaparse` 先轉成 Markdown
+5. PDF 的 Markdown 會回到既有 Markdown parser，與 `TXT/MD/HTML` 一樣輸出 block-aware `ParsedDocument`
+6. Worker 依 ParsedDocument 建立 parent section 與 child chunk
+7. Worker 以 replace-all 方式重建 `document_chunks`
+8. Worker 為 child chunks 寫入 `embedding`
+9. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
 1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run
@@ -120,23 +122,29 @@
 1. `POST /areas/{area_id}/documents` 僅允許 `maintainer` 以上上傳單一文件
 2. API 先將原始檔寫入物件儲存，再建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`
 3. 正式環境由 Celery worker 執行 ingest；測試模式可走 inline ingest 以維持本機驗證可重跑
-4. Worker 目前真正解析 `TXT`、`Markdown` 與 `HTML`；其中 `Markdown / HTML` 已支援表格感知 chunking
-5. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks，再建立新 ingest job 重建 chunk tree
-6. `DELETE /documents/{document_id}` 會移除 document、相關 jobs、document chunks 與原始檔
-7. `GET /areas/{area_id}/documents`、`GET /documents/{document_id}`、`GET /ingest-jobs/{job_id}` 都必須先套 area access 邊界
+4. Worker 與 API inline ingest 目前真正解析 `TXT`、`Markdown`、`HTML` 與 `PDF`
+5. `PDF` 採 provider-based parsing：`PDF_PARSER_PROVIDER=local|llamaparse`；`llamaparse` 只使用標準 Markdown 輸出，不啟用 agentic mode
+6. `llamaparse` 路徑在進入既有 Markdown parser 前，會先清理常見頁碼 / 分隔符噪音；進入 chunking 前再做 PDF-specific block consolidation，優先合併同 heading 的碎片 text/table runs
+7. `local` PDF parser 僅提供自架 fallback 與基本文字擷取；不承諾表格高保真，也不支援 OCR / 掃描 PDF
+8. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks，再建立新 ingest job 重建 chunk tree
+9. `DELETE /documents/{document_id}` 會移除 document、相關 jobs、document chunks 與原始檔
+10. `GET /areas/{area_id}/documents`、`GET /documents/{document_id}`、`GET /ingest-jobs/{job_id}` 都必須先套 area access 邊界
 
 ### Document chunk tree
 1. `document_chunks` 採固定兩層結構：`parent -> child`
 2. parser 與 chunker 之間使用 block-aware contract：`ParsedDocument(normalized_text, source_format, blocks)` 與 `ParsedBlock(block_kind, heading, content, start_offset, end_offset)`
-3. `document_chunks` 除 `chunk_type` 外，另有 `structure_kind=text|table`，供後續 retrieval、citation 與 observability 直接辨識內容結構
-4. `parent` chunk 由 custom section builder 建立；TXT 以段落群組為主，Markdown 先以 heading 分界，再切出 `text/table` blocks，HTML 則由最小 parser 輸出 `text/table` blocks
-5. `table parent` 不與前後 `text parent` 合併；只有 `text parent` 會套用最小長度合併規則
-6. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
-7. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
-8. `child` chunk 才是後續 retrieval 的最小候選單位
-9. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
-10. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
-11. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+3. `PDF` 不直接寫入外部 SaaS chunk 結果；無論是 `local` 或 `llamaparse`，都必須先回到既有 parser/chunk tree contract
+4. `document_chunks` 除 `chunk_type` 外，另有 `structure_kind=text|table`，供後續 retrieval、citation 與 observability 直接辨識內容結構
+5. `parent` chunk 由 custom section builder 建立；TXT 以段落群組為主，Markdown 與 LlamaParse PDF Markdown 先以 heading 分界，再切出 `text/table` blocks，HTML 則由最小 parser 輸出 `text/table` blocks
+6. `PDF + llamaparse` 會先做一次 PDF-specific block consolidation，降低同 heading 下因 page noise、碎表格或過短 text block 造成的 parent fragmentation
+7. 若 `PDF + llamaparse` 命中同 heading 的短 `text -> table -> text` 模式，系統會建立單一 parent cluster，但仍保留 `text/table/text` children，避免破壞 table-aware retrieval 與 citations
+8. `table parent` 不與前後 `text parent` 合併；只有 `text parent` 會套用最小長度合併規則
+9. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
+10. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
+11. `child` chunk 才是後續 retrieval 的最小候選單位
+12. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
+13. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
+14. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
 
 ### Retrieval foundation
 1. retrieval 目前先作為 API 內部 service，不提供 public route

@@ -29,6 +29,45 @@ READER_TOKEN = "Bearer test::user-reader::/group/reader"
 # 無授權測試 token。
 OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
 
+# 可被 PyPDFLoader 正常擷取文字的最小 PDF 測試樣本。
+MINIMAL_TEXT_PDF = b"""%PDF-1.1
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 73 >>
+stream
+BT
+/F1 18 Tf
+50 100 Td
+(Deep Agent PDF local parser sample) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000063 00000 n 
+0000000122 00000 n 
+0000000248 00000 n 
+0000000371 00000 n 
+trailer
+<< /Root 1 0 R /Size 6 >>
+startxref
+441
+%%EOF
+"""
+
 
 def _uuid() -> str:
     """建立測試用 UUID 字串。"""
@@ -205,6 +244,136 @@ def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
     assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
 
 
+def test_upload_pdf_uses_local_parser_and_becomes_ready(client, db_session) -> None:
+    """local PDF parser 應能讓 PDF 在 inline ingest 下轉為 ready。"""
+
+    area = Area(id=_uuid(), name="Maintainer PDF Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("guide.pdf", MINIMAL_TEXT_PDF, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "ready"
+    assert payload["document"]["file_name"] == "guide.pdf"
+    assert payload["document"]["chunk_summary"]["total_chunks"] == 2
+
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert len(stored_chunks) == 2
+    assert all(chunk.structure_kind == ChunkStructureKind.text for chunk in stored_chunks)
+    assert any("Deep Agent PDF local parser sample" in chunk.content for chunk in stored_chunks)
+
+
+def test_upload_pdf_uses_llamaparse_markdown_when_enabled(client, db_session, app_settings, monkeypatch) -> None:
+    """llamaparse provider 應能將 Markdown 結果交回既有 parser 與 chunk tree。"""
+
+    app_settings.pdf_parser_provider = "llamaparse"
+    app_settings.llamaparse_api_key = "test-key"
+    monkeypatch.setattr(
+        "app.services.parsers._extract_pdf_markdown_with_llamaparse",
+        lambda *, payload, pdf_config: "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+    )
+    area = Area(id=_uuid(), name="Maintainer PDF Tables")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("report.pdf", MINIMAL_TEXT_PDF, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "ready"
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
+
+
+def test_upload_pdf_clusters_text_table_text_when_llamaparse_enabled(client, db_session, app_settings, monkeypatch) -> None:
+    """llamaparse PDF 的 `text -> table -> text` 應落成單一 parent cluster 與混合 children。"""
+
+    app_settings.pdf_parser_provider = "llamaparse"
+    app_settings.llamaparse_api_key = "test-key"
+    app_settings.chunk_min_parent_section_length = 800
+    monkeypatch.setattr(
+        "app.services.parsers._extract_pdf_markdown_with_llamaparse",
+        lambda *, payload, pdf_config: (
+            "# Overview\n\nIntro note\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n\nClosing note"
+        ),
+    )
+    area = Area(id=_uuid(), name="Maintainer PDF Cluster")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("cluster.pdf", MINIMAL_TEXT_PDF, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "ready"
+
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    parent_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.parent]
+    child_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.child]
+    assert len(parent_chunks) == 1
+    assert [chunk.structure_kind for chunk in child_chunks] == [
+        ChunkStructureKind.text,
+        ChunkStructureKind.table,
+        ChunkStructureKind.text,
+    ]
+    assert [chunk.child_index for chunk in child_chunks] == [0, 1, 2]
+
+
+def test_upload_pdf_marks_failed_when_llamaparse_missing_key(client, db_session, app_settings) -> None:
+    """llamaparse provider 缺少 API key 時應呈現受控失敗。"""
+
+    app_settings.pdf_parser_provider = "llamaparse"
+    app_settings.llamaparse_api_key = None
+    area = Area(id=_uuid(), name="Maintainer PDF Missing Key")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("secure.pdf", MINIMAL_TEXT_PDF, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "failed"
+    assert "LLAMAPARSE_API_KEY" in (payload["job"]["error_message"] or "")
+    assert payload["document"]["chunk_summary"]["total_chunks"] == 0
+
+
 def test_upload_document_rejects_reader(client, db_session) -> None:
     """reader 不可上傳文件。"""
 
@@ -300,9 +469,9 @@ def test_upload_document_rejects_unknown_extension(client, db_session) -> None:
 
 
 def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db_session) -> None:
-    """產品範圍內但本 phase 未支援的副檔名應進入 failed 且沒有 chunks。"""
+    """產品範圍內但仍未支援的副檔名應進入 failed 且沒有 chunks。"""
 
-    area = Area(id=_uuid(), name="PDF Docs")
+    area = Area(id=_uuid(), name="DOCX Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
@@ -310,7 +479,7 @@ def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db
     response = client.post(
         f"/areas/{area.id}/documents",
         headers={"Authorization": ADMIN_TOKEN},
-        files={"file": ("deck.pdf", b"%PDF-1.4", "application/pdf")},
+        files={"file": ("deck.docx", b"PK\x03\x04", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
     )
 
     assert response.status_code == 201

@@ -33,6 +33,7 @@
 - 身分與授權：`Keycloak`
 - 前端：`React + Tailwind`
 - 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
+- PDF 解析：`LangChain PDF loaders`、`LlamaParse SaaS (optional)`
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
 
@@ -124,18 +125,21 @@
 1. API 收檔並存入 MinIO
 2. 建立 `documents` 與 `ingest_jobs`
 3. Worker 解析文件
-4. Worker 先輸出 block-aware `ParsedDocument / ParsedBlock`，區分 `text` 與 `table`
-5. 先建立 parent sections，再依內容型別切分 child chunks
-6. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
-7. `table` child 優先保留整表，超大表格才依 row groups 切分
-8. 產生 embedding
-9. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
-10. 寫入 `document_chunks`
-11. 更新文件狀態
+4. `PDF` 先經 provider-based parsing：`local` 走 LangChain PDF loader，`llamaparse` 則先轉成 Markdown
+5. Worker 先輸出 block-aware `ParsedDocument / ParsedBlock`，區分 `text` 與 `table`
+6. 先建立 parent sections，再依內容型別切分 child chunks
+7. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
+8. `table` child 優先保留整表，超大表格才依 row groups 切分
+9. 產生 embedding
+10. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
+11. 寫入 `document_chunks`
+12. 更新文件狀態
 
 補充約束：
 - `document_chunks` 必須以 SQL-first 欄位保存 `chunk_type` 與 `structure_kind`
-- `Markdown + HTML` 本輪支援表格感知 chunking
+- `LlamaParse` 正式路徑只使用標準 Markdown 輸出模式；agentic mode 僅保留未來擴充空間
+- `Markdown + HTML + LlamaParse PDF->Markdown` 本輪支援表格感知 chunking
+- `local PDF parser` 僅作為自架 fallback，不承諾表格高保真
 - `TXT` 不做表格感知
 
 ## 前端需求 (One-Page Dashboard)

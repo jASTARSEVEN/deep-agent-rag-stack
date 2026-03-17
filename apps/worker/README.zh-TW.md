@@ -30,6 +30,10 @@
 - `MINIO_SECURE`
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
+- `PDF_PARSER_PROVIDER`
+- `LLAMAPARSE_API_KEY`
+- `LLAMAPARSE_DO_NOT_CACHE`
+- `LLAMAPARSE_MERGE_CONTINUED_TABLES`
 - `CHUNK_MIN_PARENT_SECTION_LENGTH`
 - `CHUNK_TARGET_CHILD_SIZE`
 - `CHUNK_CHILD_OVERLAP`
@@ -64,10 +68,13 @@
 - 若 ingest task 無法更新資料庫，請確認 `DATABASE_URL` 指向與 API 相同的資料庫。
 - 若正式環境無法讀取文件內容，請確認 `MINIO_*` 與 `MINIO_BUCKET` 一致。
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。
-- `TXT`、`Markdown` 與 `HTML` 目前都會建立 SQL-first 的 parent-child chunks。
+- `TXT`、`Markdown`、`HTML` 與 `PDF` 目前都會建立 SQL-first 的 parent-child chunks。
+- `PDF_PARSER_PROVIDER=local` 會使用 LangChain PDF loader 作為自架 fallback；`PDF_PARSER_PROVIDER=llamaparse` 則會先把 PDF 轉成 Markdown，再交給既有 Markdown parser 與 chunk tree。
+- `LLAMAPARSE_DO_NOT_CACHE=true` 是企業文件建議的安全預設；`LLAMAPARSE_MERGE_CONTINUED_TABLES=false` 則讓跨頁表格合併維持 opt-in。
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
 - `ready` 現在代表 chunking 與 embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
-- 其餘檔案型別仍維持受控 `failed`。
+- 本模組目前只啟用 LlamaParse 的標準 Markdown 轉換路徑，未來才會再評估 agentic mode。
+- 尚未實作的檔案型別仍維持受控 `failed`。
 - retrieval API、rerank 與 chat orchestration 不在此模組內實作。

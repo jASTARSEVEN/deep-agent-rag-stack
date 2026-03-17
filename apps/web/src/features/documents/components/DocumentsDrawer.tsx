@@ -210,6 +210,9 @@ export function DocumentsDrawer({
                     accept=".txt,.md,.pdf,.docx,.pptx,.html"
                     onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   />
+                  <p className="text-[11px] leading-5 text-stone-500">
+                    支援 TXT、Markdown、HTML、PDF、DOCX、PPTX。PDF 會依後端設定走 local 或 LlamaParse 解析。
+                  </p>
                   <button
                     data-testid="upload-document-submit"
                     className="w-full rounded-full bg-emerald-700 py-2 text-xs font-bold text-white transition hover:bg-emerald-600 disabled:opacity-50"

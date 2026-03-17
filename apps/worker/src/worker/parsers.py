@@ -4,17 +4,42 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from pathlib import Path
 import re
+import tempfile
 
 
 # 本 phase 真正支援解析的副檔名。
-SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html"}
+SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html", ".pdf"}
+
+# 支援的 PDF parser provider 名稱。
+SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse"}
 
 # Markdown heading 判定規則。
 MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,3})\s+(?P<heading>.+?)\s*$")
 
 # Markdown table delimiter 判定規則。
 MARKDOWN_TABLE_DELIMITER_PATTERN = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$")
+
+# PDF Markdown 常見頁碼噪音。
+PDF_PAGE_LABEL_PATTERN = re.compile(r"^\s*(?:page|p\.)\s+\d+(?:\s*(?:/|of)\s*\d+)?\s*$", re.IGNORECASE)
+
+# PDF Markdown 常見頁面分隔符噪音。
+PDF_PAGE_SEPARATOR_PATTERN = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+
+
+@dataclass(slots=True)
+class PdfParserConfig:
+    """PDF parser provider 使用的設定。"""
+
+    # 要使用的 PDF parser provider 名稱。
+    provider: str = "local"
+    # LlamaParse API 金鑰。
+    llamaparse_api_key: str | None = None
+    # 是否要求 LlamaParse 不快取文件內容。
+    llamaparse_do_not_cache: bool = True
+    # 是否啟用跨頁延續表格合併。
+    llamaparse_merge_continued_tables: bool = False
 
 
 @dataclass(slots=True)
@@ -45,12 +70,18 @@ class ParsedDocument:
     blocks: list[ParsedBlock]
 
 
-def parse_document(*, file_name: str, payload: bytes) -> ParsedDocument:
+def parse_document(
+    *,
+    file_name: str,
+    payload: bytes,
+    pdf_config: PdfParserConfig | None = None,
+) -> ParsedDocument:
     """依副檔名選擇 parser，並回傳 block-aware 結果。
 
     參數：
     - `file_name`：使用者上傳時的原始檔名。
     - `payload`：從物件儲存讀出的原始位元組內容。
+    - `pdf_config`：PDF parser provider 設定；非 PDF 檔案時可省略。
 
     回傳：
     - `ParsedDocument`：解析後的標準化文件內容。
@@ -63,6 +94,8 @@ def parse_document(*, file_name: str, payload: bytes) -> ParsedDocument:
         return _parse_markdown_document(payload=payload)
     if lower_name.endswith(".html"):
         return _parse_html_document(payload=payload)
+    if lower_name.endswith(".pdf"):
+        return _parse_pdf_document(payload=payload, pdf_config=pdf_config or PdfParserConfig())
     raise ValueError("目前尚未支援此檔案類型的解析。")
 
 
@@ -107,6 +140,23 @@ def _parse_markdown_document(*, payload: bytes) -> ParsedDocument:
     """
 
     text = _decode_payload(payload=payload).strip()
+    return _parse_markdown_text(text=text, source_format="markdown")
+
+
+def _parse_markdown_text(*, text: str, source_format: str) -> ParsedDocument:
+    """解析 Markdown 字串，辨識 heading、文字與表格 blocks。
+
+    參數：
+    - `text`：已解碼的 Markdown 文字。
+    - `source_format`：來源格式名稱。
+
+    回傳：
+    - `ParsedDocument`：Markdown block-aware 結果。
+    """
+
+    if not text.strip():
+        raise ValueError("文件內容不可為空白。")
+
     lines = text.splitlines()
     block_inputs: list[tuple[str, str | None, str]] = []
     current_heading: str | None = None
@@ -137,7 +187,30 @@ def _parse_markdown_document(*, payload: bytes) -> ParsedDocument:
     _append_markdown_text_block(block_inputs=block_inputs, heading=current_heading, lines=current_text_lines)
     if not block_inputs:
         block_inputs.append(("text", None, text))
-    return _materialize_blocks(source_format="markdown", block_inputs=block_inputs)
+    return _materialize_blocks(source_format=source_format, block_inputs=block_inputs)
+
+
+def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> ParsedDocument:
+    """依 provider 解析 PDF，再交由現有 Markdown parser 處理。
+
+    參數：
+    - `payload`：PDF 原始位元組內容。
+    - `pdf_config`：PDF parser provider 設定。
+
+    回傳：
+    - `ParsedDocument`：解析後的標準化文件內容。
+    """
+
+    provider = pdf_config.provider.strip().lower()
+    if provider not in SUPPORTED_PDF_PARSER_PROVIDERS:
+        raise ValueError(f"不支援的 PDF parser provider：{pdf_config.provider}")
+
+    if provider == "local":
+        extracted_text = _extract_pdf_text_with_local_loader(payload=payload)
+        return _materialize_blocks(source_format="pdf", block_inputs=[("text", None, extracted_text)])
+
+    markdown = _extract_pdf_markdown_with_llamaparse(payload=payload, pdf_config=pdf_config)
+    return _parse_markdown_text(text=_clean_llamaparse_markdown(markdown), source_format="pdf")
 
 
 def _append_markdown_text_block(
@@ -258,6 +331,91 @@ def _materialize_blocks(*, source_format: str, block_inputs: list[tuple[str, str
         raise ValueError("無法從文件內容建立有效 chunks。")
 
     return ParsedDocument(normalized_text="\n\n".join(normalized_parts), source_format=source_format, blocks=blocks)
+
+
+def _extract_pdf_text_with_local_loader(*, payload: bytes) -> str:
+    """使用 LangChain PDF loader 萃取 PDF 純文字。
+
+    參數：
+    - `payload`：PDF 原始位元組內容。
+
+    回傳：
+    - `str`：萃取後的純文字。
+    """
+
+    try:
+        from langchain_community.document_loaders import PyPDFLoader
+    except ImportError as exc:
+        raise ValueError("local PDF parser 需要安裝 langchain-community 與 pypdf。") from exc
+
+    temp_path = _write_temporary_pdf(payload=payload)
+    try:
+        documents = PyPDFLoader(str(temp_path)).load()
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    text = "\n\n".join(document.page_content.strip() for document in documents if document.page_content.strip()).strip()
+    if not text:
+        raise ValueError("local PDF parser 無法從文件中擷取文字內容。")
+    return text
+
+
+def _extract_pdf_markdown_with_llamaparse(*, payload: bytes, pdf_config: PdfParserConfig) -> str:
+    """使用 LlamaParse 將 PDF 轉為 Markdown。
+
+    參數：
+    - `payload`：PDF 原始位元組內容。
+    - `pdf_config`：LlamaParse 設定。
+
+    回傳：
+    - `str`：LlamaParse 回傳的 Markdown 內容。
+    """
+
+    if not pdf_config.llamaparse_api_key:
+        raise ValueError("PDF_PARSER_PROVIDER=llamaparse 需要設定 LLAMAPARSE_API_KEY。")
+
+    try:
+        from llama_parse import LlamaParse
+    except ImportError as exc:
+        raise ValueError("llamaparse provider 需要安裝 llama-parse。") from exc
+
+    temp_path = _write_temporary_pdf(payload=payload)
+    try:
+        parser = LlamaParse(
+            api_key=pdf_config.llamaparse_api_key,
+            result_type="markdown",
+            do_not_cache=pdf_config.llamaparse_do_not_cache,
+            merge_tables_across_pages_in_markdown=pdf_config.llamaparse_merge_continued_tables,
+        )
+        documents = parser.load_data(str(temp_path))
+    except Exception as exc:  # noqa: BLE001 - 對外部 SaaS 失敗統一包成受控錯誤。
+        raise ValueError(f"LlamaParse PDF 解析失敗：{exc}") from exc
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    markdown = "\n\n".join(
+        document.text.strip()
+        for document in documents
+        if getattr(document, "text", "").strip()
+    ).strip()
+    if not markdown:
+        raise ValueError("LlamaParse 未回傳可用的 Markdown 內容。")
+    return markdown
+
+
+def _write_temporary_pdf(*, payload: bytes) -> Path:
+    """將 PDF bytes 寫入暫存檔，供 PDF loader 使用。
+
+    參數：
+    - `payload`：PDF 原始位元組內容。
+
+    回傳：
+    - `Path`：暫存 PDF 檔案路徑。
+    """
+
+    with tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temporary_file:
+        temporary_file.write(payload)
+        return Path(temporary_file.name)
 
 
 class _HTMLBlockParser(HTMLParser):
@@ -476,3 +634,36 @@ def _normalize_whitespace(value: str) -> str:
     """
 
     return " ".join(value.split()).strip()
+
+
+def _clean_llamaparse_markdown(markdown: str) -> str:
+    """清理 LlamaParse Markdown 中常見的頁碼與分隔噪音。
+
+    參數：
+    - `markdown`：LlamaParse 回傳的 Markdown 文字。
+
+    回傳：
+    - `str`：移除常見頁面噪音後的 Markdown。
+    """
+
+    cleaned_lines: list[str] = []
+    previous_was_blank = True
+
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if PDF_PAGE_LABEL_PATTERN.match(stripped) or PDF_PAGE_SEPARATOR_PATTERN.match(stripped):
+            continue
+        if not stripped:
+            if previous_was_blank:
+                continue
+            cleaned_lines.append("")
+            previous_was_blank = True
+            continue
+
+        cleaned_lines.append(line.rstrip())
+        previous_was_blank = False
+
+    cleaned_markdown = "\n".join(cleaned_lines).strip()
+    if not cleaned_markdown:
+        raise ValueError("LlamaParse Markdown 清理後沒有剩餘內容。")
+    return cleaned_markdown

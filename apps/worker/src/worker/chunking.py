@@ -47,6 +47,24 @@ class SectionDraft:
     start_offset: int
     # section 在 normalize 後文字中的結束 offset。
     end_offset: int
+    # 此 parent 內部保留的 component blocks；若為空值代表整段視為單一 component。
+    components: list["SectionComponent"] | None = None
+
+
+@dataclass(slots=True)
+class SectionComponent:
+    """parent section 內部的可切分 component block。"""
+
+    # component 內容結構型別。
+    structure_kind: str
+    # component 所屬 heading。
+    heading: str | None
+    # component 內容。
+    content: str
+    # component 相對於 parent content 的起始 offset。
+    start_offset: int
+    # component 相對於 parent content 的結束 offset。
+    end_offset: int
 
 
 @dataclass(slots=True)
@@ -155,10 +173,21 @@ def _build_sections(*, parsed_document: ParsedDocument, config: ChunkingConfig) 
             content=block.content,
             start_offset=block.start_offset,
             end_offset=block.end_offset,
+            components=[
+                SectionComponent(
+                    structure_kind=block.block_kind,
+                    heading=block.heading,
+                    content=block.content,
+                    start_offset=0,
+                    end_offset=len(block.content),
+                )
+            ],
         )
         for index, block in enumerate(parsed_document.blocks)
         if block.content.strip()
     ]
+    if parsed_document.source_format == "pdf":
+        sections = _consolidate_pdf_sections(sections, config=config)
     return _normalize_sections(sections, config=config)
 
 
@@ -250,10 +279,123 @@ def _normalize_sections(sections: list[SectionDraft], *, config: ChunkingConfig)
                 content=section.content,
                 start_offset=start_offset,
                 end_offset=end_offset,
+                components=section.components,
             )
         )
         cursor = end_offset + 2
     return normalized_sections
+
+
+def _consolidate_pdf_sections(sections: list[SectionDraft], *, config: ChunkingConfig) -> list[SectionDraft]:
+    """在 PDF 路徑先合併過碎的 parser blocks，降低 parent section 碎片化。
+
+    參數：
+    - `sections`：由 parser 直接輸出的 section 草稿。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `list[SectionDraft]`：做過 PDF consolidation 的 section 清單。
+    """
+
+    if not sections:
+        return []
+
+    consolidated: list[SectionDraft] = []
+    index = 0
+    while index < len(sections):
+        clustered = _build_pdf_table_cluster(sections=sections, start_index=index, config=config)
+        if clustered is not None:
+            consolidated.append(clustered)
+            index += 3
+            continue
+
+        current = sections[index]
+
+        if current.structure_kind == "table":
+            if (
+                consolidated
+                and consolidated[-1].structure_kind == "table"
+                and consolidated[-1].heading == current.heading
+                and consolidated[-1].end_offset == current.start_offset - 2
+            ):
+                consolidated[-1] = _merge_same_kind_sections(consolidated[-1], current)
+            else:
+                consolidated.append(current)
+            index += 1
+            continue
+
+        merged = current
+        lookahead = index + 1
+        while lookahead < len(sections):
+            candidate = sections[lookahead]
+            if candidate.structure_kind != "text":
+                break
+            if candidate.heading != merged.heading:
+                break
+            if len(merged.content) >= config.min_parent_section_length:
+                break
+            merged = _merge_same_kind_sections(merged, candidate)
+            lookahead += 1
+
+        if (
+            consolidated
+            and consolidated[-1].structure_kind == "text"
+            and consolidated[-1].heading == merged.heading
+            and len(merged.content) < config.min_parent_section_length
+        ):
+            consolidated[-1] = _merge_same_kind_sections(consolidated[-1], merged)
+        else:
+            consolidated.append(merged)
+
+        index = lookahead
+
+    return consolidated
+
+
+def _build_pdf_table_cluster(
+    *,
+    sections: list[SectionDraft],
+    start_index: int,
+    config: ChunkingConfig,
+) -> SectionDraft | None:
+    """將 `text -> table -> text` 的短 PDF blocks 合併為單一 parent cluster。
+
+    參數：
+    - `sections`：PDF parser 直接輸出的 section 草稿。
+    - `start_index`：欲檢查的起始索引。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `SectionDraft | None`：若符合 cluster 規則則回傳合併後 parent，否則回傳空值。
+    """
+
+    if start_index + 2 >= len(sections):
+        return None
+
+    first = sections[start_index]
+    middle = sections[start_index + 1]
+    last = sections[start_index + 2]
+    if first.structure_kind != "text" or middle.structure_kind != "table" or last.structure_kind != "text":
+        return None
+    if first.heading != middle.heading or first.heading != last.heading:
+        return None
+    if len(first.content) >= config.min_parent_section_length or len(last.content) >= config.min_parent_section_length:
+        return None
+    return _merge_section_sequence(first, middle, last, structure_kind="text", preserve_components=True)
+
+
+def _merge_same_kind_sections(left_section: SectionDraft, right_section: SectionDraft) -> SectionDraft:
+    """合併兩個同類型 section，保留 heading 與原始 offset 範圍。
+
+    參數：
+    - `left_section`：前段 section。
+    - `right_section`：後段 section。
+
+    回傳：
+    - `SectionDraft`：合併後但尚未重新正規化 index/offset 的 section。
+    """
+
+    return _merge_section_sequence(left_section, right_section, structure_kind=left_section.structure_kind)
 
 
 def _merge_sections(left_section: SectionDraft, right_section: SectionDraft) -> SectionDraft:
@@ -267,14 +409,80 @@ def _merge_sections(left_section: SectionDraft, right_section: SectionDraft) -> 
     - `SectionDraft`：尚未重新計算 index 與 offset 的合併結果。
     """
 
+    return _merge_section_sequence(left_section, right_section, structure_kind="text")
+
+
+def _merge_section_sequence(
+    *sections: SectionDraft,
+    structure_kind: str,
+    preserve_components: bool = False,
+) -> SectionDraft:
+    """依序合併多個 sections，並保留 component offsets。
+
+    參數：
+    - `sections`：要合併的 sections。
+    - `structure_kind`：合併後 parent 的結構型別。
+
+    回傳：
+    - `SectionDraft`：合併後但尚未重新正規化的 section。
+    """
+
+    merged_content_parts: list[str] = []
+    merged_components: list[SectionComponent] = []
+    cursor = 0
+    heading: str | None = None
+
+    for index, section in enumerate(sections):
+        if index > 0 and merged_content_parts and section.content:
+            merged_content_parts.append("\n\n")
+            cursor += 2
+        merged_content_parts.append(section.content)
+        heading = _merge_headings(heading, section.heading)
+        if preserve_components:
+            for component in _section_components(section):
+                merged_components.append(
+                    SectionComponent(
+                        structure_kind=component.structure_kind,
+                        heading=component.heading,
+                        content=component.content,
+                        start_offset=cursor + component.start_offset,
+                        end_offset=cursor + component.end_offset,
+                    )
+                )
+        cursor += len(section.content)
+
     return SectionDraft(
-        section_index=0,
-        structure_kind="text",
-        heading=_merge_headings(left_section.heading, right_section.heading),
-        content=f"{left_section.content}\n\n{right_section.content}",
-        start_offset=0,
-        end_offset=0,
+        section_index=sections[0].section_index if sections else 0,
+        structure_kind=structure_kind,
+        heading=heading,
+        content="".join(merged_content_parts),
+        start_offset=sections[0].start_offset if sections else 0,
+        end_offset=sections[-1].end_offset if sections else 0,
+        components=merged_components if preserve_components else None,
     )
+
+
+def _section_components(section: SectionDraft) -> list[SectionComponent]:
+    """回傳 section 內可供 child chunking 使用的 component blocks。
+
+    參數：
+    - `section`：目標 parent section。
+
+    回傳：
+    - `list[SectionComponent]`：component 清單。
+    """
+
+    if section.components:
+        return section.components
+    return [
+        SectionComponent(
+            structure_kind=section.structure_kind,
+            heading=section.heading,
+            content=section.content,
+            start_offset=0,
+            end_offset=len(section.content),
+        )
+    ]
 
 
 def _merge_headings(left_heading: str | None, right_heading: str | None) -> str | None:
@@ -310,9 +518,51 @@ def _build_child_chunks(
     - `list[ChunkDraft]`：此 section 下的 child chunk 草稿。
     """
 
-    if section.structure_kind == "table":
-        return _build_table_child_chunks(section=section, position_counter=position_counter, config=config)
-    return _build_text_child_chunks(section=section, position_counter=position_counter, config=config)
+    components = _section_components(section)
+    if len(components) == 1 and components[0].structure_kind == section.structure_kind:
+        if section.structure_kind == "table":
+            return _build_table_child_chunks(
+                section=section,
+                position_counter=position_counter,
+                config=config,
+                starting_child_index=0,
+            )
+        return _build_text_child_chunks(
+            section=section,
+            position_counter=position_counter,
+            config=config,
+            starting_child_index=0,
+        )
+
+    children: list[ChunkDraft] = []
+    next_child_index = 0
+    for component in components:
+        component_section = SectionDraft(
+            section_index=section.section_index,
+            structure_kind=component.structure_kind,
+            heading=component.heading or section.heading,
+            content=component.content,
+            start_offset=section.start_offset + component.start_offset,
+            end_offset=section.start_offset + component.end_offset,
+            components=[component],
+        )
+        if component.structure_kind == "table":
+            component_children = _build_table_child_chunks(
+                section=component_section,
+                position_counter=position_counter,
+                config=config,
+                starting_child_index=next_child_index,
+            )
+        else:
+            component_children = _build_text_child_chunks(
+                section=component_section,
+                position_counter=position_counter,
+                config=config,
+                starting_child_index=next_child_index,
+            )
+        children.extend(component_children)
+        next_child_index += len(component_children)
+    return children
 
 
 def _build_text_child_chunks(
@@ -320,6 +570,7 @@ def _build_text_child_chunks(
     section: SectionDraft,
     position_counter: count[int],
     config: ChunkingConfig,
+    starting_child_index: int,
 ) -> list[ChunkDraft]:
     """將文字 parent section 切成 child chunks。
 
@@ -333,7 +584,7 @@ def _build_text_child_chunks(
     """
 
     children: list[ChunkDraft] = []
-    child_index = 0
+    child_index = starting_child_index
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=config.target_child_chunk_size,
         chunk_overlap=config.child_chunk_overlap,
@@ -397,6 +648,7 @@ def _build_table_child_chunks(
     section: SectionDraft,
     position_counter: count[int],
     config: ChunkingConfig,
+    starting_child_index: int,
 ) -> list[ChunkDraft]:
     """將表格 parent section 切成 table-aware child chunks。
 
@@ -416,7 +668,7 @@ def _build_table_child_chunks(
                 structure_kind="table",
                 position=next(position_counter),
                 section_index=section.section_index,
-                child_index=0,
+                child_index=starting_child_index,
                 heading=section.heading,
                 content=section.content,
                 content_preview=_build_content_preview(section.content, config=config),
@@ -434,7 +686,7 @@ def _build_table_child_chunks(
                 structure_kind="table",
                 position=next(position_counter),
                 section_index=section.section_index,
-                child_index=0,
+                child_index=starting_child_index,
                 heading=section.heading,
                 content=section.content,
                 content_preview=_build_content_preview(section.content, config=config),
@@ -445,7 +697,7 @@ def _build_table_child_chunks(
         ]
 
     children: list[ChunkDraft] = []
-    for child_index, row_group in enumerate(
+    for group_index, row_group in enumerate(
         _group_table_rows(data_rows=table_parts.data_rows, max_rows_per_child=config.table_max_rows_per_child)
     ):
         row_start = row_group[0].start_offset
@@ -459,7 +711,7 @@ def _build_table_child_chunks(
                 structure_kind="table",
                 position=next(position_counter),
                 section_index=section.section_index,
-                child_index=child_index,
+                child_index=starting_child_index + group_index,
                 heading=section.heading,
                 content=child_content,
                 content_preview=_build_content_preview(child_content, config=config),

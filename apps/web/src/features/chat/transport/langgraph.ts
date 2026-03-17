@@ -48,6 +48,9 @@ interface PendingCompletionUpdate {
   usedKnowledgeBase: boolean;
 }
 
+/** 正式 token 串流來源；`custom` 僅承載 phase 與 tool_call 等產品事件。 */
+const PRIMARY_TOKEN_STREAM_EVENT = "messages-tuple";
+
 
 /** 判斷未知資料是否為一般 record。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -249,7 +252,7 @@ async function streamAreaThreadChatInternal(
     } as never) as AsyncIterable<{ event?: string; data?: unknown }>;
 
     for await (const part of stream) {
-      if ((part.event === "messages" || part.event === "messages-tuple")) {
+      if ((part.event === "messages" || part.event === PRIMARY_TOKEN_STREAM_EVENT)) {
         const delta = extractMessageDelta(part.data);
         if (delta) {
           logChatStreamDebug(streamStartedAt, "messages_tuple", {
@@ -283,11 +286,10 @@ async function streamAreaThreadChatInternal(
       if (part.event === "custom" && isRecord(part.data) && part.data.type === "token") {
         const delta = part.data.delta;
         if (typeof delta === "string" && delta) {
-          logChatStreamDebug(streamStartedAt, "custom_token", {
+          logChatStreamDebug(streamStartedAt, "custom_token_ignored", {
             deltaLength: delta.length,
             deltaPreview: delta.slice(0, 80),
           });
-          onUpdate({ delta });
         }
         continue;
       }

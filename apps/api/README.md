@@ -46,6 +46,10 @@ This module contains the project's FastAPI service. It currently provides:
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
+- `PDF_PARSER_PROVIDER`
+- `LLAMAPARSE_API_KEY`
+- `LLAMAPARSE_DO_NOT_CACHE`
+- `LLAMAPARSE_MERGE_CONTINUED_TABLES`
 - `CHUNK_MIN_PARENT_SECTION_LENGTH`
 - `CHUNK_TARGET_CHILD_SIZE`
 - `CHUNK_CHILD_OVERLAP`
@@ -128,12 +132,15 @@ This module contains the project's FastAPI service. It currently provides:
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
-- `TXT`, `Markdown`, and `HTML` uploads now produce SQL-first parent-child `document_chunks`.
+- `TXT`, `Markdown`, `HTML`, and `PDF` uploads now produce SQL-first parent-child `document_chunks`.
+- `PDF_PARSER_PROVIDER=local` uses LangChain PDF loading as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse before the existing Markdown parser and chunk tree.
+- `LLAMAPARSE_DO_NOT_CACHE=true` is the recommended default for enterprise documents, and `LLAMAPARSE_MERGE_CONTINUED_TABLES=false` keeps cross-page table merges opt-in.
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
+- Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.
 - Chat now runs through LangGraph Server built-in thread/run endpoints with custom auth; the retrieval pipeline remains SQL-gated and ready-only before the answer layer.

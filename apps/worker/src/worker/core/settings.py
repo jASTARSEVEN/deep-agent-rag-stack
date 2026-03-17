@@ -22,6 +22,8 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_TABLE_PRESERVE_MAX_CHARS",
     "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
     "EMBEDDING_DIMENSIONS",
+    "LLAMAPARSE_DO_NOT_CACHE",
+    "LLAMAPARSE_MERGE_CONTINUED_TABLES",
 }
 
 
@@ -69,6 +71,10 @@ class WorkerSettings(BaseSettings):
     chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
     chunk_table_preserve_max_chars: Annotated[int, Field(alias="CHUNK_TABLE_PRESERVE_MAX_CHARS")] = 4000
     chunk_table_max_rows_per_child: Annotated[int, Field(alias="CHUNK_TABLE_MAX_ROWS_PER_CHILD")] = 20
+    pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "local"
+    llamaparse_api_key: Annotated[str | None, Field(alias="LLAMAPARSE_API_KEY")] = None
+    llamaparse_do_not_cache: Annotated[bool, Field(alias="LLAMAPARSE_DO_NOT_CACHE")] = True
+    llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False
     embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
     embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
     embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536

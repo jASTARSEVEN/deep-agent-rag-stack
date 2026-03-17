@@ -26,6 +26,8 @@
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
+- `PDF_PARSER_PROVIDER`
+- `LLAMAPARSE_*`
 - `CELERY_*`
 - `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
@@ -63,4 +65,5 @@
 - `supabase/migrations/` 掛載到 `/docker-entrypoint-initdb.d` 只適用全新資料庫 volume；既有資料庫在專用 migration runner 落地前仍需走 Alembic 升級。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
 - 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。
+- 若要讓 compose 內的 API 與 worker 都切換到 LlamaParse，除了在 `.env` 設定 `PDF_PARSER_PROVIDER=llamaparse` 外，也必須提供 `LLAMAPARSE_API_KEY`；修改後需重新啟動 `api` 與 `worker` 容器。
 - 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。

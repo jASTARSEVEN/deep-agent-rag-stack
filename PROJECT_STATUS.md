@@ -46,6 +46,9 @@
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
 - 已完成將 `match_chunks` 收斂為資料庫候選召回 RPC；最終 `RRF`、ranking policy、rerank 與 assembler 由 Python 層負責
+- 已完成 provider-based PDF parsing：`local` 走 LangChain PDF loader，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
+- 已補上 `llamaparse` 的 Markdown noise cleanup 與 PDF-specific block consolidation，降低 parent chunks 在 PDF 路徑上的過度碎片化
+- 已支援 `PDF + llamaparse` 的短 `text -> table -> text` cluster parent 規則：單一 parent、混合 `text/table/text` children，維持 table-aware retrieval/citation 語意
 
 ## 已完成功能
 
@@ -97,6 +100,8 @@
 - Web 已在 `/areas` 補上 Files 區塊、單檔 upload、文件狀態與失敗訊息顯示
 - API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
 - Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例
+- 已為 `PDF` 新增 provider-based parsing，正式支援 `local` 與 `llamaparse` 兩條解析路徑
+- 已新增 `LLAMAPARSE_DO_NOT_CACHE` 與 `LLAMAPARSE_MERGE_CONTINUED_TABLES` 設定，並將 agentic mode 保留為未來規劃
 
 ### Phase 3.5 — 已完成的 lifecycle hardening 與 chunk tree 基礎
 - 已新增 `document_chunks` SQL-first schema，採固定 `parent -> child` 兩層結構

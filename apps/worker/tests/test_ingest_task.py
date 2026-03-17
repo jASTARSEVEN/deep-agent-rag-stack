@@ -16,8 +16,48 @@ from worker.db import (
     create_database_engine,
     create_session_factory,
 )
-from worker.parsers import parse_document
+from worker.parsers import ParsedBlock, ParsedDocument, parse_document
 from worker.tasks.ingest import process_document_ingest
+
+
+# 可被 PyPDFLoader 正常擷取文字的最小 PDF 測試樣本。
+MINIMAL_TEXT_PDF = b"""%PDF-1.1
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 73 >>
+stream
+BT
+/F1 18 Tf
+50 100 Td
+(Deep Agent PDF local parser sample) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000063 00000 n 
+0000000122 00000 n 
+0000000248 00000 n 
+0000000371 00000 n 
+trailer
+<< /Root 1 0 R /Size 6 >>
+startxref
+441
+%%EOF
+"""
 
 
 def build_settings(tmp_path: Path) -> WorkerSettings:
@@ -48,6 +88,10 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         CHUNK_TXT_PARENT_GROUP_SIZE=4,
         CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
         CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
+        PDF_PARSER_PROVIDER="local",
+        LLAMAPARSE_API_KEY="",
+        LLAMAPARSE_DO_NOT_CACHE=True,
+        LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
         EMBEDDING_DIMENSIONS=1536,
@@ -149,8 +193,8 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert all(chunk.embedding is not None for chunk in child_chunks)
 
 
-def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, tmp_path: Path) -> None:
-    """未支援副檔名應轉為 failed，且沒有 chunks。"""
+def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path) -> None:
+    """local PDF provider 應能將 PDF 推進到 ready。"""
 
     settings = build_settings(tmp_path)
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
@@ -158,10 +202,76 @@ def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, 
     Base.metadata.create_all(bind=engine)
     session_factory = create_session_factory(engine)
 
-    document, job = seed_job(session_factory, file_name="deck.pdf", payload=b"%PDF-1.4")
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
     storage_path = Path(settings.local_storage_path) / document.storage_key
     storage_path.parent.mkdir(parents=True, exist_ok=True)
-    storage_path.write_bytes(b"%PDF-1.4")
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert refreshed_job.parent_chunk_count == 1
+        assert refreshed_job.child_chunk_count == 1
+        assert len(refreshed_chunks) == 2
+        assert refreshed_chunks[0].content
+
+
+def test_process_document_ingest_supports_llamaparse_pdf(monkeypatch, tmp_path: Path) -> None:
+    """llamaparse provider 應能將 Markdown 結果交回既有 chunking 流程。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "llamaparse"
+    settings.llamaparse_api_key = "test-key"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_markdown_with_llamaparse",
+        lambda *, payload, pdf_config: "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_marks_failed_for_llamaparse_missing_key(monkeypatch, tmp_path: Path) -> None:
+    """llamaparse provider 缺少 API key 時應轉為受控 failed。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "llamaparse"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
 
     result = process_document_ingest(job.id)
 
@@ -174,7 +284,11 @@ def test_process_document_ingest_marks_failed_for_unsupported_type(monkeypatch, 
         assert refreshed_document.status == DocumentStatus.failed
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
-        assert refreshed_job.error_message == "目前尚未支援此檔案類型的解析。"
+        assert refreshed_job.error_message is not None
+        assert (
+            "LLAMAPARSE_API_KEY" in refreshed_job.error_message
+            or "llama-parse" in refreshed_job.error_message.lower()
+        )
         assert refreshed_chunk_count == 0
 
 
@@ -337,9 +451,101 @@ def test_build_chunk_tree_preserves_markdown_table_as_table_parent() -> None:
 
     assert len(result.parent_chunks) == 3
     assert [chunk.structure_kind for chunk in result.parent_chunks] == ["text", "table", "text"]
+
+
+def test_build_chunk_tree_consolidates_short_pdf_text_blocks_with_same_heading() -> None:
+    """PDF source 的同 heading 短 text blocks 應在 parent 建立前先 consolidation。"""
+
+    parsed_document = ParsedDocument(
+        normalized_text="Intro A\n\nIntro B\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+        source_format="pdf",
+        blocks=[
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Intro A",
+                start_offset=0,
+                end_offset=7,
+            ),
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Intro B",
+                start_offset=9,
+                end_offset=16,
+            ),
+            ParsedBlock(
+                block_kind="table",
+                heading="Overview",
+                content="| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                start_offset=18,
+                end_offset=64,
+            ),
+        ],
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 800
+    result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
+
+    assert len(result.parent_chunks) == 2
+    assert result.parent_chunks[0].structure_kind == "text"
+    assert result.parent_chunks[0].content == "Intro A\n\nIntro B"
+    assert result.parent_chunks[1].structure_kind == "table"
     table_parent = result.parent_chunks[1]
-    assert table_parent.heading == "Report"
+    assert table_parent.heading == "Overview"
     assert "| Alice | 95 |" in table_parent.content
+
+
+def test_build_chunk_tree_clusters_pdf_text_table_text_under_same_heading() -> None:
+    """PDF 的 `text -> table -> text` 短區塊應合併為單一 parent cluster。"""
+
+    parsed_document = ParsedDocument(
+        normalized_text="Intro note\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n\nClosing note",
+        source_format="pdf",
+        blocks=[
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Intro note",
+                start_offset=0,
+                end_offset=10,
+            ),
+            ParsedBlock(
+                block_kind="table",
+                heading="Overview",
+                content="| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                start_offset=12,
+                end_offset=58,
+            ),
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Closing note",
+                start_offset=60,
+                end_offset=72,
+            ),
+        ],
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 800
+    result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
+
+    assert len(result.parent_chunks) == 1
+    parent = result.parent_chunks[0]
+    assert parent.structure_kind == "text"
+    assert parent.heading == "Overview"
+    assert "Intro note" in parent.content
+    assert "| Alice | 95 |" in parent.content
+    assert "Closing note" in parent.content
+
+    assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table", "text"]
+    assert [chunk.child_index for chunk in result.child_chunks] == [0, 1, 2]
+    for child in result.child_chunks:
+        relative_start = child.start_offset - parent.start_offset
+        relative_end = child.end_offset - parent.start_offset
+        assert parent.content[relative_start:relative_end] == child.content
 
 
 def test_build_chunk_tree_splits_large_table_by_row_group_and_repeats_header() -> None:

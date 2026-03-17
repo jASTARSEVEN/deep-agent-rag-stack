@@ -3,6 +3,49 @@
 import { expect, test } from "@playwright/test";
 
 
+/** 可被 local PDF parser 擷取文字的最小 PDF 測試樣本。 */
+const MINIMAL_TEXT_PDF = Buffer.from(`%PDF-1.1
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 144] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 73 >>
+stream
+BT
+/F1 18 Tf
+50 100 Td
+(Deep Agent PDF local parser sample) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000010 00000 n 
+0000000063 00000 n 
+0000000122 00000 n 
+0000000248 00000 n 
+0000000371 00000 n 
+trailer
+<< /Root 1 0 R /Size 6 >>
+startxref
+441
+%%EOF
+`, "utf-8");
+
+/** 故意提供給 local PDF parser 的損毀 PDF 測試樣本。 */
+const BROKEN_PDF = Buffer.from("%PDF-1.4 broken", "utf-8");
+
+
 /**
  * 以 test auth mode 指定角色登入。
  *
@@ -151,21 +194,46 @@ test("maintainer 可看 detail 但 access 管理區不可操作", async ({ page 
 });
 
 
-test("admin 上傳未支援檔案後會看到 failed 與錯誤訊息", async ({ page }) => {
+test("admin 上傳 PDF 後會看到 ready 狀態", async ({ page }) => {
+  const areaName = `PDF Area ${Date.now()}`;
+
+  await loginAs(page, "admin");
+
+  await expect(page).toHaveURL(/\/areas$/);
+  await page.getByTestId("create-area-name").fill(areaName);
+  await page.getByTestId("create-area-description").fill("PDF upload verification area");
+  await page.getByTestId("create-area-submit").click();
+  await expect(page.getByTestId("areas-list")).toContainText(areaName);
+  await expect(page.getByTestId("area-detail-panel")).toContainText(areaName);
+  await page.getByRole("button", { name: "管理文件" }).click();
+  await page.getByTestId("document-upload").setInputFiles({
+    name: "admin-guide.pdf",
+    mimeType: "application/pdf",
+    buffer: MINIMAL_TEXT_PDF,
+  });
+  await page.getByTestId("upload-document-submit").click();
+
+  await expect(page.getByTestId("documents-list")).toContainText("admin-guide.pdf");
+  await expect(page.getByTestId("documents-list")).toContainText("ready");
+  await expect(page.getByTestId("documents-list")).toContainText("2 chunks (1 parent / 1 child)");
+});
+
+
+test("admin 上傳損毀 PDF 後會看到 failed 與錯誤訊息", async ({ page }) => {
   await loginAs(page, "admin");
 
   // 打開管理文件
   await page.getByRole("button", { name: "管理文件" }).click();
   await page.getByTestId("document-upload").setInputFiles({
-    name: "unsupported.pdf",
+    name: "broken.pdf",
     mimeType: "application/pdf",
-    buffer: Buffer.from("%PDF-1.4"),
+    buffer: BROKEN_PDF,
   });
   await page.getByTestId("upload-document-submit").click();
 
-  await expect(page.getByTestId("documents-list")).toContainText("unsupported.pdf");
+  await expect(page.getByTestId("documents-list")).toContainText("broken.pdf");
   await expect(page.getByTestId("documents-list")).toContainText("failed");
-  await expect(page.getByText("目前尚未支援此檔案類型的解析。")).toBeVisible();
+  await expect(page.getByTestId("documents-list")).toContainText("local PDF parser");
   await expect(page.getByTestId("documents-list")).toContainText("0 chunks (0 parent / 0 child)");
 });
 

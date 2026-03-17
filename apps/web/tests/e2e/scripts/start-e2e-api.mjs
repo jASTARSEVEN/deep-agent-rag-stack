@@ -38,6 +38,7 @@ const apiEnv = {
   MINIO_BUCKET: "documents",
   LOCAL_STORAGE_PATH: storagePath,
   MAX_UPLOAD_SIZE_BYTES: "1048576",
+  PDF_PARSER_PROVIDER: "local",
   CELERY_BROKER_URL: "redis://localhost:16379/0",
   CELERY_RESULT_BACKEND: "redis://localhost:16379/1",
   INGEST_INLINE_MODE: "true",

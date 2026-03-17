@@ -26,6 +26,8 @@ This module contains the local Docker Compose stack and the container build asse
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
+- `PDF_PARSER_PROVIDER`
+- `LLAMAPARSE_*`
 - `CELERY_*`
 - `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
@@ -63,4 +65,5 @@ This module contains the local Docker Compose stack and the container build asse
 - `supabase/migrations/` is mounted into `/docker-entrypoint-initdb.d` only for fresh database volumes. Existing databases still need Alembic-based upgrades until a dedicated migration runner lands.
 - Current compose health checks only verify stack readiness, not complete business correctness.
 - The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and pair it with `INGEST_INLINE_MODE=true`.
+- To switch both compose services to LlamaParse, set `PDF_PARSER_PROVIDER=llamaparse` and provide `LLAMAPARSE_API_KEY` in `.env`, then restart the `api` and `worker` containers so the new environment reaches both runtimes.
 - To enable Cohere rerank in compose, provide `COHERE_API_KEY` in `.env` and keep `RERANK_PROVIDER=cohere`.

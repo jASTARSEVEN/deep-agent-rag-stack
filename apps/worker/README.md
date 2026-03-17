@@ -30,6 +30,10 @@ This module contains the project's Celery worker. It currently provides the mini
 - `MINIO_SECURE`
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
+- `PDF_PARSER_PROVIDER`
+- `LLAMAPARSE_API_KEY`
+- `LLAMAPARSE_DO_NOT_CACHE`
+- `LLAMAPARSE_MERGE_CONTINUED_TABLES`
 - `CHUNK_MIN_PARENT_SECTION_LENGTH`
 - `CHUNK_TARGET_CHILD_SIZE`
 - `CHUNK_CHILD_OVERLAP`
@@ -64,10 +68,13 @@ This module contains the project's Celery worker. It currently provides the mini
 - If ingest tasks cannot update the database, make sure `DATABASE_URL` points to the same database used by the API.
 - If the runtime cannot read document content, confirm that `MINIO_*` and `MINIO_BUCKET` match the deployment settings.
 - If no tasks are registered, make sure the `worker.tasks` package is loaded by Celery.
-- `TXT`, `Markdown`, and `HTML` files now produce SQL-first parent-child chunks.
+- `TXT`, `Markdown`, `HTML`, and `PDF` files now produce SQL-first parent-child chunks.
+- `PDF_PARSER_PROVIDER=local` uses LangChain PDF loading as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse and then reuses the existing Markdown parser and chunk tree.
+- `LLAMAPARSE_DO_NOT_CACHE=true` is the recommended default for enterprise documents, and `LLAMAPARSE_MERGE_CONTINUED_TABLES=false` keeps cross-page table merges opt-in.
 - `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
-- File types other than `TXT` / `Markdown` / `HTML` still move into controlled `failed` status.
+- Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
+- File types outside the implemented parser set still move into controlled `failed` status.
 - Public retrieval APIs, rerank, and chat orchestration remain outside this module.

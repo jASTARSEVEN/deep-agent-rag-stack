@@ -1,6 +1,7 @@
 """文件 ingest、chunking 與狀態轉換。"""
 
 from datetime import UTC, datetime
+import logging
 
 from sqlalchemy import delete
 
@@ -19,9 +20,11 @@ from worker.db import (
     create_session_factory,
     session_scope,
 )
-from worker.parsers import parse_document
+from worker.parsers import PdfParserConfig, parse_document
 from worker.storage import StorageError, build_object_storage_reader
 from worker.tasks.indexing import index_document_chunks
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="worker.tasks.ingest.process_document_ingest")
@@ -57,24 +60,41 @@ def process_document_ingest(job_id: str) -> str:
             return "document-skipped"
 
         _mark_processing(session=session, document=document, job=job)
+        pdf_provider = settings.pdf_parser_provider if document.file_name.lower().endswith(".pdf") else None
 
         try:
             payload = storage.get_object(object_key=document.storage_key)
             job.stage = "parsing"
             session.commit()
-            parsed_document = parse_document(file_name=document.file_name, payload=payload)
+            parsed_document = parse_document(
+                file_name=document.file_name,
+                payload=payload,
+                pdf_config=_build_pdf_parser_config(settings),
+            )
             job.stage = "chunking"
             session.commit()
             chunking_result = build_chunk_tree(
                 parsed_document=parsed_document,
                 config=_build_chunking_config(settings),
             )
+            _log_chunking_observability(
+                document=document,
+                job=job,
+                parsed_document=parsed_document,
+                chunking_result=chunking_result,
+                pdf_provider=pdf_provider,
+            )
             _replace_document_chunks(session=session, document=document, chunking_result=chunking_result)
             job.stage = "indexing"
             session.commit()
             index_document_chunks(session=session, document=document, settings=settings)
         except (StorageError, ValueError, UnicodeDecodeError) as exc:
-            _mark_failed(session=session, document=document, job=job, message=str(exc))
+            _mark_failed(
+                session=session,
+                document=document,
+                job=job,
+                message=_format_failure_message(message=str(exc), pdf_provider=pdf_provider),
+            )
             return "failed"
 
         _mark_succeeded(session=session, document=document, job=job, chunking_result=chunking_result)
@@ -209,6 +229,86 @@ def _mark_succeeded(*, session, document: Document, job: IngestJob, chunking_res
     session.commit()
 
 
+def _log_chunking_observability(
+    *,
+    document: Document,
+    job: IngestJob,
+    parsed_document,
+    chunking_result: ChunkingResult,
+    pdf_provider: str | None,
+) -> None:
+    """記錄 ingest/chunking 的觀測資訊，方便診斷 PDF 路徑。
+
+    參數：
+    - `document`：目前處理中的文件。
+    - `job`：目前 ingest job。
+    - `parsed_document`：parser 產出的標準化文件。
+    - `chunking_result`：chunking 結果。
+    - `pdf_provider`：若為 PDF，實際使用的 provider。
+
+    回傳：
+    - `None`：此函式只負責輸出 log。
+    """
+
+    diagnostics = _collect_chunking_diagnostics(chunking_result=chunking_result)
+    logger.info(
+        "ingest chunking completed file=%s job_id=%s source_format=%s pdf_provider=%s parent_chunks=%s child_chunks=%s text_table_text_clusters=%s mixed_structure_parents=%s",
+        document.file_name,
+        job.id,
+        parsed_document.source_format,
+        pdf_provider or "n/a",
+        len(chunking_result.parent_chunks),
+        len(chunking_result.child_chunks),
+        diagnostics["text_table_text_clusters"],
+        diagnostics["mixed_structure_parents"],
+    )
+
+
+def _collect_chunking_diagnostics(*, chunking_result: ChunkingResult) -> dict[str, int]:
+    """彙整 chunk tree 的最小診斷資訊。
+
+    參數：
+    - `chunking_result`：已建立完成的 chunk tree。
+
+    回傳：
+    - `dict[str, int]`：供 log 與觀測使用的診斷計數。
+    """
+
+    child_kinds_by_section: dict[int, list[str]] = {}
+    for child in chunking_result.child_chunks:
+        child_kinds_by_section.setdefault(child.section_index, []).append(child.structure_kind)
+
+    mixed_structure_parents = 0
+    text_table_text_clusters = 0
+    for kinds in child_kinds_by_section.values():
+        unique_kinds = set(kinds)
+        if len(unique_kinds) > 1:
+            mixed_structure_parents += 1
+        if kinds == ["text", "table", "text"]:
+            text_table_text_clusters += 1
+
+    return {
+        "mixed_structure_parents": mixed_structure_parents,
+        "text_table_text_clusters": text_table_text_clusters,
+    }
+
+
+def _format_failure_message(*, message: str, pdf_provider: str | None) -> str:
+    """在失敗訊息中補上 PDF parser 路徑，方便從 DB 直接診斷。
+
+    參數：
+    - `message`：原始可讀失敗訊息。
+    - `pdf_provider`：若為 PDF，實際使用的 provider。
+
+    回傳：
+    - `str`：補上 provider 前綴後的失敗訊息。
+    """
+
+    if not pdf_provider:
+        return message
+    return f"[pdf_provider={pdf_provider}] {message}"
+
+
 def _build_chunking_config(settings) -> ChunkingConfig:
     """將 worker 設定物件映射為 chunking 參數。
 
@@ -227,4 +327,22 @@ def _build_chunking_config(settings) -> ChunkingConfig:
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
         table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
         table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
+    )
+
+
+def _build_pdf_parser_config(settings) -> PdfParserConfig:
+    """將 worker 設定物件映射為 PDF parser 參數。
+
+    參數：
+    - `settings`：目前 worker 執行期設定。
+
+    回傳：
+    - `PdfParserConfig`：供 PDF parser provider 使用的參數物件。
+    """
+
+    return PdfParserConfig(
+        provider=settings.pdf_parser_provider,
+        llamaparse_api_key=settings.llamaparse_api_key,
+        llamaparse_do_not_cache=settings.llamaparse_do_not_cache,
+        llamaparse_merge_continued_tables=settings.llamaparse_merge_continued_tables,
     )
