@@ -133,7 +133,9 @@ This module contains the project's FastAPI service. It currently provides:
 - `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` and `INGEST_INLINE_MODE=true` for API tests and Playwright E2E.
 - `TXT`, `Markdown`, `HTML`, and `PDF` uploads now produce SQL-first parent-child `document_chunks`.
-- `PDF_PARSER_PROVIDER=local` uses LangChain PDF loading as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse before the existing Markdown parser and chunk tree.
+- `PDF_PARSER_PROVIDER=local` uses `Unstructured partition_pdf(strategy="fast")` as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse before the existing Markdown parser and chunk tree.
+- `.xlsx` uploads use `unstructured.partition_xlsx`, prefer worksheet `text_as_html`, and then re-enter the existing HTML table-aware parser and chunk tree.
+- `.docx` and `.pptx` uploads use `unstructured.partition_docx` / `partition_pptx`, then map Unstructured elements into the existing `text/table` block-aware parser contract.
 - `LLAMAPARSE_DO_NOT_CACHE=true` is the recommended default for enterprise documents, and `LLAMAPARSE_MERGE_CONTINUED_TABLES=false` keeps cross-page table merges opt-in.
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.

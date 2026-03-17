@@ -33,7 +33,8 @@
 - 身分與授權：`Keycloak`
 - 前端：`React + Tailwind`
 - 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
-- PDF 解析：`LangChain PDF loaders`、`LlamaParse SaaS (optional)`
+- PDF 解析：`Unstructured partition_pdf`、`LlamaParse SaaS (optional)`
+- Office 文件解析：`Unstructured partition_docx`、`partition_pptx`、`partition_xlsx`
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
 
@@ -41,7 +42,7 @@
 
 ### 範圍內
 - 僅支援檔案上傳作為知識來源
-- 檔案類型：`PDF`、`DOCX`、`TXT/MD`、`PPTX`、`HTML`
+- 檔案類型：`PDF`、`DOCX`、`TXT/MD`、`PPTX`、`HTML`、`XLSX`
 - Knowledge Area 管理
 - 以 Keycloak group 為基礎的授權
 - 背景索引與進度顯示
@@ -125,20 +126,22 @@
 1. API 收檔並存入 MinIO
 2. 建立 `documents` 與 `ingest_jobs`
 3. Worker 解析文件
-4. `PDF` 先經 provider-based parsing：`local` 走 LangChain PDF loader，`llamaparse` 則先轉成 Markdown
+4. `PDF` 先經 provider-based parsing：`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 則先轉成 Markdown
 5. Worker 先輸出 block-aware `ParsedDocument / ParsedBlock`，區分 `text` 與 `table`
-6. 先建立 parent sections，再依內容型別切分 child chunks
-7. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
-8. `table` child 優先保留整表，超大表格才依 row groups 切分
-9. 產生 embedding
-10. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
-11. 寫入 `document_chunks`
-12. 更新文件狀態
+6. `XLSX` 使用 `Unstructured partition_xlsx` 解析 worksheet，優先以 `text_as_html` 回接既有 HTML table-aware parser
+7. `DOCX` 與 `PPTX` 使用 `Unstructured partition_docx` / `partition_pptx` 解析，映射回既有 `text/table` block-aware contract
+8. 先建立 parent sections，再依內容型別切分 child chunks
+9. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
+10. `table` child 優先保留整表，超大表格才依 row groups 切分
+11. 產生 embedding
+12. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
+13. 寫入 `document_chunks`
+14. 更新文件狀態
 
 補充約束：
 - `document_chunks` 必須以 SQL-first 欄位保存 `chunk_type` 與 `structure_kind`
 - `LlamaParse` 正式路徑只使用標準 Markdown 輸出模式；agentic mode 僅保留未來擴充空間
-- `Markdown + HTML + LlamaParse PDF->Markdown` 本輪支援表格感知 chunking
+- `Markdown + HTML + LlamaParse PDF->Markdown + XLSX + DOCX/PPTX(Unstructured)` 本輪支援 block-aware chunking；其中表格感知正式覆蓋 Markdown、HTML、XLSX 與可辨識 table element 的 DOCX/PPTX
 - `local PDF parser` 僅作為自架 fallback，不承諾表格高保真
 - `TXT` 不做表格感知
 

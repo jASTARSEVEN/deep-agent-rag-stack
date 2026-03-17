@@ -1,5 +1,6 @@
 """Worker ingest task 與 chunk tree 測試。"""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from worker.chunking import ChunkingConfig, build_chunk_tree
@@ -20,7 +21,7 @@ from worker.parsers import ParsedBlock, ParsedDocument, parse_document
 from worker.tasks.ingest import process_document_ingest
 
 
-# 可被 PyPDFLoader 正常擷取文字的最小 PDF 測試樣本。
+# 測試 local PDF provider 路徑的最小 PDF 樣本。
 MINIMAL_TEXT_PDF = b"""%PDF-1.1
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -194,7 +195,33 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
 
 
 def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path) -> None:
-    """local PDF provider 應能將 PDF 推進到 ready。"""
+    """local PDF provider 應能以 Unstructured local 路徑將 PDF 推進到 ready。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured element metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured PDF element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
+
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Guide", metadata=_FakeMetadata()),
+            _FakeElement(
+                category="NarrativeText",
+                text="Deep Agent PDF local parser sample",
+                metadata=_FakeMetadata(),
+            ),
+        ],
+    )
 
     settings = build_settings(tmp_path)
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
@@ -218,10 +245,179 @@ def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path)
         assert refreshed_document.status == DocumentStatus.ready
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any("Deep Agent PDF local parser sample" in chunk.content for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_supports_xlsx(monkeypatch, tmp_path: Path) -> None:
+    """XLSX parser 應能將 worksheet 推進到 ready 並寫出 table-aware chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured worksheet metadata。"""
+
+        page_name: str
+        text_as_html: str
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured worksheet element。"""
+
+        metadata: _FakeMetadata
+        text: str
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_xlsx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(
+                metadata=_FakeMetadata(
+                    page_name="Budget",
+                    text_as_html=(
+                        "<table><tr><th>Name</th><th>Score</th></tr>"
+                        "<tr><td>Alice</td><td>95</td></tr></table>"
+                    ),
+                ),
+                text="Name Score Alice 95",
+            )
+        ],
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"fake-xlsx"
+    document, job = seed_job(session_factory, file_name="budget.xlsx", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
         assert refreshed_job.parent_chunk_count == 1
         assert refreshed_job.child_chunk_count == 1
         assert len(refreshed_chunks) == 2
         assert refreshed_chunks[0].content
+
+
+def test_process_document_ingest_supports_docx(monkeypatch, tmp_path: Path) -> None:
+    """DOCX parser 應能將文件推進到 ready 並寫出 text/table chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured office metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured office element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_docx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Project Plan", metadata=_FakeMetadata()),
+            _FakeElement(category="NarrativeText", text="Executive summary", metadata=_FakeMetadata()),
+            _FakeElement(
+                category="Table",
+                text="Owner Status Alice Ready",
+                metadata=_FakeMetadata(
+                    text_as_html=(
+                        "<table><tr><th>Owner</th><th>Status</th></tr>"
+                        "<tr><td>Alice</td><td>Ready</td></tr></table>"
+                    )
+                ),
+            ),
+        ],
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"fake-docx"
+    document, job = seed_job(session_factory, file_name="plan.docx", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_supports_pptx(monkeypatch, tmp_path: Path) -> None:
+    """PPTX parser 應能將文件推進到 ready 並寫出文字 chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured office metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured office element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pptx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Quarterly Review", metadata=_FakeMetadata()),
+            _FakeElement(category="ListItem", text="Revenue up 15%", metadata=_FakeMetadata()),
+        ],
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"fake-pptx"
+    document, job = seed_job(session_factory, file_name="review.pptx", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert all(chunk.structure_kind == ChunkStructureKind.text for chunk in refreshed_chunks)
 
 
 def test_process_document_ingest_supports_llamaparse_pdf(monkeypatch, tmp_path: Path) -> None:

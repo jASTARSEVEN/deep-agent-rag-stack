@@ -82,7 +82,7 @@
 - embedding / FTS placeholders
 
 狀態：
-- `已完成（MVP 垂直切片）`
+- `已完成（MVP 垂直切片，含 XLSX worksheet table-aware parsing）`
 
 ## Phase 3.5 — Document Lifecycle Hardening & Chunk Tree Foundation
 

@@ -22,7 +22,7 @@ from app.services.tasks import dispatch_document_ingest
 SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md"}
 
 # 產品範圍內但本 phase 尚未真正處理的副檔名。
-RECOGNIZED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".pptx", ".html"}
+RECOGNIZED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".pptx", ".html", ".xlsx"}
 
 # 若瀏覽器沒有帶 content type，退回使用的 MIME 類型。
 DEFAULT_TEXT_CONTENT_TYPE = "text/plain"

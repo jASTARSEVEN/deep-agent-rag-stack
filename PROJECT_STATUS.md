@@ -46,9 +46,11 @@
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
 - 已完成將 `match_chunks` 收斂為資料庫候選召回 RPC；最終 `RRF`、ranking policy、rerank 與 assembler 由 Python 層負責
-- 已完成 provider-based PDF parsing：`local` 走 LangChain PDF loader，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
+- 已完成 provider-based PDF parsing：`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
 - 已補上 `llamaparse` 的 Markdown noise cleanup 與 PDF-specific block consolidation，降低 parent chunks 在 PDF 路徑上的過度碎片化
 - 已支援 `PDF + llamaparse` 的短 `text -> table -> text` cluster parent 規則：單一 parent、混合 `text/table/text` children，維持 table-aware retrieval/citation 語意
+- 已新增 `XLSX -> Unstructured partition_xlsx -> HTML table-aware parser` 路徑，worksheet 可直接進入既有 table-aware chunking
+- 已新增 `DOCX/PPTX -> Unstructured partition_docx/partition_pptx` 路徑，回接既有 `text/table` block-aware parser contract
 
 ## 已完成功能
 
@@ -96,7 +98,7 @@
 - 已實作 `POST /areas/{area_id}/documents`、`GET /areas/{area_id}/documents`、`GET /documents/{document_id}` 與 `GET /ingest-jobs/{job_id}`
 - 文件 upload 已接上物件儲存、`documents` / `ingest_jobs` 建立與 Celery dispatch
 - 已實作 `uploaded -> processing -> ready|failed` 與 `queued -> processing -> succeeded|failed` 狀態轉換
-- Worker 已補最小 ingest task、`TXT/MD` parser 與其他檔案型別的受控失敗語意
+- Worker 已補最小 ingest task、`TXT/MD/PDF/HTML/XLSX/DOCX/PPTX` parser 與其他檔案型別的受控失敗語意
 - Web 已在 `/areas` 補上 Files 區塊、單檔 upload、文件狀態與失敗訊息顯示
 - API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
 - Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例

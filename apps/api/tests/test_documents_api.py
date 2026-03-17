@@ -1,5 +1,6 @@
 """Documents、chunks 與 ingest jobs API 測試。"""
 
+from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
@@ -29,7 +30,7 @@ READER_TOKEN = "Bearer test::user-reader::/group/reader"
 # 無授權測試 token。
 OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
 
-# 可被 PyPDFLoader 正常擷取文字的最小 PDF 測試樣本。
+# 測試 local PDF provider 路徑的最小 PDF 樣本。
 MINIMAL_TEXT_PDF = b"""%PDF-1.1
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
@@ -275,8 +276,104 @@ def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
     assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
 
 
-def test_upload_pdf_uses_local_parser_and_becomes_ready(client, db_session) -> None:
-    """local PDF parser 應能讓 PDF 在 inline ingest 下轉為 ready。"""
+def test_upload_xlsx_creates_table_chunks_via_unstructured(client, db_session, monkeypatch) -> None:
+    """含 XLSX worksheet 的文件應建立 table structure_kind chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured worksheet metadata。"""
+
+        page_name: str
+        text_as_html: str
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured worksheet element。"""
+
+        metadata: _FakeMetadata
+        text: str
+
+    monkeypatch.setattr(
+        "app.services.parsers._extract_xlsx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(
+                metadata=_FakeMetadata(
+                    page_name="Quarterly Budget",
+                    text_as_html=(
+                        "<table><tr><th>Name</th><th>Score</th></tr>"
+                        "<tr><td>Alice</td><td>95</td></tr>"
+                        "<tr><td>Bob</td><td>88</td></tr></table>"
+                    ),
+                ),
+                text="Name Score Alice 95 Bob 88",
+            )
+        ],
+    )
+
+    area = Area(id=_uuid(), name="Maintainer XLSX Tables")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={
+            "file": (
+                "report.xlsx",
+                b"fake-xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "ready"
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
+    table_parent = next(
+        chunk
+        for chunk in stored_chunks
+        if chunk.chunk_type == ChunkType.parent and chunk.structure_kind == ChunkStructureKind.table
+    )
+    assert table_parent.heading == "Quarterly Budget"
+    assert "Alice" in table_parent.content
+
+
+def test_upload_pdf_uses_local_parser_and_becomes_ready(client, db_session, monkeypatch) -> None:
+    """local PDF parser 應能以 Unstructured local 路徑讓 PDF 在 inline ingest 下轉為 ready。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured element metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured PDF element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
+
+    monkeypatch.setattr(
+        "app.services.parsers._extract_pdf_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Guide", metadata=_FakeMetadata()),
+            _FakeElement(
+                category="NarrativeText",
+                text="Deep Agent PDF local parser sample",
+                metadata=_FakeMetadata(),
+            ),
+        ],
+    )
 
     area = Area(id=_uuid(), name="Maintainer PDF Docs")
     db_session.add(area)
@@ -499,13 +596,45 @@ def test_upload_document_rejects_unknown_extension(client, db_session) -> None:
     assert response.json()["detail"] == "目前不支援此檔案類型。"
 
 
-def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db_session) -> None:
-    """產品範圍內但仍未支援的副檔名應進入 failed 且沒有 chunks。"""
+def test_upload_docx_creates_chunks_via_unstructured(client, db_session, monkeypatch) -> None:
+    """DOCX 應能透過 Unstructured 轉為 ready 並建立 chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured office metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured office element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
 
     area = Area(id=_uuid(), name="DOCX Docs")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
     db_session.commit()
+
+    monkeypatch.setattr(
+        "app.services.parsers._extract_docx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Project Plan", metadata=_FakeMetadata()),
+            _FakeElement(category="NarrativeText", text="Executive summary", metadata=_FakeMetadata()),
+            _FakeElement(
+                category="Table",
+                text="Owner Status Alice Ready",
+                metadata=_FakeMetadata(
+                    text_as_html=(
+                        "<table><tr><th>Owner</th><th>Status</th></tr>"
+                        "<tr><td>Alice</td><td>Ready</td></tr></table>"
+                    )
+                ),
+            ),
+        ],
+    )
 
     response = client.post(
         f"/areas/{area.id}/documents",
@@ -515,10 +644,59 @@ def test_upload_document_marks_unimplemented_supported_type_as_failed(client, db
 
     assert response.status_code == 201
     payload = response.json()
-    assert payload["document"]["status"] == "failed"
-    assert payload["document"]["chunk_summary"]["total_chunks"] == 0
-    assert payload["job"]["status"] == "failed"
-    assert payload["job"]["error_message"] == "目前尚未支援此檔案類型的解析。"
+    assert payload["document"]["status"] == "ready"
+    assert payload["job"]["status"] == "succeeded"
+    assert payload["document"]["chunk_summary"]["total_chunks"] > 0
+
+
+def test_upload_pptx_creates_chunks_via_unstructured(client, db_session, monkeypatch) -> None:
+    """PPTX 應能透過 Unstructured 轉為 ready 並建立文字 chunks。"""
+
+    @dataclass
+    class _FakeMetadata:
+        """模擬 Unstructured office metadata。"""
+
+        text_as_html: str | None = None
+
+    @dataclass
+    class _FakeElement:
+        """模擬 Unstructured office element。"""
+
+        category: str
+        text: str
+        metadata: _FakeMetadata
+
+    area = Area(id=_uuid(), name="PPTX Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    monkeypatch.setattr(
+        "app.services.parsers._extract_pptx_elements_with_unstructured",
+        lambda *, payload: [
+            _FakeElement(category="Title", text="Quarterly Review", metadata=_FakeMetadata()),
+            _FakeElement(category="ListItem", text="Revenue up 15%", metadata=_FakeMetadata()),
+            _FakeElement(category="ListItem", text="Margin stable", metadata=_FakeMetadata()),
+        ],
+    )
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": ADMIN_TOKEN},
+        files={
+            "file": (
+                "deck.pptx",
+                b"PK\x03\x04",
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["status"] == "ready"
+    assert payload["job"]["status"] == "succeeded"
+    assert payload["document"]["chunk_summary"]["total_chunks"] > 0
 
 
 def test_list_documents_returns_only_area_documents_with_chunk_summary(client, db_session) -> None:

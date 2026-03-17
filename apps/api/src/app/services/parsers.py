@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from html import escape
 from html.parser import HTMLParser
 from pathlib import Path
 import re
@@ -10,7 +11,7 @@ import tempfile
 
 
 # 本 phase 真正支援解析的副檔名。
-SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html", ".pdf"}
+SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html", ".pdf", ".xlsx", ".docx", ".pptx"}
 
 # 支援的 PDF parser provider 名稱。
 SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse"}
@@ -21,11 +22,17 @@ MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,3})\s+(?P<heading>.+?)\s*$")
 # Markdown table delimiter 判定規則。
 MARKDOWN_TABLE_DELIMITER_PATTERN = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$")
 
+# Markdown table cell 分隔規則；忽略 escaped pipe。
+MARKDOWN_TABLE_CELL_SPLIT_PATTERN = re.compile(r"(?<!\\)\|")
+
 # PDF Markdown 常見頁碼噪音。
 PDF_PAGE_LABEL_PATTERN = re.compile(r"^\s*(?:page|p\.)\s+\d+(?:\s*(?:/|of)\s*\d+)?\s*$", re.IGNORECASE)
 
 # PDF Markdown 常見頁面分隔符噪音。
 PDF_PAGE_SEPARATOR_PATTERN = re.compile(r"^\s*(?:-{3,}|\*{3,}|_{3,})\s*$")
+
+# local PDF parser 使用的 Unstructured strategy。
+LOCAL_PDF_UNSTRUCTURED_STRATEGY = "fast"
 
 
 @dataclass(slots=True)
@@ -96,6 +103,12 @@ def parse_document(
         return _parse_html_document(payload=payload)
     if lower_name.endswith(".pdf"):
         return _parse_pdf_document(payload=payload, pdf_config=pdf_config or PdfParserConfig())
+    if lower_name.endswith(".xlsx"):
+        return _parse_xlsx_document(payload=payload)
+    if lower_name.endswith(".docx"):
+        return _parse_docx_document(payload=payload)
+    if lower_name.endswith(".pptx"):
+        return _parse_pptx_document(payload=payload)
     raise ValueError("目前尚未支援此檔案類型的解析。")
 
 
@@ -206,8 +219,11 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
         raise ValueError(f"不支援的 PDF parser provider：{pdf_config.provider}")
 
     if provider == "local":
-        extracted_text = _extract_pdf_text_with_local_loader(payload=payload)
-        return _materialize_blocks(source_format="pdf", block_inputs=[("text", None, extracted_text)])
+        elements = _extract_pdf_elements_with_unstructured(payload=payload)
+        return _materialize_blocks(
+            source_format="pdf",
+            block_inputs=_build_pdf_block_inputs_from_unstructured_elements(elements=elements),
+        )
 
     markdown = _extract_pdf_markdown_with_llamaparse(payload=payload, pdf_config=pdf_config)
     return _parse_markdown_text(text=_clean_llamaparse_markdown(markdown), source_format="pdf")
@@ -272,7 +288,101 @@ def _consume_markdown_table(*, lines: list[str], start_index: int) -> tuple[list
             break
         table_lines.append(candidate)
         index += 1
-    return table_lines, index
+    return _normalize_markdown_table_lines(table_lines), index
+
+
+def _normalize_markdown_table_lines(lines: list[str]) -> list[str]:
+    """將 Markdown table 正規化為穩定且精簡的 canonical 文字。
+
+    參數：
+    - `lines`：原始 Markdown table 行列表，至少包含 header 與 delimiter。
+
+    回傳：
+    - `list[str]`：移除 padding 空白並壓縮 delimiter 的 table 行列表。
+    """
+
+    if len(lines) < 2:
+        return [line.rstrip() for line in lines]
+
+    header_cells = _split_markdown_table_row(lines[0])
+    delimiter_cells = _split_markdown_table_row(lines[1])
+    data_rows = [_split_markdown_table_row(line) for line in lines[2:]]
+    column_count = max(
+        len(header_cells),
+        len(delimiter_cells),
+        *(len(row) for row in data_rows),
+    )
+    padded_header = _pad_markdown_table_row(header_cells, column_count=column_count)
+    padded_data_rows = [_pad_markdown_table_row(row, column_count=column_count) for row in data_rows]
+    normalized_delimiter = _normalize_markdown_table_delimiter(
+        cells=delimiter_cells,
+        column_count=column_count,
+    )
+    return [
+        _render_markdown_row(padded_header),
+        _render_markdown_delimiter_row(normalized_delimiter),
+        *(_render_markdown_row(row) for row in padded_data_rows),
+    ]
+
+
+def _split_markdown_table_row(line: str) -> list[str]:
+    """將 Markdown table row 拆為 cell 清單。
+
+    參數：
+    - `line`：單行 Markdown table 文字。
+
+    回傳：
+    - `list[str]`：去除欄位 padding 後的 cell 內容。
+    """
+
+    normalized_line = line.strip()
+    if normalized_line.startswith("|"):
+        normalized_line = normalized_line[1:]
+    if normalized_line.endswith("|"):
+        normalized_line = normalized_line[:-1]
+    if not normalized_line:
+        return []
+    return [cell.strip() for cell in MARKDOWN_TABLE_CELL_SPLIT_PATTERN.split(normalized_line)]
+
+
+def _pad_markdown_table_row(cells: list[str], *, column_count: int) -> list[str]:
+    """補齊 Markdown row 的欄位數，維持穩定欄數。
+
+    參數：
+    - `cells`：原始 cell 清單。
+    - `column_count`：目標欄位數。
+
+    回傳：
+    - `list[str]`：補齊空字串後的 cell 清單。
+    """
+
+    return cells + [""] * max(column_count - len(cells), 0)
+
+
+def _normalize_markdown_table_delimiter(*, cells: list[str], column_count: int) -> list[str]:
+    """將 delimiter row 壓成最短合法格式並保留對齊資訊。
+
+    參數：
+    - `cells`：原始 delimiter cell 清單。
+    - `column_count`：目標欄位數。
+
+    回傳：
+    - `list[str]`：最小化後的 delimiter cell 清單。
+    """
+
+    normalized_cells: list[str] = []
+    padded_cells = _pad_markdown_table_row(cells, column_count=column_count)
+    for cell in padded_cells:
+        compact = cell.replace(" ", "")
+        align_left = compact.startswith(":")
+        align_right = compact.endswith(":")
+        core = "---"
+        if align_left:
+            core = ":" + core
+        if align_right:
+            core = core + ":"
+        normalized_cells.append(core)
+    return normalized_cells
 
 
 def _parse_html_document(*, payload: bytes) -> ParsedDocument:
@@ -286,12 +396,92 @@ def _parse_html_document(*, payload: bytes) -> ParsedDocument:
     """
 
     text = _decode_payload(payload=payload)
+    return _materialize_blocks(source_format="html", block_inputs=_extract_html_block_inputs(text=text))
+
+
+def _parse_xlsx_document(*, payload: bytes) -> ParsedDocument:
+    """使用 Unstructured 解析 XLSX，並將 worksheet 轉為 table-aware blocks。
+
+    參數：
+    - `payload`：XLSX 原始位元組內容。
+
+    回傳：
+    - `ParsedDocument`：包含各 worksheet table blocks 的結果。
+    """
+
+    elements = _extract_xlsx_elements_with_unstructured(payload=payload)
+    block_inputs: list[tuple[str, str | None, str]] = []
+
+    for element in elements:
+        metadata = getattr(element, "metadata", None)
+        heading = _normalize_worksheet_heading(metadata=metadata)
+        text_as_html = (getattr(metadata, "text_as_html", None) or "").strip() if metadata is not None else ""
+        if text_as_html:
+            block_inputs.extend(
+                _extract_html_block_inputs(text=f"<h1>{escape(heading)}</h1>\n{text_as_html}" if heading else text_as_html)
+            )
+            continue
+
+        fallback_text = (getattr(element, "text", "") or "").strip()
+        if fallback_text:
+            block_inputs.append(("table", heading, fallback_text))
+
+    if not block_inputs:
+        raise ValueError("Unstructured XLSX parser 未回傳可用的 worksheet 內容。")
+
+    return _materialize_blocks(source_format="xlsx", block_inputs=block_inputs)
+
+
+def _parse_docx_document(*, payload: bytes) -> ParsedDocument:
+    """使用 Unstructured 解析 DOCX，並映射為 block-aware 結果。
+
+    參數：
+    - `payload`：DOCX 原始位元組內容。
+
+    回傳：
+    - `ParsedDocument`：DOCX block-aware 結果。
+    """
+
+    elements = _extract_docx_elements_with_unstructured(payload=payload)
+    return _materialize_blocks(
+        source_format="docx",
+        block_inputs=_build_office_block_inputs_from_unstructured_elements(elements=elements),
+    )
+
+
+def _parse_pptx_document(*, payload: bytes) -> ParsedDocument:
+    """使用 Unstructured 解析 PPTX，並映射為 block-aware 結果。
+
+    參數：
+    - `payload`：PPTX 原始位元組內容。
+
+    回傳：
+    - `ParsedDocument`：PPTX block-aware 結果。
+    """
+
+    elements = _extract_pptx_elements_with_unstructured(payload=payload)
+    return _materialize_blocks(
+        source_format="pptx",
+        block_inputs=_build_office_block_inputs_from_unstructured_elements(elements=elements),
+    )
+
+
+def _extract_html_block_inputs(*, text: str) -> list[tuple[str, str | None, str]]:
+    """將 HTML 字串轉為 block 輸入清單。
+
+    參數：
+    - `text`：HTML 原始文字。
+
+    回傳：
+    - `list[tuple[str, str | None, str]]`：可供 materialize 的 block 輸入。
+    """
+
     parser = _HTMLBlockParser()
     parser.feed(text)
     parser.close()
     if not parser.block_inputs:
         raise ValueError("無法從文件內容建立有效 chunks。")
-    return _materialize_blocks(source_format="html", block_inputs=parser.block_inputs)
+    return parser.block_inputs
 
 
 def _materialize_blocks(*, source_format: str, block_inputs: list[tuple[str, str | None, str]]) -> ParsedDocument:
@@ -333,31 +523,123 @@ def _materialize_blocks(*, source_format: str, block_inputs: list[tuple[str, str
     return ParsedDocument(normalized_text="\n\n".join(normalized_parts), source_format=source_format, blocks=blocks)
 
 
-def _extract_pdf_text_with_local_loader(*, payload: bytes) -> str:
-    """使用 LangChain PDF loader 萃取 PDF 純文字。
+def _build_pdf_block_inputs_from_unstructured_elements(*, elements: list[object]) -> list[tuple[str, str | None, str]]:
+    """將 Unstructured PDF elements 映射為 block-aware parser 輸入。
+
+    參數：
+    - `elements`：Unstructured PDF partition 回傳的 element 清單。
+
+    回傳：
+    - `list[tuple[str, str | None, str]]`：可供 materialize 的 block 輸入。
+    """
+
+    block_inputs: list[tuple[str, str | None, str]] = []
+    current_heading: str | None = None
+
+    for element in elements:
+        metadata = getattr(element, "metadata", None)
+        category = str(getattr(element, "category", "") or element.__class__.__name__).strip().lower()
+        text_as_html = (getattr(metadata, "text_as_html", None) or "").strip() if metadata is not None else ""
+        raw_text = (getattr(element, "text", "") or "").strip()
+
+        if category == "title" and raw_text:
+            current_heading = raw_text
+            block_inputs.append(("text", None, raw_text))
+            continue
+
+        if category == "table":
+            if text_as_html:
+                block_inputs.extend(
+                    _extract_html_block_inputs(
+                        text=f"<h1>{escape(current_heading)}</h1>\n{text_as_html}" if current_heading else text_as_html
+                    )
+                )
+                continue
+            if raw_text:
+                block_inputs.append(("table", current_heading, raw_text))
+            continue
+
+        if raw_text:
+            block_inputs.append(("text", current_heading, raw_text))
+
+    if not block_inputs:
+        raise ValueError("local PDF parser 無法從文件中擷取文字內容。")
+    return block_inputs
+
+
+def _build_office_block_inputs_from_unstructured_elements(
+    *,
+    elements: list[object],
+) -> list[tuple[str, str | None, str]]:
+    """將 Unstructured DOCX/PPTX elements 映射為 block-aware parser 輸入。
+
+    參數：
+    - `elements`：Unstructured office partition 回傳的 element 清單。
+
+    回傳：
+    - `list[tuple[str, str | None, str]]`：可供 materialize 的 block 輸入。
+    """
+
+    block_inputs: list[tuple[str, str | None, str]] = []
+    current_heading: str | None = None
+
+    for element in elements:
+        metadata = getattr(element, "metadata", None)
+        category = str(getattr(element, "category", "") or element.__class__.__name__).strip().lower()
+        text_as_html = (getattr(metadata, "text_as_html", None) or "").strip() if metadata is not None else ""
+        raw_text = (getattr(element, "text", "") or "").strip()
+
+        if category == "title" and raw_text:
+            current_heading = raw_text
+            block_inputs.append(("text", None, raw_text))
+            continue
+
+        if category == "table":
+            if text_as_html:
+                block_inputs.extend(
+                    _extract_html_block_inputs(
+                        text=f"<h1>{escape(current_heading)}</h1>\n{text_as_html}" if current_heading else text_as_html
+                    )
+                )
+                continue
+            if raw_text:
+                block_inputs.append(("table", current_heading, raw_text))
+            continue
+
+        if raw_text:
+            block_inputs.append(("text", current_heading, raw_text))
+
+    if not block_inputs:
+        raise ValueError("Unstructured office parser 未回傳可用內容。")
+    return block_inputs
+
+
+def _extract_pdf_elements_with_unstructured(*, payload: bytes) -> list[object]:
+    """使用 Unstructured partition_pdf 萃取 PDF elements。
 
     參數：
     - `payload`：PDF 原始位元組內容。
 
     回傳：
-    - `str`：萃取後的純文字。
+    - `list[object]`：Unstructured 回傳的 element 清單。
     """
 
     try:
-        from langchain_community.document_loaders import PyPDFLoader
+        from unstructured.partition.pdf import partition_pdf
     except ImportError as exc:
-        raise ValueError("local PDF parser 需要安裝 langchain-community 與 pypdf。") from exc
+        raise ValueError("local PDF parser 需要安裝 unstructured[pdf] 與相關系統依賴。") from exc
 
     temp_path = _write_temporary_pdf(payload=payload)
     try:
-        documents = PyPDFLoader(str(temp_path)).load()
+        elements = partition_pdf(filename=str(temp_path), strategy=LOCAL_PDF_UNSTRUCTURED_STRATEGY)
+    except Exception as exc:  # noqa: BLE001 - 對第三方 parser 失敗統一包成受控錯誤。
+        raise ValueError(f"Unstructured PDF 解析失敗：{exc}") from exc
     finally:
         temp_path.unlink(missing_ok=True)
 
-    text = "\n\n".join(document.page_content.strip() for document in documents if document.page_content.strip()).strip()
-    if not text:
+    if not elements:
         raise ValueError("local PDF parser 無法從文件中擷取文字內容。")
-    return text
+    return list(elements)
 
 
 def _extract_pdf_markdown_with_llamaparse(*, payload: bytes, pdf_config: PdfParserConfig) -> str:
@@ -403,6 +685,90 @@ def _extract_pdf_markdown_with_llamaparse(*, payload: bytes, pdf_config: PdfPars
     return markdown
 
 
+def _extract_xlsx_elements_with_unstructured(*, payload: bytes) -> list[object]:
+    """使用 Unstructured partition_xlsx 擷取 worksheet elements。
+
+    參數：
+    - `payload`：XLSX 原始位元組內容。
+
+    回傳：
+    - `list[object]`：Unstructured 回傳的 worksheet elements。
+    """
+
+    try:
+        from unstructured.partition.xlsx import partition_xlsx
+    except ImportError as exc:
+        raise ValueError("XLSX parser 需要安裝 unstructured[all-docs] 或至少可用的 xlsx 相依套件。") from exc
+
+    temp_path = _write_temporary_file(payload=payload, suffix=".xlsx")
+    try:
+        elements = partition_xlsx(filename=str(temp_path))
+    except Exception as exc:  # noqa: BLE001 - 對第三方 parser 失敗統一包成受控錯誤。
+        raise ValueError(f"Unstructured XLSX 解析失敗：{exc}") from exc
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    if not elements:
+        raise ValueError("Unstructured XLSX parser 未回傳任何 worksheet。")
+    return list(elements)
+
+
+def _extract_docx_elements_with_unstructured(*, payload: bytes) -> list[object]:
+    """使用 Unstructured partition_docx 擷取 DOCX elements。
+
+    參數：
+    - `payload`：DOCX 原始位元組內容。
+
+    回傳：
+    - `list[object]`：Unstructured 回傳的 element 清單。
+    """
+
+    try:
+        from unstructured.partition.docx import partition_docx
+    except ImportError as exc:
+        raise ValueError("DOCX parser 需要安裝 unstructured[docx] 與相關相依套件。") from exc
+
+    temp_path = _write_temporary_file(payload=payload, suffix=".docx")
+    try:
+        elements = partition_docx(filename=str(temp_path))
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Unstructured DOCX 解析失敗：{exc}") from exc
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    if not elements:
+        raise ValueError("Unstructured DOCX parser 未回傳任何內容。")
+    return list(elements)
+
+
+def _extract_pptx_elements_with_unstructured(*, payload: bytes) -> list[object]:
+    """使用 Unstructured partition_pptx 擷取 PPTX elements。
+
+    參數：
+    - `payload`：PPTX 原始位元組內容。
+
+    回傳：
+    - `list[object]`：Unstructured 回傳的 element 清單。
+    """
+
+    try:
+        from unstructured.partition.pptx import partition_pptx
+    except ImportError as exc:
+        raise ValueError("PPTX parser 需要安裝 unstructured[pptx] 與相關相依套件。") from exc
+
+    temp_path = _write_temporary_file(payload=payload, suffix=".pptx")
+    try:
+        elements = partition_pptx(filename=str(temp_path))
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError(f"Unstructured PPTX 解析失敗：{exc}") from exc
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    if not elements:
+        raise ValueError("Unstructured PPTX parser 未回傳任何內容。")
+    return list(elements)
+
+
 def _write_temporary_pdf(*, payload: bytes) -> Path:
     """將 PDF bytes 寫入暫存檔，供 PDF loader 使用。
 
@@ -413,9 +779,47 @@ def _write_temporary_pdf(*, payload: bytes) -> Path:
     - `Path`：暫存 PDF 檔案路徑。
     """
 
-    with tempfile.NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temporary_file:
+    return _write_temporary_file(payload=payload, suffix=".pdf")
+
+
+def _write_temporary_file(*, payload: bytes, suffix: str) -> Path:
+    """將二進位內容寫入指定副檔名的暫存檔。
+
+    參數：
+    - `payload`：原始位元組內容。
+    - `suffix`：暫存檔副檔名。
+
+    回傳：
+    - `Path`：暫存檔案路徑。
+    """
+
+    with tempfile.NamedTemporaryFile("wb", suffix=suffix, delete=False) as temporary_file:
         temporary_file.write(payload)
         return Path(temporary_file.name)
+
+
+def _normalize_worksheet_heading(*, metadata: object | None) -> str | None:
+    """從 Unstructured metadata 擷取 worksheet 名稱。
+
+    參數：
+    - `metadata`：Unstructured element metadata。
+
+    回傳：
+    - `str | None`：標準化後的 worksheet 名稱。
+    """
+
+    if metadata is None:
+        return None
+
+    for attribute_name in ("page_name", "sheet_name", "text_as_html"):
+        if attribute_name == "text_as_html":
+            continue
+        value = getattr(metadata, attribute_name, None)
+        if isinstance(value, str):
+            normalized_value = value.strip()
+            if normalized_value:
+                return normalized_value
+    return None
 
 
 class _HTMLBlockParser(HTMLParser):
@@ -621,6 +1025,19 @@ def _render_markdown_row(cells: list[str]) -> str:
     """
 
     return "| " + " | ".join(cell.replace("\n", " ").strip() for cell in cells) + " |"
+
+
+def _render_markdown_delimiter_row(cells: list[str]) -> str:
+    """將 delimiter cells 渲染為穩定的 Markdown delimiter row。
+
+    參數：
+    - `cells`：delimiter cell 清單。
+
+    回傳：
+    - `str`：Markdown delimiter row。
+    """
+
+    return "| " + " | ".join(cell.strip() or "---" for cell in cells) + " |"
 
 
 def _normalize_whitespace(value: str) -> str:

@@ -1,6 +1,6 @@
 /** Area-scoped chat panel，正式透過 LangGraph built-in thread/run 互動。 */
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import type { AccessTokenGetter } from "../../../lib/api";
 import type { ChatMessageViewModel } from "../../../lib/types";
@@ -36,10 +36,12 @@ export function ChatPanel({
   const [chatQuestion, setChatQuestion] = useState(EMPTY_CHAT_INPUT);
   const [chatMessages, setChatMessages] = useState<ChatMessageViewModel[]>([]);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
+  const isChatSubmitLockedRef = useRef(false);
 
   useEffect(() => {
     setChatQuestion(EMPTY_CHAT_INPUT);
     setIsSubmittingChat(false);
+    isChatSubmitLockedRef.current = false;
 
     if (!areaId) {
       setChatMessages([]);
@@ -78,8 +80,22 @@ export function ChatPanel({
     };
   }, [accessTokenGetter, areaId, onError]);
 
+  /**
+   * 送出目前的 area chat 問題，並以同步鎖避免連續 Enter 造成重複請求。
+   *
+   * Args:
+   *   event: 觸發送出的表單事件。
+   *
+   * Returns:
+   *   Promise<void>: 非同步送出流程完成後結束。
+   */
   async function handleChatSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+
+    if (isChatSubmitLockedRef.current) {
+      return;
+    }
+
     if (!areaId) {
       onError("請先選擇 area。");
       return;
@@ -93,6 +109,7 @@ export function ChatPanel({
 
     onError(null);
     onNoticeClear?.();
+    isChatSubmitLockedRef.current = true;
     setIsSubmittingChat(true);
     setChatQuestion(EMPTY_CHAT_INPUT);
     setChatMessages((current) => [...current, createUserMessage(trimmedQuestion), createAssistantMessage()]);
@@ -117,6 +134,7 @@ export function ChatPanel({
       );
       onError(errorMessage);
     } finally {
+      isChatSubmitLockedRef.current = false;
       setIsSubmittingChat(false);
     }
   }

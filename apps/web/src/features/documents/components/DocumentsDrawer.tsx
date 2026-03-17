@@ -207,7 +207,7 @@ export function DocumentsDrawer({
                     data-testid="document-upload"
                     type="file"
                     className="w-full text-xs"
-                    accept=".txt,.md,.pdf,.docx,.pptx,.html"
+                    accept=".txt,.md,.pdf,.docx,.pptx,.html,.xlsx"
                     onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   />
                   <p className="text-[11px] leading-5 text-stone-500">
