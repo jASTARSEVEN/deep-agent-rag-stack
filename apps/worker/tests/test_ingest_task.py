@@ -258,6 +258,39 @@ def test_process_document_ingest_supports_llamaparse_pdf(monkeypatch, tmp_path: 
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
 
 
+def test_process_document_ingest_truncates_chunk_heading_and_preview(monkeypatch, tmp_path: Path) -> None:
+    """ingest 寫入 chunk 時應裁切過長 heading 與 content preview，避免超出 schema。"""
+
+    settings = build_settings(tmp_path)
+    settings.chunk_content_preview_length = 400
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    long_heading = "H" * 320
+    long_body = "A" * 420
+    payload = f"# {long_heading}\n{long_body}".encode()
+    document, job = seed_job(session_factory, file_name="long-heading.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        stored_chunks = (
+            session.query(DocumentChunk)
+            .filter(DocumentChunk.document_id == document.id)
+            .order_by(DocumentChunk.position.asc())
+            .all()
+        )
+        assert result == "succeeded"
+        assert stored_chunks
+        assert all(chunk.heading == long_heading[:255] for chunk in stored_chunks)
+        assert all(len(chunk.content_preview) == 255 for chunk in stored_chunks)
+
+
 def test_process_document_ingest_marks_failed_for_llamaparse_missing_key(monkeypatch, tmp_path: Path) -> None:
     """llamaparse provider 缺少 API key 時應轉為受控 failed。"""
 

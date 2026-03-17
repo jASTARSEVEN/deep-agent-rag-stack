@@ -26,6 +26,12 @@ from worker.tasks.indexing import index_document_chunks
 
 logger = logging.getLogger(__name__)
 
+# `document_chunks.heading` 欄位的資料庫最大長度。
+MAX_CHUNK_HEADING_LENGTH = 255
+
+# `document_chunks.content_preview` 欄位的資料庫最大長度。
+MAX_CHUNK_CONTENT_PREVIEW_LENGTH = 255
+
 
 @celery_app.task(name="worker.tasks.ingest.process_document_ingest")
 def process_document_ingest(job_id: str) -> str:
@@ -146,9 +152,9 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
             position=draft.position,
             section_index=draft.section_index,
             child_index=None,
-            heading=draft.heading,
+            heading=_sanitize_chunk_heading(draft.heading),
             content=draft.content,
-            content_preview=draft.content_preview,
+            content_preview=_sanitize_content_preview(draft.content_preview),
             char_count=draft.char_count,
             start_offset=draft.start_offset,
             end_offset=draft.end_offset,
@@ -167,9 +173,9 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
                 position=draft.position,
                 section_index=draft.section_index,
                 child_index=draft.child_index,
-                heading=draft.heading,
+                heading=_sanitize_chunk_heading(draft.heading),
                 content=draft.content,
-                content_preview=draft.content_preview,
+                content_preview=_sanitize_content_preview(draft.content_preview),
                 char_count=draft.char_count,
                 start_offset=draft.start_offset,
                 end_offset=draft.end_offset,
@@ -177,6 +183,34 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
         )
 
     session.flush()
+
+
+def _sanitize_chunk_heading(heading: str | None) -> str | None:
+    """將 chunk heading 裁切到資料庫欄位可接受的長度。
+
+    參數：
+    - `heading`：chunk 草稿上的 heading。
+
+    回傳：
+    - `str | None`：可安全寫入資料庫的 heading；若原值為空則回傳空值。
+    """
+
+    if heading is None:
+        return None
+    return heading[:MAX_CHUNK_HEADING_LENGTH]
+
+
+def _sanitize_content_preview(content_preview: str) -> str:
+    """將 chunk 摘要裁切到資料庫欄位可接受的長度。
+
+    參數：
+    - `content_preview`：chunk 草稿上的摘要文字。
+
+    回傳：
+    - `str`：可安全寫入資料庫的摘要文字。
+    """
+
+    return content_preview[:MAX_CHUNK_CONTENT_PREVIEW_LENGTH]
 
 
 def _mark_failed(*, session, document: Document, job: IngestJob, message: str) -> None:

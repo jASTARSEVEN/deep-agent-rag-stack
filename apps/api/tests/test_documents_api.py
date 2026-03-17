@@ -165,6 +165,37 @@ def test_upload_document_preserves_langchain_child_offsets(client, db_session) -
         assert parent.content[relative_start:relative_end] == child.content
 
 
+def test_upload_document_truncates_chunk_heading_and_preview(client, db_session, app_settings) -> None:
+    """inline ingest 寫入 chunk 時應裁切過長 heading 與 content preview，避免超出 schema。"""
+
+    app_settings.chunk_content_preview_length = 400
+    area = Area(id=_uuid(), name="Long Heading Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    long_heading = "H" * 320
+    long_body = "A" * 420
+    file_payload = f"# {long_heading}\n{long_body}\n".encode()
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("long-heading.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert stored_chunks
+    assert all(chunk.heading == long_heading[:255] for chunk in stored_chunks)
+    assert all(len(chunk.content_preview) == 255 for chunk in stored_chunks)
+
+
 def test_upload_markdown_table_creates_table_chunks(client, db_session) -> None:
     """含 Markdown table 的文件應建立 table structure_kind chunks。"""
 
