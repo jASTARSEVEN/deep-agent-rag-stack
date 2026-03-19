@@ -87,7 +87,11 @@ def create_document_upload(
         session.refresh(job)
     else:
         dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
-    return build_document_summary(session=session, document=document), build_ingest_job_summary(document=document, job=job)
+    return build_document_summary(session=session, document=document), build_ingest_job_summary(
+        session=session,
+        document=document,
+        job=job,
+    )
 
 
 def list_area_documents(session: Session, principal: CurrentPrincipal, *, area_id: str) -> list[DocumentSummary]:
@@ -165,7 +169,7 @@ def get_ingest_job_detail(session: Session, principal: CurrentPrincipal, *, job_
         if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise _build_job_not_found_error() from exc
         raise
-    return build_ingest_job_summary(document=document, job=job)
+    return build_ingest_job_summary(session=session, document=document, job=job)
 
 
 def reindex_document(
@@ -212,7 +216,11 @@ def reindex_document(
         session.refresh(job)
     else:
         dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
-    return build_document_summary(session=session, document=document), build_ingest_job_summary(document=document, job=job)
+    return build_document_summary(session=session, document=document), build_ingest_job_summary(
+        session=session,
+        document=document,
+        job=job,
+    )
 
 
 def delete_document(
@@ -273,10 +281,11 @@ def build_document_summary(
     )
 
 
-def build_ingest_job_summary(*, document: Document, job: IngestJob) -> IngestJobSummary:
+def build_ingest_job_summary(*, session: Session, document: Document, job: IngestJob) -> IngestJobSummary:
     """將 ingest job model 轉成 API schema。
 
     參數：
+    - `session`：用來查詢 persisted chunk 摘要的資料庫 session。
     - `document`：此 job 對應的 document。
     - `job`：ORM ingest job model。
 
@@ -284,17 +293,13 @@ def build_ingest_job_summary(*, document: Document, job: IngestJob) -> IngestJob
     - `IngestJobSummary`：可供 API 回傳的 ingest job 摘要資料。
     """
 
+    resolved_chunk_summary = _build_document_chunk_summary(session=session, document=document)
     return IngestJobSummary(
         id=job.id,
         document_id=job.document_id,
         status=job.status,
         stage=job.stage,
-        chunk_summary=ChunkSummary(
-            total_chunks=job.parent_chunk_count + job.child_chunk_count,
-            parent_chunks=job.parent_chunk_count,
-            child_chunks=job.child_chunk_count,
-            last_indexed_at=document.indexed_at,
-        ),
+        chunk_summary=resolved_chunk_summary,
         error_message=job.error_message,
         created_at=job.created_at,
         updated_at=job.updated_at,
@@ -314,7 +319,14 @@ def _build_document_chunk_summary(session: Session, document: Document) -> Chunk
 
     return _load_chunk_summaries(session=session, document_ids=[document.id]).get(
         document.id,
-        ChunkSummary(total_chunks=0, parent_chunks=0, child_chunks=0, last_indexed_at=document.indexed_at),
+        ChunkSummary(
+            total_chunks=0,
+            parent_chunks=0,
+            child_chunks=0,
+            mixed_structure_parents=0,
+            text_table_text_clusters=0,
+            last_indexed_at=document.indexed_at,
+        ),
     )
 
 
@@ -336,7 +348,7 @@ def _load_chunk_summaries(session: Session, *, document_ids: list[str]) -> dict[
         document.id: document
         for document in session.scalars(select(Document).where(Document.id.in_(document_ids))).all()
     }
-    rows = session.execute(
+    count_rows = session.execute(
         select(
             DocumentChunk.document_id,
             DocumentChunk.chunk_type,
@@ -347,19 +359,67 @@ def _load_chunk_summaries(session: Session, *, document_ids: list[str]) -> dict[
     ).all()
 
     counts_by_document_id = {document_id: {"parent": 0, "child": 0} for document_id in document_ids}
-    for document_id, chunk_type, chunk_count in rows:
+    for document_id, chunk_type, chunk_count in count_rows:
         chunk_type_key = chunk_type.value if isinstance(chunk_type, ChunkType) else str(chunk_type)
         counts_by_document_id.setdefault(document_id, {"parent": 0, "child": 0})[chunk_type_key] = chunk_count
+
+    child_rows = session.execute(
+        select(
+            DocumentChunk.document_id,
+            DocumentChunk.section_index,
+            DocumentChunk.child_index,
+            DocumentChunk.structure_kind,
+        )
+        .where(
+            DocumentChunk.document_id.in_(document_ids),
+            DocumentChunk.chunk_type == ChunkType.child,
+        )
+        .order_by(DocumentChunk.document_id.asc(), DocumentChunk.section_index.asc(), DocumentChunk.child_index.asc())
+    ).all()
+    diagnostics_by_document_id = _build_chunk_summary_diagnostics(child_rows=child_rows, document_ids=document_ids)
 
     return {
         document_id: ChunkSummary(
             total_chunks=counts["parent"] + counts["child"],
             parent_chunks=counts["parent"],
             child_chunks=counts["child"],
+            mixed_structure_parents=diagnostics_by_document_id[document_id]["mixed_structure_parents"],
+            text_table_text_clusters=diagnostics_by_document_id[document_id]["text_table_text_clusters"],
             last_indexed_at=documents[document_id].indexed_at if document_id in documents else None,
         )
         for document_id, counts in counts_by_document_id.items()
     }
+
+
+def _build_chunk_summary_diagnostics(*, child_rows, document_ids: list[str]) -> dict[str, dict[str, int]]:
+    """依 persisted child chunks 計算 chunk summary 的觀測指標。
+
+    參數：
+    - `child_rows`：child chunk 的 `(document_id, section_index, child_index, structure_kind)` 查詢結果。
+    - `document_ids`：要輸出的文件識別碼列表。
+
+    回傳：
+    - `dict[str, dict[str, int]]`：每份文件的 mixed parent 與 cluster 計數。
+    """
+
+    kinds_by_parent: dict[tuple[str, int], list[str]] = {}
+    for document_id, section_index, _child_index, structure_kind in child_rows:
+        structure_kind_value = structure_kind.value if hasattr(structure_kind, "value") else str(structure_kind)
+        kinds_by_parent.setdefault((document_id, section_index), []).append(structure_kind_value)
+
+    diagnostics_by_document_id = {
+        document_id: {
+            "mixed_structure_parents": 0,
+            "text_table_text_clusters": 0,
+        }
+        for document_id in document_ids
+    }
+    for (document_id, _section_index), kinds in kinds_by_parent.items():
+        if len(set(kinds)) > 1:
+            diagnostics_by_document_id[document_id]["mixed_structure_parents"] += 1
+        if kinds == ["text", "table", "text"]:
+            diagnostics_by_document_id[document_id]["text_table_text_clusters"] += 1
+    return diagnostics_by_document_id
 
 
 def _get_authorized_document_for_write(session: Session, principal: CurrentPrincipal, *, document_id: str) -> Document:

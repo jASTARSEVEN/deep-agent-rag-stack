@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from app.services.embedding_text import build_embedding_input_text
 from app.db.models import (
     Area,
     AreaUserRole,
@@ -99,11 +100,15 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
         "total_chunks": 4,
         "parent_chunks": 2,
         "child_chunks": 2,
+        "mixed_structure_parents": 0,
+        "text_table_text_clusters": 0,
         "last_indexed_at": response_payload["document"]["chunk_summary"]["last_indexed_at"],
     }
     assert response_payload["job"]["status"] == "succeeded"
     assert response_payload["job"]["stage"] == "succeeded"
     assert response_payload["job"]["chunk_summary"]["child_chunks"] == 2
+    assert response_payload["job"]["chunk_summary"]["mixed_structure_parents"] == 0
+    assert response_payload["job"]["chunk_summary"]["text_table_text_clusters"] == 0
 
     stored_document = db_session.get(Document, response_payload["document"]["id"])
     stored_job = db_session.get(IngestJob, response_payload["job"]["id"])
@@ -122,6 +127,111 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
     assert child_chunks
     assert all(chunk.embedding is not None for chunk in child_chunks)
     assert (Path(app_settings.local_storage_path) / stored_document.storage_key).exists()
+
+
+def test_upload_document_embeddings_include_heading(monkeypatch, client, db_session, app_settings) -> None:
+    """inline ingest 建立 child embedding 時應將 heading 與 content 一起送入 provider。"""
+
+    area = Area(id=_uuid(), name="Embedding Heading Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    captured_texts: list[str] = []
+
+    class CapturingEmbeddingProvider:
+        """記錄 embedding 輸入的測試替身。"""
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            """保存輸入文字並回傳固定維度向量。
+
+            參數：
+            - `texts`：送入 embedding provider 的字串列表。
+
+            回傳：
+            - `list[list[float]]`：與 schema 維度一致的假向量。
+            """
+
+            captured_texts.extend(texts)
+            return [[0.1] * app_settings.embedding_dimensions for _ in texts]
+
+    monkeypatch.setattr(
+        "app.services.indexing.build_embedding_provider",
+        lambda settings: CapturingEmbeddingProvider(),
+    )
+
+    file_payload = b"# Intro\nAlpha body\n\n## Detail\nBeta body\n"
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("embedding-heading.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    stored_children = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"], DocumentChunk.chunk_type == ChunkType.child)
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    assert stored_children
+    assert captured_texts == [
+        build_embedding_input_text(heading=chunk.heading, content=chunk.content) for chunk in stored_children
+    ]
+
+
+def test_upload_document_merges_short_table_parent_for_inline_ingest(client, db_session, app_settings) -> None:
+    """inline ingest 應將過短 table parent 與相鄰同 heading 文字合併。"""
+
+    area = Area(id=_uuid(), name="Inline Table Merge Docs")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    app_settings.chunk_min_parent_section_length = 220
+    file_payload = "\n".join(
+        [
+            "# Coverage",
+            "投保規則說明。",
+            "",
+            "| 投保年齡 | 投保金額 |",
+            "| --- | --- |",
+            "| 15足歲(不含)以下 | 美元35萬元 |",
+            "| 15足歲(含)以上 | 美元1,000萬元 |",
+            "",
+            "續保與繳費方式另見下列說明。",
+        ]
+    ).encode()
+
+    response = client.post(
+        f"/areas/{area.id}/documents",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        files={"file": ("coverage.md", file_payload, "text/markdown")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["document"]["chunk_summary"]["parent_chunks"] == 1
+    assert payload["document"]["chunk_summary"]["mixed_structure_parents"] == 1
+    assert payload["document"]["chunk_summary"]["text_table_text_clusters"] == 1
+
+    stored_chunks = (
+        db_session.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == payload["document"]["id"])
+        .order_by(DocumentChunk.position.asc())
+        .all()
+    )
+    parent_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.parent]
+    child_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == ChunkType.child]
+
+    assert len(parent_chunks) == 1
+    assert parent_chunks[0].structure_kind == ChunkStructureKind.text
+    assert [chunk.structure_kind for chunk in child_chunks] == [
+        ChunkStructureKind.text,
+        ChunkStructureKind.table,
+        ChunkStructureKind.text,
+    ]
 
 
 def test_upload_document_preserves_langchain_child_offsets(client, db_session) -> None:
@@ -753,6 +863,8 @@ def test_list_documents_returns_only_area_documents_with_chunk_summary(client, d
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["items"]] == [visible_document_id]
     assert response.json()["items"][0]["chunk_summary"]["parent_chunks"] == 1
+    assert response.json()["items"][0]["chunk_summary"]["mixed_structure_parents"] == 0
+    assert response.json()["items"][0]["chunk_summary"]["text_table_text_clusters"] == 0
 
 
 def test_document_detail_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:

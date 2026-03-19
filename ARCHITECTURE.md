@@ -141,13 +141,14 @@
 5. `parent` chunk 由 custom section builder 建立；TXT 以段落群組為主，Markdown 與 LlamaParse PDF Markdown 先以 heading 分界，再切出 `text/table` blocks，HTML 與 `XLSX` 產生的 worksheet HTML 則由最小 parser 輸出 `text/table` blocks，`DOCX/PPTX` 則由 Unstructured elements 映射到同一份 `text/table` block contract
 6. `PDF + llamaparse` 會先做一次 PDF-specific block consolidation，降低同 heading 下因 page noise、碎表格或過短 text block 造成的 parent fragmentation
 7. 若 `PDF + llamaparse` 命中同 heading 的短 `text -> table -> text` 模式，系統會建立單一 parent cluster，但仍保留 `text/table/text` children，避免破壞 table-aware retrieval 與 citations
-8. `table parent` 不與前後 `text parent` 合併；只有 `text parent` 會套用最小長度合併規則
+8. parent normalization 採精準度優先策略：除既有短 `text parent` 合併外，過短 `table parent` 也可在同 heading、相鄰且語意連續時，與前後 `text parent` 合併為 mixed parent；合併後仍保留 `text/table/text` children 邊界
 9. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
 10. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
 11. `child` chunk 才是後續 retrieval 的最小候選單位
-12. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
-13. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
-14. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+12. child chunk embedding 的正式輸入為 `heading + content` 的自然拼接文字；若沒有 heading，則只使用 content
+13. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
+14. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
+15. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
 
 ### Retrieval foundation
 1. retrieval 目前先作為 API 內部 service，不提供 public route
@@ -157,22 +158,25 @@
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `PGroonga`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
-8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + minimal rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
+8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
-10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 筆候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. assembler 會以 `(document_id, parent_chunk_id, structure_kind)` 為聚合邊界，將 rerank 後的 child chunks 組裝為 chat-ready context 與 context-level reference metadata
-12. assembler 不得擴張 SQL gate 後的資料集合；同一 parent 只合併已命中的 child chunks，不主動補前後 sibling
-13. `table` chunks 在 assembler 內維持 Markdown table 文字；同一 parent 多個 row-group child 合併時只保留一次表頭
-14. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限
-15. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意
-16. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫
-17. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
-18. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
-19. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
-20. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
-21. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
-22. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
-23. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
+10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
+11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字
+12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
+13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion
+14. `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 限制的是同一 parent 內可採信的命中 child 數；被此 guardrail 淘汰的 hit 不得在後續 expansion 階段再補回 context
+15. 命中 `table` child 時，assembler 會優先補齊同一 parent 內相鄰的 table row-group children，再視 budget 補上前後緊鄰的 `text` child，形成較完整的 `text/table/text` 語意片段
+16. `table` chunks 在 assembler 與 parent-level rerank 文字組裝內都維持 Markdown table 文字；同一 context 內多個 row-group child 合併時只保留一次表頭
+17. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限，而 `ASSEMBLER_MAX_CHARS_PER_CONTEXT` 同時決定 full-parent 與 expanded-window 的 materialization budget
+18. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意
+19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫
+20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
+21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
+22. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
+23. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
+24. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
+25. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
+26. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

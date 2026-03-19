@@ -15,11 +15,11 @@ from app.services.reranking import (
     RerankInputDocument,
     build_rerank_provider,
 )
+from app.services.retrieval_text import build_rerank_document_text
 from app.services.retrieval import (
     _build_match_chunks_rpc_statement,
     _apply_python_rrf,
     _apply_ranking_policy,
-    _build_rerank_document_text,
     RankedChunkMatch,
     retrieve_area_candidates,
 )
@@ -382,10 +382,161 @@ def test_retrieve_area_candidates_returns_same_404_for_missing_and_unauthorized(
     assert getattr(unauthorized_error, "detail", None) == getattr(missing_error, "detail", None)
 
 
-def test_build_rerank_document_text_truncates_to_cost_guardrail() -> None:
-    """rerank 文件文字應受最大字元數限制。"""
+def test_build_rerank_document_text_adds_prefixes_and_truncates_to_cost_guardrail() -> None:
+    """rerank 文件文字應帶有 header/content 前綴並受最大字元數限制。"""
 
-    assert _build_rerank_document_text(content="  abcdef  ", max_chars=4) == "abcd"
+    assert (
+        build_rerank_document_text(heading=" Intro ", content="  abcdef  ", max_chars=128)
+        == "Header: Intro\nContent:\nabcdef"
+    )
+    assert build_rerank_document_text(heading="Intro", content="abcdef", max_chars=10) == "Header: In"
+
+
+def test_retrieve_area_candidates_uses_parent_level_rerank_documents(db_session, app_settings, monkeypatch) -> None:
+    """rerank 應以 parent-level 組裝文字為輸入，且帶有固定前綴。"""
+
+    area = Area(id=_uuid(), name="Retrieval Parent Rerank")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="parent-rerank.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-parent-rerank/parent-rerank.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+
+    parent_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Section One",
+        content="alpha intro\n\nalpha details",
+        content_preview="alpha intro",
+        char_count=27,
+        start_offset=0,
+        end_offset=27,
+    )
+    child_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent_one.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Section One",
+        content="alpha intro",
+        content_preview="alpha intro",
+        char_count=11,
+        start_offset=0,
+        end_offset=11,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    child_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent_one.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Section One",
+        content="alpha details",
+        content_preview="alpha details",
+        char_count=13,
+        start_offset=13,
+        end_offset=26,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    parent_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=None,
+        heading="Section Two",
+        content="beta only",
+        content_preview="beta only",
+        char_count=9,
+        start_offset=28,
+        end_offset=37,
+    )
+    child_three = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent_two.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=4,
+        section_index=1,
+        child_index=0,
+        heading="Section Two",
+        content="beta only",
+        content_preview="beta only",
+        char_count=9,
+        start_offset=28,
+        end_offset=37,
+        embedding=[0.2] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([parent_one, child_one, child_two, parent_two, child_three])
+    db_session.commit()
+
+    captured_documents: list[RerankInputDocument] = []
+
+    class CapturingRerankProvider:
+        """記錄 rerank 輸入的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存輸入並回傳固定分數。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del query
+            del top_n
+            captured_documents.extend(documents)
+            return [
+                type("Score", (), {"candidate_id": document.candidate_id, "score": float(len(documents) - index)})()
+                for index, document in enumerate(documents)
+            ]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="alpha",
+    )
+
+    assert len(captured_documents) == 2
+    assert captured_documents[0].text == "Header: Section One\nContent:\nalpha intro\n\nalpha details"
+    assert captured_documents[1].text == "Header: Section Two\nContent:\nbeta only"
+    assert result.candidates[0].chunk_id == child_one.id
+    assert result.candidates[1].chunk_id == child_two.id
+    assert result.candidates[0].rerank_rank == 1
+    assert result.candidates[1].rerank_rank == 1
 
 
 def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:

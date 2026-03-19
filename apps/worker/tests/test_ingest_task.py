@@ -5,6 +5,7 @@ from pathlib import Path
 
 from worker.chunking import ChunkingConfig, build_chunk_tree
 from worker.core.settings import WorkerSettings
+from worker.embedding_text import build_embedding_input_text
 from worker.db import (
     Base,
     ChunkStructureKind,
@@ -17,8 +18,9 @@ from worker.db import (
     create_database_engine,
     create_session_factory,
 )
-from worker.parsers import ParsedBlock, ParsedDocument, parse_document
+from worker.parsers import ParsedBlock, ParsedDocument, _parse_markdown_text, parse_document
 from worker.tasks.ingest import process_document_ingest
+from worker.tasks.indexing import index_document_chunks
 
 
 # 測試 local PDF provider 路徑的最小 PDF 樣本。
@@ -192,6 +194,175 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         child_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.child]
         assert child_chunks
         assert all(chunk.embedding is not None for chunk in child_chunks)
+
+
+def test_parse_document_pdf_markdown_relaxes_short_table_delimiter_cells() -> None:
+    """PDF Markdown 的短 delimiter cell 應仍可被 worker parser 視為 table block。"""
+
+    parsed = _parse_markdown_text(
+        text=(
+            "版次：114 年 9 月版    66    修訂日期：114.9.1\n\n"
+            "| 1    | 集體彙繳件保費折扣                           | ○         |   |\n"
+            "| ---- | ----------------------------------- | --------- | - |\n"
+            "| 2    | 「個人保險契約審閱期間」規定                      | ○         |   |\n"
+            "| 共通規定 | 4                                   | 「投保聲明書」規定 | ○ |\n"
+        ),
+        source_format="pdf",
+    )
+
+    assert len(parsed.blocks) == 2
+    assert parsed.blocks[0].block_kind == "text"
+    assert parsed.blocks[1].block_kind == "table"
+    assert parsed.blocks[1].content == "\n".join(
+        [
+            "| 1 | 集體彙繳件保費折扣 | ○ |  |",
+            "| --- | --- | --- | --- |",
+            "| 2 | 「個人保險契約審閱期間」規定 | ○ |  |",
+            "| 共通規定 | 4 | 「投保聲明書」規定 | ○ |",
+        ]
+    )
+
+
+def test_build_chunk_tree_keeps_canonical_table_inside_pdf_parent_cluster() -> None:
+    """PDF `text -> table -> text` parent cluster 應保留 canonical table 文字。"""
+
+    parsed = _parse_markdown_text(
+        text=(
+            "版次：114 年 9 月版    66    修訂日期：114.9.1\n\n"
+            "| 1    | 集體彙繳件保費折扣                           | ○         |   |\n"
+            "| ---- | ----------------------------------- | --------- | - |\n"
+            "| 2    | 「個人保險契約審閱期間」規定                      | ○         |   |\n"
+            "| 共通規定 | 4                                   | 「投保聲明書」規定 | ○ |\n\n"
+            "1. 經核保評估加費≦EM400%可投保本險，次標準體承保須加費。\n"
+        ),
+        source_format="pdf",
+    )
+
+    chunk_tree = build_chunk_tree(parsed_document=parsed, config=build_chunking_config(build_settings(Path("/tmp"))))
+
+    assert len(chunk_tree.parent_chunks) == 1
+    assert chunk_tree.parent_chunks[0].content == "\n\n".join(
+        [
+            "版次：114 年 9 月版    66    修訂日期：114.9.1",
+            "\n".join(
+                [
+                    "| 1 | 集體彙繳件保費折扣 | ○ |  |",
+                    "| --- | --- | --- | --- |",
+                    "| 2 | 「個人保險契約審閱期間」規定 | ○ |  |",
+                    "| 共通規定 | 4 | 「投保聲明書」規定 | ○ |",
+                ]
+            ),
+            "1. 經核保評估加費≦EM400%可投保本險，次標準體承保須加費。",
+        ]
+    )
+
+
+def test_index_document_chunks_embeddings_include_heading(monkeypatch, tmp_path: Path) -> None:
+    """worker indexing 建立 child embedding 時應將 heading 與 content 一起送入 provider。"""
+
+    settings = build_settings(tmp_path)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    captured_texts: list[str] = []
+
+    class CapturingEmbeddingProvider:
+        """記錄 embedding 輸入的測試替身。"""
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            """保存輸入文字並回傳固定維度向量。
+
+            參數：
+            - `texts`：送入 embedding provider 的字串列表。
+
+            回傳：
+            - `list[list[float]]`：與 schema 維度一致的假向量。
+            """
+
+            captured_texts.extend(texts)
+            return [[0.1] * settings.embedding_dimensions for _ in texts]
+
+    monkeypatch.setattr(
+        "worker.tasks.indexing.build_embedding_provider",
+        lambda worker_settings: CapturingEmbeddingProvider(),
+    )
+
+    with session_factory() as session:
+        document = Document(
+            id="document-embedding-1",
+            area_id="area-1",
+            file_name="notes.md",
+            content_type="text/markdown",
+            file_size=10,
+            storage_key="area-1/document-embedding-1/notes.md",
+            status=DocumentStatus.processing,
+        )
+        session.add(document)
+        session.flush()
+        session.add_all(
+            [
+                DocumentChunk(
+                    id="parent-embedding-1",
+                    document_id=document.id,
+                    parent_chunk_id=None,
+                    chunk_type=ChunkType.parent,
+                    structure_kind=ChunkStructureKind.text,
+                    position=0,
+                    section_index=0,
+                    child_index=None,
+                    heading="Intro",
+                    content="Alpha body",
+                    content_preview="Alpha body",
+                    char_count=10,
+                    start_offset=0,
+                    end_offset=10,
+                ),
+                DocumentChunk(
+                    id="child-embedding-1",
+                    document_id=document.id,
+                    parent_chunk_id="parent-embedding-1",
+                    chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.text,
+                    position=1,
+                    section_index=0,
+                    child_index=0,
+                    heading="Intro",
+                    content="Alpha body",
+                    content_preview="Alpha body",
+                    char_count=10,
+                    start_offset=0,
+                    end_offset=10,
+                ),
+                DocumentChunk(
+                    id="child-embedding-2",
+                    document_id=document.id,
+                    parent_chunk_id="parent-embedding-1",
+                    chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.table,
+                    position=2,
+                    section_index=0,
+                    child_index=1,
+                    heading="Budget",
+                    content="| item | value |\n| --- | --- |\n| alpha | 1 |",
+                    content_preview="| item | value |",
+                    char_count=46,
+                    start_offset=11,
+                    end_offset=57,
+                ),
+            ]
+        )
+        session.commit()
+
+        index_document_chunks(session=session, document=document, settings=settings)
+
+    assert captured_texts == [
+        build_embedding_input_text(heading="Intro", content="Alpha body"),
+        build_embedding_input_text(
+            heading="Budget",
+            content="| item | value |\n| --- | --- |\n| alpha | 1 |",
+        ),
+    ]
 
 
 def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path) -> None:
@@ -654,8 +825,8 @@ def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() ->
         previous_end = child.end_offset
 
 
-def test_build_chunk_tree_preserves_markdown_table_as_table_parent() -> None:
-    """Markdown table 應形成獨立 table parent，且不與前後文字合併。"""
+def test_build_chunk_tree_merges_short_markdown_table_parent_with_adjacent_text() -> None:
+    """過短 Markdown table parent 應與相鄰同 heading 文字合併。"""
 
     text = "\n".join(
         [
@@ -678,8 +849,9 @@ def test_build_chunk_tree_preserves_markdown_table_as_table_parent() -> None:
         config=build_chunking_config(settings),
     )
 
-    assert len(result.parent_chunks) == 3
-    assert [chunk.structure_kind for chunk in result.parent_chunks] == ["text", "table", "text"]
+    assert len(result.parent_chunks) == 1
+    assert result.parent_chunks[0].structure_kind == "text"
+    assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table", "text"]
 
 
 def test_build_chunk_tree_consolidates_short_pdf_text_blocks_with_same_heading() -> None:
@@ -775,6 +947,68 @@ def test_build_chunk_tree_clusters_pdf_text_table_text_under_same_heading() -> N
         relative_start = child.start_offset - parent.start_offset
         relative_end = child.end_offset - parent.start_offset
         assert parent.content[relative_start:relative_end] == child.content
+
+
+def test_build_chunk_tree_merges_short_table_with_adjacent_text_same_heading() -> None:
+    """過短 table parent 應與相鄰同 heading 文字合併為 mixed parent。"""
+
+    text = "\n".join(
+        [
+            "# Coverage",
+            "投保規則說明。",
+            "",
+            "| 投保年齡 | 投保金額 |",
+            "| --- | --- |",
+            "| 15足歲(不含)以下 | 美元35萬元 |",
+            "| 15足歲(含)以上 | 美元1,000萬元 |",
+            "",
+            "續保與繳費方式另見下列說明。",
+        ]
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 220
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="coverage.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert len(result.parent_chunks) == 1
+    parent = result.parent_chunks[0]
+    assert parent.structure_kind == "text"
+    assert "投保規則說明。" in parent.content
+    assert "| 15足歲(含)以上 | 美元1,000萬元 |" in parent.content
+    assert "續保與繳費方式另見下列說明。" in parent.content
+    assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table", "text"]
+
+
+def test_build_chunk_tree_keeps_short_table_separate_when_heading_differs() -> None:
+    """過短 table parent 若前後 heading 不同，不應跨 heading 合併。"""
+
+    text = "\n".join(
+        [
+            "# Coverage",
+            "投保規則說明。",
+            "",
+            "## 體檢額度",
+            "| 投保年齡 | 投保金額 |",
+            "| --- | --- |",
+            "| 70 歲(含)以下 | 美元 200 萬元 |",
+            "",
+            "## 繳費方式",
+            "續保與繳費方式另見下列說明。",
+        ]
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 220
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="coverage-headings.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert [chunk.structure_kind for chunk in result.parent_chunks] == ["text", "table", "text"]
+    assert result.parent_chunks[1].structure_kind == "table"
 
 
 def test_build_chunk_tree_splits_large_table_by_row_group_and_repeats_header() -> None:

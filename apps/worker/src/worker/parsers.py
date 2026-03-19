@@ -186,7 +186,7 @@ def _parse_markdown_text(*, text: str, source_format: str) -> ParsedDocument:
             index += 1
             continue
 
-        if _is_markdown_table_start(lines=lines, start_index=index):
+        if _is_markdown_table_start(lines=lines, start_index=index, source_format=source_format):
             _append_markdown_text_block(block_inputs=block_inputs, heading=current_heading, lines=current_text_lines)
             current_text_lines = []
             table_lines, next_index = _consume_markdown_table(lines=lines, start_index=index)
@@ -251,12 +251,13 @@ def _append_markdown_text_block(
         block_inputs.append(("text", heading, content))
 
 
-def _is_markdown_table_start(*, lines: list[str], start_index: int) -> bool:
+def _is_markdown_table_start(*, lines: list[str], start_index: int, source_format: str) -> bool:
     """判定指定位置是否為 Markdown table 起點。
 
     參數：
     - `lines`：整份 Markdown 行列表。
     - `start_index`：欲檢查的起始行位置。
+    - `source_format`：目前解析的來源格式，用於套用格式特定的容錯規則。
 
     回傳：
     - `bool`：若為 GFM table 起點則回傳真。
@@ -266,7 +267,40 @@ def _is_markdown_table_start(*, lines: list[str], start_index: int) -> bool:
         return False
     header_line = lines[start_index].rstrip()
     delimiter_line = lines[start_index + 1].rstrip()
-    return "|" in header_line and bool(MARKDOWN_TABLE_DELIMITER_PATTERN.match(delimiter_line))
+    return "|" in header_line and _is_markdown_table_delimiter_row(
+        delimiter_line=delimiter_line,
+        allow_short_hyphen_cells=source_format == "pdf",
+    )
+
+
+def _is_markdown_table_delimiter_row(*, delimiter_line: str, allow_short_hyphen_cells: bool) -> bool:
+    """判定指定行是否可視為 Markdown table delimiter row。
+
+    參數：
+    - `delimiter_line`：欲檢查的 delimiter 行。
+    - `allow_short_hyphen_cells`：是否容忍 PDF provider 常見的單一 `-` delimiter cell。
+
+    回傳：
+    - `bool`：若符合 delimiter row 規則則回傳真。
+    """
+
+    if MARKDOWN_TABLE_DELIMITER_PATTERN.match(delimiter_line):
+        return True
+    if not allow_short_hyphen_cells:
+        return False
+
+    delimiter_cells = _split_markdown_table_row(delimiter_line)
+    if not delimiter_cells:
+        return False
+
+    for cell in delimiter_cells:
+        compact = cell.replace(" ", "")
+        if not compact or "-" not in compact:
+            return False
+        stripped = compact.strip(":")
+        if not stripped or any(character != "-" for character in stripped):
+            return False
+    return True
 
 
 def _consume_markdown_table(*, lines: list[str], start_index: int) -> tuple[list[str], int]:

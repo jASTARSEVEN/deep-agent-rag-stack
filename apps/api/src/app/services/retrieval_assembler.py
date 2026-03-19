@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.settings import AppSettings
 from app.db.models import ChunkStructureKind, ChunkType, DocumentChunk
 from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace
+from app.services.retrieval_text import merge_chunk_contents
 
 
 @dataclass(slots=True)
@@ -167,13 +168,17 @@ def assemble_retrieval_result(
         session=session,
         parent_chunk_ids=[candidate.parent_chunk_id for candidate in retrieval_result.candidates if candidate.parent_chunk_id],
     )
+    children_by_parent_id = _load_children_by_parent_chunks(
+        session=session,
+        parent_chunk_ids=[candidate.parent_chunk_id for candidate in retrieval_result.candidates if candidate.parent_chunk_id],
+    )
 
-    grouped_records: OrderedDict[tuple[str, str | None, ChunkStructureKind], list[_CandidateRecord]] = OrderedDict()
+    grouped_records: OrderedDict[tuple[str, str | None], list[_CandidateRecord]] = OrderedDict()
     for order, candidate in enumerate(retrieval_result.candidates):
         chunk = chunk_by_id.get(candidate.chunk_id)
         if chunk is None:
             raise ValueError(f"找不到 retrieval candidate 對應的 child chunk：{candidate.chunk_id}")
-        group_key = (candidate.document_id, candidate.parent_chunk_id, candidate.structure_kind)
+        group_key = (candidate.document_id, candidate.parent_chunk_id)
         grouped_records.setdefault(group_key, []).append(_CandidateRecord(order=order, candidate=candidate, chunk=chunk))
 
     assembled_contexts: list[AssembledContext] = []
@@ -202,15 +207,27 @@ def assemble_retrieval_result(
             continue
 
         parent_chunk = parent_chunk_by_id.get(kept_records[0].candidate.parent_chunk_id or "")
-        assembled_text, truncated = _build_assembled_text(
-            records=kept_records,
+        included_chunks, assembled_text, truncated = _materialize_context(
+            kept_records=kept_records,
+            dropped_records=dropped_records,
+            parent_chunk=parent_chunk,
+            parent_children=children_by_parent_id.get(kept_records[0].candidate.parent_chunk_id or "", []),
             max_chars=settings.assembler_max_chars_per_context,
         )
         context_source = _resolve_context_source(records=kept_records)
         heading = kept_records[0].candidate.heading or (parent_chunk.heading if parent_chunk is not None else None)
-        start_offset = min(record.candidate.start_offset for record in kept_records)
-        end_offset = max(record.candidate.end_offset for record in kept_records)
-        chunk_ids = [record.candidate.chunk_id for record in kept_records]
+        start_offset = (
+            parent_chunk.start_offset
+            if parent_chunk is not None and _should_use_full_parent(parent_chunk=parent_chunk, max_chars=settings.assembler_max_chars_per_context)
+            else min(chunk.start_offset for chunk in included_chunks)
+        )
+        end_offset = (
+            parent_chunk.end_offset
+            if parent_chunk is not None and _should_use_full_parent(parent_chunk=parent_chunk, max_chars=settings.assembler_max_chars_per_context)
+            else max(chunk.end_offset for chunk in included_chunks)
+        )
+        chunk_ids = [str(chunk.id) for chunk in included_chunks]
+        structure_kind = parent_chunk.structure_kind if parent_chunk is not None else kept_records[0].candidate.structure_kind
 
         assembled_contexts.append(
             AssembledContext(
@@ -221,7 +238,7 @@ def assemble_retrieval_result(
                     else None
                 ),
                 chunk_ids=chunk_ids,
-                structure_kind=kept_records[0].candidate.structure_kind,
+                structure_kind=structure_kind,
                 heading=heading,
                 assembled_text=assembled_text,
                 source=context_source,
@@ -321,48 +338,262 @@ def _load_parent_chunks(*, session: Session, parent_chunk_ids: list[str]) -> dic
     return {str(chunk.id): chunk for chunk in parent_chunks}
 
 
-def _build_assembled_text(*, records: list[_CandidateRecord], max_chars: int) -> tuple[str, bool]:
-    """建立單一 context 的 assembled text。
+def _load_children_by_parent_chunks(*, session: Session, parent_chunk_ids: list[str]) -> dict[str, list[DocumentChunk]]:
+    """補查指定 parent 下的所有 child chunks。
 
     參數：
-    - `records`：同一組 context 的候選 child chunks。
+    - `session`：目前資料庫 session。
+    - `parent_chunk_ids`：要補查的 parent chunk ids。
+
+    回傳：
+    - `dict[str, list[DocumentChunk]]`：以 parent chunk id 為鍵、依 child 順序排序的 children。
+    """
+
+    if not parent_chunk_ids:
+        return {}
+
+    children = session.scalars(
+        select(DocumentChunk).where(
+            DocumentChunk.parent_chunk_id.in_(parent_chunk_ids),
+            DocumentChunk.chunk_type == ChunkType.child,
+        )
+        .order_by(DocumentChunk.parent_chunk_id.asc(), DocumentChunk.child_index.asc(), DocumentChunk.position.asc())
+    ).all()
+    grouped: dict[str, list[DocumentChunk]] = {}
+    for child in children:
+        grouped.setdefault(str(child.parent_chunk_id), []).append(child)
+    return grouped
+
+
+def _materialize_context(
+    *,
+    kept_records: list[_CandidateRecord],
+    dropped_records: list[_CandidateRecord],
+    parent_chunk: DocumentChunk | None,
+    parent_children: list[DocumentChunk],
+    max_chars: int,
+) -> tuple[list[DocumentChunk], str, bool]:
+    """依精準度優先策略將命中點展開為 context。
+
+    參數：
+    - `kept_records`：同一 parent 內、保留用於 materialization 的命中 child。
+    - `dropped_records`：同一 parent 內因 guardrail 被捨棄的命中 child。
+    - `parent_chunk`：此 context 對應的 parent chunk。
+    - `parent_children`：此 parent 下的完整 child 列表。
     - `max_chars`：單一 context 可用的最大字元數。
 
     回傳：
-    - `tuple[str, bool]`：組裝後文字與是否發生裁切。
+    - `tuple[list[DocumentChunk], str, bool]`：納入的 child、assembled text 與是否發生裁切。
     """
 
-    if records[0].candidate.structure_kind == ChunkStructureKind.table:
-        assembled_text = _merge_table_records(records=records)
-    else:
-        assembled_text = "\n\n".join(record.candidate.content.strip() for record in records if record.candidate.content.strip())
+    if parent_chunk is not None and _should_use_full_parent(parent_chunk=parent_chunk, max_chars=max_chars):
+        included_chunks = parent_children or [record.chunk for record in kept_records]
+        normalized_text = parent_chunk.content.strip()
+        return included_chunks, normalized_text[:max_chars], len(normalized_text) > max_chars
 
+    included_chunks = _expand_context_children(
+        kept_records=kept_records,
+        dropped_records=dropped_records,
+        parent_children=parent_children,
+        max_chars=max_chars,
+    )
+    assembled_text = _merge_children_contents(children=included_chunks)
     normalized_text = assembled_text.strip()
     if len(normalized_text) <= max_chars:
-        return normalized_text, False
-    return normalized_text[:max_chars], True
+        return included_chunks, normalized_text, False
+    return included_chunks, normalized_text[:max_chars], True
 
 
-def _merge_table_records(*, records: list[_CandidateRecord]) -> str:
-    """將多個 table row-group child 合併為單一 table context。
+def _should_use_full_parent(*, parent_chunk: DocumentChunk, max_chars: int) -> bool:
+    """判斷此 parent 是否可直接作為完整 context。
 
     參數：
-    - `records`：同一 parent 下、已依 child 順序排序的 table child chunks。
+    - `parent_chunk`：候選 parent chunk。
+    - `max_chars`：單一 context 的最大字元數。
 
     回傳：
-    - `str`：只保留一次表頭的 Markdown table 內容。
+    - `bool`：若 parent 長度未超過 context budget 則回傳真值。
     """
 
-    merged_lines: list[str] = []
-    for index, record in enumerate(records):
-        lines = [line.rstrip() for line in record.candidate.content.strip().splitlines() if line.strip()]
-        if not lines:
+    return parent_chunk.char_count <= max_chars
+
+
+def _expand_context_children(
+    *,
+    kept_records: list[_CandidateRecord],
+    dropped_records: list[_CandidateRecord],
+    parent_children: list[DocumentChunk],
+    max_chars: int,
+) -> list[DocumentChunk]:
+    """以命中 child 為中心做 budget-aware 的 sibling expansion。
+
+    參數：
+    - `kept_records`：保留的命中 child。
+    - `dropped_records`：被 guardrail 捨棄的命中 child。
+    - `parent_children`：此 parent 下所有 child chunks。
+    - `max_chars`：單一 context 可用的最大字元數。
+
+    回傳：
+    - `list[DocumentChunk]`：排序後納入 context 的 child 列表。
+    """
+
+    if not parent_children:
+        return [record.chunk for record in kept_records]
+
+    children_by_id = {str(child.id): child for child in parent_children}
+    blocked_ids = {str(record.chunk.id) for record in dropped_records}
+    included_ids = {str(record.chunk.id) for record in kept_records}
+    ordered_children = list(parent_children)
+    index_by_id = {str(child.id): index for index, child in enumerate(ordered_children)}
+    included_indices = {index_by_id[chunk_id] for chunk_id in included_ids if chunk_id in index_by_id}
+
+    if not included_indices:
+        return [record.chunk for record in kept_records]
+
+    if any(children_by_id[chunk_id].structure_kind == ChunkStructureKind.table for chunk_id in included_ids):
+        for chunk_id in list(included_ids):
+            child = children_by_id[chunk_id]
+            if child.structure_kind != ChunkStructureKind.table:
+                continue
+            table_index = index_by_id[chunk_id]
+            for candidate_index in _contiguous_table_indices(children=ordered_children, start_index=table_index):
+                candidate = ordered_children[candidate_index]
+                if str(candidate.id) not in blocked_ids:
+                    included_ids.add(str(candidate.id))
+                    included_indices.add(candidate_index)
+
+        left_neighbor = min(included_indices) - 1
+        if left_neighbor >= 0:
+            candidate = ordered_children[left_neighbor]
+            if candidate.structure_kind == ChunkStructureKind.text and str(candidate.id) not in blocked_ids:
+                included_ids.add(str(candidate.id))
+                included_indices.add(left_neighbor)
+
+        right_neighbor = max(included_indices) + 1
+        if right_neighbor < len(ordered_children):
+            candidate = ordered_children[right_neighbor]
+            if candidate.structure_kind == ChunkStructureKind.text and str(candidate.id) not in blocked_ids:
+                included_ids.add(str(candidate.id))
+                included_indices.add(right_neighbor)
+
+    expanded = _fit_children_within_budget(
+        children=ordered_children,
+        included_ids=included_ids,
+        blocked_ids=blocked_ids,
+        max_chars=max_chars,
+    )
+    return expanded or [record.chunk for record in kept_records]
+
+
+def _contiguous_table_indices(*, children: list[DocumentChunk], start_index: int) -> list[int]:
+    """找出與命中 table 相鄰的完整 table row-group 範圍。
+
+    參數：
+    - `children`：同一 parent 下的 child 列表。
+    - `start_index`：命中 table child 的索引。
+
+    回傳：
+    - `list[int]`：需一併納入的 table child 索引。
+    """
+
+    indices = [start_index]
+    index = start_index - 1
+    while index >= 0 and children[index].structure_kind == ChunkStructureKind.table:
+        indices.insert(0, index)
+        index -= 1
+    index = start_index + 1
+    while index < len(children) and children[index].structure_kind == ChunkStructureKind.table:
+        indices.append(index)
+        index += 1
+    return indices
+
+
+def _fit_children_within_budget(
+    *,
+    children: list[DocumentChunk],
+    included_ids: set[str],
+    blocked_ids: set[str],
+    max_chars: int,
+) -> list[DocumentChunk]:
+    """在不超過 budget 的前提下，自命中點向外擴張 child。
+
+    參數：
+    - `children`：同一 parent 下依順序排列的 child 列表。
+    - `included_ids`：目前已必須納入的 child ids。
+    - `blocked_ids`：不可再納入的 child ids。
+    - `max_chars`：單一 context 的最大字元數。
+
+    回傳：
+    - `list[DocumentChunk]`：完成 budget-aware expansion 的 child 列表。
+    """
+
+    included = {str(chunk.id) for chunk in children if str(chunk.id) in included_ids}
+    if not included:
+        return []
+
+    best = [chunk for chunk in children if str(chunk.id) in included]
+    if len(_merge_children_contents(children=best).strip()) > max_chars:
+        return best
+
+    left = min(index for index, chunk in enumerate(children) if str(chunk.id) in included) - 1
+    right = max(index for index, chunk in enumerate(children) if str(chunk.id) in included) + 1
+
+    while left >= 0 or right < len(children):
+        candidates: list[tuple[str, int]] = []
+        if left >= 0 and str(children[left].id) not in blocked_ids:
+            candidates.append(("left", left))
+        if right < len(children) and str(children[right].id) not in blocked_ids:
+            candidates.append(("right", right))
+        if not candidates:
+            break
+
+        chosen_direction = None
+        for direction, index in sorted(candidates, key=lambda item: 0 if children[item[1]].structure_kind == ChunkStructureKind.text else 1):
+            trial_ids = included | {str(children[index].id)}
+            trial_children = [chunk for chunk in children if str(chunk.id) in trial_ids]
+            if len(_merge_children_contents(children=trial_children).strip()) <= max_chars:
+                included = trial_ids
+                best = trial_children
+                chosen_direction = direction
+                break
+        if chosen_direction is None:
+            break
+        if chosen_direction == "left":
+            left -= 1
+        else:
+            right += 1
+
+    return best
+
+
+def _merge_children_contents(*, children: list[DocumentChunk]) -> str:
+    """將 child chunks 依連續結構分組後組成 context 文字。
+
+    參數：
+    - `children`：依 child 順序排列的 children。
+
+    回傳：
+    - `str`：可送入 LLM 的 assembled text。
+    """
+
+    if not children:
+        return ""
+
+    merged_parts: list[str] = []
+    run_kind = children[0].structure_kind
+    run_contents: list[str] = []
+    for child in children:
+        if child.structure_kind != run_kind and run_contents:
+            merged_parts.append(merge_chunk_contents(structure_kind=run_kind, contents=run_contents))
+            run_kind = child.structure_kind
+            run_contents = [child.content]
             continue
-        if index == 0 or len(lines) < 3:
-            merged_lines.extend(lines)
-            continue
-        merged_lines.extend(lines[2:])
-    return "\n".join(merged_lines).strip()
+        run_contents.append(child.content)
+
+    if run_contents:
+        merged_parts.append(merge_chunk_contents(structure_kind=run_kind, contents=run_contents))
+
+    return "\n\n".join(part.strip() for part in merged_parts if part and part.strip()).strip()
 
 
 def _resolve_context_source(*, records: list[_CandidateRecord]) -> str:

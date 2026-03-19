@@ -223,7 +223,7 @@ def _build_text_sections(text: str, *, config: ChunkingConfig) -> list[SectionDr
 
 
 def _normalize_sections(sections: list[SectionDraft], *, config: ChunkingConfig) -> list[SectionDraft]:
-    """合併過短文字 parent sections，並重算 section index 與 offsets。
+    """合併過短 parent sections，並重算 section index 與 offsets。
 
     參數：
     - `sections`：初步切好的 parent section 草稿。
@@ -235,6 +235,22 @@ def _normalize_sections(sections: list[SectionDraft], *, config: ChunkingConfig)
 
     if not sections:
         return []
+
+    merged_sections = _merge_adjacent_text_sections(sections=sections, config=config)
+    merged_sections = _merge_undersized_sections(sections=merged_sections, config=config)
+    return _reindex_sections(sections=merged_sections)
+
+
+def _merge_adjacent_text_sections(sections: list[SectionDraft], *, config: ChunkingConfig) -> list[SectionDraft]:
+    """先套用既有的短文字 parent 合併規則。
+
+    參數：
+    - `sections`：初步切好的 parent section 草稿。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `list[SectionDraft]`：完成文字優先合併的 section 清單。
+    """
 
     merged_sections: list[SectionDraft] = []
     index = 0
@@ -266,9 +282,208 @@ def _normalize_sections(sections: list[SectionDraft], *, config: ChunkingConfig)
 
         merged_sections.append(current)
 
+    return merged_sections
+
+
+def _merge_undersized_sections(sections: list[SectionDraft], *, config: ChunkingConfig) -> list[SectionDraft]:
+    """將仍過短的 parent 與相鄰同 heading section 合併。
+
+    參數：
+    - `sections`：已完成初步文字合併的 section 清單。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `list[SectionDraft]`：完成過短 parent 補併的 section 清單。
+    """
+
+    if len(sections) <= 1:
+        return sections
+
+    merged_sections = list(sections)
+    changed = True
+    while changed and len(merged_sections) > 1:
+        changed = False
+        index = 0
+        while index < len(merged_sections):
+            current = merged_sections[index]
+            if not _is_undersized_section(section=current, config=config):
+                index += 1
+                continue
+
+            merged = _merge_undersized_section_at_index(
+                sections=merged_sections,
+                index=index,
+                config=config,
+            )
+            if merged is None:
+                index += 1
+                continue
+
+            merged_sections = merged
+            changed = True
+            break
+
+    return merged_sections
+
+
+def _merge_undersized_section_at_index(
+    *,
+    sections: list[SectionDraft],
+    index: int,
+    config: ChunkingConfig,
+) -> list[SectionDraft] | None:
+    """嘗試合併指定索引的過短 parent section。
+
+    參數：
+    - `sections`：目前的 section 清單。
+    - `index`：欲處理的過短 section 索引。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `list[SectionDraft] | None`：若成功合併則回傳新清單，否則回傳空值。
+    """
+
+    current = sections[index]
+    previous = sections[index - 1] if index > 0 else None
+    next_section = sections[index + 1] if index + 1 < len(sections) else None
+
+    if (
+        previous is not None
+        and next_section is not None
+        and _can_merge_by_heading(current, previous)
+        and _can_merge_by_heading(current, next_section)
+        and _is_text_like(previous)
+        and current.structure_kind == "table"
+        and _is_text_like(next_section)
+    ):
+        merged = _merge_mixed_sections(previous, current, next_section)
+        return [*sections[: index - 1], merged, *sections[index + 2 :]]
+
+    candidates: list[tuple[str, SectionDraft]] = []
+    if previous is not None and _can_merge_by_heading(current, previous):
+        candidates.append(("left", _merge_pair_for_undersized(previous, current)))
+    if next_section is not None and _can_merge_by_heading(current, next_section):
+        candidates.append(("right", _merge_pair_for_undersized(current, next_section)))
+
+    if not candidates:
+        return None
+
+    direction, merged = min(
+        candidates,
+        key=lambda item: (
+            abs(len(item[1].content) - config.min_parent_section_length),
+            0 if item[0] == "right" else 1,
+        ),
+    )
+    if direction == "left":
+        return [*sections[: index - 1], merged, *sections[index + 1 :]]
+    return [*sections[:index], merged, *sections[index + 2 :]]
+
+
+def _is_undersized_section(*, section: SectionDraft, config: ChunkingConfig) -> bool:
+    """判斷 parent section 是否低於最小長度門檻。
+
+    參數：
+    - `section`：欲判斷的 parent section。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `bool`：若字元數低於門檻則回傳真值。
+    """
+
+    return len(section.content) < config.min_parent_section_length
+
+
+def _can_merge_by_heading(current: SectionDraft, neighbor: SectionDraft) -> bool:
+    """判斷過短 parent 是否可與相鄰 section 合併。
+
+    參數：
+    - `current`：目前過短的 section。
+    - `neighbor`：相鄰候選 section。
+
+    回傳：
+    - `bool`：只有 heading 相同時才允許合併。
+    """
+
+    return current.heading == neighbor.heading
+
+
+def _is_text_like(section: SectionDraft) -> bool:
+    """判斷 section 是否屬於文字型 parent。
+
+    參數：
+    - `section`：欲判斷的 section。
+
+    回傳：
+    - `bool`：若 `structure_kind` 為 `text` 則回傳真值。
+    """
+
+    return section.structure_kind == "text"
+
+
+def _has_component_boundaries(section: SectionDraft) -> bool:
+    """判斷 section 是否保留多個 component 邊界。
+
+    參數：
+    - `section`：欲判斷的 section。
+
+    回傳：
+    - `bool`：若 section 內含多個 component 則回傳真值。
+    """
+
+    return bool(section.components and len(section.components) > 1)
+
+
+def _merge_pair_for_undersized(left_section: SectionDraft, right_section: SectionDraft) -> SectionDraft:
+    """依相鄰 section 型別選擇適合的合併方式。
+
+    參數：
+    - `left_section`：前段 section。
+    - `right_section`：後段 section。
+
+    回傳：
+    - `SectionDraft`：合併後但尚未重新編號的 section。
+    """
+
+    if (
+        left_section.structure_kind == right_section.structure_kind == "text"
+        and (_has_component_boundaries(left_section) or _has_component_boundaries(right_section))
+    ):
+        return _merge_mixed_sections(left_section, right_section)
+
+    if left_section.structure_kind == right_section.structure_kind:
+        if left_section.structure_kind == "text":
+            return _merge_sections(left_section, right_section)
+        return _merge_same_kind_sections(left_section, right_section)
+    return _merge_mixed_sections(left_section, right_section)
+
+
+def _merge_mixed_sections(*sections: SectionDraft) -> SectionDraft:
+    """將含 text/table 的相鄰 sections 合併為 mixed text parent。
+
+    參數：
+    - `sections`：欲合併的相鄰 sections。
+
+    回傳：
+    - `SectionDraft`：保留 component 邊界的 mixed parent。
+    """
+
+    return _merge_section_sequence(*sections, structure_kind="text", preserve_components=True)
+
+
+def _reindex_sections(*, sections: list[SectionDraft]) -> list[SectionDraft]:
+    """重算 section index 與 normalize 後 offsets。
+
+    參數：
+    - `sections`：待重算索引的 section 清單。
+
+    回傳：
+    - `list[SectionDraft]`：完成重新編號的 section 清單。
+    """
+
     normalized_sections: list[SectionDraft] = []
     cursor = 0
-    for section_index, section in enumerate(merged_sections):
+    for section_index, section in enumerate(sections):
         start_offset = cursor
         end_offset = start_offset + len(section.content)
         normalized_sections.append(

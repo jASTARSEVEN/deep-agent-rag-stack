@@ -36,8 +36,9 @@
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
-- 專案已具備 internal-only 的 minimal rerank 路徑，涵蓋 Cohere / deterministic rerank provider、retrieval trace metadata 與 fail-open fallback
+- 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 Cohere / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
+- assembler 已升級為 precision-first materializer：小 parent 直接回完整 parent，大 parent 以命中 child 為中心做 budget-aware expansion；table hit 會優先補齊完整表格與前後說明文字
 - 專案已開始將 retrieval/assembler 收斂為單一 retrieval tool，供 LangGraph chat runtime 使用
 - 專案已具備 LangGraph Server built-in thread/run chat runtime 與 Web chat UI
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
@@ -122,7 +123,7 @@
 - 已為 `document_chunks` 新增 SQL-first `structure_kind` 欄位，支援 `text | table`
 - 已支援 Markdown table 辨識，並將同一 heading 內的 `text` 與 `table` blocks 拆開處理
 - 已支援最小 HTML parser，可辨識 `h1~h3`、段落 / list 文字與 `<table>` 結構
-- `table parent` 已明確獨立，不會與前後文字 parent 合併
+- 已將過短 `table parent` 納入 parent normalization：在同 heading、相鄰且語意連續時，會與前後文字 parent 合併為 mixed parent，但仍保留 `text/table/text` children 邊界
 - 小型表格會保留整表為單一 `child + table`
 - 超大型表格會依 row groups 切分，並在每個 child 重複表頭
 - 已新增 `CHUNK_TABLE_PRESERVE_MAX_CHARS` 與 `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
@@ -132,6 +133,7 @@
 - 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
 - 已補 worker 與 inline ingest 的 indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
 - 已導入 embedding provider abstraction，初版支援 `openai`，並保留 `deterministic` 供離線測試
+- 已將 child chunk embedding 輸入調整為 `heading + content` 的自然拼接文字，改善 chunk 被切碎時的主題召回
 - 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba
 - 已將 vector ANN index 由 `ivfflat` 切換為 `hnsw`，並補上 `documents(area_id, status)` retrieval filter index
@@ -142,15 +144,18 @@
 - 已在 internal retrieval service 將流程擴充為 SQL gate -> vector recall / FTS recall -> `RRF` -> rerank
 - 已為 retrieval candidates 補上 `rrf_rank`、`rerank_rank`、`rerank_score` 與 `rerank_applied`
 - 已新增 in-memory retrieval trace metadata，保留 query、top-k 設定與每筆 candidate 的 ranking trace
-- 已實作 rerank 成本控制：僅重排前 `RERANK_TOP_N` 筆候選，且每筆文件內容受 `RERANK_MAX_CHARS_PER_DOC` 限制
+- 已實作 rerank 成本控制：僅重排前 `RERANK_TOP_N` 個 parent-level 候選，且每筆文件內容受 `RERANK_MAX_CHARS_PER_DOC` 限制
+- 已將 rerank 輸入改為 parent-level 組裝文字，固定帶入 `Header:` / `Content:` 前綴，降低 child chunk 過度碎片化造成的排序偏差
 - 已落實 rerank runtime failure 的 fail-open fallback，不影響 deny-by-default、same-404 與 ready-only 邊界
 - API 測試已補 rerank provider factory、runtime fallback、rerank metadata 與 upload -> ingest -> retrieval 的近似 E2E 驗證
 
 ### Phase 4.2 — 已完成的 table-aware retrieval assembler slice
 - 已新增 internal retrieval assembler service，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
-- assembler 已以 `(document_id, parent_chunk_id, structure_kind)` 作為聚合邊界，避免 text/table 混合與同一 parent 重複灌入 prompt
-- assembler 已支援 table row-group child 合併，並在合併後僅保留一次表頭
+- assembler 已改為以 parent 為單位的 precision-first context materializer：小 parent 直接回完整 parent，大 parent 才做 budget-aware sibling expansion
+- assembler 已以 parent 邊界去重同一 parent 的多個 hits，並保留 context-level reference metadata
+- assembler 已支援 table row-group child 合併，命中 table 時會優先補齊完整表格並在合併後僅保留一次表頭，再視 budget 補前後相鄰文字
 - 已新增 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` guardrails
+- `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 目前明確限制每個 parent 可採信的 hit child 數，避免過度寬鬆擴張
 - assembler trace 已補齊 kept/dropped chunk ids、per-context merge 結果與 truncation metadata
 - API 測試已補 text merge、table merge、budget trace、citation offsets、rerank fallback 與 upload -> ingest -> retrieval -> assembly 近似 E2E 驗證
 

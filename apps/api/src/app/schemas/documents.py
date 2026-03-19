@@ -17,6 +17,10 @@ class ChunkSummary(BaseModel):
     parent_chunks: int
     # child chunk 數量。
     child_chunks: int
+    # 由多種 child 結構組成的 parent 數量。
+    mixed_structure_parents: int
+    # child 順序為 `text/table/text` 的 parent 數量。
+    text_table_text_clusters: int
     # 最近一次成功完成 indexing 的時間。
     last_indexed_at: datetime | None
 

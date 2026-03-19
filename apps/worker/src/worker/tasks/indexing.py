@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 
 from worker.core.settings import WorkerSettings
 from worker.db import ChunkType, Document, DocumentChunk
+from worker.embedding_text import build_embedding_input_text
 from worker.embeddings import build_embedding_provider
 
 
@@ -32,7 +33,15 @@ def index_document_chunks(*, session, document: Document, settings: WorkerSettin
 
     # 執行向量編碼
     provider = build_embedding_provider(settings)
-    embeddings = provider.embed_texts([chunk.content for chunk in child_chunks])
+    embeddings = provider.embed_texts(
+        [
+            build_embedding_input_text(
+                heading=chunk.heading,
+                content=chunk.content,
+            )
+            for chunk in child_chunks
+        ]
+    )
     
     # 更新 embedding 欄位
     for chunk, embedding in zip(child_chunks, embeddings, strict=True):

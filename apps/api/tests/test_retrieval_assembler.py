@@ -110,6 +110,93 @@ def test_assemble_retrieval_result_merges_text_children_with_same_parent(db_sess
     assert assembled.trace.assembler.kept_chunk_ids == [child_one.id, child_two.id]
 
 
+def test_assemble_retrieval_result_uses_full_parent_for_small_single_hit(db_session, app_settings) -> None:
+    """小 parent 即使只命中單一 child，也應回完整 parent 內容。"""
+
+    area = Area(id="area-assemble-full-parent", name="Assemble Full Parent")
+    document = Document(
+        id="document-assemble-full-parent",
+        area_id=area.id,
+        file_name="full-parent.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-assemble-full-parent/full-parent.md",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id="parent-assemble-full-parent",
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Full Parent",
+        content="alpha intro\n\nalpha evidence\n\nalpha closing",
+        content_preview="alpha intro",
+        char_count=41,
+        start_offset=0,
+        end_offset=41,
+    )
+    child = _build_ready_child(
+        app_settings=app_settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-full-parent",
+        position=1,
+        section_index=0,
+        child_index=1,
+        heading="Full Parent",
+        content="alpha evidence",
+        start_offset=13,
+        end_offset=27,
+    )
+    before = _build_ready_child(
+        app_settings=app_settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-full-parent-before",
+        position=2,
+        section_index=0,
+        child_index=0,
+        heading="Full Parent",
+        content="alpha intro",
+        start_offset=0,
+        end_offset=11,
+    )
+    after = _build_ready_child(
+        app_settings=app_settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-full-parent-after",
+        position=3,
+        section_index=0,
+        child_index=2,
+        heading="Full Parent",
+        content="alpha closing",
+        start_offset=29,
+        end_offset=41,
+    )
+    db_session.add_all([area, document, parent, before, child, after])
+    db_session.commit()
+
+    assembled = assemble_retrieval_result(
+        session=db_session,
+        settings=app_settings,
+        retrieval_result=RetrievalResult(
+            candidates=[_build_candidate(child, source="hybrid")],
+            trace=_build_trace(query="alpha"),
+        ),
+    )
+
+    assert len(assembled.assembled_contexts) == 1
+    assert assembled.assembled_contexts[0].assembled_text == parent.content
+    assert assembled.assembled_contexts[0].chunk_ids == [before.id, child.id, after.id]
+    assert assembled.assembled_contexts[0].start_offset == parent.start_offset
+    assert assembled.assembled_contexts[0].end_offset == parent.end_offset
+
+
 def test_load_chunk_helpers_normalize_uuid_keys_to_strings(monkeypatch) -> None:
     """chunk 補查 helper 應將 ORM 的 UUID 識別碼正規化為字串 key。
 
@@ -269,6 +356,100 @@ def test_assemble_retrieval_result_merges_table_children_with_single_header(db_s
     assert assembled.assembled_contexts[0].assembled_text.count("| item | value |") == 1
     assert "| alpha | 1 |" in assembled.assembled_contexts[0].assembled_text
     assert "| beta | 2 |" in assembled.assembled_contexts[0].assembled_text
+
+
+def test_assemble_retrieval_result_expands_table_hit_with_adjacent_text(db_session, app_settings) -> None:
+    """大 parent 命中 table 時，應補前後相鄰說明文字。"""
+
+    settings = app_settings.model_copy(update={"assembler_max_chars_per_context": 180})
+    area = Area(id="area-assemble-table-window", name="Assemble Table Window")
+    document = Document(
+        id="document-assemble-table-window",
+        area_id=area.id,
+        file_name="table-window.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-assemble-table-window/table-window.md",
+        status=DocumentStatus.ready,
+    )
+    parent_content = (
+        "投保規則說明與前置條件。\n\n"
+        "| item | value |\n| --- | --- |\n| alpha | 1 |\n| beta | 2 |\n\n"
+        "續保與給付限制說明。"
+    )
+    parent = DocumentChunk(
+        id="parent-assemble-table-window",
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Coverage",
+        content=parent_content,
+        content_preview="投保規則說明",
+        char_count=len(parent_content),
+        start_offset=0,
+        end_offset=len(parent_content),
+    )
+    intro = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-window-intro",
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Coverage",
+        content="投保規則說明與前置條件。",
+        start_offset=0,
+        end_offset=13,
+    )
+    table = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-window-table",
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Coverage",
+        content="| item | value |\n| --- | --- |\n| alpha | 1 |\n| beta | 2 |",
+        start_offset=15,
+        end_offset=73,
+    )
+    outro = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-window-outro",
+        position=3,
+        section_index=0,
+        child_index=2,
+        heading="Coverage",
+        content="續保與給付限制說明。",
+        start_offset=75,
+        end_offset=86,
+    )
+    db_session.add_all([area, document, parent, intro, table, outro])
+    db_session.commit()
+
+    assembled = assemble_retrieval_result(
+        session=db_session,
+        settings=settings,
+        retrieval_result=RetrievalResult(
+            candidates=[_build_candidate(table, source="hybrid")],
+            trace=_build_trace(query="alpha"),
+        ),
+    )
+
+    assert len(assembled.assembled_contexts) == 1
+    assert assembled.assembled_contexts[0].structure_kind == ChunkStructureKind.text
+    assert assembled.assembled_contexts[0].chunk_ids == [intro.id, table.id, outro.id]
+    assert "投保規則說明與前置條件。" in assembled.assembled_contexts[0].assembled_text
+    assert "| alpha | 1 |" in assembled.assembled_contexts[0].assembled_text
+    assert "續保與給付限制說明。" in assembled.assembled_contexts[0].assembled_text
 
 
 def test_assemble_retrieval_result_keeps_text_and_table_separate(db_session, app_settings) -> None:

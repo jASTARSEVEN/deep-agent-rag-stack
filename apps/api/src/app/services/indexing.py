@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
 from app.db.models import ChunkType, Document, DocumentChunk
+from app.services.embedding_text import build_embedding_input_text
 from app.services.embeddings import build_embedding_provider
 
 
@@ -29,7 +30,15 @@ def index_document_chunks(*, session: Session, document: Document, settings: App
         raise ValueError("文件沒有可供 retrieval 使用的 child chunks。")
 
     provider = build_embedding_provider(settings)
-    embeddings = provider.embed_texts([chunk.content for chunk in child_chunks])
+    embeddings = provider.embed_texts(
+        [
+            build_embedding_input_text(
+                heading=chunk.heading,
+                content=chunk.content,
+            )
+            for chunk in child_chunks
+        ]
+    )
     for chunk, embedding in zip(child_chunks, embeddings, strict=True):
         chunk.embedding = embedding
 

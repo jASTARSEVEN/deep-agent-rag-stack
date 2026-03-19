@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections import OrderedDict
 from dataclasses import dataclass
 
 from sqlalchemy import Integer, String, bindparam, select, text
@@ -16,6 +17,7 @@ from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
 from app.services.reranking import RerankInputDocument, build_rerank_provider
+from app.services.retrieval_text import build_rerank_document_text, merge_chunk_contents
 
 
 @dataclass(slots=True)
@@ -87,6 +89,17 @@ class RankedChunkMatch:
     rerank_rank: int | None = None
     rerank_score: float | None = None
     rerank_applied: bool = False
+
+
+@dataclass(slots=True)
+class _RerankParentGroup:
+    """rerank 前依 parent 聚合的候選群組。"""
+
+    candidate_id: str
+    heading: str | None
+    content: str
+    matches: list[RankedChunkMatch]
+    order: int
 
 
 def _build_match_chunks_rpc_statement():
@@ -385,16 +398,21 @@ def _sqlite_fts_score(*, query: str, content: str) -> int:
 def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:
     """將 RRF 後的 candidates 再送入 rerank，並保留 fail-open fallback。"""
 
-    rerank_limit = min(settings.rerank_top_n, len(matches))
+    rerank_groups = _group_matches_for_parent_rerank(matches=matches)
+    rerank_limit = min(settings.rerank_top_n, len(rerank_groups))
     if rerank_limit <= 0:
         return matches
 
     rerank_inputs = [
         RerankInputDocument(
-            candidate_id=match.chunk.id,
-            text=_build_rerank_document_text(content=match.chunk.content, max_chars=settings.rerank_max_chars_per_doc),
+            candidate_id=group.candidate_id,
+            text=build_rerank_document_text(
+                heading=group.heading,
+                content=group.content,
+                max_chars=settings.rerank_max_chars_per_doc,
+            ),
         )
-        for match in matches[:rerank_limit]
+        for group in rerank_groups[:rerank_limit]
     ]
 
     try:
@@ -403,39 +421,102 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
     except Exception:
         return matches
 
-    rerank_score_by_chunk_id = {item.candidate_id: item for item in rerank_scores}
-    top_matches = matches[:rerank_limit]
-    for match in top_matches:
-        score = rerank_score_by_chunk_id.get(match.chunk.id)
-        if score is None:
-            match.rerank_applied = False
-            match.rerank_score = None
-            match.rerank_rank = None
-            continue
-        match.rerank_applied = True
-        match.rerank_score = score.score
+    rerank_score_by_group_id = {item.candidate_id: item for item in rerank_scores}
+    top_groups = rerank_groups[:rerank_limit]
+    for group in top_groups:
+        score = rerank_score_by_group_id.get(group.candidate_id)
+        for match in group.matches:
+            if score is None:
+                match.rerank_applied = False
+                match.rerank_score = None
+                match.rerank_rank = None
+                continue
+            match.rerank_applied = True
+            match.rerank_score = score.score
 
-    reranked_top_matches = sorted(
-        top_matches,
+    reranked_top_groups = sorted(
+        top_groups,
         key=lambda item: (
-            0 if item.rerank_applied else 1,
-            -(item.rerank_score if item.rerank_score is not None else float("-inf")),
-            item.rrf_rank or 0,
+            0 if any(match.rerank_applied for match in item.matches) else 1,
+            -(
+                max(match.rerank_score for match in item.matches if match.rerank_score is not None)
+                if any(match.rerank_score is not None for match in item.matches)
+                else float("-inf")
+            ),
+            item.order,
         ),
     )
-    for index, match in enumerate(reranked_top_matches, start=1):
-        if match.rerank_applied:
-            match.rerank_rank = index
-    return reranked_top_matches + matches[rerank_limit:]
+    for index, group in enumerate(reranked_top_groups, start=1):
+        for match in group.matches:
+            if match.rerank_applied:
+                match.rerank_rank = index
+
+    ordered_matches: list[RankedChunkMatch] = []
+    for group in reranked_top_groups + rerank_groups[rerank_limit:]:
+        ordered_matches.extend(group.matches)
+    return ordered_matches
 
 
-def _build_rerank_document_text(*, content: str, max_chars: int) -> str:
-    """建立送進 rerank 的文件文字。"""
+def _group_matches_for_parent_rerank(*, matches: list[RankedChunkMatch]) -> list[_RerankParentGroup]:
+    """依 parent 邊界將 child candidates 聚合為 rerank 群組。
 
-    normalized_content = content.strip()
-    if len(normalized_content) <= max_chars:
-        return normalized_content
-    return normalized_content[:max_chars]
+    參數：
+    - `matches`：已完成 RRF 的 child-level 候選。
+
+    回傳：
+    - `list[_RerankParentGroup]`：供 parent-level rerank 使用的群組列表。
+    """
+
+    grouped_matches: OrderedDict[tuple[str, str, ChunkStructureKind], list[RankedChunkMatch]] = OrderedDict()
+    for match in matches:
+        group_parent_id = match.chunk.parent_chunk_id or match.chunk.id
+        group_key = (str(match.chunk.document_id), str(group_parent_id), match.chunk.structure_kind)
+        grouped_matches.setdefault(group_key, []).append(match)
+
+    rerank_groups: list[_RerankParentGroup] = []
+    for order, records in enumerate(grouped_matches.values()):
+        sorted_records = sorted(
+            records,
+            key=lambda item: (
+                item.chunk.child_index if item.chunk.child_index is not None else -1,
+                item.chunk.position,
+                item.chunk.id,
+            ),
+        )
+        heading = next((match.chunk.heading for match in sorted_records if match.chunk.heading), None)
+        content = merge_chunk_contents(
+            structure_kind=sorted_records[0].chunk.structure_kind,
+            contents=[match.chunk.content for match in sorted_records],
+        )
+        rerank_groups.append(
+            _RerankParentGroup(
+                candidate_id=_build_parent_rerank_candidate_id(matches=sorted_records),
+                heading=heading,
+                content=content,
+                matches=sorted_records,
+                order=order,
+            )
+        )
+    return rerank_groups
+
+
+def _build_parent_rerank_candidate_id(*, matches: list[RankedChunkMatch]) -> str:
+    """建立 parent-level rerank 群組識別碼。
+
+    參數：
+    - `matches`：屬於同一 parent 群組的 child 候選。
+
+    回傳：
+    - `str`：穩定且可映射回 child 候選群組的識別碼。
+    """
+
+    first_match = matches[0]
+    parent_or_chunk_id = first_match.chunk.parent_chunk_id or first_match.chunk.id
+    return (
+        f"{first_match.chunk.document_id}:"
+        f"{parent_or_chunk_id}:"
+        f"{first_match.chunk.structure_kind.value}"
+    )
 
 
 def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
