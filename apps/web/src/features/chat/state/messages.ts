@@ -11,6 +11,14 @@ interface AssistantMessageOverrides {
   content?: string;
   /** 是否正在串流。 */
   isStreaming?: boolean;
+  /** 結構化回答區塊。 */
+  answerBlocks?: ChatMessageViewModel["answerBlocks"];
+  /** citations。 */
+  citations?: ChatMessageViewModel["citations"];
+  /** 是否使用知識庫。 */
+  usedKnowledgeBase?: ChatMessageViewModel["usedKnowledgeBase"];
+  /** 預設選取的 citation context。 */
+  selectedCitationContextIndex?: number | null;
 }
 
 /** 建立新的使用者訊息。 */
@@ -19,12 +27,14 @@ export function createUserMessage(question: string, id?: string): ChatMessageVie
     id: id ?? `user-${Date.now()}`,
     role: "user",
     content: question,
+    answerBlocks: [],
     citations: [],
     phaseState: null,
     toolCalls: [],
     isStreaming: false,
     isError: false,
     usedKnowledgeBase: null,
+    selectedCitationContextIndex: null,
   };
 }
 
@@ -35,12 +45,14 @@ export function createAssistantMessage(overrides: AssistantMessageOverrides = {}
     id: overrides.id ?? `assistant-${Date.now()}`,
     role: "assistant",
     content: overrides.content ?? "",
-    citations: [],
+    answerBlocks: overrides.answerBlocks ?? [],
+    citations: overrides.citations ?? [],
     phaseState: null,
     toolCalls: [],
     isStreaming: overrides.isStreaming ?? true,
     isError: false,
-    usedKnowledgeBase: null,
+    usedKnowledgeBase: overrides.usedKnowledgeBase ?? null,
+    selectedCitationContextIndex: overrides.selectedCitationContextIndex ?? null,
   };
 }
 
@@ -103,6 +115,7 @@ export function applyStreamUpdate(
     nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
       ...current,
       content: streamUpdate.answer || current.content,
+      answerBlocks: Array.isArray(streamUpdate.answerBlocks) ? streamUpdate.answerBlocks : current.answerBlocks,
       phaseState: null,
       isStreaming: false,
       usedKnowledgeBase: streamUpdate.usedKnowledgeBase ?? current.usedKnowledgeBase,

@@ -13,6 +13,21 @@ from sqlalchemy.orm import Session
 # `apps/api/src` 目錄，供 E2E seed 腳本重用既有 model 與 metadata。
 API_SRC_DIRECTORY = Path(__file__).resolve().parents[4] / "api" / "src"
 
+# 固定 seed 用的 area UUID。
+AREA_ADMIN_ID = "00000000-0000-0000-0000-000000000001"
+AREA_READER_ID = "00000000-0000-0000-0000-000000000002"
+AREA_MAINTAINER_ID = "00000000-0000-0000-0000-000000000003"
+
+# 固定 seed 用的 document UUID。
+DOCUMENT_READER_READY_ID = "00000000-0000-0000-0000-000000000101"
+DOCUMENT_MAINTAINER_READY_ID = "00000000-0000-0000-0000-000000000102"
+
+# 固定 seed 用的 chunk UUID。
+CHUNK_READER_PARENT_ID = "00000000-0000-0000-0000-000000000201"
+CHUNK_READER_CHILD_ID = "00000000-0000-0000-0000-000000000202"
+CHUNK_MAINTAINER_PARENT_ID = "00000000-0000-0000-0000-000000000203"
+CHUNK_MAINTAINER_CHILD_ID = "00000000-0000-0000-0000-000000000204"
+
 
 def build_engine(database_path: Path):
     """建立 E2E 專用 SQLite engine。
@@ -54,37 +69,41 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
     with Session(bind=engine) as session:
         session.add_all(
             [
-                Area(id="area-admin", name="Admin Control Area", description="供 admin 驗證 access management 使用。"),
-                Area(id="area-reader", name="Reader Handbook Area", description="供 reader 驗證唯讀存取使用。"),
-                Area(id="area-maintainer", name="Maintainer Docs Area", description="供 maintainer 驗證 detail 顯示使用。"),
+                Area(id=AREA_ADMIN_ID, name="Admin Control Area", description="供 admin 驗證 access management 使用。"),
+                Area(id=AREA_READER_ID, name="Reader Handbook Area", description="供 reader 驗證唯讀存取使用。"),
+                Area(id=AREA_MAINTAINER_ID, name="Maintainer Docs Area", description="供 maintainer 驗證 detail 顯示使用。"),
             ]
         )
         session.add_all(
             [
-                AreaUserRole(area_id="area-admin", user_sub="user-admin", role=Role.admin),
-                AreaGroupRole(area_id="area-reader", group_path="/group/reader", role=Role.reader),
-                AreaGroupRole(area_id="area-maintainer", group_path="/group/maintainer", role=Role.maintainer),
+                AreaUserRole(area_id=AREA_ADMIN_ID, user_sub="user-admin", role=Role.admin),
+                AreaUserRole(area_id=AREA_READER_ID, user_sub="user-reader", role=Role.reader),
+                AreaUserRole(area_id=AREA_MAINTAINER_ID, user_sub="user-maintainer", role=Role.maintainer),
+                AreaGroupRole(area_id=AREA_READER_ID, group_path="/group/reader", role=Role.reader),
+                AreaGroupRole(area_id=AREA_MAINTAINER_ID, group_path="/group/maintainer", role=Role.maintainer),
             ]
         )
         session.add_all(
             [
                 Document(
-                    id="document-reader-ready",
-                    area_id="area-reader",
+                    id=DOCUMENT_READER_READY_ID,
+                    area_id=AREA_READER_ID,
                     file_name="reader-handbook.md",
                     content_type="text/markdown",
                     file_size=128,
                     storage_key="seed/reader-handbook.md",
+                    normalized_text="Reader intro content explains the reader policy and citations behavior.",
                     status=DocumentStatus.ready,
                     indexed_at=datetime(2026, 3, 13, 0, 0, tzinfo=UTC),
                 ),
                 Document(
-                    id="document-maintainer-ready",
-                    area_id="area-maintainer",
+                    id=DOCUMENT_MAINTAINER_READY_ID,
+                    area_id=AREA_MAINTAINER_ID,
                     file_name="maintainer-guide.md",
                     content_type="text/markdown",
                     file_size=256,
                     storage_key="seed/maintainer-guide.md",
+                    normalized_text="Maintainer intro content explains upload, reindex, and chat behavior.",
                     status=DocumentStatus.ready,
                     indexed_at=datetime(2026, 3, 13, 0, 5, tzinfo=UTC),
                 ),
@@ -93,8 +112,8 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
         session.add_all(
             [
                 DocumentChunk(
-                    id="chunk-reader-parent",
-                    document_id="document-reader-ready",
+                    id=CHUNK_READER_PARENT_ID,
+                    document_id=DOCUMENT_READER_READY_ID,
                     parent_chunk_id=None,
                     chunk_type=ChunkType.parent,
                     structure_kind=ChunkStructureKind.text,
@@ -109,9 +128,9 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     end_offset=20,
                 ),
                 DocumentChunk(
-                    id="chunk-reader-child",
-                    document_id="document-reader-ready",
-                    parent_chunk_id="chunk-reader-parent",
+                    id=CHUNK_READER_CHILD_ID,
+                    document_id=DOCUMENT_READER_READY_ID,
+                    parent_chunk_id=CHUNK_READER_PARENT_ID,
                     chunk_type=ChunkType.child,
                     structure_kind=ChunkStructureKind.text,
                     position=1,
@@ -126,8 +145,8 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     embedding=[0.2] * 1536,
                 ),
                 DocumentChunk(
-                    id="chunk-maintainer-parent",
-                    document_id="document-maintainer-ready",
+                    id=CHUNK_MAINTAINER_PARENT_ID,
+                    document_id=DOCUMENT_MAINTAINER_READY_ID,
                     parent_chunk_id=None,
                     chunk_type=ChunkType.parent,
                     structure_kind=ChunkStructureKind.text,
@@ -142,9 +161,9 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     end_offset=24,
                 ),
                 DocumentChunk(
-                    id="chunk-maintainer-child",
-                    document_id="document-maintainer-ready",
-                    parent_chunk_id="chunk-maintainer-parent",
+                    id=CHUNK_MAINTAINER_CHILD_ID,
+                    document_id=DOCUMENT_MAINTAINER_READY_ID,
+                    parent_chunk_id=CHUNK_MAINTAINER_PARENT_ID,
                     chunk_type=ChunkType.child,
                     structure_kind=ChunkStructureKind.text,
                     position=1,

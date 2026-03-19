@@ -192,6 +192,7 @@ export function AccessModal({
                   <div className="flex-1 relative">
                     <input
                       type="text"
+                      data-testid="access-users-input"
                       className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2 text-sm outline-none transition focus:border-amber-600 focus:bg-white"
                       placeholder="輸入 @ 搜尋使用者..."
                       value={userQuery}
@@ -223,6 +224,7 @@ export function AccessModal({
                     )}
                   </div>
                   <select
+                    data-testid="access-user-role"
                     className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm outline-none transition focus:border-amber-600"
                     value={newUserRole}
                     onChange={(e) => setNewUserRole(e.target.value as AreaRole)}
@@ -233,6 +235,7 @@ export function AccessModal({
                   </select>
                   <button
                     type="button"
+                    data-testid="access-users-add"
                     onClick={addUser}
                     className="rounded-xl bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-200 transition"
                   >
@@ -282,6 +285,7 @@ export function AccessModal({
                   <div className="flex-1 relative">
                     <input
                       type="text"
+                      data-testid="access-groups-input"
                       className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-2 text-sm outline-none transition focus:border-amber-600 focus:bg-white"
                       placeholder="輸入 @ 搜尋群組..."
                       value={groupQuery}
@@ -313,6 +317,7 @@ export function AccessModal({
                     )}
                   </div>
                   <select
+                    data-testid="access-group-role"
                     className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm outline-none transition focus:border-amber-600"
                     value={newGroupRole}
                     onChange={(e) => setNewGroupRole(e.target.value as AreaRole)}
@@ -323,6 +328,7 @@ export function AccessModal({
                   </select>
                   <button
                     type="button"
+                    data-testid="access-groups-add"
                     onClick={addGroup}
                     className="rounded-xl bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-700 hover:bg-stone-200 transition"
                   >
@@ -368,7 +374,9 @@ export function AccessModal({
 
         <footer className="flex-shrink-0 pt-6 mt-2 border-t border-stone-100 flex items-center justify-between">
           <p className="text-xs text-stone-400">
+            <span data-testid="access-summary">
             已加入: {users.length} 位使用者, {groups.length} 個群組
+            </span>
           </p>
           <div className="flex gap-3">
             <button
@@ -380,6 +388,7 @@ export function AccessModal({
             </button>
             <button
               form="access-form"
+              data-testid="save-access"
               className="rounded-full bg-stone-900 px-8 py-2 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50"
               disabled={isSubmitting || isLoading}
               type="submit"

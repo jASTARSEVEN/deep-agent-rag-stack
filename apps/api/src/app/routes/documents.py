@@ -9,6 +9,7 @@ from app.core.settings import AppSettings, get_app_settings
 from app.db.session import get_database_session
 from app.schemas.documents import (
     DocumentListResponse,
+    DocumentPreviewResponse,
     DocumentSummary,
     ReindexDocumentResponse,
     UploadDocumentResponse,
@@ -17,6 +18,7 @@ from app.services.documents import (
     create_document_upload,
     delete_document,
     get_document_detail,
+    get_document_preview,
     list_area_documents,
     reindex_document,
 )
@@ -120,6 +122,26 @@ def read_document_route(
     """
 
     return get_document_detail(session=session, principal=principal, document_id=document_id)
+
+
+@router.get("/documents/{document_id}/preview", response_model=DocumentPreviewResponse)
+def read_document_preview_route(
+    document_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    session: Session = Depends(get_database_session),
+) -> DocumentPreviewResponse:
+    """讀取單一 ready 文件的全文 preview 與 child chunk map。
+
+    參數：
+    - `document_id`：要查詢的文件識別碼。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `DocumentPreviewResponse`：指定文件的全文 preview 內容。
+    """
+
+    return get_document_preview(session=session, principal=principal, document_id=document_id)
 
 
 @router.post("/documents/{document_id}/reindex", response_model=ReindexDocumentResponse)

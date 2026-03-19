@@ -1,4 +1,4 @@
-"""Documents、document chunks 與 ingest jobs service。"""
+"""Documents、document chunks、ingest jobs 與全文 preview service。"""
 
 from pathlib import PurePosixPath
 from typing import Any
@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
 from app.db.models import ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
-from app.schemas.documents import ChunkSummary, DocumentSummary, IngestJobSummary
+from app.schemas.documents import (
+    ChunkSummary,
+    DocumentPreviewChunk,
+    DocumentPreviewResponse,
+    DocumentSummary,
+    IngestJobSummary,
+)
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.ingest import process_ingest_job_inline
 from app.services.storage import ObjectStorage
@@ -67,6 +73,7 @@ def create_document_upload(
         content_type=content_type,
         file_size=len(payload),
         storage_key=storage_key,
+        normalized_text=None,
         status=DocumentStatus.uploaded,
         indexed_at=None,
     )
@@ -145,6 +152,53 @@ def get_document_detail(session: Session, principal: CurrentPrincipal, *, docume
     return build_document_summary(session=session, document=document)
 
 
+def get_document_preview(session: Session, principal: CurrentPrincipal, *, document_id: str) -> DocumentPreviewResponse:
+    """取得單一 ready 文件的全文 preview。
+
+    參數：
+    - `session`：用來查詢文件與 chunks 的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `document_id`：要查詢的文件識別碼。
+
+    回傳：
+    - `DocumentPreviewResponse`：指定文件的全文 preview 與 chunk map。
+
+    前置條件：
+    - 僅 `status=ready` 且已通過 area access 檢查的文件可讀取全文 preview。
+    """
+
+    document = _get_authorized_ready_document_for_preview(session=session, principal=principal, document_id=document_id)
+    if not document.normalized_text:
+        raise _build_document_not_found_error()
+
+    chunks = session.scalars(
+        select(DocumentChunk)
+        .where(
+            DocumentChunk.document_id == document.id,
+            DocumentChunk.chunk_type == ChunkType.child,
+        )
+        .order_by(DocumentChunk.section_index.asc(), DocumentChunk.child_index.asc(), DocumentChunk.position.asc())
+    ).all()
+    return DocumentPreviewResponse(
+        document_id=document.id,
+        file_name=document.file_name,
+        content_type=document.content_type,
+        normalized_text=document.normalized_text,
+        chunks=[
+            DocumentPreviewChunk(
+                chunk_id=chunk.id,
+                parent_chunk_id=chunk.parent_chunk_id,
+                child_index=chunk.child_index,
+                heading=chunk.heading,
+                structure_kind=chunk.structure_kind,
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+            )
+            for chunk in chunks
+        ],
+    )
+
+
 def get_ingest_job_detail(session: Session, principal: CurrentPrincipal, *, job_id: str) -> IngestJobSummary:
     """取得單一 ingest job 詳情。
 
@@ -198,6 +252,7 @@ def reindex_document(
     document = _get_authorized_document_for_write(session=session, principal=principal, document_id=document_id)
     session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
     document.status = DocumentStatus.uploaded
+    document.normalized_text = None
     document.indexed_at = None
     job = IngestJob(
         document_id=document.id,
@@ -446,6 +501,35 @@ def _get_authorized_document_for_write(session: Session, principal: CurrentPrinc
         )
     except HTTPException as exc:
         if exc.status_code in {status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN}:
+            raise _build_document_not_found_error() from exc
+        raise
+    return document
+
+
+def _get_authorized_ready_document_for_preview(
+    session: Session,
+    principal: CurrentPrincipal,
+    *,
+    document_id: str,
+) -> Document:
+    """讀取可供全文 preview 的 ready 文件，並套用 same-404。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `document_id`：目標文件識別碼。
+
+    回傳：
+    - `Document`：已通過存取與 ready 檢查的文件。
+    """
+
+    document = session.get(Document, document_id)
+    if document is None or document.status != DocumentStatus.ready:
+        raise _build_document_not_found_error()
+    try:
+        require_area_access(session=session, principal=principal, area_id=document.area_id)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
             raise _build_document_not_found_error() from exc
         raise
     return document

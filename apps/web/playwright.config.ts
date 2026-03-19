@@ -31,13 +31,13 @@ export default defineConfig({
     {
       command: "npm run api:e2e",
       url: `${E2E_API_URL}/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
     },
     {
       command: "npm run dev:e2e",
       url: E2E_WEB_URL,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         ...process.env,

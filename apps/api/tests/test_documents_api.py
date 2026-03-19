@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from app.services.embedding_text import build_embedding_input_text
+from app.services.parsers import parse_document
 from app.db.models import (
     Area,
     AreaUserRole,
@@ -117,6 +118,7 @@ def test_upload_document_creates_chunks_and_inline_ready(client, db_session, app
     assert stored_document.status == DocumentStatus.ready
     assert stored_document.file_size == len(file_payload)
     assert stored_document.indexed_at is not None
+    assert stored_document.normalized_text == parse_document(file_name="notes.md", payload=file_payload).normalized_text
     assert stored_job is not None
     assert stored_job.status == IngestJobStatus.succeeded
     assert stored_job.parent_chunk_count == 2
@@ -343,12 +345,9 @@ def test_upload_markdown_table_creates_table_chunks(client, db_session) -> None:
         .all()
     )
     assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in stored_chunks)
-    table_parent = next(
-        chunk
-        for chunk in stored_chunks
-        if chunk.chunk_type == "parent" and chunk.structure_kind == ChunkStructureKind.table
-    )
-    assert "| Alice | 95 |" in table_parent.content
+    table_chunks = [chunk for chunk in stored_chunks if chunk.chunk_type == "child" and chunk.structure_kind == ChunkStructureKind.table]
+    assert table_chunks
+    assert "| Alice | 95 |" in table_chunks[0].content
 
 
 def test_upload_html_table_creates_table_chunks(client, db_session) -> None:
@@ -893,6 +892,122 @@ def test_document_detail_returns_same_404_for_unauthorized_and_missing(client, d
     assert unauthorized_response.json() == missing_response.json()
 
 
+def test_document_preview_returns_normalized_text_and_child_chunk_map(client, db_session) -> None:
+    """已授權且 ready 的文件應可回傳全文 preview 與 child chunk map。"""
+
+    area = Area(id=_uuid(), name="Preview Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="preview.md",
+        content_type="text/markdown",
+        file_size=18,
+        storage_key="preview",
+        normalized_text="# Intro\nAlpha body\n\n## Next\nBeta body",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Intro",
+        content="Alpha body\n\nBeta body",
+        content_preview="Alpha body",
+        char_count=21,
+        start_offset=8,
+        end_offset=29,
+    )
+    child_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Intro",
+        content="Alpha body",
+        content_preview="Alpha body",
+        char_count=10,
+        start_offset=8,
+        end_offset=18,
+    )
+    child_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Next",
+        content="Beta body",
+        content_preview="Beta body",
+        char_count=9,
+        start_offset=29,
+        end_offset=38,
+    )
+    db_session.add_all([area, document, parent, child_one, child_two])
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    db_session.commit()
+
+    response = client.get(f"/documents/{document.id}/preview", headers={"Authorization": READER_TOKEN})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["document_id"] == document.id
+    assert payload["normalized_text"] == "# Intro\nAlpha body\n\n## Next\nBeta body"
+    assert [item["child_index"] for item in payload["chunks"]] == [0, 1]
+    assert payload["chunks"][0]["parent_chunk_id"] == parent.id
+    assert payload["chunks"][0]["start_offset"] == 8
+    assert payload["chunks"][1]["heading"] == "Next"
+
+
+def test_document_preview_returns_same_404_for_unauthorized_missing_and_not_ready(client, db_session) -> None:
+    """未授權、不存在與非 ready 文件的 preview 都應回相同 404。"""
+
+    area = Area(id=_uuid(), name="Preview Secret")
+    ready_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="ready.md",
+        content_type="text/markdown",
+        file_size=9,
+        storage_key="ready",
+        normalized_text="Ready body",
+        status=DocumentStatus.ready,
+    )
+    uploaded_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="uploaded.md",
+        content_type="text/markdown",
+        file_size=11,
+        storage_key="uploaded",
+        normalized_text=None,
+        status=DocumentStatus.uploaded,
+    )
+    db_session.add_all([area, ready_document, uploaded_document])
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    unauthorized_response = client.get(f"/documents/{ready_document.id}/preview", headers={"Authorization": OUTSIDER_TOKEN})
+    missing_response = client.get("/documents/missing-document/preview", headers={"Authorization": OUTSIDER_TOKEN})
+    not_ready_response = client.get(f"/documents/{uploaded_document.id}/preview", headers={"Authorization": ADMIN_TOKEN})
+
+    assert unauthorized_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert not_ready_response.status_code == 404
+    assert unauthorized_response.json() == missing_response.json() == not_ready_response.json()
+
+
 def test_ingest_job_detail_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
     """未授權與不存在的 ingest job 都應回相同 404。"""
 
@@ -957,6 +1072,11 @@ def test_reindex_document_replaces_existing_chunks(client, db_session, app_setti
         chunk.id for chunk in db_session.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).all()
     }
     assert original_chunk_ids.isdisjoint(refreshed_chunk_ids)
+    refreshed_document = db_session.get(Document, document_id)
+    assert refreshed_document is not None
+    db_session.refresh(refreshed_document)
+    expected_payload = f"# Intro\n{'C' * 320}\n\n## Next\n{'D' * 340}\n".encode()
+    assert refreshed_document.normalized_text == parse_document(file_name="notes.md", payload=expected_payload).normalized_text
 
 
 def test_reindex_document_returns_same_404_for_unauthorized_and_missing(client, db_session) -> None:
@@ -1036,3 +1156,160 @@ def test_delete_document_returns_same_404_for_unauthorized_and_missing(client, d
     assert unauthorized_response.status_code == 404
     assert missing_response.status_code == 404
     assert unauthorized_response.json() == missing_response.json()
+
+
+def test_document_preview_returns_normalized_text_and_child_chunk_map(client, db_session) -> None:
+    """ready 文件的全文 preview 應回傳 normalized text 與 child chunk map。"""
+
+    area = Area(id=_uuid(), name="Preview Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="preview.md",
+        content_type="text/markdown",
+        file_size=120,
+        storage_key="area/document-preview/preview.md",
+        status=DocumentStatus.ready,
+        normalized_text="Intro paragraph\n\nDetail paragraph",
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Intro",
+        content="Intro paragraph\n\nDetail paragraph",
+        content_preview="Intro paragraph",
+        char_count=33,
+        start_offset=0,
+        end_offset=33,
+    )
+    child_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Intro",
+        content="Intro paragraph",
+        content_preview="Intro paragraph",
+        char_count=15,
+        start_offset=0,
+        end_offset=15,
+    )
+    child_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Intro",
+        content="Detail paragraph",
+        content_preview="Detail paragraph",
+        char_count=16,
+        start_offset=17,
+        end_offset=33,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            document,
+            parent,
+            child_one,
+            child_two,
+        ]
+    )
+    db_session.commit()
+
+    response = client.get(
+        f"/documents/{document.id}/preview",
+        headers={"Authorization": READER_TOKEN},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "document_id": document.id,
+        "file_name": "preview.md",
+        "content_type": "text/markdown",
+        "normalized_text": "Intro paragraph\n\nDetail paragraph",
+        "chunks": [
+            {
+                "chunk_id": child_one.id,
+                "parent_chunk_id": parent.id,
+                "child_index": 0,
+                "heading": "Intro",
+                "structure_kind": "text",
+                "start_offset": 0,
+                "end_offset": 15,
+            },
+            {
+                "chunk_id": child_two.id,
+                "parent_chunk_id": parent.id,
+                "child_index": 1,
+                "heading": "Intro",
+                "structure_kind": "text",
+                "start_offset": 17,
+                "end_offset": 33,
+            },
+        ],
+    }
+
+
+def test_document_preview_returns_same_404_for_unauthorized_and_not_ready(client, db_session) -> None:
+    """未授權與 not-ready 文件都不應暴露全文 preview。"""
+
+    area = Area(id=_uuid(), name="Preview Guard Area")
+    ready_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="ready-preview.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="area/ready-preview.md",
+        status=DocumentStatus.ready,
+        normalized_text="ready text",
+    )
+    not_ready_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="processing-preview.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="area/processing-preview.md",
+        status=DocumentStatus.processing,
+        normalized_text="processing text",
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            ready_document,
+            not_ready_document,
+        ]
+    )
+    db_session.commit()
+
+    unauthorized_response = client.get(
+        f"/documents/{ready_document.id}/preview",
+        headers={"Authorization": OUTSIDER_TOKEN},
+    )
+    not_ready_response = client.get(
+        f"/documents/{not_ready_document.id}/preview",
+        headers={"Authorization": READER_TOKEN},
+    )
+
+    assert unauthorized_response.status_code == 404
+    assert unauthorized_response.json()["detail"] == "找不到指定的 document。"
+    assert not_ready_response.status_code == 404
+    assert not_ready_response.json()["detail"] == "找不到指定的 document。"

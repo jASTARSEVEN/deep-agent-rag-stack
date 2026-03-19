@@ -11,8 +11,9 @@
 - React + Tailwind / Shadcn UI
 - **DashboardLayout**: 負責全螢幕網格佈局與頂部全局狀態管理。
 - **AreaSidebar**: 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺以最大化對話空間。
-- **ChatPanel**: 視窗核心，負責多輪對話、串流狀態顯示與工具調用 (Retrieval/Reasoning) 的透明化檢視。
-- **DocumentsDrawer**: 負責不中斷對話的文件生命週期管理，透過右側滑出式抽屜提供文件上傳、列表與狀態追蹤。
+- **ChatPanel**: 視窗核心，負責多輪對話、串流狀態顯示、句尾 citation chips、工具調用透明化檢視，以及右側全文預覽欄的互動狀態。
+- **DocumentPreviewPane**: 右側固定全文預覽欄，依 citation 所屬 `start_offset/end_offset` scroll 到對應位置，並以 child chunk 邊界做強/弱/hover 高亮。
+- **DocumentsDrawer**: 負責不中斷對話的文件生命週期管理，透過右側滑出式抽屜提供文件上傳、列表、狀態追蹤，以及 ready 文件的 chunk-aware 全文檢視。
 - **AccessModal**: 彈窗式權限管理，確保區域權限與角色設定不干擾主對話流程。
 - 提供「登入 -> 側邊欄選取區域 -> 中央即時對話」的流暢戰情室體驗。
 
@@ -77,8 +78,9 @@
 7. `DOCX` 與 `PPTX` 會先由 `Unstructured partition_docx` / `partition_pptx` 解析，再映射為既有 `text/table` block-aware contract
 8. Worker 依 ParsedDocument 建立 parent section 與 child chunk
 9. Worker 以 replace-all 方式重建 `document_chunks`
-10. Worker 為 child chunks 寫入 `embedding`
-11. Worker 更新 document/job 狀態為 `ready` 或 `failed`
+10. Worker 將 `ParsedDocument.normalized_text` 寫回 `documents.normalized_text`，作為全文 preview 的正式資料來源
+11. Worker 為 child chunks 寫入 `embedding`
+12. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
 1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run；每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
@@ -86,11 +88,18 @@
 3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
 4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
 5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 內固定套用 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 table-aware assembler
-6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 assembled contexts 與 references；前端顯示單位與實際送進 LLM 的 context 單位一致
-7. LangGraph thread state 以 `messages` 作為正式的多輪記憶欄位；graph 會把本輪 assistant message 回寫到同一 thread，前端也可用 `threads.getState()` 恢復既有歷史
-8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：最終 state 走 `values`，高層階段與工具呼叫資訊走 `custom`
+6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 `citations`、`assembled_contexts`、`answer_blocks` 與 `used_knowledge_base`；其中回答引用由 `[[C1]]` marker 解析為 UI 可用的 `answer_blocks`
+7. LangGraph thread state 除 `messages` 外，另保存 `message_artifacts`；每個 assistant turn 會持久化 `answer_blocks`、`citations` 與 `used_knowledge_base`，供前端 reload 後還原 chips 與預覽互動
+8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
 9. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
-10. 前端會將 Assembled Contexts、單一 context、工具輸入與工具輸出都以可縮放樹狀結構顯示
+10. 前端正式引用 UX 為回答句尾 chips + 右側全文預覽欄；`Assembled Contexts`、工具輸入與工具輸出保留為 debug/details
+
+### 文件管理預覽流程
+1. 使用者在 `DocumentsDrawer` 中選取 `ready` 文件
+2. 前端呼叫既有 `GET /documents/{document_id}/preview`
+3. API 維持 ready-only、same-404 與 deny-by-default 語意
+4. 前端以 `normalized_text + child chunk map` 建立 chunk list 與全文高亮，不新增第二條 inspector API
+5. 點擊 chunk list 或全文中的 chunk 時，兩側同步作用中的 child chunk 狀態
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
@@ -149,6 +158,8 @@
 13. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
 14. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
 15. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+16. `documents.normalized_text` 是正式全文 preview 的資料來源；其內容必須與 `document_chunks.start_offset/end_offset` 對齊
+17. reindex / failed ingest 開始時必須清空舊的 `documents.normalized_text`，避免全文 preview 與現存 chunks 不一致
 
 ### Retrieval foundation
 1. retrieval 目前先作為 API 內部 service，不提供 public route
@@ -177,6 +188,9 @@
 24. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用
 25. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
 26. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
+27. retrieval tool 回給 LLM 的 payload 只保留 `context_label`、`context_index`、`document_name`、`heading` 與 `assembled_text`；`start_offset/end_offset` 僅屬於 UI locator payload，不送入 LLM
+28. public documents API 新增 `GET /documents/{document_id}/preview`；此 route 必須維持 same-404 與 ready-only，且回傳 `normalized_text + child chunk map`
+29. 全文預覽欄的 hover 高亮以 child chunk 為最小單位；主 citation 命中 chunk 強高亮，同一 context 其他 child 弱高亮，hover chunk 淡高亮
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

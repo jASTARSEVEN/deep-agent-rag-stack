@@ -43,6 +43,9 @@
 - 專案已具備 LangGraph Server built-in thread/run chat runtime 與 Web chat UI
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
 - 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
+- 專案已具備 `documents.normalized_text` 全文持久化來源與 `GET /documents/{document_id}/preview`，供 ready-only 文件全文預覽與 chunk-aware UI 使用
+- 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
+- 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
@@ -163,7 +166,10 @@
 - 已實作 `DashboardLayout` 全螢幕網格與頂部全局狀態管理
 - 已實作 `AreaSidebar` 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺
 - 已實作 `ChatPanel` 作為中央視窗核心，負責多輪對話、串流狀態顯示與工具調用檢視
+- 已將 `ChatPanel` 升級為雙欄佈局：左側回答與 citation chips、右側全文預覽欄
+- 已新增 `DocumentPreviewPane`，支援依 citation 自動 scroll 到全文對應位置，並以 child chunk 做 active / related / hover 高亮
 - 已實作 `DocumentsDrawer` 負責右側滑出式文件管理，支援在不中斷對話的情況下上傳、編輯與刪除文件
+- 已將 `DocumentsDrawer` 擴充為列表 + chunk-aware 檢視器，可直接開啟 ready 文件的 child chunk 清單與全文預覽
 - 已實作 `AccessModal` 負責區域權限管理，提供彈窗式角色與權限設定介面
 - 已完成從「單純 Chat MVP」向「現代化 RAG 戰情室體驗」的 UI/UX 轉型
 
@@ -186,12 +192,14 @@
 - 已將 graph 輸出升級為 assembled-context level contract，前端顯示單位與實際送進 LLM 的 context 單位對齊
 - 已將 Web chat stream 收斂為 LangGraph SDK `messages-tuple`、`custom` 與 `values` 事件；最終 answer / citations / assembled contexts / trace 直接來自 graph state
 - `custom` 事件目前已收斂為 `phase` 與 `tool_call`；token delta 正式透過 `messages-tuple` 傳遞
-- 前端已將 chat 拆為獨立 `features/chat`，並將 Assembled Contexts、工具輸入與工具輸出改為可縮放檢視
+- 前端已將 chat 拆為獨立 `features/chat`，並將 `Assembled Contexts` 降級為 debug 檢視；正式使用者互動改為回答句尾 chips 與右側全文預覽欄
 - API chat 已收斂到 `app/chat` domain；LangGraph 相關程式僅保留 graph/auth/http app loader 與 runtime glue
 - 已補 `retrieve_area_contexts` 完成事件的 context payload 測試，避免 tool output 與 assembled context contract 再出現欄位不一致
 - 已為 Deep Agents runtime 新增可選 LangSmith tracing，會附帶 `area_id`、`principal_sub`、`groups` 數量、chat provider/model 與問題長度等 metadata
 - 已為 `LANGSMITH_TRACING=true` 但缺少 `LANGSMITH_API_KEY` 的錯誤情境補上明確執行期驗證
 - 已新增 `CHAT_STREAM_DEBUG` 與 `VITE_CHAT_STREAM_DEBUG`，可分別觀測 API 與 Web 端的 stream phase、tool call、values commit 與 token/message delta 時序
+- 已新增以 `message_artifacts` 持久化的 assistant turn UI metadata，reload 後仍可恢復 `answer_blocks`、citations 與 `used_knowledge_base`
+- 已新增全文 preview route 與 `documents.normalized_text`，讓 citation chips 可直接帶使用者跳到文件內對應 chunk 範圍
 
 ## 目前階段重點
 
@@ -199,6 +207,7 @@
 - 交付 `Phase 5.1` 的 LangGraph Server built-in thread/run chat MVP
 - 完善一頁式戰情室 (Dashboard) 的各項組件互動細節，實現「現代化 RAG 戰情室體驗」
 - 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
+- 驗證 citation chips、全文 preview、child chunk hover highlighting 與 ready-only preview API 在 compose 環境下的整體一致性
 - 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
 - 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
 - 穩定 LangGraph 啟動方式與既有 areas/documents 路由的相容性

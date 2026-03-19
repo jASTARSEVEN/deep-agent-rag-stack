@@ -20,7 +20,7 @@ export function ContextViewer({ citations }: ContextViewerProps): JSX.Element | 
     <div className="mt-4 rounded-2xl bg-white/80 px-4 py-3" data-testid="chat-citations">
       <details>
         <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
-          Assembled Contexts
+          Debug Contexts
           <span className="ml-2 normal-case tracking-normal text-stone-400">
             {citations.length} contexts
           </span>

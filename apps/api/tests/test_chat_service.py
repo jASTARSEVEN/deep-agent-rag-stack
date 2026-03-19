@@ -21,6 +21,7 @@ from app.db.models import (
 from app.chat.agent.runtime import (
     DeepAgentsChatRuntime,
     DeterministicChatRuntime,
+    _build_answer_blocks_from_markers,
     _build_agent_input_messages,
     build_chat_runtime,
 )
@@ -200,6 +201,58 @@ def test_build_agent_input_messages_prefers_thread_history() -> None:
         )
         == history_messages
     )
+
+
+def test_build_answer_blocks_from_markers_parses_context_labels() -> None:
+    """回答 marker 應被解析為 answer blocks 與 display citations。
+
+    參數：
+    - 無
+
+    回傳：
+    - `None`：以斷言驗證 marker parse 結果。
+    """
+
+    clean_answer, answer_blocks = _build_answer_blocks_from_markers(
+        answer="第一段重點 [[C1]]\n\n第二段綜合整理 [[C1,C2]]",
+        citations_payload=[
+            {
+                "context_index": 0,
+                "context_label": "C1",
+                "document_id": "doc-1",
+                "document_name": "policy.md",
+                "heading": "Section A",
+                "parent_chunk_id": "parent-1",
+                "child_chunk_ids": ["child-1"],
+                "structure_kind": "text",
+                "start_offset": 0,
+                "end_offset": 10,
+                "excerpt": "alpha",
+                "source": "hybrid",
+                "truncated": False,
+            },
+            {
+                "context_index": 1,
+                "context_label": "C2",
+                "document_id": "doc-1",
+                "document_name": "policy.md",
+                "heading": "Section B",
+                "parent_chunk_id": "parent-2",
+                "child_chunk_ids": ["child-2"],
+                "structure_kind": "text",
+                "start_offset": 20,
+                "end_offset": 30,
+                "excerpt": "beta",
+                "source": "hybrid",
+                "truncated": False,
+            },
+        ],
+    )
+
+    assert clean_answer == "第一段重點\n\n第二段綜合整理"
+    assert [block.text for block in answer_blocks] == ["第一段重點", "第二段綜合整理"]
+    assert answer_blocks[0].citation_context_indices == [0]
+    assert [item.context_label for item in answer_blocks[1].display_citations] == ["C1", "C2"]
 
 
 def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch) -> None:
@@ -462,8 +515,18 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
         """模擬 citation 的最小 `model_dump` 介面。"""
 
         context_index: int
+        context_label: str
         document_id: str
+        document_name: str
+        parent_chunk_id: str | None
+        child_chunk_ids: list[str]
+        heading: str | None
+        structure_kind: str
+        start_offset: int
+        end_offset: int
         excerpt: str
+        source: str
+        truncated: bool
 
         def model_dump(self, *, mode: str = "json") -> dict[str, object]:
             """回傳與 Pydantic model 類似的 dump 結果。
@@ -478,8 +541,18 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
             assert mode == "json"
             return {
                 "context_index": self.context_index,
+                "context_label": self.context_label,
                 "document_id": self.document_id,
+                "document_name": self.document_name,
+                "parent_chunk_id": self.parent_chunk_id,
+                "child_chunk_ids": self.child_chunk_ids,
+                "heading": self.heading,
+                "structure_kind": self.structure_kind,
+                "start_offset": self.start_offset,
+                "end_offset": self.end_offset,
                 "excerpt": self.excerpt,
+                "source": self.source,
+                "truncated": self.truncated,
             }
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
@@ -502,7 +575,23 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
                     end_offset=40,
                 )
             ],
-            citations=[FakeCitation(context_index=0, document_id="doc-1", excerpt="這是一段組裝後的內容。")],
+            citations=[
+                FakeCitation(
+                    context_index=0,
+                    context_label="C1",
+                    document_id="doc-1",
+                    document_name="reader-policy.md",
+                    parent_chunk_id="parent-1",
+                    child_chunk_ids=["child-1", "child-2"],
+                    heading="Reader Policy",
+                    structure_kind="text",
+                    start_offset=10,
+                    end_offset=40,
+                    excerpt="這是一段組裝後的內容。",
+                    source="hybrid",
+                    truncated=False,
+                )
+            ],
             trace={
                 "retrieval": {"query": kwargs["question"]},
                 "assembler": {"contexts": [{"context_index": 0, "truncated": False}]},
@@ -597,8 +686,18 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
         """模擬 citation 的最小 `model_dump` 介面。"""
 
         context_index: int
+        context_label: str
         document_id: str
+        document_name: str
+        parent_chunk_id: str | None
+        child_chunk_ids: list[str]
+        heading: str | None
+        structure_kind: str
+        start_offset: int
+        end_offset: int
         excerpt: str
+        source: str
+        truncated: bool
 
         def model_dump(self, *, mode: str = "json") -> dict[str, object]:
             """回傳與 Pydantic model 類似的 dump 結果。
@@ -613,8 +712,18 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             assert mode == "json"
             return {
                 "context_index": self.context_index,
+                "context_label": self.context_label,
                 "document_id": self.document_id,
+                "document_name": self.document_name,
+                "parent_chunk_id": self.parent_chunk_id,
+                "child_chunk_ids": self.child_chunk_ids,
+                "heading": self.heading,
+                "structure_kind": self.structure_kind,
+                "start_offset": self.start_offset,
+                "end_offset": self.end_offset,
                 "excerpt": self.excerpt,
+                "source": self.source,
+                "truncated": self.truncated,
             }
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
@@ -637,7 +746,23 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
                     end_offset=40,
                 )
             ],
-            citations=[FakeCitation(context_index=0, document_id="doc-1", excerpt="這是一段組裝後的內容。")],
+            citations=[
+                FakeCitation(
+                    context_index=0,
+                    context_label="C1",
+                    document_id="doc-1",
+                    document_name="reader-policy.md",
+                    parent_chunk_id="parent-1",
+                    child_chunk_ids=["child-1"],
+                    heading="Reader Policy",
+                    structure_kind="text",
+                    start_offset=10,
+                    end_offset=40,
+                    excerpt="這是一段組裝後的內容。",
+                    source="hybrid",
+                    truncated=False,
+                )
+            ],
             trace={
                 "retrieval": {"query": kwargs["question"]},
                 "assembler": {"contexts": [{"context_index": 0, "truncated": False}]},
@@ -693,6 +818,9 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
     assert list(captured_tool_result.keys()) == ["assembled_contexts"]
     assert captured_tool_result["assembled_contexts"] == [
         {
+            "context_label": "C1",
+            "context_index": 0,
+            "document_name": "reader-policy.md",
             "heading": "Reader Policy",
             "assembled_text": "這是一段組裝後的內容。",
         }
@@ -870,16 +998,25 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     )
 
     assert result["answer"] == "這是帶真實檢索的回答。"
+    assert result["answer_blocks"] == [
+        {
+            "text": "這是帶真實檢索的回答。",
+            "citation_context_indices": [],
+            "display_citations": [],
+        }
+    ]
     assert result["citations"] == [
         {
             "context_index": 0,
+            "context_label": "C1",
             "document_id": document.id,
+            "document_name": "reader-policy.md",
             "parent_chunk_id": parent.id,
             "child_chunk_ids": [child_one.id, child_two.id],
             "heading": "Reader Policy",
             "structure_kind": "text",
             "start_offset": 0,
-            "end_offset": 26,
+            "end_offset": 27,
             "excerpt": "alpha intro\n\nalpha details",
             "source": "hybrid",
             "truncated": False,
@@ -888,7 +1025,9 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert result["assembled_contexts"] == [
         {
             "context_index": 0,
+            "context_label": "C1",
             "document_id": document.id,
+            "document_name": "reader-policy.md",
             "parent_chunk_id": parent.id,
             "child_chunk_ids": [child_one.id, child_two.id],
             "structure_kind": "text",
@@ -897,7 +1036,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "assembled_text": "alpha intro\n\nalpha details",
             "source": "hybrid",
             "start_offset": 0,
-            "end_offset": 26,
+            "end_offset": 27,
             "truncated": False,
         }
     ]
@@ -905,9 +1044,15 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert result["trace"]["assembler"]["kept_chunk_ids"] == [child_one.id, child_two.id]
     assert result["trace"]["agent"]["retrieval_invoked"] is True
     assert result["trace"]["agent"]["contexts_count"] == 1
+    assert result["used_knowledge_base"] is True
+    assert result["message_artifact"]["assistant_turn_index"] == 0
+    assert result["message_artifact"]["used_knowledge_base"] is True
     assert captured_tool_result == {
         "assembled_contexts": [
             {
+                "context_label": "C1",
+                "context_index": 0,
+                "document_name": "reader-policy.md",
                 "heading": "Reader Policy",
                 "assembled_text": "alpha intro\n\nalpha details",
             }
@@ -922,7 +1067,9 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
         "contexts": [
             {
                 "context_index": 0,
+                "context_label": "C1",
                 "document_id": document.id,
+                "document_name": "reader-policy.md",
                 "parent_chunk_id": parent.id,
                 "child_chunk_ids": [child_one.id, child_two.id],
                 "heading": "Reader Policy",

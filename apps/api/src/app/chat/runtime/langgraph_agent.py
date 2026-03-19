@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from operator import add
 from typing import Annotated, NotRequired, TypedDict
 
 from langgraph.graph.message import add_messages
@@ -14,7 +15,7 @@ from app.chat.agent.runtime import (
     build_chat_runtime,
     extract_final_assistant_message,
 )
-from app.chat.tools.retrieval import retrieve_area_contexts_tool
+from app.chat.tools.retrieval import build_assembled_context_payload, retrieve_area_contexts_tool
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
 
@@ -40,10 +41,16 @@ class ChatGraphState(TypedDict):
     principal: dict[str, object]
     # 最終回答文字。
     answer: str
+    # 最終回答區塊。
+    answer_blocks: list[dict]
     # 最終 context references。
     citations: list[dict]
     # 最終 assembled contexts。
     assembled_contexts: list[dict]
+    # 每個 assistant turn 的持久化 UI artifacts。
+    message_artifacts: Annotated[list[dict[str, object]], add]
+    # 本輪是否使用知識庫。
+    used_knowledge_base: bool
     # 最終 trace。
     trace: dict
     # 測試與本機覆寫用的可選 settings。
@@ -81,8 +88,11 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
                 **state,
                 "messages": [final_assistant_message] if final_assistant_message is not None else [],
                 "answer": str(result.get("answer", "")),
+                "answer_blocks": list(result.get("answer_blocks", [])),
                 "citations": list(result.get("citations", [])),
                 "assembled_contexts": list(result.get("assembled_contexts", [])),
+                "message_artifacts": [dict(result["message_artifact"])] if isinstance(result.get("message_artifact"), dict) else [],
+                "used_knowledge_base": bool(result.get("used_knowledge_base", False)),
                 "trace": dict(result.get("trace", {})),
             }
 
@@ -101,30 +111,19 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
             **state,
             "messages": [{"role": "assistant", "content": answer}],
             "answer": answer,
+            "answer_blocks": [{"text": answer, "citation_context_indices": [], "display_citations": []}],
             "citations": [item.model_dump(mode="json") for item in retrieval_tool_result.citations],
-            "assembled_contexts": [
+            "assembled_contexts": build_assembled_context_payload(session, retrieval_tool_result),
+            "message_artifacts": [
                 {
-                    "context_index": index,
-                    "document_id": context.document_id,
-                    "parent_chunk_id": context.parent_chunk_id,
-                    "child_chunk_ids": context.chunk_ids,
-                    "structure_kind": context.structure_kind.value,
-                    "heading": context.heading,
-                    "assembled_text": context.assembled_text,
-                    "source": context.source,
-                    "start_offset": context.start_offset,
-                    "end_offset": context.end_offset,
-                    "truncated": next(
-                        (
-                            item["truncated"]
-                            for item in retrieval_tool_result.trace["assembler"]["contexts"]
-                            if item["context_index"] == index
-                        ),
-                        False,
-                    ),
+                    "assistant_turn_index": _count_assistant_turns(state.get("messages")),
+                    "answer": answer,
+                    "answer_blocks": [{"text": answer, "citation_context_indices": [], "display_citations": []}],
+                    "citations": [item.model_dump(mode="json") for item in retrieval_tool_result.citations],
+                    "used_knowledge_base": bool(retrieval_tool_result.citations),
                 }
-                for index, context in enumerate(retrieval_tool_result.assembled_contexts)
             ],
+            "used_knowledge_base": bool(retrieval_tool_result.citations),
             "trace": {
                 "retrieval": retrieval_tool_result.trace["retrieval"],
                 "assembler": retrieval_tool_result.trace["assembler"],
@@ -152,3 +151,25 @@ def build_graph(_config=None):
 
 # 對外匯出的 compiled graph。
 graph = build_graph()
+
+
+def _count_assistant_turns(messages: object) -> int:
+    """計算目前 thread state 中已存在的 assistant 訊息數量。
+
+    參數：
+    - `messages`：LangGraph thread state 內的 messages 欄位。
+
+    回傳：
+    - `int`：既有 assistant 訊息數量。
+    """
+
+    if not isinstance(messages, list):
+        return 0
+    count = 0
+    for message in messages:
+        if isinstance(message, dict):
+            message_type = message.get("type")
+            role = message.get("role")
+            if message_type == "ai" or role == "assistant":
+                count += 1
+    return count

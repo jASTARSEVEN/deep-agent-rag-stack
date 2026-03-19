@@ -12,6 +12,12 @@ logger = logging.getLogger(__name__)
 _admin_client: KeycloakAdmin | None = None
 
 
+def _is_auth_test_mode() -> bool:
+    """判斷目前是否為 auth test mode。"""
+
+    return get_settings().auth_test_mode
+
+
 def _get_admin_client() -> KeycloakAdmin:
     """取得初始化的 KeycloakAdmin 客戶端 (Lazy initialization)。"""
     global _admin_client
@@ -86,6 +92,8 @@ def get_sub_by_username(username: str) -> str | None:
     """
     if not username:
         return None
+    if _is_auth_test_mode():
+        return username
 
     admin = _get_admin_client()
     try:
@@ -109,6 +117,8 @@ def get_usernames_by_subs(subs: list[str]) -> dict[str, str]:
     """
     if not subs:
         return {}
+    if _is_auth_test_mode():
+        return {sub: sub for sub in subs}
 
     admin = _get_admin_client()
     mapping: dict[str, str] = {}

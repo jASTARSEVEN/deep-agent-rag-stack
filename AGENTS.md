@@ -66,6 +66,12 @@
 - 安全敏感行為必須明確、可文件化、可測試。
 - Python ORM 一律使用 SQLAlchemy 2 寫法；不得新增 `session.query(...)` 這類 1.x 風格 API。
 
+## Python 版本讀取規則
+- 回答 Python 版本、Python 路徑、interpreter 來源或虛擬環境相關問題時，必須優先讀取專案根目錄 `.python-version`、根目錄 `pyproject.toml` 的 `requires-python`，以及專案虛擬環境 `.venv/bin/python`。
+- 若 `.venv/bin/python` 存在，應優先將其視為本專案目前使用的 Python interpreter，並回報其版本與路徑。
+- 僅在專案未宣告 Python 版本、且不存在專案虛擬環境時，才可補充說明目前 shell 解析到的全域 `python` / `python3` 路徑與版本。
+- 若同時回報專案版本與全域版本，必須明確標示何者屬於專案、何者屬於本機全域環境，避免混淆。
+
 ## 專案級文件規則
 以下四份文件是本專案的長期上下文來源，所有 agent 在規劃或實作前都必須先閱讀：
 - `Summary.md`：產品背景、需求範圍、核心業務規則與固定技術選型

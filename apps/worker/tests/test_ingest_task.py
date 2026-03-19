@@ -184,6 +184,7 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
         assert refreshed_document.indexed_at is not None
+        assert refreshed_document.normalized_text == parse_document(file_name="notes.md", payload=payload).normalized_text
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert refreshed_job.stage == "succeeded"
@@ -682,6 +683,7 @@ def test_process_document_ingest_marks_failed_for_llamaparse_missing_key(monkeyp
         assert result == "failed"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.failed
+        assert refreshed_document.normalized_text is None
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
         assert refreshed_job.error_message is not None
@@ -754,7 +756,14 @@ def test_reprocessing_replaces_existing_chunks(monkeypatch, tmp_path: Path) -> N
         refreshed_chunk_ids = {
             chunk.id for chunk in session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
         }
+        refreshed_document = session.get(Document, document.id)
         assert original_chunk_ids.isdisjoint(refreshed_chunk_ids)
+        assert refreshed_document is not None
+        session.refresh(refreshed_document)
+        assert (
+            refreshed_document.normalized_text
+            == parse_document(file_name="notes.md", payload=b"# Title\nupdated\n\n## Next\nmore").normalized_text
+        )
 
 
 def test_build_chunk_tree_merges_short_parent_with_following_section() -> None:
@@ -1078,3 +1087,63 @@ def test_process_document_ingest_supports_html_table_blocks(monkeypatch, tmp_pat
         )
         assert result == "succeeded"
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_persists_normalized_text(monkeypatch, tmp_path: Path) -> None:
+    """成功 ingest 後應保存 normalized_text 供全文 preview 使用。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"# Title\nAlpha body\n\n## Next\nBeta body\n"
+    document, job = seed_job(session_factory, file_name="preview.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.normalized_text == parse_document(
+            file_name="preview.md",
+            payload=payload,
+        ).normalized_text
+
+
+def test_process_document_ingest_clears_normalized_text_on_failure(monkeypatch, tmp_path: Path) -> None:
+    """ingest 失敗時應清空舊 normalized_text，避免 preview 看到過期內容。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"\xff\xfe\x00"
+    document, job = seed_job(session_factory, file_name="broken.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    with session_factory() as session:
+        stored_document = session.get(Document, document.id)
+        assert stored_document is not None
+        stored_document.normalized_text = "stale text"
+        session.commit()
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        assert result == "failed"
+        assert refreshed_document is not None
+        assert refreshed_document.normalized_text is None
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.failed

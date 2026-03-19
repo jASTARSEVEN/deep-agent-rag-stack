@@ -4,7 +4,12 @@ import { Client } from "@langchain/langgraph-sdk";
 
 import type { AccessTokenGetter } from "../../../lib/api";
 import { appConfig } from "../../../lib/config";
-import type { ChatContextReference, ChatPhaseState, ChatToolCallState } from "../../../lib/types";
+import type {
+  ChatAnswerBlock,
+  ChatContextReference,
+  ChatPhaseState,
+  ChatToolCallState,
+} from "../../../lib/types";
 
 
 /** 前端 session storage 使用的 area-thread mapping key。 */
@@ -25,6 +30,18 @@ interface LangGraphStateMessage {
   content?: unknown;
 }
 
+/** LangGraph thread state 上的 assistant turn artifact。 */
+interface LangGraphMessageArtifact {
+  /** assistant turn 在 thread messages 內的順序。 */
+  assistant_turn_index?: unknown;
+  /** 回答區塊。 */
+  answer_blocks?: unknown;
+  /** assembled-context 引用資料。 */
+  citations?: unknown;
+  /** 是否使用知識庫。 */
+  used_knowledge_base?: unknown;
+}
+
 /** LangGraph chat stream 的單次更新。 */
 export interface LangGraphChatStreamUpdate {
   /** 本次 delta 文字；若無則為空值。 */
@@ -35,6 +52,8 @@ export interface LangGraphChatStreamUpdate {
   completed?: boolean;
   /** 完成後的最終回答文字。 */
   answer?: string;
+  /** 完成後的結構化回答區塊。 */
+  answerBlocks?: ChatAnswerBlock[];
   /** 是否回傳 trace。 */
   trace?: Record<string, unknown>;
   /** 目前高層 chat 階段。 */
@@ -51,6 +70,8 @@ interface PendingCompletionUpdate {
   references: ChatContextReference[];
   /** 最終回答文字。 */
   answer: string;
+  /** 最終回答區塊。 */
+  answerBlocks: ChatAnswerBlock[];
   /** 最終 trace。 */
   trace?: Record<string, unknown>;
   /** 本輪是否有使用知識庫 references。 */
@@ -64,6 +85,100 @@ const PRIMARY_TOKEN_STREAM_EVENT = "messages-tuple";
 /** 判斷未知資料是否為一般 record。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+
+/** 正規化 context label。 */
+function normalizeContextLabel(contextIndex: number, rawValue: unknown): string {
+  return typeof rawValue === "string" && rawValue.trim() ? rawValue.trim() : `C${contextIndex + 1}`;
+}
+
+
+/** 將未知資料正規化為前端 citation payload。 */
+function normalizeChatContextReference(value: unknown): ChatContextReference | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const contextIndex = typeof value.context_index === "number" ? value.context_index : 0;
+  return {
+    context_index: contextIndex,
+    context_label: normalizeContextLabel(contextIndex, value.context_label),
+    document_id: typeof value.document_id === "string" ? value.document_id : "",
+    document_name: typeof value.document_name === "string" ? value.document_name : "Unknown document",
+    parent_chunk_id: typeof value.parent_chunk_id === "string" ? value.parent_chunk_id : null,
+    child_chunk_ids: Array.isArray(value.child_chunk_ids)
+      ? value.child_chunk_ids.filter((item): item is string => typeof item === "string")
+      : [],
+    heading: typeof value.heading === "string" ? value.heading : null,
+    structure_kind: value.structure_kind === "table" ? "table" : "text",
+    start_offset: typeof value.start_offset === "number" ? value.start_offset : 0,
+    end_offset: typeof value.end_offset === "number" ? value.end_offset : 0,
+    excerpt: typeof value.assembled_text === "string"
+      ? value.assembled_text
+      : (typeof value.excerpt === "string" ? value.excerpt : ""),
+    assembled_text: typeof value.assembled_text === "string" ? value.assembled_text : undefined,
+    source: typeof value.source === "string" ? value.source : "",
+    truncated: Boolean(value.truncated),
+  };
+}
+
+
+/** 將未知資料正規化為回答區塊。 */
+function normalizeAnswerBlock(value: unknown): ChatAnswerBlock | null {
+  if (!isRecord(value) || typeof value.text !== "string") {
+    return null;
+  }
+  const citationContextIndices = Array.isArray(value.citation_context_indices)
+    ? value.citation_context_indices.filter((item): item is number => typeof item === "number")
+    : [];
+  const displayCitations = Array.isArray(value.display_citations)
+    ? value.display_citations.flatMap((item) => {
+        if (!isRecord(item)) {
+          return [];
+        }
+        const contextIndex = typeof item.context_index === "number" ? item.context_index : 0;
+        return [
+          {
+            context_index: contextIndex,
+            context_label: normalizeContextLabel(contextIndex, item.context_label),
+            document_id: typeof item.document_id === "string" ? item.document_id : "",
+            document_name: typeof item.document_name === "string" ? item.document_name : "Unknown document",
+            heading: typeof item.heading === "string" ? item.heading : null,
+          },
+        ];
+      })
+    : [];
+  return {
+    text: value.text,
+    citation_context_indices: citationContextIndices,
+    display_citations: displayCitations,
+  };
+}
+
+
+/** 正規化 answer blocks 列表。 */
+function normalizeAnswerBlocks(value: unknown): ChatAnswerBlock[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item) => {
+    const block = normalizeAnswerBlock(item);
+    return block ? [block] : [];
+  });
+}
+
+
+/** 依 assistant turn 順序取得對應 artifact。 */
+function getAssistantArtifact(
+  artifacts: LangGraphMessageArtifact[],
+  assistantTurnIndex: number,
+): LangGraphMessageArtifact | undefined {
+  return artifacts.find((artifact, artifactIndex) => {
+    const artifactTurnIndex = typeof artifact.assistant_turn_index === "number"
+      ? artifact.assistant_turn_index
+      : artifactIndex;
+    return artifactTurnIndex === assistantTurnIndex;
+  });
 }
 
 
@@ -259,7 +374,17 @@ function flattenStateMessageContent(content: unknown): string {
 /** 將 LangGraph thread state messages 轉成前端 chat message view models。 */
 export function mapThreadStateMessagesToChatMessages(
   messages: LangGraphStateMessage[],
-): Array<{ id: string; role: "user" | "assistant"; content: string }> {
+  messageArtifacts: LangGraphMessageArtifact[],
+): Array<{
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  answerBlocks: ChatAnswerBlock[];
+  citations: ChatContextReference[];
+  usedKnowledgeBase: boolean | null;
+}> {
+  let assistantTurnIndex = 0;
+
   return messages.flatMap((message, index) => {
     const role =
       message.type === "human" || message.role === "user"
@@ -269,12 +394,27 @@ export function mapThreadStateMessagesToChatMessages(
     if (!role || !content) {
       return [];
     }
+    const artifact = role === "assistant" ? getAssistantArtifact(messageArtifacts, assistantTurnIndex) : undefined;
+    const hydratedMessage = {
+      id: `thread-${index}-${role}`,
+      role,
+      content,
+      answerBlocks: role === "assistant" ? normalizeAnswerBlocks(artifact?.answer_blocks) : [],
+      citations: role === "assistant" && Array.isArray(artifact?.citations)
+        ? artifact.citations.flatMap((citation) => {
+            const normalized = normalizeChatContextReference(citation);
+            return normalized ? [normalized] : [];
+          })
+        : [],
+      usedKnowledgeBase: role === "assistant" && typeof artifact?.used_knowledge_base === "boolean"
+        ? artifact.used_knowledge_base
+        : null,
+    } as const;
+    if (role === "assistant") {
+      assistantTurnIndex += 1;
+    }
     return [
-      {
-        id: `thread-${index}-${role}`,
-        role,
-        content,
-      },
+      hydratedMessage,
     ];
   });
 }
@@ -284,7 +424,14 @@ export function mapThreadStateMessagesToChatMessages(
 export async function loadAreaThreadHistory(
   areaId: string,
   accessTokenGetter: AccessTokenGetter,
-): Promise<Array<{ id: string; role: "user" | "assistant"; content: string }>> {
+): Promise<Array<{
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  answerBlocks: ChatAnswerBlock[];
+  citations: ChatContextReference[];
+  usedKnowledgeBase: boolean | null;
+}>> {
   const threadId = getAreaThreadId(areaId);
   if (!threadId) {
     return [];
@@ -299,9 +446,13 @@ export async function loadAreaThreadHistory(
   try {
     const threadState = await client.threads.getState<{
       messages?: LangGraphStateMessage[];
+      message_artifacts?: LangGraphMessageArtifact[];
     }>(threadId);
     const stateMessages = Array.isArray(threadState.values?.messages) ? threadState.values.messages : [];
-    return mapThreadStateMessagesToChatMessages(stateMessages);
+    const messageArtifacts = Array.isArray(threadState.values?.message_artifacts)
+      ? threadState.values.message_artifacts
+      : [];
+    return mapThreadStateMessagesToChatMessages(stateMessages, messageArtifacts);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("Thread") && message.includes("not found")) {
@@ -424,32 +575,19 @@ async function streamAreaThreadChatInternal(
       }
       if (part.event === "values" && isRecord(part.data) && isCurrentQuestionState(part.data, areaId, question)) {
         const citations = Array.isArray(part.data.citations) ? (part.data.citations as ChatContextReference[]) : [];
+        const normalizedCitations = citations
+          .map((citation) => normalizeChatContextReference(citation))
+          .filter((citation): citation is ChatContextReference => citation !== null);
         const assembledContexts = Array.isArray(part.data.assembled_contexts)
           ? (part.data.assembled_contexts as Array<Record<string, unknown>>)
           : [];
         const references = assembledContexts.length > 0
-          ? assembledContexts.map(
-              (context): ChatContextReference => ({
-                context_index: typeof context.context_index === "number" ? context.context_index : 0,
-                document_id: typeof context.document_id === "string" ? context.document_id : "",
-                parent_chunk_id: typeof context.parent_chunk_id === "string" ? context.parent_chunk_id : null,
-                child_chunk_ids: Array.isArray(context.child_chunk_ids)
-                  ? context.child_chunk_ids.filter((item): item is string => typeof item === "string")
-                  : [],
-                heading: typeof context.heading === "string" ? context.heading : null,
-                structure_kind: context.structure_kind === "table" ? "table" : "text",
-                start_offset: typeof context.start_offset === "number" ? context.start_offset : 0,
-                end_offset: typeof context.end_offset === "number" ? context.end_offset : 0,
-                excerpt: typeof context.assembled_text === "string"
-                  ? context.assembled_text
-                  : (typeof context.excerpt === "string" ? context.excerpt : ""),
-                assembled_text: typeof context.assembled_text === "string" ? context.assembled_text : undefined,
-                source: typeof context.source === "string" ? context.source : "",
-                truncated: Boolean(context.truncated),
-              }),
-            )
-          : citations;
+          ? assembledContexts
+              .map((context) => normalizeChatContextReference(context))
+              .filter((context): context is ChatContextReference => context !== null)
+          : normalizedCitations;
         const answer = typeof part.data.answer === "string" ? part.data.answer : "";
+        const answerBlocks = normalizeAnswerBlocks(part.data.answer_blocks);
         const trace =
           part.data.trace && typeof part.data.trace === "object"
             ? (part.data.trace as Record<string, unknown>)
@@ -461,6 +599,7 @@ async function streamAreaThreadChatInternal(
         pendingCompletion = {
           references,
           answer,
+          answerBlocks,
           trace,
           usedKnowledgeBase: references.length > 0 || Boolean((trace?.agent as { retrieval_invoked?: boolean } | undefined)?.retrieval_invoked),
         };

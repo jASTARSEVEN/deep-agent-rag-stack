@@ -1,11 +1,11 @@
-"""Documents 與 ingest jobs API schema。"""
+"""Documents、ingest jobs 與全文 preview API schema。"""
 
 from uuid import UUID
 from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.db.models import DocumentStatus, IngestJobStatus
+from app.db.models import ChunkStructureKind, DocumentStatus, IngestJobStatus
 
 
 class ChunkSummary(BaseModel):
@@ -96,3 +96,37 @@ class ReindexDocumentResponse(BaseModel):
     document: DocumentSummary
     # 新建立的 ingest job 摘要。
     job: IngestJobSummary
+
+
+class DocumentPreviewChunk(BaseModel):
+    """全文 preview 使用的 child chunk 邊界資料。"""
+
+    # chunk 唯一識別碼。
+    chunk_id: UUID
+    # chunk 所屬 parent chunk 識別碼。
+    parent_chunk_id: UUID | None
+    # parent 下 child 順序。
+    child_index: int | None
+    # chunk 所屬 heading。
+    heading: str | None
+    # chunk 內容結構型別。
+    structure_kind: ChunkStructureKind
+    # chunk 在全文 normalized_text 的起始 offset。
+    start_offset: int
+    # chunk 在全文 normalized_text 的結束 offset。
+    end_offset: int
+
+
+class DocumentPreviewResponse(BaseModel):
+    """全文 preview API 回傳內容。"""
+
+    # 文件唯一識別碼。
+    document_id: UUID
+    # 使用者上傳時的原始檔名。
+    file_name: str
+    # 上傳時記錄的 MIME 類型。
+    content_type: str
+    # parser 正規化後、供全文 preview 使用的完整文字內容。
+    normalized_text: str
+    # 依 child chunk 排序的全文 chunk map。
+    chunks: list[DocumentPreviewChunk]

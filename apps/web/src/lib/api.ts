@@ -7,6 +7,7 @@ import type {
   AreaListPayload,
   AreaSummary,
   DocumentListPayload,
+  DocumentPreviewPayload,
   DocumentSummary,
   AuthContextPayload,
   IngestJobSummary,
@@ -279,6 +280,18 @@ export async function fetchDocumentDetail(documentId: string): Promise<DocumentS
 
 
 /**
+ * 讀取單一文件的全文預覽內容與 chunk map。
+ *
+ * @param documentId 要查詢的文件識別碼。
+ * @returns 文件全文預覽 payload。
+ */
+export async function fetchDocumentPreview(documentId: string): Promise<DocumentPreviewPayload> {
+  const response = await fetchProtected(`/documents/${documentId}/preview`);
+  return (await response.json()) as DocumentPreviewPayload;
+}
+
+
+/**
  * 重新建立單一文件的 ingest job 與 chunks。
  *
  * @param documentId 要重建索引的文件識別碼。
@@ -337,4 +350,3 @@ export async function searchGroups(query: string) {
   const response = await fetchProtected(`/directory/groups?q=${encodeURIComponent(query)}`);
   return await response.json();
 }
-

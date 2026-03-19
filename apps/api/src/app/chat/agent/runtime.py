@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import Callable, Iterator
 from contextlib import nullcontext
@@ -12,6 +13,7 @@ from typing import Any
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.agent.deep_agents import build_main_agent
+from app.chat.contracts.types import ChatAnswerBlock, ChatMessageArtifact
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
     build_agent_tool_context_payload,
@@ -40,6 +42,9 @@ except ImportError:  # pragma: no cover - 依賴缺失時於執行期明確失�
 
 # chat streaming debug 使用的模組 logger。
 LOGGER = logging.getLogger(__name__)
+
+# 回答中的 citation marker，例如 `[[C1]]` 或 `[[C1,C2]]`。
+CITATION_MARKER_PATTERN = re.compile(r"\[\[(?P<labels>C\d+(?:\s*,\s*C\d+)*)\]\]")
 
 
 @dataclass(slots=True)
@@ -314,8 +319,8 @@ class DeepAgentsChatRuntime:
                     question=str(tool_input["question"]),
                 )
                 citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
-                assembled_contexts_payload = build_assembled_context_payload(retrieval_result)
-                llm_tool_contexts_payload = build_agent_tool_context_payload(retrieval_result)
+                assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
+                llm_tool_contexts_payload = build_agent_tool_context_payload(session, retrieval_result)
                 retrieval_invoked = True
                 log_stream_debug(
                     event="retrieval_complete",
@@ -328,7 +333,7 @@ class DeepAgentsChatRuntime:
                     name="retrieve_area_contexts",
                     status="completed",
                     input_payload=tool_input,
-                    output_payload=build_tool_call_output_summary(retrieval_result),
+                    output_payload=build_tool_call_output_summary(session, retrieval_result),
                 )
 
             return json.dumps(
@@ -404,7 +409,12 @@ class DeepAgentsChatRuntime:
                     )
                     result = stream_payload
 
-        answer = _extract_final_answer_text(result) or "".join(streamed_answer_parts).strip() or "目前無法根據現有內容生成穩定回答。"
+        raw_answer = _extract_final_answer_text(result) or "".join(streamed_answer_parts).strip() or "目前無法根據現有內容生成穩定回答。"
+        answer, answer_blocks = _build_answer_blocks_from_markers(
+            answer=raw_answer,
+            citations_payload=citations_payload,
+        )
+        used_knowledge_base = bool(citations_payload) or retrieval_invoked
         log_stream_debug(
             event="answer_complete",
             token_events=len(streamed_answer_parts),
@@ -430,11 +440,112 @@ class DeepAgentsChatRuntime:
         }
         return {
             "answer": answer,
+            "answer_blocks": [item.model_dump(mode="json") for item in answer_blocks],
             "citations": citations_payload,
             "assembled_contexts": assembled_contexts_payload,
+            "used_knowledge_base": used_knowledge_base,
+            "message_artifact": ChatMessageArtifact(
+                assistant_turn_index=_count_assistant_turns(conversation_messages),
+                answer=answer,
+                answer_blocks=answer_blocks,
+                citations=citations_payload,
+                used_knowledge_base=used_knowledge_base,
+            ).model_dump(mode="json"),
             "trace": trace,
             "raw_result": result,
         }
+
+
+def _build_answer_blocks_from_markers(
+    *,
+    answer: str,
+    citations_payload: list[dict[str, object]],
+) -> tuple[str, list[ChatAnswerBlock]]:
+    """將回答中的 citation markers 解析為 UI 可用的 answer blocks。
+
+    參數：
+    - `answer`：LLM 產出的原始回答文字。
+    - `citations_payload`：目前回合的 citation payload。
+
+    回傳：
+    - `tuple[str, list[ChatAnswerBlock]]`：去除 marker 的回答與解析後區塊。
+    """
+
+    citation_by_label = {
+        str(citation["context_label"]): citation
+        for citation in citations_payload
+        if isinstance(citation.get("context_label"), str)
+    }
+    raw_blocks = re.split(r"\n\s*\n", answer.strip())
+    answer_blocks: list[ChatAnswerBlock] = []
+
+    for raw_block in raw_blocks:
+        labels: list[str] = []
+
+        def replace_marker(match: re.Match[str]) -> str:
+            """擷取 marker 中的 labels，並在輸出文字中移除 marker。
+
+            參數：
+            - `match`：命中的 marker regex。
+
+            回傳：
+            - `str`：固定回傳空字串，代表移除 marker 本身。
+            """
+
+            for label in [item.strip() for item in match.group("labels").split(",")]:
+                if label and label not in labels:
+                    labels.append(label)
+            return ""
+
+        cleaned_text = CITATION_MARKER_PATTERN.sub(replace_marker, raw_block).strip()
+        cleaned_text = re.sub(r"[ \t]{2,}", " ", cleaned_text)
+        if not cleaned_text:
+            continue
+        display_citations = [citation_by_label[label] for label in labels if label in citation_by_label]
+        answer_blocks.append(
+            ChatAnswerBlock.model_validate(
+                {
+                    "text": cleaned_text,
+                    "citation_context_indices": [
+                        int(item["context_index"])
+                        for item in display_citations
+                        if isinstance(item.get("context_index"), int)
+                    ],
+                    "display_citations": display_citations,
+                }
+            )
+        )
+
+    if answer_blocks:
+        clean_answer = "\n\n".join(block.text for block in answer_blocks)
+        return clean_answer, answer_blocks
+
+    fallback_answer = CITATION_MARKER_PATTERN.sub("", answer).strip()
+    fallback_text = fallback_answer or answer.strip()
+    return fallback_text, [ChatAnswerBlock(text=fallback_text, citation_context_indices=[], display_citations=[])]
+
+
+def _count_assistant_turns(conversation_messages: list[object] | None) -> int:
+    """計算目前 thread 中既有 assistant turn 數量。
+
+    參數：
+    - `conversation_messages`：目前 thread 已累積的訊息列表。
+
+    回傳：
+    - `int`：本輪 assistant artifact 應使用的 turn index。
+    """
+
+    if not isinstance(conversation_messages, list):
+        return 0
+
+    assistant_turns = 0
+    for message in conversation_messages:
+        if isinstance(message, dict):
+            message_type = message.get("type")
+            role = message.get("role")
+            if message_type == "ai" or role == "assistant":
+                assistant_turns += 1
+    return assistant_turns
 
 
 def build_chat_runtime(settings: AppSettings) -> DeterministicChatRuntime | DeepAgentsChatRuntime:

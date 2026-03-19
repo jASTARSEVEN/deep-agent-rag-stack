@@ -130,7 +130,9 @@ def test_retrieve_area_contexts_tool_returns_context_level_contract(db_session, 
     assert result.assembled_contexts[0].assembled_text == "alpha intro\n\nalpha details"
     assert len(result.citations) == 1
     assert result.citations[0].context_index == 0
+    assert result.citations[0].context_label == "C1"
     assert result.citations[0].document_id == document.id
+    assert result.citations[0].document_name == "tool-contract.md"
     assert result.citations[0].parent_chunk_id == parent.id
     assert result.citations[0].child_chunk_ids == [child_one.id, child_two.id]
     assert result.citations[0].heading == "Section"
@@ -218,14 +220,16 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
         question="alpha",
     )
 
-    assembled_payload = build_assembled_context_payload(result)
-    llm_payload = build_agent_tool_context_payload(result)
-    summary_payload = build_tool_call_output_summary(result)
+    assembled_payload = build_assembled_context_payload(db_session, result)
+    llm_payload = build_agent_tool_context_payload(db_session, result)
+    summary_payload = build_tool_call_output_summary(db_session, result)
 
     assert assembled_payload == [
         {
             "context_index": 0,
+            "context_label": "C1",
             "document_id": document.id,
+            "document_name": "tool-payload.md",
             "parent_chunk_id": parent.id,
             "child_chunk_ids": [child.id],
             "structure_kind": "text",
@@ -238,14 +242,24 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
             "truncated": True,
         }
     ]
-    assert llm_payload == [{"heading": "Payload Section", "assembled_text": "alpha intr"}]
+    assert llm_payload == [
+        {
+            "context_label": "C1",
+            "context_index": 0,
+            "document_name": "tool-payload.md",
+            "heading": "Payload Section",
+            "assembled_text": "alpha intr",
+        }
+    ]
     assert summary_payload == {
         "contexts_count": 1,
         "citations_count": 1,
         "contexts": [
             {
                 "context_index": 0,
+                "context_label": "C1",
                 "document_id": document.id,
+                "document_name": "tool-payload.md",
                 "parent_chunk_id": parent.id,
                 "child_chunk_ids": [child.id],
                 "heading": "Payload Section",
@@ -268,9 +282,9 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
     - `None`：以斷言驗證空值處理。
     """
 
-    assert build_assembled_context_payload(None) == []
-    assert build_agent_tool_context_payload(None) == []
-    assert build_tool_call_output_summary(None) == {
+    assert build_assembled_context_payload(None, None) == []
+    assert build_agent_tool_context_payload(None, None) == []
+    assert build_tool_call_output_summary(None, None) == {
         "contexts_count": 0,
         "citations_count": 0,
         "contexts": [],
@@ -333,9 +347,10 @@ def test_build_chat_citations_normalizes_uuid_ids() -> None:
         ),
     )
 
-    citations = build_chat_citations(assembled_result=assembled_result, max_items=4)
+    citations = build_chat_citations(session=None, assembled_result=assembled_result, max_items=4)
 
     assert len(citations) == 1
+    assert citations[0].context_label == "C1"
     assert citations[0].document_id == str(document_id)
     assert citations[0].parent_chunk_id == str(parent_chunk_id)
     assert citations[0].child_chunk_ids == [str(item) for item in child_chunk_ids]

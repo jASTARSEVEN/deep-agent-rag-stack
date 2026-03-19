@@ -97,6 +97,8 @@ class Document(Base):
     file_size: Mapped[int] = mapped_column(nullable=False)
     # 原始檔在物件儲存中的鍵值。
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+    # parser 正規化後、供全文 preview 使用的完整文字內容。
+    normalized_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 文件目前處理狀態。
     status: Mapped[DocumentStatus] = mapped_column(SqlEnum(DocumentStatus, native_enum=False), nullable=False)
     # 最近一次成功完成 chunking 的時間。

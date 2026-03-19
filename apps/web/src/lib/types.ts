@@ -216,12 +216,42 @@ export interface ReindexDocumentPayload {
 export type ChatStructureKind = "text" | "table";
 
 
+/** 回答區塊句尾可點擊的 citation 顯示資料。 */
+export interface ChatDisplayCitation {
+  /** context 在回傳列表中的順序。 */
+  context_index: number;
+  /** 前端顯示用的穩定 citation label。 */
+  context_label: string;
+  /** context 所屬文件識別碼。 */
+  document_id: string;
+  /** context 所屬文件名稱。 */
+  document_name: string;
+  /** context 所屬段落標題。 */
+  heading: string | null;
+}
+
+
+/** assistant 回答的單一顯示區塊。 */
+export interface ChatAnswerBlock {
+  /** 區塊文字內容。 */
+  text: string;
+  /** 此區塊引用的 context index 列表。 */
+  citation_context_indices: number[];
+  /** 句尾顯示用的 citations。 */
+  display_citations: ChatDisplayCitation[];
+}
+
+
 /** 單一 assembled context reference。 */
 export interface ChatContextReference {
   /** context 在回傳列表中的順序。 */
   context_index: number;
+  /** 前端顯示用的穩定 citation label。 */
+  context_label: string;
   /** context 所屬文件識別碼。 */
   document_id: string;
+  /** context 所屬文件名稱。 */
+  document_name: string;
   /** context 所屬 parent chunk 識別碼。 */
   parent_chunk_id: string | null;
   /** 合併進此 context 的 child chunk 識別碼。 */
@@ -272,6 +302,39 @@ export interface ChatToolCallState {
   output: Record<string, unknown> | null;
 }
 
+/** 全文預覽使用的 child chunk 範圍。 */
+export interface PreviewChunk {
+  /** child chunk 識別碼。 */
+  chunk_id: string;
+  /** 所屬 parent chunk 識別碼。 */
+  parent_chunk_id: string | null;
+  /** 同 parent 下的 child 順序。 */
+  child_index: number | null;
+  /** chunk 所屬標題。 */
+  heading: string | null;
+  /** chunk 內容結構型別。 */
+  structure_kind: ChatStructureKind;
+  /** chunk 在全文中的起始 offset。 */
+  start_offset: number;
+  /** chunk 在全文中的結束 offset。 */
+  end_offset: number;
+}
+
+
+/** 文件全文預覽 payload。 */
+export interface DocumentPreviewPayload {
+  /** 文件識別碼。 */
+  document_id: string;
+  /** 文件名稱。 */
+  file_name: string;
+  /** 文件 MIME 類型。 */
+  content_type: string;
+  /** normalize 後全文文字。 */
+  normalized_text: string;
+  /** child chunk map。 */
+  chunks: PreviewChunk[];
+}
+
 /** 前端 chat 訊息 view model。 */
 export interface ChatMessageViewModel {
   /** 訊息唯一識別碼。 */
@@ -280,6 +343,8 @@ export interface ChatMessageViewModel {
   role: "user" | "assistant";
   /** 訊息內容。 */
   content: string;
+  /** assistant 回答區塊。 */
+  answerBlocks: ChatAnswerBlock[];
   /** 助理訊息對應的 assembled context references。 */
   citations: ChatContextReference[];
   /** 助理目前所處的高層階段。 */
@@ -292,6 +357,8 @@ export interface ChatMessageViewModel {
   isError: boolean;
   /** 本輪是否使用知識庫 references。 */
   usedKnowledgeBase: boolean | null;
+  /** 目前被選取的 citation context。 */
+  selectedCitationContextIndex: number | null;
 }
 
 

@@ -61,6 +61,7 @@ def process_ingest_job_inline(
             payload=payload,
             pdf_config=_build_pdf_parser_config(settings),
         )
+        document.normalized_text = parsed_document.normalized_text
         job.stage = "chunking"
         session.commit()
         chunking_result = build_chunk_tree(
@@ -106,6 +107,7 @@ def _mark_processing(*, session: Session, document: Document, job: IngestJob) ->
     job.parent_chunk_count = 0
     job.child_chunk_count = 0
     document.status = DocumentStatus.processing
+    document.normalized_text = None
     session.commit()
 
 
@@ -214,6 +216,7 @@ def _mark_failed(*, session: Session, document: Document, job: IngestJob, messag
     job.parent_chunk_count = 0
     job.child_chunk_count = 0
     document.status = DocumentStatus.failed
+    document.normalized_text = None
     document.indexed_at = None
     session.commit()
 
