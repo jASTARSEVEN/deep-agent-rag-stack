@@ -35,7 +35,7 @@ function formatChunkSummary(document: DocumentSummary): string {
 
 /** 建立 chunk 摘要預覽文字。 */
 function buildChunkExcerpt(preview: DocumentPreviewPayload, startOffset: number, endOffset: number): string {
-  const content = preview.normalized_text.slice(Math.max(0, startOffset), Math.max(startOffset, endOffset)).replace(/\s+/g, " ").trim();
+  const content = preview.display_text.slice(Math.max(0, startOffset), Math.max(startOffset, endOffset)).replace(/\s+/g, " ").trim();
   if (!content) {
     return "此 chunk 沒有可顯示的文字內容。";
   }
@@ -268,19 +268,19 @@ export function DocumentsDrawer({
     }
   };
 
-  const handleReindex = async (doc: DocumentSummary) => {
+  const handleReindex = async (doc: DocumentSummary, forceReparse = false) => {
     setActiveActionId(doc.id);
     setError(null);
     setNotice(null);
     try {
-      const payload = await reindexDocument(doc.id);
+      const payload = await reindexDocument(doc.id, { forceReparse });
       const job = await fetchIngestJob(payload.job.id);
       setDocumentJobs(prev => ({ ...prev, [doc.id]: job }));
-      setNotice(`已啟動重新索引：${doc.file_name}`);
+      setNotice(forceReparse ? `已啟動強制重新解析：${doc.file_name}` : `已啟動重新索引：${doc.file_name}`);
       clearDocumentPreviewState(doc.id);
       await loadDocuments();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "重新索引失敗");
+      setError(err instanceof Error ? err.message : (forceReparse ? "強制重新解析失敗" : "重新索引失敗"));
     } finally {
       setActiveActionId(null);
     }
@@ -473,6 +473,17 @@ export function DocumentsDrawer({
                               }}
                             >
                               {activeActionId === doc.id ? "處理中..." : "重新索引"}
+                            </button>
+                            <button
+                              data-testid={`force-reindex-document-${doc.id}`}
+                              className="rounded-lg border border-amber-300 px-3 py-1.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                              disabled={activeActionId === doc.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleReindex(doc, true);
+                              }}
+                            >
+                              強制重新解析
                             </button>
                             <button
                               data-testid={`delete-document-${doc.id}`}

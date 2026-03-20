@@ -19,7 +19,6 @@ from app.schemas.documents import (
     IngestJobSummary,
 )
 from app.services.access import require_area_access, require_minimum_area_role
-from app.services.ingest import process_ingest_job_inline
 from app.services.storage import ObjectStorage
 from app.services.tasks import dispatch_document_ingest
 
@@ -32,6 +31,9 @@ RECOGNIZED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".pptx", ".html", ".xls
 
 # 若瀏覽器沒有帶 content type，退回使用的 MIME 類型。
 DEFAULT_TEXT_CONTENT_TYPE = "text/plain"
+
+# parse artifact 儲存目錄名稱。
+PARSE_ARTIFACTS_DIRECTORY = "artifacts"
 
 
 def create_document_upload(
@@ -49,7 +51,7 @@ def create_document_upload(
     參數：
     - `session`：用來建立文件與 job 的資料庫 session。
     - `principal`：目前已驗證使用者。
-    - `settings`：應用程式設定，包含 upload 與 ingest 模式。
+    - `settings`：應用程式設定。
     - `storage`：原始檔物件儲存介面。
     - `celery_client`：用來派送 ingest task 的 Celery client。
     - `area_id`：文件所屬 area 識別碼。
@@ -73,6 +75,7 @@ def create_document_upload(
         content_type=content_type,
         file_size=len(payload),
         storage_key=storage_key,
+        display_text=None,
         normalized_text=None,
         status=DocumentStatus.uploaded,
         indexed_at=None,
@@ -88,12 +91,7 @@ def create_document_upload(
     session.commit()
     session.refresh(document)
     session.refresh(job)
-    if settings.ingest_inline_mode:
-        process_ingest_job_inline(session=session, storage=storage, job_id=job.id, settings=settings)
-        session.refresh(document)
-        session.refresh(job)
-    else:
-        dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
+    dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
     return build_document_summary(session=session, document=document), build_ingest_job_summary(
         session=session,
         document=document,
@@ -168,7 +166,7 @@ def get_document_preview(session: Session, principal: CurrentPrincipal, *, docum
     """
 
     document = _get_authorized_ready_document_for_preview(session=session, principal=principal, document_id=document_id)
-    if not document.normalized_text:
+    if not document.display_text:
         raise _build_document_not_found_error()
 
     chunks = session.scalars(
@@ -183,7 +181,7 @@ def get_document_preview(session: Session, principal: CurrentPrincipal, *, docum
         document_id=document.id,
         file_name=document.file_name,
         content_type=document.content_type,
-        normalized_text=document.normalized_text,
+        display_text=document.display_text,
         chunks=[
             DocumentPreviewChunk(
                 chunk_id=chunk.id,
@@ -234,6 +232,7 @@ def reindex_document(
     celery_client: Any,
     *,
     document_id: str,
+    force_reparse: bool = False,
 ) -> tuple[DocumentSummary, IngestJobSummary]:
     """重新建立既有文件的 ingest job 與 chunk tree。
 
@@ -244,6 +243,7 @@ def reindex_document(
     - `storage`：原始檔物件儲存介面。
     - `celery_client`：用來派送 ingest task 的 Celery client。
     - `document_id`：要重建索引的文件識別碼。
+    - `force_reparse`：若為真，要求 worker 忽略既有 parse artifacts 並重跑 parser。
 
     回傳：
     - `tuple[DocumentSummary, IngestJobSummary]`：重建後的文件與新 job 摘要。
@@ -252,6 +252,7 @@ def reindex_document(
     document = _get_authorized_document_for_write(session=session, principal=principal, document_id=document_id)
     session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
     document.status = DocumentStatus.uploaded
+    document.display_text = None
     document.normalized_text = None
     document.indexed_at = None
     job = IngestJob(
@@ -265,12 +266,7 @@ def reindex_document(
     session.commit()
     session.refresh(document)
     session.refresh(job)
-    if settings.ingest_inline_mode:
-        process_ingest_job_inline(session=session, storage=storage, job_id=job.id, settings=settings)
-        session.refresh(document)
-        session.refresh(job)
-    else:
-        dispatch_document_ingest(celery_client=celery_client, job_id=job.id)
+    dispatch_document_ingest(celery_client=celery_client, job_id=job.id, force_reparse=force_reparse)
     return build_document_summary(session=session, document=document), build_ingest_job_summary(
         session=session,
         document=document,
@@ -298,6 +294,7 @@ def delete_document(
     """
 
     document = _get_authorized_document_for_write(session=session, principal=principal, document_id=document_id)
+    storage.delete_prefix(prefix=_build_parse_artifact_prefix(storage_key=document.storage_key))
     storage.delete_object(object_key=document.storage_key)
     session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
     session.execute(delete(IngestJob).where(IngestJob.document_id == document.id))
@@ -334,6 +331,12 @@ def build_document_summary(
         created_at=document.created_at,
         updated_at=document.updated_at,
     )
+
+
+def _build_parse_artifact_prefix(*, storage_key: str) -> str:
+    """依文件 storage key 建立 parse artifact 的固定前綴路徑。"""
+
+    return str(PurePosixPath(storage_key).parent / PARSE_ARTIFACTS_DIRECTORY)
 
 
 def build_ingest_job_summary(*, session: Session, document: Document, job: IngestJob) -> IngestJobSummary:

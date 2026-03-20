@@ -78,6 +78,10 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         DATABASE_URL=f"sqlite+pysqlite:///{tmp_path / 'worker.sqlite'}",
         CELERY_BROKER_URL="redis://redis:6379/0",
         CELERY_RESULT_BACKEND="redis://redis:6379/1",
+        CELERY_WORKER_POOL="solo",
+        CELERY_WORKER_CONCURRENCY=1,
+        CELERY_WORKER_PREFETCH_MULTIPLIER=1,
+        CELERY_WORKER_MAX_TASKS_PER_CHILD=1,
         STORAGE_BACKEND="filesystem",
         LOCAL_STORAGE_PATH=tmp_path / "storage",
         MINIO_ENDPOINT="http://minio:9000",
@@ -92,6 +96,7 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
         CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
         PDF_PARSER_PROVIDER="local",
+        MARKER_MODEL_CACHE_DIR=tmp_path / "marker-model-cache",
         LLAMAPARSE_API_KEY="",
         LLAMAPARSE_DO_NOT_CACHE=True,
         LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
@@ -163,6 +168,7 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
     """支援的 md 文件應推進到 ready/succeeded，並寫入 parent-child chunks。"""
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -185,6 +191,8 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_document.status == DocumentStatus.ready
         assert refreshed_document.indexed_at is not None
         assert refreshed_document.normalized_text == parse_document(file_name="notes.md", payload=payload).normalized_text
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Title\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert refreshed_job.stage == "succeeded"
@@ -396,6 +404,7 @@ def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path)
     )
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -415,6 +424,8 @@ def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path)
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("Guide\n\n## Guide\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert any("Deep Agent PDF local parser sample" in chunk.content for chunk in refreshed_chunks)
@@ -438,6 +449,7 @@ def test_process_document_ingest_supports_xlsx(monkeypatch, tmp_path: Path) -> N
         text: str
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
         "worker.parsers._extract_xlsx_elements_with_unstructured",
@@ -473,6 +485,8 @@ def test_process_document_ingest_supports_xlsx(monkeypatch, tmp_path: Path) -> N
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Budget\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
@@ -480,6 +494,9 @@ def test_process_document_ingest_supports_xlsx(monkeypatch, tmp_path: Path) -> N
         assert refreshed_job.child_chunk_count == 1
         assert len(refreshed_chunks) == 2
         assert refreshed_chunks[0].content
+        artifact_path = storage_path.parent / "artifacts" / "xlsx.extracted.html"
+        assert artifact_path.exists()
+        assert "<h1>Budget</h1>" in artifact_path.read_text(encoding="utf-8")
 
 
 def test_process_document_ingest_supports_docx(monkeypatch, tmp_path: Path) -> None:
@@ -500,6 +517,7 @@ def test_process_document_ingest_supports_docx(monkeypatch, tmp_path: Path) -> N
         metadata: _FakeMetadata
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
         "worker.parsers._extract_docx_elements_with_unstructured",
@@ -537,9 +555,14 @@ def test_process_document_ingest_supports_docx(monkeypatch, tmp_path: Path) -> N
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("Project Plan\n\n## Project Plan\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+        artifact_path = storage_path.parent / "artifacts" / "docx.extracted.html"
+        assert artifact_path.exists()
+        assert "Owner" in artifact_path.read_text(encoding="utf-8")
 
 
 def test_process_document_ingest_supports_pptx(monkeypatch, tmp_path: Path) -> None:
@@ -560,6 +583,7 @@ def test_process_document_ingest_supports_pptx(monkeypatch, tmp_path: Path) -> N
         metadata: _FakeMetadata
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
         "worker.parsers._extract_pptx_elements_with_unstructured",
@@ -587,6 +611,8 @@ def test_process_document_ingest_supports_pptx(monkeypatch, tmp_path: Path) -> N
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("Quarterly Review\n\n## Quarterly Review\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert all(chunk.structure_kind == ChunkStructureKind.text for chunk in refreshed_chunks)
@@ -621,9 +647,213 @@ def test_process_document_ingest_supports_llamaparse_pdf(monkeypatch, tmp_path: 
         assert result == "succeeded"
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## PDF Report\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+        raw_artifact_path = storage_path.parent / "artifacts" / "llamaparse.raw.md"
+        cleaned_artifact_path = storage_path.parent / "artifacts" / "llamaparse.cleaned.md"
+        assert raw_artifact_path.exists()
+        assert cleaned_artifact_path.exists()
+        assert "| Alice | 95 |" in cleaned_artifact_path.read_text(encoding="utf-8")
+
+
+def test_process_document_ingest_supports_marker_pdf(monkeypatch, tmp_path: Path) -> None:
+    """marker provider 應能將 Markdown 結果交回既有 chunking 流程。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "marker"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_markdown_with_marker",
+        lambda *, payload, pdf_config: "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## PDF Report\n\n")
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+        artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
+        assert artifact_path.exists()
+        assert artifact_path.read_text(encoding="utf-8").strip().startswith("# PDF Report")
+
+
+def test_process_document_ingest_reuses_existing_markdown_artifact_on_reindex(monkeypatch, tmp_path: Path) -> None:
+    """reindex 若已存在 PDF Markdown artifact，應直接重建 chunks 而不重跑 parser。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "marker"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_markdown_with_marker",
+        lambda *, payload, pdf_config: (_ for _ in ()).throw(AssertionError("不應重跑 marker parser")),
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+    artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("# Reused Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |", encoding="utf-8")
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert refreshed_document.normalized_text.startswith("| Name | Score |")
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Reused Report\n\n")
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_force_reparse_ignores_existing_markdown_artifact(monkeypatch, tmp_path: Path) -> None:
+    """force_reparse 應忽略既有 Markdown artifact 並重跑 parser。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "marker"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_markdown_with_marker",
+        lambda *, payload, pdf_config: "# Fresh Report\n\n| Name | Score |\n| --- | --- |\n| Bob | 88 |",
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+    artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text("# Stale Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |", encoding="utf-8")
+
+    result = process_document_ingest(job.id, force_reparse=True)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert "| Bob | 88 |" in refreshed_document.normalized_text
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Fresh Report\n\n")
+        assert "| Alice | 95 |" not in refreshed_document.normalized_text
+        assert "| Bob | 88 |" in artifact_path.read_text(encoding="utf-8")
+
+
+def test_process_document_ingest_reuses_existing_html_artifact_on_reindex(monkeypatch, tmp_path: Path) -> None:
+    """reindex 若已存在 office HTML artifact，應直接重建 chunks 而不重跑 parser。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_docx_elements_with_unstructured",
+        lambda *, payload: (_ for _ in ()).throw(AssertionError("不應重跑 docx parser")),
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"fake-docx"
+    document, job = seed_job(session_factory, file_name="plan.docx", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+    artifact_path = storage_path.parent / "artifacts" / "docx.extracted.html"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_path.write_text(
+        (
+            "<html><body><section><h1>Plan</h1><p>Executive summary</p>"
+            "<table><tr><th>Owner</th><th>Status</th></tr>"
+            "<tr><td>Alice</td><td>Ready</td></tr></table></section></body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.ready
+        assert "Executive summary" in refreshed_document.normalized_text
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Plan\n\n")
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.succeeded
+        assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
+
+
+def test_process_document_ingest_marks_failed_for_marker_missing_dependency(monkeypatch, tmp_path: Path) -> None:
+    """marker provider 缺少依賴時應轉為受控 failed。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "marker"
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_markdown_with_marker",
+        lambda *, payload, pdf_config: (_ for _ in ()).throw(
+            ValueError("marker provider 需要安裝 marker-pdf 與其相依套件。")
+        ),
+    )
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    document, job = seed_job(session_factory, file_name="deck.pdf", payload=MINIMAL_TEXT_PDF)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(MINIMAL_TEXT_PDF)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        refreshed_chunk_count = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).count()
+        assert result == "failed"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.failed
+        assert refreshed_document.normalized_text is None
+        assert refreshed_document.display_text is None
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.failed
+        assert refreshed_job.error_message is not None
+        assert "marker-pdf" in refreshed_job.error_message.lower()
+        assert refreshed_chunk_count == 0
 
 
 def test_process_document_ingest_truncates_chunk_heading_and_preview(monkeypatch, tmp_path: Path) -> None:
@@ -684,6 +914,7 @@ def test_process_document_ingest_marks_failed_for_llamaparse_missing_key(monkeyp
         assert refreshed_document is not None
         assert refreshed_document.status == DocumentStatus.failed
         assert refreshed_document.normalized_text is None
+        assert refreshed_document.display_text is None
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
         assert refreshed_job.error_message is not None
@@ -726,6 +957,7 @@ def test_reprocessing_replaces_existing_chunks(monkeypatch, tmp_path: Path) -> N
     """同一文件再處理時應替換舊 chunks，而不是殘留舊資料。"""
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -764,6 +996,9 @@ def test_reprocessing_replaces_existing_chunks(monkeypatch, tmp_path: Path) -> N
             refreshed_document.normalized_text
             == parse_document(file_name="notes.md", payload=b"# Title\nupdated\n\n## Next\nmore").normalized_text
         )
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Title\n\n")
+        assert "## Next\n\nmore" in refreshed_document.display_text
 
 
 def test_build_chunk_tree_merges_short_parent_with_following_section() -> None:
@@ -827,9 +1062,7 @@ def test_build_chunk_tree_uses_langchain_child_splitter_with_stable_offsets() ->
         assert child.start_offset < child.end_offset
         assert child.start_offset >= parent.start_offset
         assert child.end_offset <= parent.end_offset
-        relative_start = child.start_offset - parent.start_offset
-        relative_end = child.end_offset - parent.start_offset
-        assert parent.content[relative_start:relative_end] == child.content
+        assert result.display_text[child.start_offset:child.end_offset] == child.content
         assert child.start_offset > previous_end - settings.chunk_child_overlap
         previous_end = child.end_offset
 
@@ -864,7 +1097,7 @@ def test_build_chunk_tree_merges_short_markdown_table_parent_with_adjacent_text(
 
 
 def test_build_chunk_tree_consolidates_short_pdf_text_blocks_with_same_heading() -> None:
-    """PDF source 的同 heading 短 text blocks 應在 parent 建立前先 consolidation。"""
+    """PDF source 的同 heading 短 text/table blocks 應收斂成單一 mixed parent。"""
 
     parsed_document = ParsedDocument(
         normalized_text="Intro A\n\nIntro B\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
@@ -892,19 +1125,83 @@ def test_build_chunk_tree_consolidates_short_pdf_text_blocks_with_same_heading()
                 end_offset=64,
             ),
         ],
+        artifacts=[],
     )
 
     settings = build_settings(Path("/tmp"))
     settings.chunk_min_parent_section_length = 800
     result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
 
-    assert len(result.parent_chunks) == 2
-    assert result.parent_chunks[0].structure_kind == "text"
-    assert result.parent_chunks[0].content == "Intro A\n\nIntro B"
-    assert result.parent_chunks[1].structure_kind == "table"
-    table_parent = result.parent_chunks[1]
-    assert table_parent.heading == "Overview"
-    assert "| Alice | 95 |" in table_parent.content
+    assert len(result.parent_chunks) == 1
+    parent = result.parent_chunks[0]
+    assert parent.structure_kind == "text"
+    assert parent.heading == "Overview"
+    assert "Intro A\n\nIntro B" in parent.content
+    assert "| Alice | 95 |" in parent.content
+    assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table"]
+
+
+def test_build_chunk_tree_materializes_display_text_with_heading_prefix() -> None:
+    """parent locator 應只在前綴實際匹配時包含 heading。"""
+
+    text = "# Intro\n" + ("Alpha body " * 40).strip()
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_target_child_size = 120
+    settings.chunk_child_overlap = 20
+    result = build_chunk_tree(
+        parsed_document=parse_document(file_name="notes.md", payload=text.encode()),
+        config=build_chunking_config(settings),
+    )
+
+    assert result.display_text.startswith("## Intro\n\n")
+    parent = result.parent_chunks[0]
+    assert result.display_text[parent.start_offset:parent.start_offset + len("## Intro\n\n")] == "## Intro\n\n"
+    assert parent.start_offset == 0
+    assert parent.content in result.display_text
+    assert result.child_chunks[0].start_offset == len("## Intro\n\n")
+
+
+def test_build_chunk_tree_keeps_child_offset_after_derived_heading_prefix() -> None:
+    """child offset 應維持正文起點，不因 heading 前綴而往前擴張。"""
+
+    parsed_document = ParsedDocument(
+        normalized_text="Intro note\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |\n\nClosing note",
+        source_format="pdf",
+        blocks=[
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Intro note",
+                start_offset=0,
+                end_offset=10,
+            ),
+            ParsedBlock(
+                block_kind="table",
+                heading="Overview",
+                content="| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                start_offset=12,
+                end_offset=58,
+            ),
+            ParsedBlock(
+                block_kind="text",
+                heading="Overview",
+                content="Closing note",
+                start_offset=60,
+                end_offset=72,
+            ),
+        ],
+        artifacts=[],
+    )
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 800
+    result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
+
+    assert result.display_text.startswith("## Overview\n\n")
+    parent = result.parent_chunks[0]
+    first_child = result.child_chunks[0]
+    assert parent.start_offset == 0
+    assert first_child.start_offset == len("## Overview\n\n")
+    assert result.display_text[first_child.start_offset:first_child.end_offset] == first_child.content
 
 
 def test_build_chunk_tree_clusters_pdf_text_table_text_under_same_heading() -> None:
@@ -936,6 +1233,7 @@ def test_build_chunk_tree_clusters_pdf_text_table_text_under_same_heading() -> N
                 end_offset=72,
             ),
         ],
+        artifacts=[],
     )
 
     settings = build_settings(Path("/tmp"))
@@ -953,9 +1251,7 @@ def test_build_chunk_tree_clusters_pdf_text_table_text_under_same_heading() -> N
     assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table", "text"]
     assert [chunk.child_index for chunk in result.child_chunks] == [0, 1, 2]
     for child in result.child_chunks:
-        relative_start = child.start_offset - parent.start_offset
-        relative_end = child.end_offset - parent.start_offset
-        assert parent.content[relative_start:relative_end] == child.content
+        assert result.display_text[child.start_offset:child.end_offset] == child.content
 
 
 def test_build_chunk_tree_merges_short_table_with_adjacent_text_same_heading() -> None:
@@ -989,6 +1285,66 @@ def test_build_chunk_tree_merges_short_table_with_adjacent_text_same_heading() -
     assert "| 15足歲(含)以上 | 美元1,000萬元 |" in parent.content
     assert "續保與繳費方式另見下列說明。" in parent.content
     assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table", "text"]
+
+
+def test_build_chunk_tree_merges_short_sections_when_heading_is_parent_path_prefix() -> None:
+    """短 PDF sections 若 heading 為同一條 path family，應合併為單一 mixed parent。"""
+
+    parsed_document = ParsedDocument(
+        normalized_text=(
+            "繳費年期及 6 年\n\n"
+            "投保年齡 0 歲~74 歲\n\n"
+            "(以元為單位)\n\n"
+            "1. 最低投保金額：美元 7,000 元。\n\n"
+            "1. 本險累計最高投保金額：\n\n"
+            "| 投保年齡 | 投保金額 |\n"
+            "| --- | --- |\n"
+            "| 15足歲(不含)以下 | 美元35萬元 |\n"
+            "| 15足歲(含)以上 | 美元1000萬元 |"
+        ),
+        source_format="pdf",
+        blocks=[
+            ParsedBlock(
+                block_kind="text",
+                heading="十六、 保利美美元利率變動型終身壽險(NUIW6502)",
+                content="繳費年期及 6 年\n\n投保年齡 0 歲~74 歲",
+                start_offset=0,
+                end_offset=23,
+            ),
+            ParsedBlock(
+                block_kind="text",
+                heading="十六、 保利美美元利率變動型終身壽險(NUIW6502) / 投保金額",
+                content="(以元為單位)\n\n1. 最低投保金額：美元 7,000 元。\n\n1. 本險累計最高投保金額：",
+                start_offset=25,
+                end_offset=71,
+            ),
+            ParsedBlock(
+                block_kind="table",
+                heading="十六、 保利美美元利率變動型終身壽險(NUIW6502)",
+                content=(
+                    "| 投保年齡 | 投保金額 |\n"
+                    "| --- | --- |\n"
+                    "| 15足歲(不含)以下 | 美元35萬元 |\n"
+                    "| 15足歲(含)以上 | 美元1000萬元 |"
+                ),
+                start_offset=73,
+                end_offset=145,
+            ),
+        ],
+        artifacts=[],
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_min_parent_section_length = 220
+    result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
+
+    assert len(result.parent_chunks) == 1
+    parent = result.parent_chunks[0]
+    assert parent.structure_kind == "text"
+    assert parent.heading == "十六、 保利美美元利率變動型終身壽險(NUIW6502)"
+    assert "本險累計最高投保金額：" in parent.content
+    assert "| 15足歲(含)以上 | 美元1000萬元 |" in parent.content
+    assert [chunk.structure_kind for chunk in result.child_chunks] == ["text", "table"]
 
 
 def test_build_chunk_tree_keeps_short_table_separate_when_heading_differs() -> None:
@@ -1079,6 +1435,7 @@ def test_process_document_ingest_supports_html_table_blocks(monkeypatch, tmp_pat
     result = process_document_ingest(job.id)
 
     with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
         refreshed_chunks = (
             session.query(DocumentChunk)
             .filter(DocumentChunk.document_id == document.id)
@@ -1086,13 +1443,17 @@ def test_process_document_ingest_supports_html_table_blocks(monkeypatch, tmp_pat
             .all()
         )
         assert result == "succeeded"
+        assert refreshed_document is not None
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Quarterly Report\n\n")
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
 
 
-def test_process_document_ingest_persists_normalized_text(monkeypatch, tmp_path: Path) -> None:
-    """成功 ingest 後應保存 normalized_text 供全文 preview 使用。"""
+def test_process_document_ingest_persists_display_text_and_normalized_text(monkeypatch, tmp_path: Path) -> None:
+    """成功 ingest 後應保存 normalized_text 與 display_text。"""
 
     settings = build_settings(tmp_path)
+    settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -1114,10 +1475,15 @@ def test_process_document_ingest_persists_normalized_text(monkeypatch, tmp_path:
             file_name="preview.md",
             payload=payload,
         ).normalized_text
+        assert refreshed_document.display_text is not None
+        assert refreshed_document.display_text.startswith("## Title\n\n")
+        assert "Alpha body" in refreshed_document.display_text
+        assert "## Next" in refreshed_document.display_text
+        assert "Beta body" in refreshed_document.display_text
 
 
-def test_process_document_ingest_clears_normalized_text_on_failure(monkeypatch, tmp_path: Path) -> None:
-    """ingest 失敗時應清空舊 normalized_text，避免 preview 看到過期內容。"""
+def test_process_document_ingest_clears_display_text_on_failure(monkeypatch, tmp_path: Path) -> None:
+    """ingest 失敗時應清空舊 normalized_text 與 display_text，避免 preview 看到過期內容。"""
 
     settings = build_settings(tmp_path)
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
@@ -1135,6 +1501,7 @@ def test_process_document_ingest_clears_normalized_text_on_failure(monkeypatch, 
         stored_document = session.get(Document, document.id)
         assert stored_document is not None
         stored_document.normalized_text = "stale text"
+        stored_document.display_text = "stale display text"
         session.commit()
 
     result = process_document_ingest(job.id)
@@ -1145,5 +1512,6 @@ def test_process_document_ingest_clears_normalized_text_on_failure(monkeypatch, 
         assert result == "failed"
         assert refreshed_document is not None
         assert refreshed_document.normalized_text is None
+        assert refreshed_document.display_text is None
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed

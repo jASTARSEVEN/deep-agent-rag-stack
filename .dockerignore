@@ -25,3 +25,6 @@
 # OS/editor noise
 .DS_Store
 **/.DS_Store
+
+# Model Cache
+.marker-cache/**

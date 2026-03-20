@@ -111,9 +111,9 @@ class DocumentPreviewChunk(BaseModel):
     heading: str | None
     # chunk 內容結構型別。
     structure_kind: ChunkStructureKind
-    # chunk 在全文 normalized_text 的起始 offset。
+    # chunk 在全文 display_text 的起始 offset。
     start_offset: int
-    # chunk 在全文 normalized_text 的結束 offset。
+    # chunk 在全文 display_text 的結束 offset。
     end_offset: int
 
 
@@ -126,7 +126,7 @@ class DocumentPreviewResponse(BaseModel):
     file_name: str
     # 上傳時記錄的 MIME 類型。
     content_type: str
-    # parser 正規化後、供全文 preview 使用的完整文字內容。
-    normalized_text: str
+    # 供全文 preview 與 offset 基準使用的完整顯示文字內容。
+    display_text: str
     # 依 child chunk 排序的全文 chunk map。
     chunks: list[DocumentPreviewChunk]

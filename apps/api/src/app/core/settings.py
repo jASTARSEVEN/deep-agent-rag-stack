@@ -15,7 +15,6 @@ ENV_FILE_NAME = ".env"
 EMPTY_STRING_ENV_KEYS = {
     "MINIO_SECURE",
     "MAX_UPLOAD_SIZE_BYTES",
-    "INGEST_INLINE_MODE",
     "CHUNK_MIN_PARENT_SECTION_LENGTH",
     "CHUNK_TARGET_CHILD_SIZE",
     "CHUNK_CHILD_OVERLAP",
@@ -45,8 +44,6 @@ EMPTY_STRING_ENV_KEYS = {
     "LANGSMITH_ENDPOINT",
     "LANGSMITH_WORKSPACE_ID",
     "LANGSMITH_TRACING",
-    "LLAMAPARSE_DO_NOT_CACHE",
-    "LLAMAPARSE_MERGE_CONTINUED_TABLES",
 }
 
 
@@ -99,13 +96,8 @@ class AppSettings(BaseSettings):
     chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
     chunk_table_preserve_max_chars: Annotated[int, Field(alias="CHUNK_TABLE_PRESERVE_MAX_CHARS")] = 4000
     chunk_table_max_rows_per_child: Annotated[int, Field(alias="CHUNK_TABLE_MAX_ROWS_PER_CHILD")] = 20
-    pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "local"
-    llamaparse_api_key: Annotated[str | None, Field(alias="LLAMAPARSE_API_KEY")] = None
-    llamaparse_do_not_cache: Annotated[bool, Field(alias="LLAMAPARSE_DO_NOT_CACHE")] = True
-    llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False
     celery_broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     celery_result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
-    ingest_inline_mode: Annotated[bool, Field(alias="INGEST_INLINE_MODE")] = False
     keycloak_url: Annotated[str, Field(alias="KEYCLOAK_URL")] = "http://keycloak:8080"
     keycloak_issuer: Annotated[str, Field(alias="KEYCLOAK_ISSUER")] = "http://localhost:18080/realms/deep-agent-dev"
     keycloak_jwks_url: Annotated[str, Field(alias="KEYCLOAK_JWKS_URL")] = (

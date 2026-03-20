@@ -1,6 +1,8 @@
 """Worker 骨架的 Celery 應用程式進入點。"""
 
 from worker.core.settings import get_settings
+from worker.db import create_database_engine
+from worker.schema_guard import ensure_schema_compatibility
 
 
 class _FallbackCeleryApp:
@@ -51,8 +53,21 @@ def create_celery_app():
         accept_content=["json"],
         result_serializer="json",
         timezone="UTC",
+        worker_pool=settings.worker_pool,
+        worker_concurrency=settings.worker_concurrency,
+        worker_prefetch_multiplier=settings.worker_prefetch_multiplier,
+        worker_max_tasks_per_child=settings.worker_max_tasks_per_child,
     )
     application.autodiscover_tasks(["worker.tasks"])
+
+    from celery.signals import worker_init
+
+    @worker_init.connect
+    def verify_database_schema(**_: object) -> None:
+        """在 worker 啟動時確認資料庫 schema 與目前程式碼相容。"""
+
+        ensure_schema_compatibility(create_database_engine(settings))
+
     return application
 
 

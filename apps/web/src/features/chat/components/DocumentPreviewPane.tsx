@@ -94,23 +94,23 @@ export function DocumentPreviewPane({
       if (start > cursor) {
         segments.push({
           key: `gap-${cursor}-${start}`,
-          text: preview.normalized_text.slice(cursor, start),
+          text: preview.display_text.slice(cursor, start),
           chunkId: null,
         });
       }
 
       segments.push({
         key: `chunk-${chunk.chunk_id}-${index}`,
-        text: preview.normalized_text.slice(start, end),
+        text: preview.display_text.slice(start, end),
         chunkId: chunk.chunk_id,
       });
       cursor = Math.max(cursor, end);
     });
 
-    if (cursor < preview.normalized_text.length) {
+    if (cursor < preview.display_text.length) {
       segments.push({
-        key: `gap-${cursor}-${preview.normalized_text.length}`,
-        text: preview.normalized_text.slice(cursor),
+        key: `gap-${cursor}-${preview.display_text.length}`,
+        text: preview.display_text.slice(cursor),
         chunkId: null,
       });
     }

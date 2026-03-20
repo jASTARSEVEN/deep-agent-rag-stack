@@ -7,7 +7,7 @@ name = "deep-agent-worker"
 version = "0.1.0"
 description = "Celery skeleton worker for the Deep Agent RAG Stack."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.14"
 license = { text = "Apache License 2.0" }
 authors = [
   { name = "卓品至", email = "easypinex@gmail.com" },

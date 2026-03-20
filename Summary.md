@@ -33,7 +33,7 @@
 - 身分與授權：`Keycloak`
 - 前端：`React + Tailwind`
 - 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
-- PDF 解析：`Unstructured partition_pdf`、`LlamaParse SaaS (optional)`
+- PDF 解析：`Marker PDF`、`Unstructured partition_pdf`、`LlamaParse SaaS (optional)`
 - Office 文件解析：`Unstructured partition_docx`、`partition_pptx`、`partition_xlsx`
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
@@ -126,7 +126,7 @@
 1. API 收檔並存入 MinIO
 2. 建立 `documents` 與 `ingest_jobs`
 3. Worker 解析文件
-4. `PDF` 先經 provider-based parsing：`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 則先轉成 Markdown
+4. `PDF` 先經 provider-based parsing：預設 `marker` 走 PDF -> Markdown，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 則先轉成 Markdown
 5. Worker 先輸出 block-aware `ParsedDocument / ParsedBlock`，區分 `text` 與 `table`
 6. `XLSX` 使用 `Unstructured partition_xlsx` 解析 worksheet，優先以 `text_as_html` 回接既有 HTML table-aware parser
 7. `DOCX` 與 `PPTX` 使用 `Unstructured partition_docx` / `partition_pptx` 解析，映射回既有 `text/table` block-aware contract
@@ -142,6 +142,7 @@
 - `document_chunks` 必須以 SQL-first 欄位保存 `chunk_type` 與 `structure_kind`
 - `LlamaParse` 正式路徑只使用標準 Markdown 輸出模式；agentic mode 僅保留未來擴充空間
 - `Markdown + HTML + LlamaParse PDF->Markdown + XLSX + DOCX/PPTX(Unstructured)` 本輪支援 block-aware chunking；其中表格感知正式覆蓋 Markdown、HTML、XLSX 與可辨識 table element 的 DOCX/PPTX
+- `marker PDF parser` 為正式預設路徑，僅負責輸出 Markdown 並回接既有 parser / chunk tree；中介產物只持久化 `marker.cleaned.md`
 - `local PDF parser` 僅作為自架 fallback，不承諾表格高保真
 - `TXT` 不做表格感知
 

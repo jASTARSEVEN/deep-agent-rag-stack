@@ -1,7 +1,9 @@
 """Worker 使用的原始檔儲存讀取抽象。"""
 
 from abc import ABC, abstractmethod
+from io import BytesIO
 from pathlib import Path
+import shutil
 
 from minio import Minio
 from minio.error import S3Error
@@ -25,6 +27,30 @@ class ObjectStorageReader(ABC):
 
         回傳：
         - `bytes`：讀取出的原始位元組內容。
+        """
+
+    @abstractmethod
+    def put_object(self, *, object_key: str, payload: bytes, content_type: str) -> None:
+        """寫入指定物件內容。
+
+        參數：
+        - `object_key`：物件儲存中的鍵值。
+        - `payload`：要寫入的原始位元組內容。
+        - `content_type`：物件 MIME 類型。
+
+        回傳：
+        - `None`：此函式只負責寫入物件。
+        """
+
+    @abstractmethod
+    def delete_prefix(self, *, prefix: str) -> None:
+        """刪除指定前綴下的所有物件。
+
+        參數：
+        - `prefix`：物件儲存中的前綴路徑。
+
+        回傳：
+        - `None`：此函式只負責批次刪除。
         """
 
 
@@ -70,6 +96,46 @@ class MinioObjectStorageReader(ObjectStorageReader):
         except S3Error as exc:
             raise StorageError("無法讀取物件儲存。") from exc
 
+    def put_object(self, *, object_key: str, payload: bytes, content_type: str) -> None:
+        """寫入指定物件。
+
+        參數：
+        - `object_key`：物件儲存中的鍵值。
+        - `payload`：要寫入的原始位元組內容。
+        - `content_type`：物件 MIME 類型。
+
+        回傳：
+        - `None`：此函式只負責寫入物件。
+        """
+
+        try:
+            self._client.put_object(
+                self._bucket,
+                object_key,
+                data=BytesIO(payload),
+                length=len(payload),
+                content_type=content_type,
+            )
+        except S3Error as exc:
+            raise StorageError("無法寫入物件儲存。") from exc
+
+    def delete_prefix(self, *, prefix: str) -> None:
+        """刪除指定前綴下的所有 MinIO 物件。
+
+        參數：
+        - `prefix`：物件儲存中的前綴路徑。
+
+        回傳：
+        - `None`：此函式只負責批次刪除。
+        """
+
+        try:
+            objects = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)
+            for obj in objects:
+                self._client.remove_object(self._bucket, obj.object_name)
+        except S3Error as exc:
+            raise StorageError("無法刪除物件儲存內容。") from exc
+
 
 class FilesystemObjectStorageReader(ObjectStorageReader):
     """從本機檔案系統讀取文件內容。"""
@@ -100,6 +166,39 @@ class FilesystemObjectStorageReader(ObjectStorageReader):
             return (self._base_path / object_key).read_bytes()
         except FileNotFoundError as exc:
             raise StorageError("無法讀取物件儲存。") from exc
+
+    def put_object(self, *, object_key: str, payload: bytes, content_type: str) -> None:
+        """將位元組內容寫入本機檔案系統。
+
+        參數：
+        - `object_key`：檔案系統儲存中的相對鍵值。
+        - `payload`：要寫入的原始位元組內容。
+        - `content_type`：物件 MIME 類型；filesystem backend 僅保留介面一致性。
+
+        回傳：
+        - `None`：此函式只負責寫入檔案。
+        """
+
+        del content_type
+        target_path = self._base_path / object_key
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(payload)
+
+    def delete_prefix(self, *, prefix: str) -> None:
+        """刪除指定前綴下的所有本機內容。
+
+        參數：
+        - `prefix`：檔案系統儲存中的相對前綴路徑。
+
+        回傳：
+        - `None`：此函式只負責刪除路徑。
+        """
+
+        target_path = self._base_path / prefix
+        if target_path.is_dir():
+            shutil.rmtree(target_path)
+        elif target_path.exists():
+            target_path.unlink()
 
 
 def build_object_storage_reader(settings: WorkerSettings) -> ObjectStorageReader:

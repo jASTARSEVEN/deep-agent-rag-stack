@@ -29,7 +29,6 @@ This module contains the local Docker Compose stack and the container build asse
 - `PDF_PARSER_PROVIDER`
 - `LLAMAPARSE_*`
 - `CELERY_*`
-- `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -64,6 +63,8 @@ This module contains the local Docker Compose stack and the container build asse
 - Keycloak automatically imports the `deep-agent-dev` realm, the `deep-agent-web` client, the groups mapper, and default users/groups on first startup.
 - `supabase/migrations/` is mounted into `/docker-entrypoint-initdb.d` only for fresh database volumes. Existing databases still need Alembic-based upgrades until a dedicated migration runner lands.
 - Current compose health checks only verify stack readiness, not complete business correctness.
-- The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and pair it with `INGEST_INLINE_MODE=true`.
-- To switch both compose services to LlamaParse, set `PDF_PARSER_PROVIDER=llamaparse` and provide `LLAMAPARSE_API_KEY` in `.env`, then restart the `api` and `worker` containers so the new environment reaches both runtimes.
+- The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and keep both the `api` and `worker` services running.
+- To switch compose ingest to LlamaParse, set `PDF_PARSER_PROVIDER=llamaparse` and provide `LLAMAPARSE_API_KEY` in `.env`, then restart the `worker` container so the new environment reaches the ingest runtime.
+- Compose now mounts `MARKER_MODEL_CACHE_DIR` on the `marker-model-cache` named volume, so Marker / Surya model downloads survive worker restarts and rebuilds. If you override the cache path, make sure the volume target still matches that path.
+- The compose worker now defaults to `CELERY_WORKER_POOL=solo`, `CELERY_WORKER_CONCURRENCY=1`, `CELERY_WORKER_PREFETCH_MULTIPLIER=1`, and `CELERY_WORKER_MAX_TASKS_PER_CHILD=1` to reduce `SIGKILL` risk when `marker` PDF ingest spikes memory inside prefork children. If you switch back to prefork, verify the container has enough memory headroom first.
 - To enable Cohere rerank in compose, provide `COHERE_API_KEY` in `.env` and keep `RERANK_PROVIDER=cohere`.

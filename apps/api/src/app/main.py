@@ -1,11 +1,15 @@
 """FastAPI 應用程式進入點。"""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth.verifier import build_token_verifier
 from app.core.settings import AppSettings, get_settings
 from app.db.session import create_database_engine, create_session_factory
+from app.db.schema_guard import ensure_schema_compatibility
 from app.routes.areas import router as areas_router
 from app.routes.auth import router as auth_router
 from app.routes.directory import router as directory_router
@@ -13,6 +17,14 @@ from app.routes.documents import router as documents_router
 from app.routes.jobs import router as jobs_router
 from app.routes.root import router as root_router
 from app.services.tasks import build_celery_client
+
+
+@asynccontextmanager
+async def _application_lifespan(application: FastAPI) -> AsyncIterator[None]:
+    """在 API 啟動時驗證資料庫 schema 相容性。"""
+
+    ensure_schema_compatibility(application.state.engine)
+    yield
 
 
 def create_app(settings: AppSettings | None = None) -> FastAPI:
@@ -30,6 +42,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
         title=resolved_settings.service_name,
         version=resolved_settings.version,
         summary="MVP skeleton API for the Deep Agent RAG Stack.",
+        lifespan=_application_lifespan,
     )
     application.state.settings = resolved_settings
     application.state.engine = create_database_engine(resolved_settings)

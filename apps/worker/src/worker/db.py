@@ -99,6 +99,8 @@ class Document(Base):
     storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
     # parser 正規化後、供全文 preview 使用的完整文字內容。
     normalized_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 供 preview 與定位使用的顯示用完整文字內容。
+    display_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 文件目前處理狀態。
     status: Mapped[DocumentStatus] = mapped_column(SqlEnum(DocumentStatus, native_enum=False), nullable=False)
     # 最近一次成功完成 chunking 的時間。
@@ -174,9 +176,9 @@ class DocumentChunk(Base):
     content_preview: Mapped[str] = mapped_column(String(255), nullable=False)
     # chunk 內容長度。
     char_count: Mapped[int] = mapped_column(Integer(), nullable=False)
-    # normalize 後文字座標起點。
+    # display_text 中的文字座標起點。
     start_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
-    # normalize 後文字座標終點。
+    # display_text 中的文字座標終點。
     end_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
     # 僅 child chunk 使用的 embedding 向量；parent 固定為空值。
     embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)

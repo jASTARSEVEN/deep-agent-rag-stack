@@ -1,4 +1,4 @@
-"""API 端 Celery dispatch 與測試 inline ingest 輔助。"""
+"""API 端 Celery dispatch 輔助。"""
 
 from typing import Any
 
@@ -15,13 +15,13 @@ DEFAULT_TASK_QUEUE_NAME = "default"
 
 
 class NoopCeleryClient:
-    """在 inline ingest 模式下替代 Celery 的最小 client。"""
+    """在缺少 celery 套件時提供一致失敗語意的最小 client。"""
 
     # 標記目前 client 僅供缺少 celery 套件時佔位使用。
     missing_dependency = True
 
     def send_task(self, name: str, kwargs: dict[str, object], queue: str) -> None:
-        """忽略 task dispatch，因為 inline ingest 不會走到此 client。
+        """保留 Celery 介面形狀，實際 dispatch 會由呼叫端拒絕。
 
         參數：
         - `name`：原本要送出的 task 名稱。
@@ -72,12 +72,13 @@ def get_celery_client(request: Request) -> Any:
     return request.app.state.celery_client
 
 
-def dispatch_document_ingest(celery_client: Any, *, job_id: str) -> None:
+def dispatch_document_ingest(celery_client: Any, *, job_id: str, force_reparse: bool = False) -> None:
     """派送文件 ingest task。
 
     參數：
     - `celery_client`：用來送出背景任務的 Celery client。
     - `job_id`：要處理的 ingest job 識別碼。
+    - `force_reparse`：若為真，worker 需忽略既有 parse artifacts 並重跑 parser。
 
     回傳：
     - `None`：此函式只負責送出任務，不回傳業務資料。
@@ -88,6 +89,6 @@ def dispatch_document_ingest(celery_client: Any, *, job_id: str) -> None:
 
     celery_client.send_task(
         INGEST_DOCUMENT_TASK_NAME,
-        kwargs={"job_id": job_id},
+        kwargs={"job_id": job_id, "force_reparse": force_reparse},
         queue=DEFAULT_TASK_QUEUE_NAME,
     )

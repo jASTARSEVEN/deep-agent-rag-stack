@@ -329,8 +329,8 @@ export interface DocumentPreviewPayload {
   file_name: string;
   /** 文件 MIME 類型。 */
   content_type: string;
-  /** normalize 後全文文字。 */
-  normalized_text: string;
+  /** 供 preview 與 chunk 定位使用的顯示全文。 */
+  display_text: string;
   /** child chunk map。 */
   chunks: PreviewChunk[];
 }

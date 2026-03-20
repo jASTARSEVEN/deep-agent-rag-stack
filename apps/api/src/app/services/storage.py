@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 from io import BytesIO
 from pathlib import Path
+import shutil
 
 from minio import Minio
 from minio.error import S3Error
@@ -50,6 +51,17 @@ class ObjectStorage(ABC):
 
         回傳：
         - `None`：此抽象方法只描述刪除行為。
+        """
+
+    @abstractmethod
+    def delete_prefix(self, *, prefix: str) -> None:
+        """刪除指定前綴下的所有物件。
+
+        參數：
+        - `prefix`：物件儲存中的前綴路徑。
+
+        回傳：
+        - `None`：此抽象方法只描述批次刪除行為。
         """
 
 
@@ -135,6 +147,23 @@ class MinioObjectStorage(ObjectStorage):
         except S3Error as exc:
             raise StorageError("無法刪除物件儲存內容。") from exc
 
+    def delete_prefix(self, *, prefix: str) -> None:
+        """刪除指定前綴下的所有 MinIO 物件。
+
+        參數：
+        - `prefix`：物件儲存中的前綴路徑。
+
+        回傳：
+        - `None`：此方法只負責批次刪除物件。
+        """
+
+        try:
+            objects = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)
+            for obj in objects:
+                self._client.remove_object(self._bucket, obj.object_name)
+        except S3Error as exc:
+            raise StorageError("無法刪除物件儲存內容。") from exc
+
 
 class FilesystemObjectStorage(ObjectStorage):
     """測試與本機驗證使用的檔案系統儲存。"""
@@ -196,6 +225,22 @@ class FilesystemObjectStorage(ObjectStorage):
 
         target = self._base_path / object_key
         if target.exists():
+            target.unlink()
+
+    def delete_prefix(self, *, prefix: str) -> None:
+        """從本機檔案系統刪除指定前綴下的所有內容。
+
+        參數：
+        - `prefix`：檔案系統儲存中的相對前綴路徑。
+
+        回傳：
+        - `None`：此方法只負責刪除路徑。
+        """
+
+        target = self._base_path / prefix
+        if target.is_dir():
+            shutil.rmtree(target)
+        elif target.exists():
             target.unlink()
 
 

@@ -69,6 +69,76 @@ async function readErrorMessage(response: Response): Promise<string> {
 }
 
 
+interface RawPreviewChunkPayload {
+  /** chunk 唯一識別碼。 */
+  chunk_id: string;
+  /** chunk 所屬 parent chunk 識別碼。 */
+  parent_chunk_id: string | null;
+  /** parent 下 child 順序。 */
+  child_index: number | null;
+  /** chunk 所屬標題。 */
+  heading: string | null;
+  /** chunk 內容結構型別。 */
+  structure_kind: "text" | "table";
+  /** chunk 在全文中的起始 offset。 */
+  start_offset: number;
+  /** chunk 在全文中的結束 offset。 */
+  end_offset: number;
+}
+
+
+interface RawDocumentPreviewPayload {
+  /** 文件識別碼。 */
+  document_id: string;
+  /** 文件名稱。 */
+  file_name: string;
+  /** 文件 MIME 類型。 */
+  content_type: string;
+  /** 目前後端可能仍回傳的舊欄位。 */
+  normalized_text?: string;
+  /** 文件全文顯示文字。 */
+  display_text?: string;
+  /** child chunk map。 */
+  chunks: RawPreviewChunkPayload[];
+}
+
+
+/**
+ * 將後端 preview 回應正規化為前端正式契約。
+ *
+ * @param payload 後端回傳的原始 JSON。
+ * @returns 供前端預覽使用的標準化 payload。
+ */
+function normalizeDocumentPreviewPayload(payload: RawDocumentPreviewPayload): DocumentPreviewPayload {
+  const displayText =
+    typeof payload.display_text === "string" && payload.display_text
+      ? payload.display_text
+      : typeof payload.normalized_text === "string"
+        ? payload.normalized_text
+        : "";
+
+  if (!displayText) {
+    throw new Error("文件預覽回應缺少 display_text。");
+  }
+
+  return {
+    document_id: payload.document_id,
+    file_name: payload.file_name,
+    content_type: payload.content_type,
+    display_text: displayText,
+    chunks: payload.chunks.map((chunk) => ({
+      chunk_id: chunk.chunk_id,
+      parent_chunk_id: chunk.parent_chunk_id,
+      child_index: chunk.child_index,
+      heading: chunk.heading,
+      structure_kind: chunk.structure_kind,
+      start_offset: chunk.start_offset,
+      end_offset: chunk.end_offset,
+    })),
+  };
+}
+
+
 /**
  * 建立受保護 API 請求 header。
  *
@@ -287,7 +357,7 @@ export async function fetchDocumentDetail(documentId: string): Promise<DocumentS
  */
 export async function fetchDocumentPreview(documentId: string): Promise<DocumentPreviewPayload> {
   const response = await fetchProtected(`/documents/${documentId}/preview`);
-  return (await response.json()) as DocumentPreviewPayload;
+  return normalizeDocumentPreviewPayload((await response.json()) as RawDocumentPreviewPayload);
 }
 
 
@@ -297,8 +367,16 @@ export async function fetchDocumentPreview(documentId: string): Promise<Document
  * @param documentId 要重建索引的文件識別碼。
  * @returns 重建後的文件與新 ingest job payload。
  */
-export async function reindexDocument(documentId: string): Promise<ReindexDocumentPayload> {
-  const response = await fetchProtected(`/documents/${documentId}/reindex`, {
+export async function reindexDocument(
+  documentId: string,
+  options?: { forceReparse?: boolean },
+): Promise<ReindexDocumentPayload> {
+  const searchParams = new URLSearchParams();
+  if (options?.forceReparse) {
+    searchParams.set("force_reparse", "true");
+  }
+  const query = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+  const response = await fetchProtected(`/documents/${documentId}/reindex${query}`, {
     method: "POST",
   });
   return (await response.json()) as ReindexDocumentPayload;

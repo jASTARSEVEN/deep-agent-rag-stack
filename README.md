@@ -101,6 +101,9 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
 2. Optionally install local Python dependencies:
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
+   - Shared workspace sync: `uv sync`
+   - If you need the Marker PDF path, use a dedicated worker environment instead of the shared workspace:
+     `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
 3. Build and start the local stack:
    - `./scripts/compose.sh up --build`
    - The wrapper always uses the repository root `.env` and `infra/docker-compose.yml`, which prevents secrets such as `OPENAI_API_KEY` from silently becoming empty when the command is run from a different working directory.
@@ -147,3 +150,4 @@ See `.env.example` for the full local default configuration. The template is gro
 - If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
 - If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.
 - If the API starts but Deep Agents retrieval fails only on an existing database, verify that the PostgreSQL schema and RPCs were upgraded with `alembic upgrade head` instead of assuming Compose restart applied them.
+- `uv sync` keeps the shared workspace on dependencies that can coexist. `deepagents` and `marker-pdf` currently require incompatible `anthropic` versions, so Marker must live in a dedicated worker virtualenv such as `.worker-venv`. The hybrid worker launcher will prefer `.worker-venv` automatically when `PDF_PARSER_PROVIDER=marker`; otherwise use `PDF_PARSER_PROVIDER=local` or `llamaparse` in the shared `.venv`.

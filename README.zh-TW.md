@@ -101,6 +101,9 @@
 2. 可選的本機 Python 依賴安裝：
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
+   - 共享 workspace 可直接使用：`uv sync`
+   - 若要使用 Marker PDF 路徑，請改用獨立 worker 環境，不要裝進共享 workspace：
+     `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
 3. 建置並啟動本機 stack：
    - `./scripts/compose.sh up --build`
    - 此 wrapper 會固定使用 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行時，`OPENAI_API_KEY` 之類的敏感設定被悄悄帶成空值。
@@ -147,3 +150,4 @@
 - 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
 - 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
 - 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先確認是否已執行 `alembic upgrade head`，不要假設重啟 Compose 就會自動套用 schema 與 RPC 升級。
+- `uv sync` 只會同步共享 workspace 中可共存的依賴。由於 `deepagents` 與 `marker-pdf` 目前依賴彼此不相容的 `anthropic` 版本，Marker 必須放在獨立 worker virtualenv，例如 `.worker-venv`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會優先使用 `.worker-venv`；若沒有這個需求，請在共享 `.venv` 改用 `PDF_PARSER_PROVIDER=local` 或 `llamaparse`。

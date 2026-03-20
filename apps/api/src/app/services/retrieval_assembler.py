@@ -442,16 +442,16 @@ def _expand_context_children(
 
     children_by_id = {str(child.id): child for child in parent_children}
     blocked_ids = {str(record.chunk.id) for record in dropped_records}
-    included_ids = {str(record.chunk.id) for record in kept_records}
+    required_ids = {str(record.chunk.id) for record in kept_records}
     ordered_children = list(parent_children)
     index_by_id = {str(child.id): index for index, child in enumerate(ordered_children)}
-    included_indices = {index_by_id[chunk_id] for chunk_id in included_ids if chunk_id in index_by_id}
+    required_indices = {index_by_id[chunk_id] for chunk_id in required_ids if chunk_id in index_by_id}
 
-    if not included_indices:
+    if not required_indices:
         return [record.chunk for record in kept_records]
 
-    if any(children_by_id[chunk_id].structure_kind == ChunkStructureKind.table for chunk_id in included_ids):
-        for chunk_id in list(included_ids):
+    if any(children_by_id[chunk_id].structure_kind == ChunkStructureKind.table for chunk_id in required_ids):
+        for chunk_id in list(required_ids):
             child = children_by_id[chunk_id]
             if child.structure_kind != ChunkStructureKind.table:
                 continue
@@ -459,26 +459,12 @@ def _expand_context_children(
             for candidate_index in _contiguous_table_indices(children=ordered_children, start_index=table_index):
                 candidate = ordered_children[candidate_index]
                 if str(candidate.id) not in blocked_ids:
-                    included_ids.add(str(candidate.id))
-                    included_indices.add(candidate_index)
-
-        left_neighbor = min(included_indices) - 1
-        if left_neighbor >= 0:
-            candidate = ordered_children[left_neighbor]
-            if candidate.structure_kind == ChunkStructureKind.text and str(candidate.id) not in blocked_ids:
-                included_ids.add(str(candidate.id))
-                included_indices.add(left_neighbor)
-
-        right_neighbor = max(included_indices) + 1
-        if right_neighbor < len(ordered_children):
-            candidate = ordered_children[right_neighbor]
-            if candidate.structure_kind == ChunkStructureKind.text and str(candidate.id) not in blocked_ids:
-                included_ids.add(str(candidate.id))
-                included_indices.add(right_neighbor)
+                    required_ids.add(str(candidate.id))
+                    required_indices.add(candidate_index)
 
     expanded = _fit_children_within_budget(
         children=ordered_children,
-        included_ids=included_ids,
+        included_ids=required_ids,
         blocked_ids=blocked_ids,
         max_chars=max_chars,
     )

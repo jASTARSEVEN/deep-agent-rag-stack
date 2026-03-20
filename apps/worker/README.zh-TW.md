@@ -11,6 +11,8 @@
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
+  - 若要使用 `PDF_PARSER_PROVIDER=marker`，請改用獨立 worker virtualenv 安裝 Marker：
+    `uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - 本機健康檢查命令：
   - `python -m worker.scripts.healthcheck`
@@ -23,6 +25,10 @@
 - `DATABASE_URL`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
+- `CELERY_WORKER_POOL`
+- `CELERY_WORKER_CONCURRENCY`
+- `CELERY_WORKER_PREFETCH_MULTIPLIER`
+- `CELERY_WORKER_MAX_TASKS_PER_CHILD`
 - `STORAGE_BACKEND`
 - `MINIO_ENDPOINT`
 - `MINIO_ACCESS_KEY`
@@ -31,6 +37,15 @@
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
+- `MARKER_MODEL_CACHE_DIR`
+- `MARKER_FORCE_OCR`
+- `MARKER_STRIP_EXISTING_OCR`
+- `MARKER_USE_LLM`
+- `MARKER_LLM_SERVICE`
+- `MARKER_OPENAI_API_KEY`
+- `MARKER_OPENAI_MODEL`
+- `MARKER_OPENAI_BASE_URL`
+- `MARKER_DISABLE_IMAGE_EXTRACTION`
 - `LLAMAPARSE_API_KEY`
 - `LLAMAPARSE_DO_NOT_CACHE`
 - `LLAMAPARSE_MERGE_CONTINUED_TABLES`
@@ -65,14 +80,20 @@
 ## 疑難排解
 
 - 若 worker 無法連到 Redis，請確認 `CELERY_BROKER_URL`。
+- 若 `marker` PDF ingest 在 Celery log 中出現 `Worker exited prematurely: signal 9 (SIGKILL)`，通常代表 prefork 子程序在重型 PDF runtime 期間被系統 OOM killer 終止；compose 預設已改為 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1` 與 `CELERY_WORKER_MAX_TASKS_PER_CHILD=1` 以降低此風險。
 - 若 ingest task 無法更新資料庫，請確認 `DATABASE_URL` 指向與 API 相同的資料庫。
 - 若正式環境無法讀取文件內容，請確認 `MINIO_*` 與 `MINIO_BUCKET` 一致。
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。
 - `TXT`、`Markdown`、`HTML` 與 `PDF` 目前都會建立 SQL-first 的 parent-child chunks。
+- `PDF_PARSER_PROVIDER=marker` 是目前預設路徑；它會先用 Marker 將 PDF 轉成 Markdown，只持久化 `marker.cleaned.md`，再回接既有 Markdown parser 與 chunk tree。
+- `marker-pdf` 刻意不放進共享 workspace 的解算圖，因為 `deepagents` 與 Marker 目前依賴彼此不相容的 `anthropic` 版本。若本機確定要走 Marker 路徑，請把它安裝到獨立 worker virtualenv，例如 `../../.worker-venv`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會自動優先挑選那個環境。
+- `MARKER_MODEL_CACHE_DIR` 應指向可寫目錄，避免 Marker / Surya 模型下載落到受限的 cache 路徑；compose 預設會把這個目錄掛到 named volume，因此 worker 重啟或重建後模型 cache 不會遺失。
+- 當 `MARKER_USE_LLM=true` 時，worker 現在會把 `MARKER_LLM_SERVICE`、`MARKER_OPENAI_API_KEY`、`MARKER_OPENAI_MODEL` 與 `MARKER_OPENAI_BASE_URL` 一起傳給 Marker 的 OpenAI-compatible LLM 設定。
 - `PDF_PARSER_PROVIDER=local` 會使用 `Unstructured partition_pdf(strategy="fast")` 作為自架 fallback；`PDF_PARSER_PROVIDER=llamaparse` 則會先把 PDF 轉成 Markdown，再交給既有 Markdown parser 與 chunk tree。
 - `.xlsx` 會使用 `unstructured.partition_xlsx`，優先採用 worksheet `text_as_html`，再回接既有 HTML table-aware parser 與 chunk tree。
 - `.docx` 與 `.pptx` 會使用 `unstructured.partition_docx` / `partition_pptx`，再把 Unstructured elements 映射回既有 `text/table` block-aware parser contract。
 - `LLAMAPARSE_DO_NOT_CACHE=true` 是企業文件建議的安全預設；`LLAMAPARSE_MERGE_CONTINUED_TABLES=false` 則讓跨頁表格合併維持 opt-in。
+- 每次新的 ingest 執行前都會先清理文件範圍內的 `artifacts/` 前綴，避免殘留舊 parse 產物。
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
 - `ready` 現在代表 chunking 與 embedding 都已完成。

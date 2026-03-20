@@ -46,20 +46,8 @@
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `MAX_UPLOAD_SIZE_BYTES`
-- `PDF_PARSER_PROVIDER`
-- `LLAMAPARSE_API_KEY`
-- `LLAMAPARSE_DO_NOT_CACHE`
-- `LLAMAPARSE_MERGE_CONTINUED_TABLES`
-- `CHUNK_MIN_PARENT_SECTION_LENGTH`
-- `CHUNK_TARGET_CHILD_SIZE`
-- `CHUNK_CHILD_OVERLAP`
-- `CHUNK_CONTENT_PREVIEW_LENGTH`
-- `CHUNK_TXT_PARENT_GROUP_SIZE`
-- `CHUNK_TABLE_PRESERVE_MAX_CHARS`
-- `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 - `CELERY_BROKER_URL`
 - `CELERY_RESULT_BACKEND`
-- `INGEST_INLINE_MODE`
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
@@ -104,7 +92,7 @@
 - `src/app/chat`：Deep Agents 主 agent、agent tools 與 LangGraph runtime glue
 - `src/app/db`：SQLAlchemy models、session 與 metadata
 - `src/app/routes`: HTTP routes
-- `src/app/services`：授權、indexing、internal retrieval 與 assembler service
+- `src/app/services`：授權、storage、task dispatch、internal retrieval 與 assembler service
 - `langgraph.json`：LangGraph Server 內建 thread/run runtime 的 loader 設定
 - `tests`：授權與 API 測試
 
@@ -131,12 +119,9 @@
 - 若 API 行程無法啟動，請先確認已安裝 `langgraph-cli[inmem]`，且 `apps/api` 內存在 `langgraph.json`。
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
 - `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
-- `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 與 `INGEST_INLINE_MODE=true`，供 API 測試與 Playwright E2E 使用。
-- `TXT`、`Markdown`、`HTML` 與 `PDF` 上傳目前都會建立 SQL-first 的 parent-child `document_chunks`。
-- `PDF_PARSER_PROVIDER=local` 會使用 `Unstructured partition_pdf(strategy="fast")` 作為自架 fallback；`PDF_PARSER_PROVIDER=llamaparse` 則會先把 PDF 轉成 Markdown，再交給既有 Markdown parser 與 chunk tree。
-- `.xlsx` 上傳會使用 `unstructured.partition_xlsx`，優先採用 worksheet `text_as_html`，再回接既有 HTML table-aware parser 與 chunk tree。
-- `.docx` 與 `.pptx` 上傳會使用 `unstructured.partition_docx` / `partition_pptx`，再把 Unstructured elements 映射回既有 `text/table` block-aware parser contract。
-- `LLAMAPARSE_DO_NOT_CACHE=true` 是企業文件建議的安全預設；`LLAMAPARSE_MERGE_CONTINUED_TABLES=false` 則讓跨頁表格合併維持 opt-in。
+- `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 供 API 測試使用；Playwright E2E 應一併啟動 API 與 worker。
+- upload 與 reindex route 只負責建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`；parse、chunking、indexing 與最終狀態推進都由 worker 負責。
+- reindex、delete 與新的 ingest 執行前都會先清理文件範圍內的 `artifacts/` 前綴，避免殘留舊 parse 產物。
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
 - `ready` 現在代表 chunk tree、embedding 與可供 PGroonga 使用的 retrieval content 都已完成。

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from html.parser import HTMLParser
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -14,7 +15,17 @@ import tempfile
 SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html", ".pdf", ".xlsx", ".docx", ".pptx"}
 
 # 支援的 PDF parser provider 名稱。
-SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse"}
+SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse", "marker"}
+
+# 可在 reindex 時重用的 parse artifact 檔名。
+REUSABLE_PARSE_ARTIFACT_FILE_NAMES = {
+    "pdf:local": "pdf.unstructured.extracted.html",
+    "pdf:marker": "marker.cleaned.md",
+    "pdf:llamaparse": "llamaparse.cleaned.md",
+    "xlsx": "xlsx.extracted.html",
+    "docx": "docx.extracted.html",
+    "pptx": "pptx.extracted.html",
+}
 
 # Markdown heading 判定規則。
 MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,3})\s+(?P<heading>.+?)\s*$")
@@ -40,7 +51,25 @@ class PdfParserConfig:
     """PDF parser provider 使用的設定。"""
 
     # 要使用的 PDF parser provider 名稱。
-    provider: str = "local"
+    provider: str = "marker"
+    # Marker / Surya 模型快取目錄。
+    marker_model_cache_dir: str = ".marker-cache/models"
+    # 是否強制 Marker 對整份 PDF 執行 OCR。
+    marker_force_ocr: bool = False
+    # 是否移除 PDF 中既有 OCR 文字，改由 Marker 重做 OCR。
+    marker_strip_existing_ocr: bool = False
+    # 是否啟用 Marker 的 LLM 強化模式。
+    marker_use_llm: bool = False
+    # Marker 使用的 LLM service 類別路徑。
+    marker_llm_service: str = "marker.services.openai.OpenAIService"
+    # Marker OpenAI-compatible API key。
+    marker_openai_api_key: str | None = None
+    # Marker OpenAI-compatible model 名稱。
+    marker_openai_model: str = "gpt-4.1-mini"
+    # Marker OpenAI-compatible base URL。
+    marker_openai_base_url: str | None = None
+    # 是否停用 Marker 的圖片擷取，避免產生額外 artifact。
+    marker_disable_image_extraction: bool = True
     # LlamaParse API 金鑰。
     llamaparse_api_key: str | None = None
     # 是否要求 LlamaParse 不快取文件內容。
@@ -66,6 +95,18 @@ class ParsedBlock:
 
 
 @dataclass(slots=True)
+class ParseArtifact:
+    """Parser 產生並需持久化的中介產物。"""
+
+    # artifact 檔名。
+    file_name: str
+    # artifact MIME 類型。
+    content_type: str
+    # artifact 原始內容。
+    payload: bytes
+
+
+@dataclass(slots=True)
 class ParsedDocument:
     """Parser 輸出的標準化文件內容。"""
 
@@ -75,6 +116,8 @@ class ParsedDocument:
     source_format: str
     # parser 辨識出的結構化 blocks。
     blocks: list[ParsedBlock]
+    # parser 產生並需持久化的中介 artifact。
+    artifacts: list[ParseArtifact]
 
 
 def parse_document(
@@ -110,6 +153,97 @@ def parse_document(
     if lower_name.endswith(".pptx"):
         return _parse_pptx_document(payload=payload)
     raise ValueError("目前尚未支援此檔案類型的解析。")
+
+
+def get_reusable_parse_artifact_names(
+    *,
+    file_name: str,
+    pdf_config: PdfParserConfig | None = None,
+) -> list[str]:
+    """回傳指定文件可重用的 parse artifact 檔名候選。
+
+    參數：
+    - `file_name`：原始文件檔名。
+    - `pdf_config`：PDF parser provider 設定；非 PDF 時可省略。
+
+    回傳：
+    - `list[str]`：可直接拿來重建 ParsedDocument 的 artifact 檔名清單。
+    """
+
+    lower_name = file_name.lower()
+    if lower_name.endswith(".pdf"):
+        provider = (pdf_config.provider if pdf_config is not None else PdfParserConfig().provider).strip().lower()
+        artifact_name = REUSABLE_PARSE_ARTIFACT_FILE_NAMES.get(f"pdf:{provider}")
+        return [artifact_name] if artifact_name is not None else []
+    if lower_name.endswith(".xlsx"):
+        return [REUSABLE_PARSE_ARTIFACT_FILE_NAMES["xlsx"]]
+    if lower_name.endswith(".docx"):
+        return [REUSABLE_PARSE_ARTIFACT_FILE_NAMES["docx"]]
+    if lower_name.endswith(".pptx"):
+        return [REUSABLE_PARSE_ARTIFACT_FILE_NAMES["pptx"]]
+    return []
+
+
+def parse_document_from_artifact(
+    *,
+    file_name: str,
+    artifact_file_name: str,
+    payload: bytes,
+    pdf_config: PdfParserConfig | None = None,
+) -> ParsedDocument:
+    """以既有 parse artifact 重建 ParsedDocument，避免重跑 parser。
+
+    參數：
+    - `file_name`：原始文件檔名，用於判定來源格式。
+    - `artifact_file_name`：artifact 檔名。
+    - `payload`：artifact 原始位元組內容。
+    - `pdf_config`：PDF parser provider 設定；非 PDF 時可省略。
+
+    回傳：
+    - `ParsedDocument`：依 artifact 內容重建的標準化文件內容。
+    """
+
+    if artifact_file_name.endswith(".md"):
+        text = _decode_payload(payload=payload).strip()
+        return _parse_markdown_text(text=text, source_format=_resolve_artifact_source_format(file_name=file_name))
+
+    if artifact_file_name.endswith(".html"):
+        text = _decode_payload(payload=payload)
+        return _materialize_blocks(
+            source_format=_resolve_artifact_source_format(file_name=file_name, pdf_config=pdf_config),
+            block_inputs=_extract_html_block_inputs(text=text),
+        )
+
+    raise ValueError(f"不支援的 parse artifact 類型：{artifact_file_name}")
+
+
+def _resolve_artifact_source_format(
+    *,
+    file_name: str,
+    pdf_config: PdfParserConfig | None = None,
+) -> str:
+    """依原始文件副檔名決定 artifact 重建後的 source_format。"""
+
+    lower_name = file_name.lower()
+    if lower_name.endswith(".pdf"):
+        return "pdf"
+    if lower_name.endswith(".xlsx"):
+        return "xlsx"
+    if lower_name.endswith(".docx"):
+        return "docx"
+    if lower_name.endswith(".pptx"):
+        return "pptx"
+    if lower_name.endswith(".html"):
+        return "html"
+    if lower_name.endswith(".md"):
+        return "markdown"
+    if lower_name.endswith(".txt"):
+        return "txt"
+
+    provider = (pdf_config.provider if pdf_config is not None else "").strip().lower()
+    if provider in SUPPORTED_PDF_PARSER_PROVIDERS:
+        return "pdf"
+    raise ValueError("無法判定 parse artifact 的來源格式。")
 
 
 def _decode_payload(*, payload: bytes) -> str:
@@ -220,13 +354,50 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
 
     if provider == "local":
         elements = _extract_pdf_elements_with_unstructured(payload=payload)
+        block_inputs, artifacts = _build_pdf_block_inputs_from_unstructured_elements(elements=elements)
         return _materialize_blocks(
             source_format="pdf",
-            block_inputs=_build_pdf_block_inputs_from_unstructured_elements(elements=elements),
+            block_inputs=block_inputs,
+            artifacts=artifacts,
+        )
+
+    if provider == "marker":
+        markdown = _extract_pdf_markdown_with_marker(payload=payload, pdf_config=pdf_config)
+        cleaned_markdown = _clean_marker_markdown(markdown)
+        parsed_document = _parse_markdown_text(text=cleaned_markdown, source_format="pdf")
+        return ParsedDocument(
+            normalized_text=parsed_document.normalized_text,
+            source_format=parsed_document.source_format,
+            blocks=parsed_document.blocks,
+            artifacts=[
+                _build_text_artifact(
+                    file_name="marker.cleaned.md",
+                    content_type="text/markdown; charset=utf-8",
+                    text=cleaned_markdown,
+                ),
+            ],
         )
 
     markdown = _extract_pdf_markdown_with_llamaparse(payload=payload, pdf_config=pdf_config)
-    return _parse_markdown_text(text=_clean_llamaparse_markdown(markdown), source_format="pdf")
+    cleaned_markdown = _clean_llamaparse_markdown(markdown)
+    parsed_document = _parse_markdown_text(text=cleaned_markdown, source_format="pdf")
+    return ParsedDocument(
+        normalized_text=parsed_document.normalized_text,
+        source_format=parsed_document.source_format,
+        blocks=parsed_document.blocks,
+        artifacts=[
+            _build_text_artifact(
+                file_name="llamaparse.raw.md",
+                content_type="text/markdown; charset=utf-8",
+                text=markdown,
+            ),
+            _build_text_artifact(
+                file_name="llamaparse.cleaned.md",
+                content_type="text/markdown; charset=utf-8",
+                text=cleaned_markdown,
+            ),
+        ],
+    )
 
 
 def _append_markdown_text_block(
@@ -445,12 +616,14 @@ def _parse_xlsx_document(*, payload: bytes) -> ParsedDocument:
 
     elements = _extract_xlsx_elements_with_unstructured(payload=payload)
     block_inputs: list[tuple[str, str | None, str]] = []
+    html_fragments: list[tuple[str | None, str]] = []
 
     for element in elements:
         metadata = getattr(element, "metadata", None)
         heading = _normalize_worksheet_heading(metadata=metadata)
         text_as_html = (getattr(metadata, "text_as_html", None) or "").strip() if metadata is not None else ""
         if text_as_html:
+            html_fragments.append((heading, text_as_html))
             block_inputs.extend(
                 _extract_html_block_inputs(text=f"<h1>{escape(heading)}</h1>\n{text_as_html}" if heading else text_as_html)
             )
@@ -463,7 +636,11 @@ def _parse_xlsx_document(*, payload: bytes) -> ParsedDocument:
     if not block_inputs:
         raise ValueError("Unstructured XLSX parser 未回傳可用的 worksheet 內容。")
 
-    return _materialize_blocks(source_format="xlsx", block_inputs=block_inputs)
+    artifacts = _build_html_artifacts(
+        file_name="xlsx.extracted.html",
+        html_fragments=html_fragments,
+    )
+    return _materialize_blocks(source_format="xlsx", block_inputs=block_inputs, artifacts=artifacts)
 
 
 def _parse_docx_document(*, payload: bytes) -> ParsedDocument:
@@ -477,9 +654,14 @@ def _parse_docx_document(*, payload: bytes) -> ParsedDocument:
     """
 
     elements = _extract_docx_elements_with_unstructured(payload=payload)
+    block_inputs, artifacts = _build_office_block_inputs_from_unstructured_elements(
+        elements=elements,
+        artifact_file_name="docx.extracted.html",
+    )
     return _materialize_blocks(
         source_format="docx",
-        block_inputs=_build_office_block_inputs_from_unstructured_elements(elements=elements),
+        block_inputs=block_inputs,
+        artifacts=artifacts,
     )
 
 
@@ -494,9 +676,14 @@ def _parse_pptx_document(*, payload: bytes) -> ParsedDocument:
     """
 
     elements = _extract_pptx_elements_with_unstructured(payload=payload)
+    block_inputs, artifacts = _build_office_block_inputs_from_unstructured_elements(
+        elements=elements,
+        artifact_file_name="pptx.extracted.html",
+    )
     return _materialize_blocks(
         source_format="pptx",
-        block_inputs=_build_office_block_inputs_from_unstructured_elements(elements=elements),
+        block_inputs=block_inputs,
+        artifacts=artifacts,
     )
 
 
@@ -518,7 +705,12 @@ def _extract_html_block_inputs(*, text: str) -> list[tuple[str, str | None, str]
     return parser.block_inputs
 
 
-def _materialize_blocks(*, source_format: str, block_inputs: list[tuple[str, str | None, str]]) -> ParsedDocument:
+def _materialize_blocks(
+    *,
+    source_format: str,
+    block_inputs: list[tuple[str, str | None, str]],
+    artifacts: list[ParseArtifact] | None = None,
+) -> ParsedDocument:
     """將 block 輸入轉為帶 offset 的 ParsedDocument。
 
     參數：
@@ -554,10 +746,18 @@ def _materialize_blocks(*, source_format: str, block_inputs: list[tuple[str, str
     if not blocks:
         raise ValueError("無法從文件內容建立有效 chunks。")
 
-    return ParsedDocument(normalized_text="\n\n".join(normalized_parts), source_format=source_format, blocks=blocks)
+    return ParsedDocument(
+        normalized_text="\n\n".join(normalized_parts),
+        source_format=source_format,
+        blocks=blocks,
+        artifacts=list(artifacts or []),
+    )
 
 
-def _build_pdf_block_inputs_from_unstructured_elements(*, elements: list[object]) -> list[tuple[str, str | None, str]]:
+def _build_pdf_block_inputs_from_unstructured_elements(
+    *,
+    elements: list[object],
+) -> tuple[list[tuple[str, str | None, str]], list[ParseArtifact]]:
     """將 Unstructured PDF elements 映射為 block-aware parser 輸入。
 
     參數：
@@ -568,6 +768,7 @@ def _build_pdf_block_inputs_from_unstructured_elements(*, elements: list[object]
     """
 
     block_inputs: list[tuple[str, str | None, str]] = []
+    html_fragments: list[tuple[str | None, str]] = []
     current_heading: str | None = None
 
     for element in elements:
@@ -583,6 +784,7 @@ def _build_pdf_block_inputs_from_unstructured_elements(*, elements: list[object]
 
         if category == "table":
             if text_as_html:
+                html_fragments.append((current_heading, text_as_html))
                 block_inputs.extend(
                     _extract_html_block_inputs(
                         text=f"<h1>{escape(current_heading)}</h1>\n{text_as_html}" if current_heading else text_as_html
@@ -598,13 +800,17 @@ def _build_pdf_block_inputs_from_unstructured_elements(*, elements: list[object]
 
     if not block_inputs:
         raise ValueError("local PDF parser 無法從文件中擷取文字內容。")
-    return block_inputs
+    return block_inputs, _build_html_artifacts(
+        file_name="pdf.unstructured.extracted.html",
+        html_fragments=html_fragments,
+    )
 
 
 def _build_office_block_inputs_from_unstructured_elements(
     *,
     elements: list[object],
-) -> list[tuple[str, str | None, str]]:
+    artifact_file_name: str,
+) -> tuple[list[tuple[str, str | None, str]], list[ParseArtifact]]:
     """將 Unstructured DOCX/PPTX elements 映射為 block-aware parser 輸入。
 
     參數：
@@ -615,6 +821,7 @@ def _build_office_block_inputs_from_unstructured_elements(
     """
 
     block_inputs: list[tuple[str, str | None, str]] = []
+    html_fragments: list[tuple[str | None, str]] = []
     current_heading: str | None = None
 
     for element in elements:
@@ -630,6 +837,7 @@ def _build_office_block_inputs_from_unstructured_elements(
 
         if category == "table":
             if text_as_html:
+                html_fragments.append((current_heading, text_as_html))
                 block_inputs.extend(
                     _extract_html_block_inputs(
                         text=f"<h1>{escape(current_heading)}</h1>\n{text_as_html}" if current_heading else text_as_html
@@ -645,7 +853,47 @@ def _build_office_block_inputs_from_unstructured_elements(
 
     if not block_inputs:
         raise ValueError("Unstructured office parser 未回傳可用內容。")
-    return block_inputs
+    return block_inputs, _build_html_artifacts(
+        file_name=artifact_file_name,
+        html_fragments=html_fragments,
+    )
+
+
+def _build_html_artifacts(*, file_name: str, html_fragments: list[tuple[str | None, str]]) -> list[ParseArtifact]:
+    """將多段 HTML 片段組成單一可持久化 artifact。"""
+
+    if not html_fragments:
+        return []
+    return [
+        _build_text_artifact(
+            file_name=file_name,
+            content_type="text/html; charset=utf-8",
+            text=_render_html_artifact_document(html_fragments=html_fragments),
+        )
+    ]
+
+
+def _build_text_artifact(*, file_name: str, content_type: str, text: str) -> ParseArtifact:
+    """建立 UTF-8 文字 artifact。"""
+
+    return ParseArtifact(file_name=file_name, content_type=content_type, payload=text.encode("utf-8"))
+
+
+def _render_html_artifact_document(*, html_fragments: list[tuple[str | None, str]]) -> str:
+    """將多段 HTML fragment 包成單一可閱讀的 HTML 文件。"""
+
+    rendered_sections: list[str] = ["<html>", "<body>"]
+    for heading, html in html_fragments:
+        normalized_html = html.strip()
+        if not normalized_html:
+            continue
+        rendered_sections.append("<section>")
+        if heading:
+            rendered_sections.append(f"<h1>{escape(heading)}</h1>")
+        rendered_sections.append(normalized_html)
+        rendered_sections.append("</section>")
+    rendered_sections.extend(["</body>", "</html>"])
+    return "\n".join(rendered_sections)
 
 
 def _extract_pdf_elements_with_unstructured(*, payload: bytes) -> list[object]:
@@ -717,6 +965,62 @@ def _extract_pdf_markdown_with_llamaparse(*, payload: bytes, pdf_config: PdfPars
     if not markdown:
         raise ValueError("LlamaParse 未回傳可用的 Markdown 內容。")
     return markdown
+
+
+def _extract_pdf_markdown_with_marker(*, payload: bytes, pdf_config: PdfParserConfig) -> str:
+    """使用 Marker 將 PDF 轉為 Markdown。
+
+    參數：
+    - `payload`：PDF 原始位元組內容。
+    - `pdf_config`：Marker 設定。
+
+    回傳：
+    - `str`：Marker 回傳的 Markdown 內容。
+    """
+
+    os.environ["MODEL_CACHE_DIR"] = pdf_config.marker_model_cache_dir
+
+    try:
+        from marker.config.parser import ConfigParser
+        from marker.converters.pdf import PdfConverter
+        from marker.models import create_model_dict
+        from marker.output import text_from_rendered
+    except ImportError as exc:
+        raise ValueError("marker provider 需要安裝 marker-pdf 與其相依套件。") from exc
+
+    config_parser = ConfigParser(
+        {
+            "output_format": "markdown",
+            "disable_image_extraction": pdf_config.marker_disable_image_extraction,
+            "force_ocr": pdf_config.marker_force_ocr,
+            "strip_existing_ocr": pdf_config.marker_strip_existing_ocr,
+            "use_llm": pdf_config.marker_use_llm,
+            "llm_service": pdf_config.marker_llm_service,
+            "openai_api_key": pdf_config.marker_openai_api_key,
+            "openai_model": pdf_config.marker_openai_model,
+            "openai_base_url": pdf_config.marker_openai_base_url,
+        }
+    )
+    temp_path = _write_temporary_pdf(payload=payload)
+    try:
+        converter = PdfConverter(
+            config=config_parser.generate_config_dict(),
+            artifact_dict=create_model_dict(),
+            processor_list=config_parser.get_processors(),
+            renderer=config_parser.get_renderer(),
+            llm_service=config_parser.get_llm_service(),
+        )
+        rendered = converter(str(temp_path))
+        markdown, _, _images = text_from_rendered(rendered)
+    except Exception as exc:  # noqa: BLE001 - 對第三方 parser 失敗統一包成受控錯誤。
+        raise ValueError(f"Marker PDF 解析失敗：{exc}") from exc
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    normalized_markdown = markdown.strip()
+    if not normalized_markdown:
+        raise ValueError("Marker 未回傳可用的 Markdown 內容。")
+    return normalized_markdown
 
 
 def _extract_xlsx_elements_with_unstructured(*, payload: bytes) -> list[object]:
@@ -1097,6 +1401,33 @@ def _clean_llamaparse_markdown(markdown: str) -> str:
     - `str`：移除常見頁面噪音後的 Markdown。
     """
 
+    return _clean_pdf_markdown(markdown=markdown, provider_name="LlamaParse")
+
+
+def _clean_marker_markdown(markdown: str) -> str:
+    """清理 Marker Markdown 中常見的頁碼與分隔噪音。
+
+    參數：
+    - `markdown`：Marker 回傳的 Markdown 文字。
+
+    回傳：
+    - `str`：移除常見頁面噪音後的 Markdown。
+    """
+
+    return _clean_pdf_markdown(markdown=markdown, provider_name="Marker")
+
+
+def _clean_pdf_markdown(*, markdown: str, provider_name: str) -> str:
+    """清理 PDF provider 回傳 Markdown 中常見的頁碼與分隔噪音。
+
+    參數：
+    - `markdown`：PDF provider 回傳的 Markdown 文字。
+    - `provider_name`：目前清理的 provider 名稱，僅供錯誤訊息使用。
+
+    回傳：
+    - `str`：移除常見頁面噪音後的 Markdown。
+    """
+
     cleaned_lines: list[str] = []
     previous_was_blank = True
 
@@ -1116,5 +1447,5 @@ def _clean_llamaparse_markdown(markdown: str) -> str:
 
     cleaned_markdown = "\n".join(cleaned_lines).strip()
     if not cleaned_markdown:
-        raise ValueError("LlamaParse Markdown 清理後沒有剩餘內容。")
+        raise ValueError(f"{provider_name} Markdown 清理後沒有剩餘內容。")
     return cleaned_markdown

@@ -14,20 +14,18 @@ const webRoot = resolve(currentDirectory, "../../..");
 /** `apps/api` 模組根目錄。 */
 const apiRoot = resolve(webRoot, "../api");
 
+/** `apps/worker` 模組根目錄。 */
+const workerRoot = resolve(webRoot, "../worker");
+
 /** Playwright E2E 共用的 SQLite 測試資料庫路徑。 */
 const databasePath = join(webRoot, ".tmp", "playwright-e2e.sqlite");
 
 /** Playwright E2E 共用的本機檔案儲存路徑。 */
 const storagePath = join(webRoot, ".tmp", "playwright-storage");
 
-/** E2E API server 共用環境變數。 */
-const apiEnv = {
+/** E2E API / worker 共用環境變數。 */
+const sharedEnv = {
   ...process.env,
-  API_SERVICE_NAME: "deep-agent-api-e2e",
-  API_VERSION: "0.1.0-e2e",
-  API_HOST: "127.0.0.1",
-  API_PORT: "18001",
-  API_CORS_ORIGINS: "http://127.0.0.1:13001",
   DATABASE_URL: `sqlite+pysqlite:///${databasePath}`,
   DATABASE_ECHO: "false",
   REDIS_URL: "redis://localhost:16379/0",
@@ -41,17 +39,31 @@ const apiEnv = {
   PDF_PARSER_PROVIDER: "local",
   CELERY_BROKER_URL: "redis://localhost:16379/0",
   CELERY_RESULT_BACKEND: "redis://localhost:16379/1",
-  INGEST_INLINE_MODE: "true",
   EMBEDDING_PROVIDER: "deterministic",
   EMBEDDING_MODEL: "text-embedding-3-small",
   EMBEDDING_DIMENSIONS: "1536",
   RERANK_PROVIDER: "deterministic",
   RERANK_MODEL: "rerank-v3.5",
+  RERANK_TOP_N: "6",
+  RERANK_MAX_CHARS_PER_DOC: "2000",
+  ASSEMBLER_MAX_CONTEXTS: "6",
+  ASSEMBLER_MAX_CHARS_PER_CONTEXT: "2500",
+  ASSEMBLER_MAX_CHILDREN_PER_PARENT: "3",
   KEYCLOAK_URL: "http://localhost:18080",
   KEYCLOAK_ISSUER: "http://localhost:18080/realms/deep-agent-dev",
   KEYCLOAK_JWKS_URL: "http://localhost:18080/realms/deep-agent-dev/protocol/openid-connect/certs",
   KEYCLOAK_GROUPS_CLAIM: "groups",
   AUTH_TEST_MODE: "true",
+};
+
+/** E2E API server 環境變數。 */
+const apiEnv = {
+  ...sharedEnv,
+  API_SERVICE_NAME: "deep-agent-api-e2e",
+  API_VERSION: "0.1.0-e2e",
+  API_HOST: "127.0.0.1",
+  API_PORT: "18001",
+  API_CORS_ORIGINS: "http://127.0.0.1:13001",
   CHAT_PROVIDER: "deterministic",
   CHAT_MODEL: "deterministic-chat",
   CHAT_MAX_OUTPUT_TOKENS: "700",
@@ -59,6 +71,13 @@ const apiEnv = {
   CHAT_INCLUDE_TRACE: "true",
   CHAT_STREAM_CHUNK_SIZE: "24",
   LANGGRAPH_SERVICE_PORT: "18001",
+};
+
+/** E2E worker 環境變數。 */
+const workerEnv = {
+  ...sharedEnv,
+  WORKER_SERVICE_NAME: "deep-agent-worker-e2e",
+  PYTHONPATH: process.env.PYTHONPATH ? `${join(workerRoot, "src")}:${process.env.PYTHONPATH}` : join(workerRoot, "src"),
 };
 
 /** `langgraph` CLI 是否可直接執行。 */
@@ -71,8 +90,19 @@ const hasLangGraphCliModule = spawnSync("python", ["-c", "import langgraph_cli"]
   cwd: apiRoot,
 }).status === 0;
 
+/** Worker 啟動用子行程。 */
+const workerProcess = spawn(
+  "python",
+  ["-m", "celery", "-A", "worker.celery_app.celery_app", "worker", "--pool=solo", "--loglevel=INFO"],
+  {
+    cwd: workerRoot,
+    stdio: "inherit",
+    env: workerEnv,
+  },
+);
+
 /** API server 啟動用子行程。 */
-const childProcess = hasLangGraphCli
+const apiProcess = hasLangGraphCli
   ? spawn(
       "langgraph",
       ["dev", "--config", "langgraph.json", "--host", "127.0.0.1", "--port", "18001", "--no-browser", "--no-reload"],
@@ -102,13 +132,30 @@ const childProcess = hasLangGraphCli
       },
     );
 
-/** 將終止訊號轉發給 API 子行程。 */
+const childProcesses = [workerProcess, apiProcess];
+
+/** 將終止訊號轉發給 API / worker 子行程。 */
 function forwardSignal(signal) {
-  if (!childProcess.killed) {
-    childProcess.kill(signal);
+  for (const childProcess of childProcesses) {
+    if (!childProcess.killed) {
+      childProcess.kill(signal);
+    }
   }
 }
 
 process.on("SIGINT", () => forwardSignal("SIGINT"));
 process.on("SIGTERM", () => forwardSignal("SIGTERM"));
-childProcess.on("exit", (code) => process.exit(code ?? 0));
+
+let didExit = false;
+
+function exitAll(code) {
+  if (didExit) {
+    return;
+  }
+  didExit = true;
+  forwardSignal("SIGTERM");
+  process.exit(code ?? 0);
+}
+
+workerProcess.on("exit", (code) => exitAll(code));
+apiProcess.on("exit", (code) => exitAll(code));

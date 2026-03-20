@@ -72,15 +72,16 @@
 1. Web 上傳檔案
 2. API 驗證請求並建立 `documents` / `ingest_jobs`
 3. API 將原始檔存入 MinIO
-4. Worker 執行 parse routing；其中 `PDF` 會先經 provider-based parsing：`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 先轉成 Markdown
-5. PDF 的 Markdown 會回到既有 Markdown parser，與 `TXT/MD/HTML` 一樣輸出 block-aware `ParsedDocument`
-6. `XLSX` 會先由 `Unstructured partition_xlsx` 解析 worksheet，優先取 `text_as_html` 並回接既有 HTML table-aware parser
-7. `DOCX` 與 `PPTX` 會先由 `Unstructured partition_docx` / `partition_pptx` 解析，再映射為既有 `text/table` block-aware contract
-8. Worker 依 ParsedDocument 建立 parent section 與 child chunk
-9. Worker 以 replace-all 方式重建 `document_chunks`
-10. Worker 將 `ParsedDocument.normalized_text` 寫回 `documents.normalized_text`，作為全文 preview 的正式資料來源
-11. Worker 為 child chunks 寫入 `embedding`
-12. Worker 更新 document/job 狀態為 `ready` 或 `failed`
+4. Worker 會先嘗試從同一文件既有 parse artifacts 重建 `ParsedDocument`；可重用的 artifact 目前包含 `marker.cleaned.md`、`llamaparse.cleaned.md`、`pdf.unstructured.extracted.html`、`xlsx.extracted.html`、`docx.extracted.html` 與 `pptx.extracted.html`
+5. 若找不到可重用 artifact，Worker 才執行 parse routing；其中 `PDF` 會先經 provider-based parsing：預設 `marker` 先轉成 Markdown，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 先轉成 Markdown
+6. PDF 的 Markdown 會回到既有 Markdown parser，與 `TXT/MD/HTML` 一樣輸出 block-aware `ParsedDocument`
+7. `XLSX` 會先由 `Unstructured partition_xlsx` 解析 worksheet，優先取 `text_as_html` 並回接既有 HTML table-aware parser
+8. `DOCX` 與 `PPTX` 會先由 `Unstructured partition_docx` / `partition_pptx` 解析，再映射為既有 `text/table` block-aware contract
+9. Worker 依 ParsedDocument 建立 parent section 與 child chunk
+10. Worker 以 replace-all 方式重建 `document_chunks`
+11. Worker 會保留 `ParsedDocument.normalized_text` 供內部 parser / chunking 使用，並另外產生 `documents.display_text` 作為全文 preview 與 locator offsets 的正式資料來源
+12. Worker 為 child chunks 寫入 `embedding`
+13. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
 ### 問答流程
 1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run；每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
@@ -98,7 +99,7 @@
 1. 使用者在 `DocumentsDrawer` 中選取 `ready` 文件
 2. 前端呼叫既有 `GET /documents/{document_id}/preview`
 3. API 維持 ready-only、same-404 與 deny-by-default 語意
-4. 前端以 `normalized_text + child chunk map` 建立 chunk list 與全文高亮，不新增第二條 inspector API
+4. 前端以 `display_text + child chunk map` 建立 chunk list 與全文高亮，不新增第二條 inspector API
 5. 點擊 chunk list 或全文中的 chunk 時，兩側同步作用中的 child chunk 狀態
 
 ### Web 登入流程
@@ -133,33 +134,36 @@
 ### Documents & ingestion vertical slice
 1. `POST /areas/{area_id}/documents` 僅允許 `maintainer` 以上上傳單一文件
 2. API 先將原始檔寫入物件儲存，再建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`
-3. 正式環境由 Celery worker 執行 ingest；測試模式可走 inline ingest 以維持本機驗證可重跑
-4. Worker 與 API inline ingest 目前真正解析 `TXT`、`Markdown`、`HTML`、`PDF`、`XLSX`、`DOCX` 與 `PPTX`
-5. `PDF` 採 provider-based parsing：`PDF_PARSER_PROVIDER=local|llamaparse`；`llamaparse` 只使用標準 Markdown 輸出，不啟用 agentic mode
-6. `llamaparse` 路徑在進入既有 Markdown parser 前，會先清理常見頁碼 / 分隔符噪音；進入 chunking 前再做 PDF-specific block consolidation，優先合併同 heading 的碎片 text/table runs
+3. 所有環境都由 Celery worker 執行 ingest；API 只負責建立 `documents` / `ingest_jobs` 並 dispatch 背景工作
+4. Worker 目前真正解析 `TXT`、`Markdown`、`HTML`、`PDF`、`XLSX`、`DOCX` 與 `PPTX`
+5. `PDF` 採 provider-based parsing：`PDF_PARSER_PROVIDER=marker|local|llamaparse`；其中 `marker` 為預設值，`llamaparse` 只使用標準 Markdown 輸出，不啟用 agentic mode
+6. `marker` 與 `llamaparse` 路徑都會在進入既有 Markdown parser 前先清理常見頁碼 / 分隔符噪音；進入 chunking 前再做 PDF-specific block consolidation，優先合併同 heading 的碎片 text/table runs
+7. Marker / Surya 模型快取路徑必須由 `MARKER_MODEL_CACHE_DIR` 映射到可寫目錄，避免 compose 或受限執行環境因使用者 home cache 權限不足而失敗
 7. `local` PDF parser 僅提供自架 fallback 與基本文字擷取；不承諾表格高保真，也不支援 OCR / 掃描 PDF
-8. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks，再建立新 ingest job 重建 chunk tree
+8. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks、保留既有 parse artifacts，再建立新 ingest job 重建 chunk tree；若帶 `force_reparse=true`，worker 需忽略既有 artifacts 並重跑 parser
 9. `DELETE /documents/{document_id}` 會移除 document、相關 jobs、document chunks 與原始檔
 10. `GET /areas/{area_id}/documents`、`GET /documents/{document_id}`、`GET /ingest-jobs/{job_id}` 都必須先套 area access 邊界
 
 ### Document chunk tree
 1. `document_chunks` 採固定兩層結構：`parent -> child`
 2. parser 與 chunker 之間使用 block-aware contract：`ParsedDocument(normalized_text, source_format, blocks)` 與 `ParsedBlock(block_kind, heading, content, start_offset, end_offset)`
-3. `PDF` 不直接寫入外部 SaaS chunk 結果；無論是 `local` 或 `llamaparse`，都必須先回到既有 parser/chunk tree contract
+3. `PDF` 不直接寫入外部 parser 的 chunk 結果；無論是 `marker`、`local` 或 `llamaparse`，都必須先回到既有 parser/chunk tree contract
 4. `document_chunks` 除 `chunk_type` 外，另有 `structure_kind=text|table`，供後續 retrieval、citation 與 observability 直接辨識內容結構
 5. `parent` chunk 由 custom section builder 建立；TXT 以段落群組為主，Markdown 與 LlamaParse PDF Markdown 先以 heading 分界，再切出 `text/table` blocks，HTML 與 `XLSX` 產生的 worksheet HTML 則由最小 parser 輸出 `text/table` blocks，`DOCX/PPTX` 則由 Unstructured elements 映射到同一份 `text/table` block contract
-6. `PDF + llamaparse` 會先做一次 PDF-specific block consolidation，降低同 heading 下因 page noise、碎表格或過短 text block 造成的 parent fragmentation
-7. 若 `PDF + llamaparse` 命中同 heading 的短 `text -> table -> text` 模式，系統會建立單一 parent cluster，但仍保留 `text/table/text` children，避免破壞 table-aware retrieval 與 citations
-8. parent normalization 採精準度優先策略：除既有短 `text parent` 合併外，過短 `table parent` 也可在同 heading、相鄰且語意連續時，與前後 `text parent` 合併為 mixed parent；合併後仍保留 `text/table/text` children 邊界
-9. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
-10. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
-11. `child` chunk 才是後續 retrieval 的最小候選單位
-12. child chunk embedding 的正式輸入為 `heading + content` 的自然拼接文字；若沒有 heading，則只使用 content
-13. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
-14. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
-15. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
-16. `documents.normalized_text` 是正式全文 preview 的資料來源；其內容必須與 `document_chunks.start_offset/end_offset` 對齊
-17. reindex / failed ingest 開始時必須清空舊的 `documents.normalized_text`，避免全文 preview 與現存 chunks 不一致
+6. `PDF + marker` 與 `PDF + llamaparse` 都會先做一次 PDF-specific block consolidation，降低同 heading 下因 page noise、碎表格或過短 text block 造成的 parent fragmentation
+7. 若 `PDF + marker` 或 `PDF + llamaparse` 命中同 heading 的短 `text -> table -> text` 模式，系統會建立單一 parent cluster，但仍保留 `text/table/text` children，避免破壞 table-aware retrieval 與 citations
+8. parse artifacts 只保留可重建 block-aware parse 結果所需的最小集合；reindex 會優先重用既有 `md/html` artifacts，delete 與真正需要重跑 parser 的 ingest 才會清理同文件舊 artifacts
+9. parent normalization 採精準度優先策略：除既有短 `text parent` 合併外，過短 `table parent` 也可在同 heading、相鄰且語意連續時，與前後 `text parent` 合併為 mixed parent；合併後仍保留 `text/table/text` children 邊界
+10. `text child` 以 `LangChain RecursiveCharacterTextSplitter` 建立，並保留 SQL-first 的 position、index 與 offset 欄位映射
+11. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
+12. `child` chunk 才是後續 retrieval 的最小候選單位
+13. child chunk embedding 的正式輸入為 `heading + content` 的自然拼接文字；若沒有 heading，則只使用 content
+14. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
+15. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
+16. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
+17. `documents.display_text` 是正式全文 preview 的資料來源；其內容必須與 `document_chunks.start_offset/end_offset` 對齊
+18. `documents.normalized_text` 保留給 parser / chunking / retrieval 內部使用，不再作為前端 preview 主 contract
+19. reindex / failed ingest 開始時必須清空舊的 `documents.display_text` 與 `documents.normalized_text`，避免全文 preview 與現存 chunks 不一致
 
 ### Retrieval foundation
 1. retrieval 目前先作為 API 內部 service，不提供 public route
@@ -189,7 +193,7 @@
 25. `custom` 事件目前是產品 UI 的正式補充通道：`phase` 用於高層狀態、`tool_call` 用於即時工具輸入輸出；token delta 的正式來源為 `messages-tuple`
 26. `tool_call.completed.output` 只回傳 debug-safe 的 context 摘要；最終完整結果仍以 graph `values` 為準
 27. retrieval tool 回給 LLM 的 payload 只保留 `context_label`、`context_index`、`document_name`、`heading` 與 `assembled_text`；`start_offset/end_offset` 僅屬於 UI locator payload，不送入 LLM
-28. public documents API 新增 `GET /documents/{document_id}/preview`；此 route 必須維持 same-404 與 ready-only，且回傳 `normalized_text + child chunk map`
+28. public documents API 新增 `GET /documents/{document_id}/preview`；此 route 必須維持 same-404 與 ready-only，且回傳 `display_text + child chunk map`
 29. 全文預覽欄的 hover 高亮以 child chunk 為最小單位；主 citation 命中 chunk 強高亮，同一 context 其他 child 弱高亮，hover chunk 淡高亮
 
 ### Table-aware chunking 規則
@@ -197,7 +201,7 @@
 2. HTML parser 目前僅處理 `h1~h3`、段落 / list 文字與 `<table>` 的最小結構，不做 `rowspan/colspan` 高保真還原
 3. `CHUNK_TABLE_PRESERVE_MAX_CHARS` 控制整表可否保留為單一 child
 4. 超過 preserve 上限的表格以 `CHUNK_TABLE_MAX_ROWS_PER_CHILD` 分組；每個 child 只允許在 row boundary 切分
-5. `table child.content` 允許重複表頭，因此可比 `normalized_text[start:end]` 多出 header，但 row payload 必須能回對原始 normalized text
+5. `table child.content` 允許重複表頭，因此可比原始 block 內容多出 header；但 child 的 `start_offset/end_offset` 必須仍能正確對回 `display_text` 中對應片段
 
 ## 雲端架構演進 (Supabase Migration) - 已完成
 

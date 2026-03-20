@@ -1,6 +1,7 @@
 """API 測試共用 fixtures。"""
 
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,19 @@ from sqlalchemy.orm import Session
 from app.core.settings import AppSettings
 from app.db.base import Base
 from app.chat.runtime.langgraph_http_app import create_langgraph_http_app
+
+
+@dataclass
+class FakeCeleryClient:
+    """供 API 測試觀察 dispatch 呼叫的 Celery client 替身。"""
+
+    # 記錄每次 `send_task` 呼叫內容。
+    calls: list[tuple[str, dict[str, object], str]] = field(default_factory=list)
+
+    def send_task(self, name: str, kwargs: dict[str, object], queue: str) -> None:
+        """保存 dispatch 呼叫參數供測試斷言。"""
+
+        self.calls.append((name, dict(kwargs), queue))
 
 
 @pytest.fixture()
@@ -47,13 +61,8 @@ def app_settings(tmp_path: Path) -> AppSettings:
         CHUNK_TXT_PARENT_GROUP_SIZE=4,
         CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
         CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
-        PDF_PARSER_PROVIDER="local",
-        LLAMAPARSE_API_KEY="",
-        LLAMAPARSE_DO_NOT_CACHE=True,
-        LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
         CELERY_BROKER_URL="redis://redis:6379/0",
         CELERY_RESULT_BACKEND="redis://redis:6379/1",
-        INGEST_INLINE_MODE=True,
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
         EMBEDDING_DIMENSIONS=1536,
@@ -86,7 +95,14 @@ def app_settings(tmp_path: Path) -> AppSettings:
 
 
 @pytest.fixture()
-def app(app_settings: AppSettings):
+def celery_client() -> FakeCeleryClient:
+    """建立可觀察 dispatch 呼叫的 Celery client 替身。"""
+
+    return FakeCeleryClient()
+
+
+@pytest.fixture()
+def app(app_settings: AppSettings, celery_client: FakeCeleryClient):
     """建立測試用 FastAPI 應用程式並初始化資料表。
 
     參數：
@@ -98,6 +114,7 @@ def app(app_settings: AppSettings):
 
     application = create_langgraph_http_app(app_settings)
     Base.metadata.create_all(bind=application.state.engine)
+    application.state.celery_client = celery_client
     try:
         yield application
     finally:

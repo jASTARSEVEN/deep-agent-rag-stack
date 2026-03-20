@@ -43,14 +43,17 @@
 - 專案已具備 LangGraph Server built-in thread/run chat runtime 與 Web chat UI
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
 - 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
-- 專案已具備 `documents.normalized_text` 全文持久化來源與 `GET /documents/{document_id}/preview`，供 ready-only 文件全文預覽與 chunk-aware UI 使用
+- 專案已具備 `documents.display_text` 全文持久化來源與 `GET /documents/{document_id}/preview`，供 ready-only 文件全文預覽與 chunk-aware UI 使用
 - 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
 - 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
 - 已完成將 `match_chunks` 收斂為資料庫候選召回 RPC；最終 `RRF`、ranking policy、rerank 與 assembler 由 Python 層負責
-- 已完成 provider-based PDF parsing：`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
+- 已完成 provider-based PDF parsing：預設 `marker` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
+- 已補上 `MARKER_MODEL_CACHE_DIR` 設定，讓 Marker / Surya 模型快取可落在 compose 與本機可寫路徑
+- 已將 parse artifact 收斂為可重建 parser 結果的最小 `md/html` 集合；reindex 會優先重用既有 artifacts，delete 與真正需要重跑 parser 的 ingest 才會清理舊 artifacts
+- 已支援 `POST /documents/{document_id}/reindex?force_reparse=true`，可由前端要求 worker 忽略既有 `md/html` artifacts 並強制重跑 parser
 - 已補上 `llamaparse` 的 Markdown noise cleanup 與 PDF-specific block consolidation，降低 parent chunks 在 PDF 路徑上的過度碎片化
 - 已支援 `PDF + llamaparse` 的短 `text -> table -> text` cluster parent 規則：單一 parent、混合 `text/table/text` children，維持 table-aware retrieval/citation 語意
 - 已新增 `XLSX -> Unstructured partition_xlsx -> HTML table-aware parser` 路徑，worksheet 可直接進入既有 table-aware chunking
@@ -106,7 +109,7 @@
 - Web 已在 `/areas` 補上 Files 區塊、單檔 upload、文件狀態與失敗訊息顯示
 - API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
 - Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例
-- 已為 `PDF` 新增 provider-based parsing，正式支援 `local` 與 `llamaparse` 兩條解析路徑
+- 已為 `PDF` 新增 provider-based parsing，正式支援 `marker`、`local` 與 `llamaparse` 三條解析路徑
 - 已新增 `LLAMAPARSE_DO_NOT_CACHE` 與 `LLAMAPARSE_MERGE_CONTINUED_TABLES` 設定，並將 agentic mode 保留為未來規劃
 
 ### Phase 3.5 — 已完成的 lifecycle hardening 與 chunk tree 基礎
@@ -119,7 +122,7 @@
 - 已落實 delete 會移除 document、ingest jobs、document_chunks 與原始檔
 - Web Files UI 已補 chunk summary、reindex、delete 與失敗訊息顯示
 - API、worker 與 Playwright E2E 已補 chunk tree、reindex、delete、same-404 與 read-only 驗證
-- API 在 inline ingest 模式下已可於缺少 celery 套件的本機環境啟動與測試
+- API ingest 已收斂為單一路徑：API 只建立 `documents` / `ingest_jobs` 並 dispatch worker，不再持有 inline ingest 鏡像實作
 
 ### Phase 3.6 — 已完成的表格感知 chunking
 - 已將 parser / chunking contract 升級為 block-aware，新增 `ParsedDocument` 與 `ParsedBlock`
@@ -134,7 +137,7 @@
 
 ### Phase 4.1 — 已完成的 retrieval foundation
 - 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
-- 已補 worker 與 inline ingest 的 indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
+- 已補 worker indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
 - 已導入 embedding provider abstraction，初版支援 `openai`，並保留 `deterministic` 供離線測試
 - 已將 child chunk embedding 輸入調整為 `heading + content` 的自然拼接文字，改善 chunk 被切碎時的主題召回
 - 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
@@ -199,7 +202,7 @@
 - 已為 `LANGSMITH_TRACING=true` 但缺少 `LANGSMITH_API_KEY` 的錯誤情境補上明確執行期驗證
 - 已新增 `CHAT_STREAM_DEBUG` 與 `VITE_CHAT_STREAM_DEBUG`，可分別觀測 API 與 Web 端的 stream phase、tool call、values commit 與 token/message delta 時序
 - 已新增以 `message_artifacts` 持久化的 assistant turn UI metadata，reload 後仍可恢復 `answer_blocks`、citations 與 `used_knowledge_base`
-- 已新增全文 preview route 與 `documents.normalized_text`，讓 citation chips 可直接帶使用者跳到文件內對應 chunk 範圍
+- 已新增全文 preview route 與 `documents.display_text`，讓 citation chips 可直接帶使用者跳到文件內對應 chunk 範圍
 
 ## 目前階段重點
 

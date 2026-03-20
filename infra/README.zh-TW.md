@@ -29,7 +29,6 @@
 - `PDF_PARSER_PROVIDER`
 - `LLAMAPARSE_*`
 - `CELERY_*`
-- `INGEST_INLINE_MODE`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -64,6 +63,8 @@
 - Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
 - `supabase/migrations/` 掛載到 `/docker-entrypoint-initdb.d` 只適用全新資料庫 volume；既有資料庫在專用 migration runner 落地前仍需走 Alembic 升級。
 - Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
-- 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem` 並搭配 `INGEST_INLINE_MODE=true`。
-- 若要讓 compose 內的 API 與 worker 都切換到 LlamaParse，除了在 `.env` 設定 `PDF_PARSER_PROVIDER=llamaparse` 外，也必須提供 `LLAMAPARSE_API_KEY`；修改後需重新啟動 `api` 與 `worker` 容器。
+- 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem`，並保持 `api` 與 `worker` 服務都在執行。
+- 若要讓 compose ingest 切換到 LlamaParse，除了在 `.env` 設定 `PDF_PARSER_PROVIDER=llamaparse` 外，也必須提供 `LLAMAPARSE_API_KEY`；修改後需重新啟動 `worker` 容器。
+- compose 會把 `MARKER_MODEL_CACHE_DIR` 預設掛到 `marker-model-cache` named volume，因此 Marker / Surya 模型下載結果可跨 worker 重啟與重建保留；若自訂 cache 路徑，應同步確認 volume target 仍落在同一路徑。
+- compose 的 worker 現在預設使用 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1` 與 `CELERY_WORKER_MAX_TASKS_PER_CHILD=1`，降低 `marker` PDF ingest 因 prefork 子程序記憶體尖峰而被 `SIGKILL` 的風險；若要改回 prefork，應先確認容器記憶體餘裕。
 - 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。

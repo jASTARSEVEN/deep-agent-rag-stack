@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 import logging
+from pathlib import PurePosixPath
 
 from sqlalchemy import delete
 
@@ -20,7 +21,13 @@ from worker.db import (
     create_session_factory,
     session_scope,
 )
-from worker.parsers import PdfParserConfig, parse_document
+from worker.parsers import (
+    ParsedDocument,
+    PdfParserConfig,
+    get_reusable_parse_artifact_names,
+    parse_document,
+    parse_document_from_artifact,
+)
 from worker.storage import StorageError, build_object_storage_reader
 from worker.tasks.indexing import index_document_chunks
 
@@ -32,13 +39,17 @@ MAX_CHUNK_HEADING_LENGTH = 255
 # `document_chunks.content_preview` 欄位的資料庫最大長度。
 MAX_CHUNK_CONTENT_PREVIEW_LENGTH = 255
 
+# parse artifact 儲存目錄名稱。
+PARSE_ARTIFACTS_DIRECTORY = "artifacts"
+
 
 @celery_app.task(name="worker.tasks.ingest.process_document_ingest")
-def process_document_ingest(job_id: str) -> str:
+def process_document_ingest(job_id: str, force_reparse: bool = False) -> str:
     """處理單一 ingest job，並更新 document/job/chunks 狀態。
 
     參數：
     - `job_id`：要處理的 ingest job 識別碼。
+    - `force_reparse`：若為真，忽略既有 parse artifacts 並強制重跑 parser。
 
     回傳：
     - `str`：本次 task 執行結果代碼，例如 `succeeded`、`failed`、`job-skipped`。
@@ -69,14 +80,25 @@ def process_document_ingest(job_id: str) -> str:
         pdf_provider = settings.pdf_parser_provider if document.file_name.lower().endswith(".pdf") else None
 
         try:
-            payload = storage.get_object(object_key=document.storage_key)
             job.stage = "parsing"
             session.commit()
-            parsed_document = parse_document(
-                file_name=document.file_name,
-                payload=payload,
-                pdf_config=_build_pdf_parser_config(settings),
-            )
+            pdf_config = _build_pdf_parser_config(settings)
+            parsed_document = None
+            if not force_reparse:
+                parsed_document = _load_reusable_parsed_document(
+                    storage=storage,
+                    document=document,
+                    pdf_config=pdf_config,
+                )
+            if parsed_document is None:
+                _clear_parse_artifacts(storage=storage, document=document)
+                payload = storage.get_object(object_key=document.storage_key)
+                parsed_document = parse_document(
+                    file_name=document.file_name,
+                    payload=payload,
+                    pdf_config=pdf_config,
+                )
+                _persist_parse_artifacts(storage=storage, document=document, parsed_document=parsed_document)
             document.normalized_text = parsed_document.normalized_text
             job.stage = "chunking"
             session.commit()
@@ -84,6 +106,7 @@ def process_document_ingest(job_id: str) -> str:
                 parsed_document=parsed_document,
                 config=_build_chunking_config(settings),
             )
+            document.display_text = chunking_result.display_text
             _log_chunking_observability(
                 document=document,
                 job=job,
@@ -127,7 +150,76 @@ def _mark_processing(*, session, document: Document, job: IngestJob) -> None:
     job.child_chunk_count = 0
     document.status = DocumentStatus.processing
     document.normalized_text = None
+    document.display_text = None
     session.commit()
+
+
+def _persist_parse_artifacts(*, storage, document: Document, parsed_document) -> None:
+    """將 parse 過程產生的中介 artifact 寫入物件儲存。"""
+
+    for artifact in parsed_document.artifacts:
+        storage.put_object(
+            object_key=_build_parse_artifact_object_key(
+                storage_key=document.storage_key,
+                artifact_file_name=artifact.file_name,
+            ),
+            payload=artifact.payload,
+            content_type=artifact.content_type,
+        )
+
+
+def _load_reusable_parsed_document(
+    *,
+    storage,
+    document: Document,
+    pdf_config: PdfParserConfig,
+) -> ParsedDocument | None:
+    """優先從既有 parse artifacts 重建 ParsedDocument，避免重跑 parser。
+
+    參數：
+    - `storage`：物件儲存介面。
+    - `document`：目前處理中的文件。
+    - `pdf_config`：PDF parser provider 設定。
+
+    回傳：
+    - `ParsedDocument | None`：若找到可重用 artifact 則回傳 ParsedDocument，否則回傳空值。
+    """
+
+    artifact_names = get_reusable_parse_artifact_names(file_name=document.file_name, pdf_config=pdf_config)
+    for artifact_name in artifact_names:
+        artifact_object_key = _build_parse_artifact_object_key(
+            storage_key=document.storage_key,
+            artifact_file_name=artifact_name,
+        )
+        try:
+            artifact_payload = storage.get_object(object_key=artifact_object_key)
+        except StorageError:
+            continue
+        return parse_document_from_artifact(
+            file_name=document.file_name,
+            artifact_file_name=artifact_name,
+            payload=artifact_payload,
+            pdf_config=pdf_config,
+        )
+    return None
+
+
+def _clear_parse_artifacts(*, storage, document: Document) -> None:
+    """清除同一文件既有的 parse artifacts，避免 reindex 殘留舊檔。"""
+
+    storage.delete_prefix(prefix=_build_parse_artifact_prefix(storage_key=document.storage_key))
+
+
+def _build_parse_artifact_object_key(*, storage_key: str, artifact_file_name: str) -> str:
+    """依文件 storage key 建立 parse artifact 的固定儲存路徑。"""
+
+    return str(PurePosixPath(storage_key).parent / PARSE_ARTIFACTS_DIRECTORY / artifact_file_name)
+
+
+def _build_parse_artifact_prefix(*, storage_key: str) -> str:
+    """依文件 storage key 建立 parse artifact 的固定前綴路徑。"""
+
+    return str(PurePosixPath(storage_key).parent / PARSE_ARTIFACTS_DIRECTORY)
 
 
 def _replace_document_chunks(*, session, document: Document, chunking_result: ChunkingResult) -> None:
@@ -236,6 +328,7 @@ def _mark_failed(*, session, document: Document, job: IngestJob, message: str) -
     job.child_chunk_count = 0
     document.status = DocumentStatus.failed
     document.normalized_text = None
+    document.display_text = None
     document.indexed_at = None
     session.commit()
 
@@ -379,6 +472,15 @@ def _build_pdf_parser_config(settings) -> PdfParserConfig:
 
     return PdfParserConfig(
         provider=settings.pdf_parser_provider,
+        marker_model_cache_dir=str(settings.marker_model_cache_dir),
+        marker_force_ocr=settings.marker_force_ocr,
+        marker_strip_existing_ocr=settings.marker_strip_existing_ocr,
+        marker_use_llm=settings.marker_use_llm,
+        marker_llm_service=settings.marker_llm_service,
+        marker_openai_api_key=settings.marker_openai_api_key,
+        marker_openai_model=settings.marker_openai_model,
+        marker_openai_base_url=settings.marker_openai_base_url,
+        marker_disable_image_extraction=settings.marker_disable_image_extraction,
         llamaparse_api_key=settings.llamaparse_api_key,
         llamaparse_do_not_cache=settings.llamaparse_do_not_cache,
         llamaparse_merge_continued_tables=settings.llamaparse_merge_continued_tables,

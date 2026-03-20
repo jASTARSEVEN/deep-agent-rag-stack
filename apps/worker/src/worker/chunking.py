@@ -89,9 +89,9 @@ class ChunkDraft:
     content_preview: str
     # chunk 內容長度。
     char_count: int
-    # chunk 起始 offset。
+    # chunk 在 display_text 中的起始 offset。
     start_offset: int
-    # chunk 結束 offset。
+    # chunk 在 display_text 中的結束 offset。
     end_offset: int
 
 
@@ -103,6 +103,8 @@ class ChunkingResult:
     parent_chunks: list[ChunkDraft]
     # child chunks 草稿。
     child_chunks: list[ChunkDraft]
+    # 供 preview 與定位使用的顯示用全文。
+    display_text: str
 
 
 def build_chunk_tree(*, parsed_document: ParsedDocument, config: ChunkingConfig) -> ChunkingResult:
@@ -125,9 +127,21 @@ def build_chunk_tree(*, parsed_document: ParsedDocument, config: ChunkingConfig)
 
     parent_chunks: list[ChunkDraft] = []
     child_chunks: list[ChunkDraft] = []
+    display_parts: list[str] = []
     position_counter = count()
+    display_cursor = 0
 
-    for section in sections:
+    for index, section in enumerate(sections):
+        if index > 0:
+            display_parts.append("\n\n")
+            display_cursor += 2
+
+        display_prefix = _render_display_heading_prefix(section.heading)
+        if display_prefix:
+            display_parts.append(display_prefix)
+            display_cursor += len(display_prefix)
+
+        display_content_start = display_cursor
         parent_chunks.append(
             ChunkDraft(
                 chunk_type="parent",
@@ -139,16 +153,31 @@ def build_chunk_tree(*, parsed_document: ParsedDocument, config: ChunkingConfig)
                 content=section.content,
                 content_preview=_build_content_preview(section.content, config=config),
                 char_count=len(section.content),
-                start_offset=section.start_offset,
-                end_offset=section.end_offset,
+                start_offset=display_content_start,
+                end_offset=display_content_start + len(section.content),
             )
         )
-        child_chunks.extend(_build_child_chunks(section=section, position_counter=position_counter, config=config))
+        child_chunks.extend(
+            _build_child_chunks(
+                section=section,
+                position_counter=position_counter,
+                config=config,
+                display_content_start=display_content_start,
+            )
+        )
+        display_parts.append(section.content)
+        display_cursor += len(section.content)
 
     if not child_chunks:
         raise ValueError("無法從文件內容建立有效 chunks。")
 
-    return ChunkingResult(parent_chunks=parent_chunks, child_chunks=child_chunks)
+    display_text = "".join(display_parts)
+    _include_verified_heading_prefix_in_parent_offsets(parent_chunks=parent_chunks, display_text=display_text)
+    return ChunkingResult(
+        parent_chunks=parent_chunks,
+        child_chunks=child_chunks,
+        display_text=display_text,
+    )
 
 
 def _build_sections(*, parsed_document: ParsedDocument, config: ChunkingConfig) -> list[SectionDraft]:
@@ -402,10 +431,63 @@ def _can_merge_by_heading(current: SectionDraft, neighbor: SectionDraft) -> bool
     - `neighbor`：相鄰候選 section。
 
     回傳：
-    - `bool`：只有 heading 相同時才允許合併。
+    - `bool`：若兩者屬於同一 heading family 則允許合併。
     """
 
-    return current.heading == neighbor.heading
+    return _headings_belong_to_same_family(current.heading, neighbor.heading)
+
+
+def _headings_belong_to_same_family(current_heading: str | None, neighbor_heading: str | None) -> bool:
+    """判斷兩個 headings 是否屬於同一條階層路徑。
+
+    參數：
+    - `current_heading`：目前 section 的 heading。
+    - `neighbor_heading`：相鄰 section 的 heading。
+
+    回傳：
+    - `bool`：若兩者完全相同，或其中一方為另一方的 path prefix，則回傳真值。
+    """
+
+    current_segments = _split_heading_segments(current_heading)
+    neighbor_segments = _split_heading_segments(neighbor_heading)
+    if not current_segments or not neighbor_segments:
+        return current_segments == neighbor_segments
+    return _is_heading_prefix(current_segments, neighbor_segments) or _is_heading_prefix(
+        neighbor_segments,
+        current_segments,
+    )
+
+
+def _split_heading_segments(heading: str | None) -> tuple[str, ...]:
+    """將 heading 依階層分隔符拆成 path segments。
+
+    參數：
+    - `heading`：原始 heading；允許空值。
+
+    回傳：
+    - `tuple[str, ...]`：清理空白後的 heading segments。
+    """
+
+    if heading is None:
+        return ()
+    normalized_heading = re.sub(r"\s+", " ", heading).strip()
+    if not normalized_heading:
+        return ()
+    return tuple(segment.strip() for segment in re.split(r"\s+/\s+", normalized_heading) if segment.strip())
+
+
+def _is_heading_prefix(prefix_segments: tuple[str, ...], target_segments: tuple[str, ...]) -> bool:
+    """判斷一組 heading segments 是否為另一組的 prefix。
+
+    參數：
+    - `prefix_segments`：候選 prefix segments。
+    - `target_segments`：完整 heading segments。
+
+    回傳：
+    - `bool`：若 `prefix_segments` 為 `target_segments` 的 prefix，則回傳真值。
+    """
+
+    return len(prefix_segments) <= len(target_segments) and target_segments[: len(prefix_segments)] == prefix_segments
 
 
 def _is_text_like(section: SectionDraft) -> bool:
@@ -712,6 +794,12 @@ def _merge_headings(left_heading: str | None, right_heading: str | None) -> str 
     """
 
     if left_heading and right_heading and left_heading != right_heading:
+        left_segments = _split_heading_segments(left_heading)
+        right_segments = _split_heading_segments(right_heading)
+        if _is_heading_prefix(left_segments, right_segments):
+            return left_heading
+        if _is_heading_prefix(right_segments, left_segments):
+            return right_heading
         return f"{left_heading} / {right_heading}"
     return left_heading or right_heading
 
@@ -721,6 +809,7 @@ def _build_child_chunks(
     section: SectionDraft,
     position_counter: count[int],
     config: ChunkingConfig,
+    display_content_start: int,
 ) -> list[ChunkDraft]:
     """將 parent section 切成 child chunks。
 
@@ -728,6 +817,7 @@ def _build_child_chunks(
     - `section`：待切分的 parent section。
     - `position_counter`：整份文件的全域 position 計數器。
     - `config`：chunking 參數設定。
+    - `display_content_start`：此 section 內容在 display_text 中的起始 offset。
 
     回傳：
     - `list[ChunkDraft]`：此 section 下的 child chunk 草稿。
@@ -740,18 +830,21 @@ def _build_child_chunks(
                 section=section,
                 position_counter=position_counter,
                 config=config,
+                display_content_start=display_content_start,
                 starting_child_index=0,
             )
         return _build_text_child_chunks(
             section=section,
             position_counter=position_counter,
             config=config,
+            display_content_start=display_content_start,
             starting_child_index=0,
         )
 
     children: list[ChunkDraft] = []
     next_child_index = 0
     for component in components:
+        component_display_content_start = display_content_start + component.start_offset
         component_section = SectionDraft(
             section_index=section.section_index,
             structure_kind=component.structure_kind,
@@ -766,6 +859,7 @@ def _build_child_chunks(
                 section=component_section,
                 position_counter=position_counter,
                 config=config,
+                display_content_start=component_display_content_start,
                 starting_child_index=next_child_index,
             )
         else:
@@ -773,6 +867,7 @@ def _build_child_chunks(
                 section=component_section,
                 position_counter=position_counter,
                 config=config,
+                display_content_start=component_display_content_start,
                 starting_child_index=next_child_index,
             )
         children.extend(component_children)
@@ -785,6 +880,7 @@ def _build_text_child_chunks(
     section: SectionDraft,
     position_counter: count[int],
     config: ChunkingConfig,
+    display_content_start: int,
     starting_child_index: int,
 ) -> list[ChunkDraft]:
     """將文字 parent section 切成 child chunks。
@@ -793,6 +889,7 @@ def _build_text_child_chunks(
     - `section`：待切分的文字 parent section。
     - `position_counter`：整份文件的全域 position 計數器。
     - `config`：chunking 參數設定。
+    - `display_content_start`：此 section 內容在 display_text 中的起始 offset。
 
     回傳：
     - `list[ChunkDraft]`：文字 child chunk 草稿。
@@ -808,8 +905,8 @@ def _build_text_child_chunks(
     )
 
     for relative_start, chunk_content in _split_text_content(section.content, splitter=splitter):
-        normalized_start = section.start_offset + relative_start
-        normalized_end = normalized_start + len(chunk_content)
+        display_start = display_content_start + relative_start
+        display_end = display_start + len(chunk_content)
         children.append(
             ChunkDraft(
                 chunk_type="child",
@@ -821,8 +918,8 @@ def _build_text_child_chunks(
                 content=chunk_content,
                 content_preview=_build_content_preview(chunk_content, config=config),
                 char_count=len(chunk_content),
-                start_offset=normalized_start,
-                end_offset=normalized_end,
+                start_offset=display_start,
+                end_offset=display_end,
             )
         )
         child_index += 1
@@ -863,6 +960,7 @@ def _build_table_child_chunks(
     section: SectionDraft,
     position_counter: count[int],
     config: ChunkingConfig,
+    display_content_start: int,
     starting_child_index: int,
 ) -> list[ChunkDraft]:
     """將表格 parent section 切成 table-aware child chunks。
@@ -871,6 +969,7 @@ def _build_table_child_chunks(
     - `section`：待切分的表格 parent section。
     - `position_counter`：整份文件的全域 position 計數器。
     - `config`：chunking 參數設定。
+    - `display_content_start`：此 section 內容在 display_text 中的起始 offset。
 
     回傳：
     - `list[ChunkDraft]`：表格 child chunk 草稿。
@@ -888,8 +987,8 @@ def _build_table_child_chunks(
                 content=section.content,
                 content_preview=_build_content_preview(section.content, config=config),
                 char_count=len(section.content),
-                start_offset=section.start_offset,
-                end_offset=section.end_offset,
+                start_offset=display_content_start,
+                end_offset=display_content_start + len(section.content),
             )
         ]
 
@@ -906,8 +1005,8 @@ def _build_table_child_chunks(
                 content=section.content,
                 content_preview=_build_content_preview(section.content, config=config),
                 char_count=len(section.content),
-                start_offset=section.start_offset,
-                end_offset=section.end_offset,
+                start_offset=display_content_start,
+                end_offset=display_content_start + len(section.content),
             )
         ]
 
@@ -931,11 +1030,59 @@ def _build_table_child_chunks(
                 content=child_content,
                 content_preview=_build_content_preview(child_content, config=config),
                 char_count=len(child_content),
-                start_offset=section.start_offset + row_start,
-                end_offset=section.start_offset + row_end,
+                start_offset=display_content_start + row_start,
+                end_offset=display_content_start + row_end,
             )
         )
     return children
+
+
+def _render_display_heading_prefix(heading: str | None) -> str:
+    """將 section heading 渲染為 display_text 用的 markdown 標題前綴。
+
+    參數：
+    - `heading`：section heading；允許為空值。
+
+    回傳：
+    - `str`：供顯示使用的標題前綴；若沒有 heading 則回傳空字串。
+    """
+
+    normalized_heading = re.sub(r"\s+", " ", heading or "").strip()
+    if not normalized_heading:
+        return ""
+    return f"## {normalized_heading}\n\n"
+
+
+def _include_verified_heading_prefix_in_parent_offsets(
+    *,
+    parent_chunks: list[ChunkDraft],
+    display_text: str,
+) -> None:
+    """只在 display_text 前綴實際匹配時，將 parent offset 擴到包含 heading。
+
+    參數：
+    - `parent_chunks`：待調整的 parent chunk 草稿清單。
+    - `display_text`：本次 materialize 後的完整顯示文字。
+
+    回傳：
+    - `None`：僅原地更新符合條件的 parent chunk offset。
+    """
+
+    for chunk in parent_chunks:
+        heading_prefix = _render_display_heading_prefix(chunk.heading)
+        if not heading_prefix:
+            continue
+
+        prefix_start = chunk.start_offset - len(heading_prefix)
+        if prefix_start < 0:
+            continue
+
+        # 只有當 materialized display_text 中，chunk 前面的字串真的就是該 heading
+        # 的顯示前綴時，才把 parent locator 擴張到包含 heading。
+        if display_text[prefix_start:chunk.start_offset] != heading_prefix:
+            continue
+
+        chunk.start_offset = prefix_start
 
 
 @dataclass(slots=True)

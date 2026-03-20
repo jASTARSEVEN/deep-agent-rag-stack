@@ -1,6 +1,6 @@
 """Documents 上傳、重建索引、刪除、列表與詳情路由。"""
 
-from fastapi import APIRouter, Depends, File, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_principal
@@ -130,7 +130,7 @@ def read_document_preview_route(
     principal: CurrentPrincipal = Depends(get_current_principal),
     session: Session = Depends(get_database_session),
 ) -> DocumentPreviewResponse:
-    """讀取單一 ready 文件的全文 preview 與 child chunk map。
+    """讀取單一 ready 文件的全文 display_text 與 child chunk map。
 
     參數：
     - `document_id`：要查詢的文件識別碼。
@@ -138,7 +138,7 @@ def read_document_preview_route(
     - `session`：目前 request 的資料庫 session。
 
     回傳：
-    - `DocumentPreviewResponse`：指定文件的全文 preview 內容。
+    - `DocumentPreviewResponse`：指定文件的全文 display_text 與 child chunk map。
     """
 
     return get_document_preview(session=session, principal=principal, document_id=document_id)
@@ -147,6 +147,7 @@ def read_document_preview_route(
 @router.post("/documents/{document_id}/reindex", response_model=ReindexDocumentResponse)
 def reindex_document_route(
     document_id: str,
+    force_reparse: bool = Query(default=False),
     principal: CurrentPrincipal = Depends(get_current_principal),
     settings: AppSettings = Depends(get_app_settings),
     storage: ObjectStorage = Depends(get_object_storage),
@@ -157,6 +158,7 @@ def reindex_document_route(
 
     參數：
     - `document_id`：要重建索引的文件識別碼。
+    - `force_reparse`：若為真，要求 worker 忽略既有 parse artifacts 並重跑 parser。
     - `principal`：目前已驗證使用者。
     - `settings`：目前應用程式設定。
     - `storage`：原始檔物件儲存介面。
@@ -174,6 +176,7 @@ def reindex_document_route(
         storage=storage,
         celery_client=celery_client,
         document_id=document_id,
+        force_reparse=force_reparse,
     )
     return ReindexDocumentResponse(document=document, job=job)
 

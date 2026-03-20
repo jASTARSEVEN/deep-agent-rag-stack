@@ -1,20 +1,12 @@
 """Table-aware retrieval assembler 測試。"""
 
-from pathlib import Path
-from tempfile import mkdtemp
 from uuid import uuid4, UUID
-
-from fastapi.testclient import TestClient
-from sqlalchemy import select
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.base import Base
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
-from app.main import create_app
 from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace, retrieve_area_candidates
 from app.services.retrieval_assembler import (
-    AssembledRetrievalResult,
     _load_child_chunks,
     _load_parent_chunks,
     assemble_retrieval_result,
@@ -452,6 +444,100 @@ def test_assemble_retrieval_result_expands_table_hit_with_adjacent_text(db_sessi
     assert "續保與給付限制說明。" in assembled.assembled_contexts[0].assembled_text
 
 
+def test_assemble_retrieval_result_prioritizes_complete_table_before_partial_adjacent_text(
+    db_session, app_settings
+) -> None:
+    """table hit 在 budget 不足時，應先保完整表格，再盡量補相鄰文字。"""
+
+    settings = app_settings.model_copy(update={"assembler_max_chars_per_context": 85})
+    area = Area(id="area-assemble-table-budget", name="Assemble Table Budget")
+    document = Document(
+        id="document-assemble-table-budget",
+        area_id=area.id,
+        file_name="table-budget.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-assemble-table-budget/table-budget.md",
+        status=DocumentStatus.ready,
+    )
+    intro_content = "I" * 20
+    table_content = "| item | value |\n| --- | --- |\n| alpha | 1 |\n| beta | 2 |"
+    outro_content = "O" * 20
+    parent_content = f"{intro_content}\n\n{table_content}\n\n{outro_content}"
+    parent = DocumentChunk(
+        id="parent-assemble-table-budget",
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Budgeted Coverage",
+        content=parent_content,
+        content_preview=intro_content,
+        char_count=len(parent_content),
+        start_offset=0,
+        end_offset=len(parent_content),
+    )
+    intro = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-budget-intro",
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Budgeted Coverage",
+        content=intro_content,
+        start_offset=0,
+        end_offset=len(intro_content),
+    )
+    table = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-budget-table",
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Budgeted Coverage",
+        content=table_content,
+        start_offset=len(intro_content) + 2,
+        end_offset=len(intro_content) + 2 + len(table_content),
+    )
+    outro = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-assemble-table-budget-outro",
+        position=3,
+        section_index=0,
+        child_index=2,
+        heading="Budgeted Coverage",
+        content=outro_content,
+        start_offset=len(intro_content) + 2 + len(table_content) + 2,
+        end_offset=len(parent_content),
+    )
+    db_session.add_all([area, document, parent, intro, table, outro])
+    db_session.commit()
+
+    assembled = assemble_retrieval_result(
+        session=db_session,
+        settings=settings,
+        retrieval_result=RetrievalResult(
+            candidates=[_build_candidate(table, source="hybrid")],
+            trace=_build_trace(query="alpha"),
+        ),
+    )
+
+    assert len(assembled.assembled_contexts) == 1
+    assert assembled.assembled_contexts[0].chunk_ids == [intro.id, table.id]
+    assert assembled.assembled_contexts[0].assembled_text == f"{intro_content}\n\n{table_content}"
+    assert outro_content not in assembled.assembled_contexts[0].assembled_text
+    assert assembled.trace.assembler.contexts[0].truncated is False
+
+
 def test_assemble_retrieval_result_keeps_text_and_table_separate(db_session, app_settings) -> None:
     """text 與 table 命中不可混成同一 context。"""
 
@@ -815,42 +901,6 @@ def test_assemble_retrieval_result_works_after_rerank_fallback(db_session, app_s
     assert assembled.assembled_contexts[0].chunk_ids == [child.id]
 
 
-def test_upload_to_assembly_pipeline_supports_markdown_and_html() -> None:
-    """upload -> ingest -> retrieval -> assembly 應可處理 Markdown 與 HTML。"""
-
-    markdown_settings = _build_pipeline_settings(
-        chunk_table_preserve_max_chars=40,
-        chunk_table_max_rows_per_child=1,
-    )
-    markdown_assembled = _run_upload_to_assembly_flow(
-        settings=markdown_settings,
-        file_name="pipeline.md",
-        content_type="text/markdown",
-        payload=(
-            b"# Intro\nalpha paragraph\n\n## Table\n| item | value |\n| --- | --- |\n"
-            b"| alpha | 1 |\n| beta | 2 |\n"
-        ),
-        query="alpha",
-    )
-    assert markdown_assembled.assembled_contexts
-    assert any(context.structure_kind == ChunkStructureKind.table for context in markdown_assembled.assembled_contexts)
-    assert any(citation.structure_kind == ChunkStructureKind.table for citation in markdown_assembled.citations)
-
-    html_settings = _build_pipeline_settings()
-    html_assembled = _run_upload_to_assembly_flow(
-        settings=html_settings,
-        file_name="pipeline.html",
-        content_type="text/html",
-        payload=(
-            b"<h1>Intro</h1><p>alpha paragraph</p><h2>Table</h2>"
-            b"<table><tr><th>item</th><th>value</th></tr><tr><td>alpha</td><td>1</td></tr></table>"
-        ),
-        query="alpha",
-    )
-    assert html_assembled.assembled_contexts
-    assert any(context.structure_kind == ChunkStructureKind.table for context in html_assembled.assembled_contexts)
-
-
 def _build_candidate(
     chunk: DocumentChunk,
     *,
@@ -962,129 +1012,3 @@ def _build_ready_child(
         end_offset=end_offset,
         embedding=[0.1] * app_settings.embedding_dimensions,
     )
-
-
-def _build_pipeline_settings(**updates: object) -> AppSettings:
-    """建立 upload -> assembly 測試使用的設定。
-
-    參數：
-    - `updates`：要覆蓋的設定欄位。
-
-    回傳：
-    - `AppSettings`：供近似 E2E 使用的測試設定。
-    """
-
-    temp_root = Path(mkdtemp(prefix="deep-agent-rag-stack-api-"))
-    base_settings = AppSettings(
-        API_SERVICE_NAME="deep-agent-api-test",
-        API_VERSION="0.1.0-test",
-        API_HOST="127.0.0.1",
-        API_PORT=18000,
-        API_CORS_ORIGINS="http://localhost:13000",
-        DATABASE_URL=f"sqlite+pysqlite:///{temp_root / 'test.db'}",
-        DATABASE_ECHO=False,
-        REDIS_URL="redis://redis:6379/0",
-        STORAGE_BACKEND="filesystem",
-        MINIO_ENDPOINT="http://minio:9000",
-        MINIO_ACCESS_KEY="minio",
-        MINIO_SECRET_KEY="minio123",
-        MINIO_BUCKET="documents",
-        LOCAL_STORAGE_PATH=temp_root / "storage",
-        MAX_UPLOAD_SIZE_BYTES=2048,
-        CHUNK_MIN_PARENT_SECTION_LENGTH=10,
-        CHUNK_TARGET_CHILD_SIZE=40,
-        CHUNK_CHILD_OVERLAP=0,
-        CHUNK_CONTENT_PREVIEW_LENGTH=120,
-        CHUNK_TXT_PARENT_GROUP_SIZE=4,
-        CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
-        CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
-        CELERY_BROKER_URL="redis://redis:6379/0",
-        CELERY_RESULT_BACKEND="redis://redis:6379/1",
-        INGEST_INLINE_MODE=True,
-        EMBEDDING_PROVIDER="deterministic",
-        EMBEDDING_MODEL="text-embedding-3-small",
-        EMBEDDING_DIMENSIONS=1536,
-        RETRIEVAL_VECTOR_TOP_K=8,
-        RETRIEVAL_FTS_TOP_K=8,
-        RETRIEVAL_MAX_CANDIDATES=12,
-        RETRIEVAL_RRF_K=60,
-        RETRIEVAL_HNSW_EF_SEARCH=100,
-        RERANK_PROVIDER="deterministic",
-        RERANK_MODEL="rerank-v3.5",
-        RERANK_TOP_N=6,
-        RERANK_MAX_CHARS_PER_DOC=2000,
-        ASSEMBLER_MAX_CONTEXTS=6,
-        ASSEMBLER_MAX_CHARS_PER_CONTEXT=2500,
-        ASSEMBLER_MAX_CHILDREN_PER_PARENT=3,
-        KEYCLOAK_URL="http://keycloak:8080",
-        KEYCLOAK_ISSUER="http://localhost:18080/realms/deep-agent-dev",
-        KEYCLOAK_JWKS_URL="http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs",
-        KEYCLOAK_GROUPS_CLAIM="groups",
-        AUTH_TEST_MODE=True,
-    )
-    return base_settings.model_copy(update=updates)
-
-
-def _run_upload_to_assembly_flow(
-    *,
-    settings: AppSettings,
-    file_name: str,
-    content_type: str,
-    payload: bytes,
-    query: str,
-) -> AssembledRetrievalResult:
-    """執行 upload -> retrieval -> assembly 的近似 E2E 流程。
-
-    參數：
-    - `settings`：此次測試使用的 API 設定。
-    - `file_name`：上傳檔名。
-    - `content_type`：上傳 MIME 類型。
-    - `payload`：上傳檔案內容。
-    - `query`：檢索查詢文字。
-
-    回傳：
-    - `AssembledRetrievalResult`：組裝後的 contexts 與 citations。
-    """
-
-    application = create_app(settings)
-    Base.metadata.create_all(bind=application.state.engine)
-    try:
-        session = application.state.session_factory()
-        area = Area(id=_uuid(), name="Pipeline")
-        area_id = area.id
-        session.add(area)
-        session.add(AreaUserRole(area_id=area_id, user_sub="user-maintainer", role=Role.maintainer))
-        session.add(AreaUserRole(area_id=area_id, user_sub="user-reader", role=Role.reader))
-        session.commit()
-        session.close()
-
-        with TestClient(application) as client:
-            response = client.post(
-                f"/areas/{area_id}/documents",
-                headers={"Authorization": "Bearer test::user-maintainer::/group/maintainer"},
-                files={"file": (file_name, payload, content_type)},
-            )
-            assert response.status_code == 201
-            document_id = response.json()["document"]["id"]
-
-        session = application.state.session_factory()
-        try:
-            stored_document = session.get(Document, document_id)
-            assert stored_document is not None
-            assert stored_document.status == DocumentStatus.ready
-            stored_chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all()
-            assert any(chunk.chunk_type == ChunkType.child for chunk in stored_chunks)
-
-            retrieval_result = retrieve_area_candidates(
-                session=session,
-                principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
-                settings=settings,
-                area_id=area_id,
-                query=query,
-            )
-            return assemble_retrieval_result(session=session, settings=settings, retrieval_result=retrieval_result)
-        finally:
-            session.close()
-    finally:
-        Base.metadata.drop_all(bind=application.state.engine)
-        application.state.engine.dispose()

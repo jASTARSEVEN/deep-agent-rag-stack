@@ -83,6 +83,7 @@
 
 狀態：
 - `已完成（MVP 垂直切片，含 XLSX worksheet table-aware parsing）`
+- 補充：PDF provider 已擴充為 `marker | local | llamaparse`，其中 `marker` 為目前預設路徑
 
 ## Phase 3.5 — Document Lifecycle Hardening & Chunk Tree Foundation
 
@@ -140,7 +141,7 @@
 - SQL authorization gate
 - PGroonga 繁體中文檢索整合
 - `document_chunks.embedding` / `content` schema
-- worker / inline ingest indexing
+- worker ingest indexing
 - vector recall
 - FTS recall (PGroonga)
 - RRF merge
