@@ -18,6 +18,8 @@ EMPTY_STRING_ENV_KEYS = {
     "CELERY_WORKER_CONCURRENCY",
     "CELERY_WORKER_PREFETCH_MULTIPLIER",
     "CELERY_WORKER_MAX_TASKS_PER_CHILD",
+    "CELERY_TASK_ACKS_LATE",
+    "CELERY_TASK_REJECT_ON_WORKER_LOST",
     "CHUNK_MIN_PARENT_SECTION_LENGTH",
     "CHUNK_TARGET_CHILD_SIZE",
     "CHUNK_CHILD_OVERLAP",
@@ -73,6 +75,8 @@ class WorkerSettings(BaseSettings):
     worker_concurrency: Annotated[int, Field(alias="CELERY_WORKER_CONCURRENCY")] = 1
     worker_prefetch_multiplier: Annotated[int, Field(alias="CELERY_WORKER_PREFETCH_MULTIPLIER")] = 1
     worker_max_tasks_per_child: Annotated[int, Field(alias="CELERY_WORKER_MAX_TASKS_PER_CHILD")] = 1
+    task_acks_late: Annotated[bool, Field(alias="CELERY_TASK_ACKS_LATE")] = True
+    task_reject_on_worker_lost: Annotated[bool, Field(alias="CELERY_TASK_REJECT_ON_WORKER_LOST")] = True
     storage_backend: Annotated[str, Field(alias="STORAGE_BACKEND")] = "minio"
     minio_endpoint: Annotated[str, Field(alias="MINIO_ENDPOINT")] = "http://minio:9000"
     minio_access_key: Annotated[str, Field(alias="MINIO_ACCESS_KEY")] = "minio"

@@ -29,6 +29,8 @@
 - `CELERY_WORKER_CONCURRENCY`
 - `CELERY_WORKER_PREFETCH_MULTIPLIER`
 - `CELERY_WORKER_MAX_TASKS_PER_CHILD`
+- `CELERY_TASK_ACKS_LATE`
+- `CELERY_TASK_REJECT_ON_WORKER_LOST`
 - `STORAGE_BACKEND`
 - `MINIO_ENDPOINT`
 - `MINIO_ACCESS_KEY`
@@ -80,7 +82,8 @@
 ## 疑難排解
 
 - 若 worker 無法連到 Redis，請確認 `CELERY_BROKER_URL`。
-- 若 `marker` PDF ingest 在 Celery log 中出現 `Worker exited prematurely: signal 9 (SIGKILL)`，通常代表 prefork 子程序在重型 PDF runtime 期間被系統 OOM killer 終止；compose 預設已改為 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1` 與 `CELERY_WORKER_MAX_TASKS_PER_CHILD=1` 以降低此風險。
+- 若 `marker` PDF ingest 在 Celery log 中出現 `Worker exited prematurely: signal 9 (SIGKILL)`，通常代表 prefork 子程序在重型 PDF runtime 期間被系統 OOM killer 終止；compose 預設已改為 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1`、`CELERY_WORKER_MAX_TASKS_PER_CHILD=1`，並搭配 `CELERY_TASK_ACKS_LATE=true`，讓 worker 同時間只會保有一個尚未完成的案件。
+- `CELERY_TASK_REJECT_ON_WORKER_LOST=true` 會在 worker 行程異常中止時把尚未完成的案件退回 queue，避免案件在「尚未做完但已被視為接收」的狀態下遺失。
 - 若 ingest task 無法更新資料庫，請確認 `DATABASE_URL` 指向與 API 相同的資料庫。
 - 若正式環境無法讀取文件內容，請確認 `MINIO_*` 與 `MINIO_BUCKET` 一致。
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。

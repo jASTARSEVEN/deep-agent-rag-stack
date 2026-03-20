@@ -66,5 +66,5 @@
 - 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem`，並保持 `api` 與 `worker` 服務都在執行。
 - 若要讓 compose ingest 切換到 LlamaParse，除了在 `.env` 設定 `PDF_PARSER_PROVIDER=llamaparse` 外，也必須提供 `LLAMAPARSE_API_KEY`；修改後需重新啟動 `worker` 容器。
 - compose 會把 `MARKER_MODEL_CACHE_DIR` 預設掛到 `marker-model-cache` named volume，因此 Marker / Surya 模型下載結果可跨 worker 重啟與重建保留；若自訂 cache 路徑，應同步確認 volume target 仍落在同一路徑。
-- compose 的 worker 現在預設使用 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1` 與 `CELERY_WORKER_MAX_TASKS_PER_CHILD=1`，降低 `marker` PDF ingest 因 prefork 子程序記憶體尖峰而被 `SIGKILL` 的風險；若要改回 prefork，應先確認容器記憶體餘裕。
+- compose 的 worker 現在預設使用 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1`、`CELERY_WORKER_MAX_TASKS_PER_CHILD=1`、`CELERY_TASK_ACKS_LATE=true` 與 `CELERY_TASK_REJECT_ON_WORKER_LOST=true`，讓 worker 同時間只保有一個尚未完成的案件，並在 worker 異常中止時把未完成案件退回 queue；若要改回 prefork，應先確認容器記憶體餘裕。
 - 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。

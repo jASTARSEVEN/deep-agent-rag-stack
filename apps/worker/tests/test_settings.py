@@ -12,6 +12,8 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         CELERY_WORKER_CONCURRENCY="",
         CELERY_WORKER_PREFETCH_MULTIPLIER="",
         CELERY_WORKER_MAX_TASKS_PER_CHILD="",
+        CELERY_TASK_ACKS_LATE="",
+        CELERY_TASK_REJECT_ON_WORKER_LOST="",
         CHUNK_MIN_PARENT_SECTION_LENGTH="",
         CHUNK_TARGET_CHILD_SIZE="",
         CHUNK_CHILD_OVERLAP="",
@@ -36,6 +38,8 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.worker_concurrency == 1
     assert settings.worker_prefetch_multiplier == 1
     assert settings.worker_max_tasks_per_child == 1
+    assert settings.task_acks_late is True
+    assert settings.task_reject_on_worker_lost is True
     assert settings.chunk_min_parent_section_length == 300
     assert settings.chunk_target_child_size == 800
     assert settings.chunk_child_overlap == 120

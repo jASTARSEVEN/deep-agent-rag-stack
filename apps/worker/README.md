@@ -29,6 +29,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CELERY_WORKER_CONCURRENCY`
 - `CELERY_WORKER_PREFETCH_MULTIPLIER`
 - `CELERY_WORKER_MAX_TASKS_PER_CHILD`
+- `CELERY_TASK_ACKS_LATE`
+- `CELERY_TASK_REJECT_ON_WORKER_LOST`
 - `STORAGE_BACKEND`
 - `MINIO_ENDPOINT`
 - `MINIO_ACCESS_KEY`
@@ -80,7 +82,8 @@ This module contains the project's Celery worker. It currently provides the mini
 ## Troubleshooting
 
 - If the worker cannot connect to Redis, verify `CELERY_BROKER_URL`.
-- If `marker` PDF ingest fails with `Worker exited prematurely: signal 9 (SIGKILL)` in Celery logs, the usual cause is the OS killing a prefork child during a heavy PDF runtime. Compose now defaults to `CELERY_WORKER_POOL=solo`, `CELERY_WORKER_CONCURRENCY=1`, `CELERY_WORKER_PREFETCH_MULTIPLIER=1`, and `CELERY_WORKER_MAX_TASKS_PER_CHILD=1` to reduce that risk.
+- If `marker` PDF ingest fails with `Worker exited prematurely: signal 9 (SIGKILL)` in Celery logs, the usual cause is the OS killing a prefork child during a heavy PDF runtime. Compose now defaults to `CELERY_WORKER_POOL=solo`, `CELERY_WORKER_CONCURRENCY=1`, `CELERY_WORKER_PREFETCH_MULTIPLIER=1`, `CELERY_WORKER_MAX_TASKS_PER_CHILD=1`, and `CELERY_TASK_ACKS_LATE=true` so the worker keeps only one in-flight job at a time.
+- `CELERY_TASK_REJECT_ON_WORKER_LOST=true` pushes an unfinished job back to the queue if the worker process dies unexpectedly, instead of letting the job disappear after it was already reserved.
 - If ingest tasks cannot update the database, make sure `DATABASE_URL` points to the same database used by the API.
 - If the runtime cannot read document content, confirm that `MINIO_*` and `MINIO_BUCKET` match the deployment settings.
 - If no tasks are registered, make sure the `worker.tasks` package is loaded by Celery.

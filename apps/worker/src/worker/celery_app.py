@@ -53,6 +53,8 @@ def create_celery_app():
         accept_content=["json"],
         result_serializer="json",
         timezone="UTC",
+        task_acks_late=settings.task_acks_late,
+        task_reject_on_worker_lost=settings.task_reject_on_worker_lost,
         worker_pool=settings.worker_pool,
         worker_concurrency=settings.worker_concurrency,
         worker_prefetch_multiplier=settings.worker_prefetch_multiplier,
