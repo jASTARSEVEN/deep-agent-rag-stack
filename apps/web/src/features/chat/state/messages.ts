@@ -2,6 +2,7 @@
 
 import type { ChatMessageViewModel, ChatToolCallState } from "../../../lib/types";
 import type { LangGraphChatStreamUpdate } from "../transport/langgraph";
+import { resolveAnswerBlocks } from "./answerBlocks";
 
 /** 可覆寫的助理訊息預設值。 */
 interface AssistantMessageOverrides {
@@ -112,14 +113,25 @@ export function applyStreamUpdate(
     }));
   }
   if (streamUpdate.completed) {
-    nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
-      ...current,
-      content: streamUpdate.answer || current.content,
-      answerBlocks: Array.isArray(streamUpdate.answerBlocks) ? streamUpdate.answerBlocks : current.answerBlocks,
-      phaseState: null,
-      isStreaming: false,
-      usedKnowledgeBase: streamUpdate.usedKnowledgeBase ?? current.usedKnowledgeBase,
-    }));
+    nextMessages = updateLastAssistantMessage(nextMessages, (current) => {
+      const nextCitations = Array.isArray(streamUpdate.references) ? streamUpdate.references : current.citations;
+      const nextAnswer = streamUpdate.answer || current.content;
+      const resolvedAnswer = resolveAnswerBlocks(
+        nextAnswer,
+        Array.isArray(streamUpdate.answerBlocks) ? streamUpdate.answerBlocks : current.answerBlocks,
+        nextCitations,
+      );
+
+      return {
+        ...current,
+        content: resolvedAnswer.cleanAnswer,
+        answerBlocks: resolvedAnswer.answerBlocks,
+        citations: nextCitations,
+        phaseState: null,
+        isStreaming: false,
+        usedKnowledgeBase: streamUpdate.usedKnowledgeBase ?? current.usedKnowledgeBase,
+      };
+    });
   }
 
   return nextMessages;

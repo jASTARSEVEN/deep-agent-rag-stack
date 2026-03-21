@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { MarkdownContent } from "../../../components/MarkdownContent";
 import type { ChatContextReference, DocumentPreviewPayload } from "../../../lib/types";
 
 
@@ -69,7 +70,7 @@ export function DocumentPreviewPane({
 }: DocumentPreviewPaneProps): JSX.Element | null {
   const [internalHoverChunkId, setInternalHoverChunkId] = useState<string | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const chunkRefs = useRef<Record<string, HTMLSpanElement | null>>({});
+  const chunkRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const autoScrollTargetChunkIdRef = useRef<string | null>(null);
   const programmaticScrollUntilRef = useRef(0);
   const scrollFrameRef = useRef<number | null>(null);
@@ -285,35 +286,39 @@ export function DocumentPreviewPane({
               <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">{activeLegendLabel}</span>
               <span className="rounded-full bg-stone-100 px-2 py-1 text-stone-600">{hoverLegendLabel}</span>
             </div>
-            <div className="whitespace-pre-wrap text-sm leading-7 text-stone-700">
+            <div className="space-y-3 text-sm leading-7 text-stone-700">
               {previewSegments.map((segment) => {
                 if (!segment.chunkId) {
-                  return <span key={segment.key}>{segment.text}</span>;
+                  return (
+                    <div key={segment.key} className="rounded-xl px-1">
+                      <MarkdownContent content={segment.text} className="text-sm leading-7 text-stone-700" />
+                    </div>
+                  );
                 }
 
                 const chunkId = segment.chunkId;
                 const isActiveChunk = activeChunkIds.has(chunkId);
                 const isHoverChunk = hoverChunkId === chunkId;
                 const highlightClass = isActiveChunk
-                  ? "bg-amber-200/90 ring-1 ring-amber-400"
+                  ? "border-amber-300 bg-amber-100/90 ring-1 ring-amber-300"
                   : isHoverChunk
-                    ? "bg-sky-100/80"
-                    : "";
+                    ? "border-sky-200 bg-sky-50/90"
+                    : "border-transparent";
 
                 return (
-                  <span
+                  <div
                     key={segment.key}
                     ref={(element) => {
                       chunkRefs.current[chunkId] = element;
                     }}
                     data-testid={`preview-chunk-${chunkId}`}
-                    className={`rounded px-0.5 transition-colors ${highlightClass}`}
+                    className={`cursor-pointer rounded-2xl border px-3 py-2 transition-colors ${highlightClass}`}
                     onClick={() => onChunkClick?.(chunkId)}
                     onMouseEnter={() => updateHoverChunk(chunkId)}
-                    onMouseLeave={() => updateHoverChunk(hoverChunkId === chunkId ? null : hoverChunkId)}
+                    onMouseLeave={() => updateHoverChunk(null)}
                   >
-                    {segment.text}
-                  </span>
+                    <MarkdownContent content={segment.text} className="text-sm leading-7 text-stone-700" />
+                  </div>
                 );
               })}
             </div>

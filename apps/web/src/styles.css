@@ -7,3 +7,101 @@
 body {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
+
+@layer components {
+  .markdown-content {
+    @apply break-words text-sm leading-7 text-inherit;
+  }
+
+  .markdown-content > :first-child {
+    @apply mt-0;
+  }
+
+  .markdown-content > :last-child {
+    @apply mb-0;
+  }
+
+  .markdown-content p,
+  .markdown-content ul,
+  .markdown-content ol,
+  .markdown-content blockquote,
+  .markdown-content pre,
+  .markdown-content table {
+    @apply my-3;
+  }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4 {
+    @apply mt-5 mb-3 font-semibold tracking-tight text-stone-900;
+  }
+
+  .markdown-content h1 {
+    @apply text-2xl;
+  }
+
+  .markdown-content h2 {
+    @apply text-xl;
+  }
+
+  .markdown-content h3 {
+    @apply text-lg;
+  }
+
+  .markdown-content ul {
+    @apply list-disc pl-6;
+  }
+
+  .markdown-content ol {
+    @apply list-decimal pl-6;
+  }
+
+  .markdown-content li {
+    @apply my-1;
+  }
+
+  .markdown-content a {
+    @apply font-medium text-amber-700 underline decoration-amber-300 underline-offset-4;
+  }
+
+  .markdown-content strong {
+    @apply font-semibold text-stone-900;
+  }
+
+  .markdown-content code {
+    @apply rounded-md bg-stone-100 px-1.5 py-0.5 font-mono text-[0.9em] text-rose-700;
+  }
+
+  .markdown-content pre {
+    @apply overflow-x-auto rounded-2xl border border-stone-200 bg-stone-950 px-4 py-3 text-stone-100 shadow-inner;
+  }
+
+  .markdown-content pre code {
+    @apply bg-transparent p-0 text-inherit;
+  }
+
+  .markdown-content blockquote {
+    @apply border-l-4 border-amber-300 bg-amber-50/70 px-4 py-2 text-stone-700;
+  }
+
+  .markdown-content hr {
+    @apply my-5 border-stone-200;
+  }
+
+  .markdown-content table {
+    @apply w-full border-collapse overflow-hidden rounded-2xl border border-stone-200;
+  }
+
+  .markdown-content thead {
+    @apply bg-stone-100;
+  }
+
+  .markdown-content th {
+    @apply border border-stone-200 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-stone-700;
+  }
+
+  .markdown-content td {
+    @apply border border-stone-200 px-3 py-2 align-top text-sm text-stone-700;
+  }
+}

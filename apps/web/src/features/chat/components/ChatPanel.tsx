@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
+import { MarkdownContent } from "../../../components/MarkdownContent";
 import { fetchDocumentPreview, type AccessTokenGetter } from "../../../lib/api";
 import type { ChatContextReference, ChatMessageViewModel, DocumentPreviewPayload } from "../../../lib/types";
 import { applyStreamUpdate, createAssistantMessage, createUserMessage, updateLastAssistantMessage } from "../state/messages";
@@ -239,7 +240,7 @@ export function ChatPanel({
                       }}
                     />
                   ) : (
-                    <p className="whitespace-pre-wrap text-sm leading-7">{message.content}</p>
+                    <MarkdownContent content={message.content} className="text-sm leading-7 text-inherit" />
                   )}
 
                   {message.role === "assistant" && message.phaseState ? (

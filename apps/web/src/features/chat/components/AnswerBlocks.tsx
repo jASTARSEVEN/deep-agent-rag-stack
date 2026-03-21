@@ -1,5 +1,6 @@
 /** assistant 回答區塊與 citation chips 顯示元件。 */
 
+import { MarkdownContent } from "../../../components/MarkdownContent";
 import type { ChatAnswerBlock } from "../../../lib/types";
 
 
@@ -27,19 +28,25 @@ export function AnswerBlocks({
 }: AnswerBlocksProps): JSX.Element {
   if (isStreaming || answerBlocks.length === 0) {
     return (
-      <p className="whitespace-pre-wrap text-sm leading-7">
-        {fallbackContent || (isStreaming ? "Generating response..." : "No content")}
-      </p>
+      <div className="rounded-2xl bg-white/70 px-4 py-3">
+        <MarkdownContent
+          content={fallbackContent || (isStreaming ? "Generating response..." : "No content")}
+          className="text-sm leading-7 text-inherit"
+        />
+      </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {answerBlocks.map((block, index) => (
-        <p key={`${index}-${block.text.slice(0, 24)}`} className="whitespace-pre-wrap text-sm leading-7">
-          <span>{block.text}</span>
+        <div
+          key={`${index}-${block.text.slice(0, 24)}`}
+          className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-[0_10px_24px_rgba(120,113,108,0.08)]"
+        >
+          <MarkdownContent content={block.text} className="text-sm leading-7 text-stone-800" />
           {block.display_citations.length > 0 ? (
-            <span className="ml-2 inline-flex flex-wrap items-center gap-2 align-middle">
+            <div className="mt-4 inline-flex flex-wrap items-center gap-2 align-middle">
               {block.display_citations.map((citation) => {
                 const isSelected = selectedCitationContextIndex === citation.context_index;
                 const label = citation.context_label || `C${citation.context_index + 1}`;
@@ -60,9 +67,9 @@ export function AnswerBlocks({
                   </button>
                 );
               })}
-            </span>
+            </div>
           ) : null}
-        </p>
+        </div>
       ))}
     </div>
   );

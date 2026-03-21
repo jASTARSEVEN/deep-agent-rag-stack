@@ -10,6 +10,7 @@ import type {
   ChatPhaseState,
   ChatToolCallState,
 } from "../../../lib/types";
+import { resolveAnswerBlocks } from "../state/answerBlocks";
 
 
 /** 前端 session storage 使用的 area-thread mapping key。 */
@@ -165,6 +166,23 @@ function normalizeAnswerBlocks(value: unknown): ChatAnswerBlock[] {
     const block = normalizeAnswerBlock(item);
     return block ? [block] : [];
   });
+}
+
+
+/**
+ * 將文字、引用與原始 answer blocks 合併為最終可顯示結果。
+ *
+ * @param answer 原始回答文字。
+ * @param rawAnswerBlocks 未正規化前的 answer blocks payload。
+ * @param citations 當前回答可用的 citation metadata。
+ * @returns 清理後文字與最終 answer blocks。
+ */
+function resolveNormalizedAnswer(
+  answer: string,
+  rawAnswerBlocks: unknown,
+  citations: ChatContextReference[],
+): { cleanAnswer: string; answerBlocks: ChatAnswerBlock[] } {
+  return resolveAnswerBlocks(answer, normalizeAnswerBlocks(rawAnswerBlocks), citations);
 }
 
 
@@ -395,17 +413,21 @@ export function mapThreadStateMessagesToChatMessages(
       return [];
     }
     const artifact = role === "assistant" ? getAssistantArtifact(messageArtifacts, assistantTurnIndex) : undefined;
+    const normalizedCitations = role === "assistant" && Array.isArray(artifact?.citations)
+      ? artifact.citations.flatMap((citation) => {
+          const normalized = normalizeChatContextReference(citation);
+          return normalized ? [normalized] : [];
+        })
+      : [];
+    const resolvedAnswer = role === "assistant"
+      ? resolveNormalizedAnswer(content, artifact?.answer_blocks, normalizedCitations)
+      : { cleanAnswer: content, answerBlocks: [] };
     const hydratedMessage = {
       id: `thread-${index}-${role}`,
       role,
-      content,
-      answerBlocks: role === "assistant" ? normalizeAnswerBlocks(artifact?.answer_blocks) : [],
-      citations: role === "assistant" && Array.isArray(artifact?.citations)
-        ? artifact.citations.flatMap((citation) => {
-            const normalized = normalizeChatContextReference(citation);
-            return normalized ? [normalized] : [];
-          })
-        : [],
+      content: resolvedAnswer.cleanAnswer,
+      answerBlocks: resolvedAnswer.answerBlocks,
+      citations: normalizedCitations,
       usedKnowledgeBase: role === "assistant" && typeof artifact?.used_knowledge_base === "boolean"
         ? artifact.used_knowledge_base
         : null,
@@ -587,7 +609,7 @@ async function streamAreaThreadChatInternal(
               .filter((context): context is ChatContextReference => context !== null)
           : normalizedCitations;
         const answer = typeof part.data.answer === "string" ? part.data.answer : "";
-        const answerBlocks = normalizeAnswerBlocks(part.data.answer_blocks);
+        const resolvedAnswer = resolveNormalizedAnswer(answer, part.data.answer_blocks, references);
         const trace =
           part.data.trace && typeof part.data.trace === "object"
             ? (part.data.trace as Record<string, unknown>)
@@ -598,8 +620,8 @@ async function streamAreaThreadChatInternal(
         });
         pendingCompletion = {
           references,
-          answer,
-          answerBlocks,
+          answer: resolvedAnswer.cleanAnswer,
+          answerBlocks: resolvedAnswer.answerBlocks,
           trace,
           usedKnowledgeBase: references.length > 0 || Boolean((trace?.agent as { retrieval_invoked?: boolean } | undefined)?.retrieval_invoked),
         };
