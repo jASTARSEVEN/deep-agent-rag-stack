@@ -104,6 +104,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `POST /areas`
 - `GET /areas`
 - `GET /areas/{area_id}`
+- `PUT /areas/{area_id}`
+- `DELETE /areas/{area_id}`
 - `GET /areas/{area_id}/access`
 - `PUT /areas/{area_id}/access`
 - `GET /areas/{area_id}/access-check`
@@ -118,10 +120,11 @@ This module contains the project's FastAPI service. It currently provides:
 
 - If the API process does not start, verify that `langgraph-cli[inmem]` is installed and `langgraph.json` is present in `apps/api`.
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
-- `GET /areas/{area_id}` and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
+- `GET /areas/{area_id}`, `PUT /areas/{area_id}`, `DELETE /areas/{area_id}`, and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` for API tests; Playwright E2E should start both the API and the worker.
 - Upload and reindex routes only create `documents=status=uploaded` and `ingest_jobs=status=queued`; parsing, chunking, indexing, and final status transitions are worker-owned.
 - Reindex and delete still clear the document-scoped `artifacts/` prefix before the worker writes new parse artifacts.
+- Area delete is a hard delete: the API first removes each document's source object and parse artifacts, then deletes the area and cascaded database rows.
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.

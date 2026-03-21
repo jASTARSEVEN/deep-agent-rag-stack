@@ -1005,6 +1005,36 @@ def test_process_document_ingest_skips_non_queued_job(monkeypatch, tmp_path: Pat
         assert refreshed_job.status == IngestJobStatus.processing
 
 
+def test_process_document_ingest_fails_safely_when_document_was_deleted(monkeypatch, tmp_path: Path) -> None:
+    """job 指向已刪文件時應安全失敗，且不得復活任何資料。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    _, job = seed_job(session_factory, file_name="notes.md", payload=b"# Title\ncontent")
+
+    with session_factory() as session:
+        document = session.get(Document, "document-1")
+        assert document is not None
+        session.delete(document)
+        session.commit()
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, "document-1")
+        refreshed_job = session.get(IngestJob, job.id)
+        assert result == "document-missing"
+        assert refreshed_document is None
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.failed
+        assert refreshed_job.stage == "failed"
+        assert refreshed_job.error_message == "找不到對應的 document。"
+
+
 def test_reprocessing_replaces_existing_chunks(monkeypatch, tmp_path: Path) -> None:
     """同一文件再處理時應替換舊 chunks，而不是殘留舊資料。"""
 

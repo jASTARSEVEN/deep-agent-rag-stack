@@ -33,6 +33,7 @@
 - `Phase 5.1` Chat MVP on LangGraph Server 已完成
 - `Phase 6` Supabase & PGroonga Migration 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
+- 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
@@ -92,9 +93,12 @@
 
 ### Phase 2 — 已完成的 MVP 垂直切片
 - 已實作 `POST /areas`、`GET /areas`、`GET /areas/{area_id}` 的最小 create/list/detail 流程
+- 已實作 `PUT /areas/{area_id}` 與 `DELETE /areas/{area_id}`，補齊 admin-only area rename / description update / hard delete 管理能力
 - 已實作 `GET /areas/{area_id}/access` 與 `PUT /areas/{area_id}/access` 的 area access management API
 - 已落實 creator becomes admin 規則，建立 area 後自動寫入 direct `admin` 角色
+- 已落實 area hard delete 先清理文件原始檔與 parse artifacts，再刪除 area/documents/jobs/chunks，避免 storage 殘留
 - 已補 maintainer / admin 權限差異、未授權 `404` 與 access 更新的 API 測試
+- Web 已補 area 編輯 modal 與刪除操作，admin 可於 Dashboard header 直接管理 area 基本資料
 - Web 已由 landing page 擴為可手動貼 token 的 Area 管理操作頁
 - Web 已可執行 auth context 驗證、area list、create area、area detail 與 access update 最小流程
 - API 已補上 CORS middleware，支援本機 Web 直接呼叫 Phase 2 API
@@ -214,6 +218,7 @@
 - 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
 - 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
 - 穩定 LangGraph 啟動方式與既有 areas/documents 路由的相容性
+- 穩定 area update/delete 與既有 documents/access/chat 狀態切換的 UI 一致性
 
 ## 下一步
 
@@ -222,11 +227,11 @@
 2. 在 compose 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
 3. 驗證 LangSmith tracing 在真實 provider 下的 trace、tags 與 metadata 是否符合預期
 4. 補完 Deep Agents greeting / no-context / tool failure fallback 的更多整合測試
-5. Chat MVP 穩定後，再評估 area rename / delete 與完整 Areas CRUD 的管理補強範圍
+5. 擴充完整 Areas CRUD 的其餘管理能力與更多 area management 回歸驗證
 
 ## 尚未開始的功能
 
-- area rename / delete
+- 完整 Areas CRUD 的其餘補強項目
 
 ## Agent Rules
 

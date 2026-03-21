@@ -1,11 +1,14 @@
 """Knowledge Area CRUD 與 access management API 測試。"""
 
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from sqlalchemy import select
 
-from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
+from app.db.models import Area, AreaGroupRole, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
+from app.routes.areas import get_object_storage
+from app.services.storage import StorageError
 
 
 # 管理者測試 token。
@@ -101,6 +104,91 @@ def test_read_area_returns_detail_for_authorized_user(client, db_session) -> Non
     assert response.json()["description"] == "Area Description"
 
 
+def test_update_area_updates_name_and_description_for_admin(client, db_session) -> None:
+    """admin 應可更新 area 名稱與說明。"""
+
+    area = Area(id=_uuid(), name="Old Name", description="Old Description")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    response = client.put(
+        f"/areas/{area.id}",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "  New Name  ", "description": "  New Description  "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "New Name"
+    assert response.json()["description"] == "New Description"
+
+    db_session.refresh(area)
+    assert area.name == "New Name"
+    assert area.description == "New Description"
+
+
+def test_update_area_allows_blank_description_to_clear_value(client, db_session) -> None:
+    """空白 description 應被正規化為空值。"""
+
+    area = Area(id=_uuid(), name="Old Name", description="Legacy Description")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    response = client.put(
+        f"/areas/{area.id}",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Updated", "description": "   "},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+    db_session.refresh(area)
+    assert area.description is None
+
+
+def test_update_area_requires_admin_role(client, db_session) -> None:
+    """maintainer 不可更新 area。"""
+
+    area = Area(id=_uuid(), name="Protected Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.put(
+        f"/areas/{area.id}",
+        headers={"Authorization": MAINTAINER_TOKEN},
+        json={"name": "Updated", "description": "Updated"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_update_area_returns_same_404_for_unauthorized_and_missing_area(client, db_session) -> None:
+    """未授權與不存在的 area update 都應回相同 404。"""
+
+    area = Area(id=_uuid(), name="Secret Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    unauthorized_response = client.put(
+        f"/areas/{area.id}",
+        headers={"Authorization": OUTSIDER_TOKEN},
+        json={"name": "Updated", "description": "Updated"},
+    )
+    missing_response = client.put(
+        "/areas/missing-area",
+        headers={"Authorization": OUTSIDER_TOKEN},
+        json={"name": "Updated", "description": "Updated"},
+    )
+
+    assert unauthorized_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert unauthorized_response.json() == missing_response.json()
+
+
 def test_get_area_access_requires_admin_role(client, db_session) -> None:
     """maintainer 不可讀取 area access 管理內容。"""
 
@@ -178,6 +266,139 @@ def test_replace_area_access_requires_admin_role(client, db_session) -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_delete_area_requires_admin_role(client, db_session) -> None:
+    """maintainer 不可刪除 area。"""
+
+    area = Area(id=_uuid(), name="Protected Delete Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.commit()
+
+    response = client.delete(f"/areas/{area.id}", headers={"Authorization": MAINTAINER_TOKEN})
+
+    assert response.status_code == 403
+
+
+def test_delete_area_returns_same_404_for_unauthorized_and_missing_area(client, db_session) -> None:
+    """未授權與不存在的 area delete 都應回相同 404。"""
+
+    area = Area(id=_uuid(), name="Hidden Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    unauthorized_response = client.delete(f"/areas/{area.id}", headers={"Authorization": OUTSIDER_TOKEN})
+    missing_response = client.delete("/areas/missing-area", headers={"Authorization": OUTSIDER_TOKEN})
+
+    assert unauthorized_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert unauthorized_response.json() == missing_response.json()
+
+
+def test_delete_area_cascades_related_data_and_cleans_storage(client, db_session, app_settings) -> None:
+    """admin 刪除 area 時應同步清理 DB 與 storage 內容。"""
+
+    area = Area(id=_uuid(), name="Delete Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="notes.md",
+        content_type="text/markdown",
+        file_size=12,
+        storage_key=f"{area.id}/doc-1/notes.md",
+        status=DocumentStatus.ready,
+    )
+    job = IngestJob(document_id=document.id, status=IngestJobStatus.succeeded, stage="succeeded")
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin),
+            AreaGroupRole(area_id=area.id, group_path="/group/reader", role=Role.reader),
+            document,
+            job,
+            DocumentChunk(
+                document_id=document.id,
+                parent_chunk_id=None,
+                chunk_type=ChunkType.parent,
+                structure_kind=ChunkStructureKind.text,
+                position=0,
+                section_index=0,
+                child_index=None,
+                heading="Intro",
+                content="content",
+                content_preview="content",
+                char_count=7,
+                start_offset=0,
+                end_offset=7,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    storage_root = Path(app_settings.local_storage_path)
+    source_path = storage_root / document.storage_key
+    artifact_path = storage_root / area.id / "doc-1" / "artifacts" / "marker.cleaned.md"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("source", encoding="utf-8")
+    artifact_path.write_text("artifact", encoding="utf-8")
+    area_id = area.id
+    document_id = document.id
+    job_id = job.id
+
+    response = client.delete(f"/areas/{area_id}", headers={"Authorization": ADMIN_TOKEN})
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    assert db_session.get(Area, area_id) is None
+    assert db_session.get(Document, document_id) is None
+    assert db_session.get(IngestJob, job_id) is None
+    assert db_session.scalars(select(AreaUserRole).where(AreaUserRole.area_id == area_id)).all() == []
+    assert db_session.scalars(select(AreaGroupRole).where(AreaGroupRole.area_id == area_id)).all() == []
+    assert db_session.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id)).all() == []
+    assert not source_path.exists()
+    assert not artifact_path.exists()
+
+
+def test_delete_area_keeps_database_rows_when_storage_cleanup_fails(client, db_session) -> None:
+    """storage 清理失敗時，不得刪除 area 與其關聯資料。"""
+
+    area = Area(id=_uuid(), name="Delete Failure Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="notes.md",
+        content_type="text/markdown",
+        file_size=12,
+        storage_key=f"{area.id}/doc-1/notes.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin),
+            document,
+        ]
+    )
+    db_session.commit()
+
+    failing_storage = Mock()
+    failing_storage.delete_prefix.side_effect = StorageError("boom")
+    client.app.dependency_overrides[get_object_storage] = lambda: failing_storage
+    try:
+        response = client.delete(f"/areas/{area.id}", headers={"Authorization": ADMIN_TOKEN})
+    finally:
+        client.app.dependency_overrides.pop(get_object_storage, None)
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "刪除 area 時無法清理物件儲存內容。"
+    db_session.expire_all()
+    assert db_session.get(Area, area.id) is not None
+    assert db_session.get(Document, document.id) is not None
+    failing_storage.delete_prefix.assert_called_once()
+    failing_storage.delete_object.assert_not_called()
 
 
 @patch("app.services.areas.get_sub_by_username")

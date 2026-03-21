@@ -89,6 +89,6 @@ def dispatch_document_ingest(celery_client: Any, *, job_id: str, force_reparse: 
 
     celery_client.send_task(
         INGEST_DOCUMENT_TASK_NAME,
-        kwargs={"job_id": job_id, "force_reparse": force_reparse},
+        kwargs={"job_id": str(job_id), "force_reparse": force_reparse},
         queue=DEFAULT_TASK_QUEUE_NAME,
     )

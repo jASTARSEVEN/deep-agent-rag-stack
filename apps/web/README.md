@@ -55,7 +55,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - Browser route: `/areas`
 - Uses `VITE_API_BASE_URL + /health` to display API health
 - Uses `VITE_API_BASE_URL + /auth/context` to establish the signed-in principal
-- Uses `VITE_API_BASE_URL + /areas*` for area create/list/detail, access management, and file upload/list
+- Uses `VITE_API_BASE_URL + /areas*` for area create/list/detail/update/delete, access management, and file upload/list
 - Uses `VITE_API_BASE_URL + /documents/*` and `/ingest-jobs/*` to display document status, chunk summaries, reindex, delete, and job stage
 - `npm run test:e2e`: runs Playwright with the web dev server and the test-mode API for automated verification
 - `npm run test:smoke:keycloak`: smoke-tests the real Keycloak / callback / logout flow against the compose stack
@@ -69,6 +69,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - `VITE_AUTH_MODE=test` is only for Playwright and local testing. It must not be treated as evidence of a production login flow.
 - `npm run test:e2e` uses test auth mode and does not validate real Keycloak issuer, callback, logout, or SSO behavior. Use `npm run test:smoke:keycloak` for that coverage.
 - Files remain integrated into `/areas`; chat is mounted there through `src/features/chat`. Chat uses LangGraph SDK default thread/run endpoints, consumes Deep Agents task progress, and shows assembled contexts rather than child-level citations.
+- Admins can now edit area name/description and hard-delete areas from the dashboard header; deleting an area also removes its document assets server-side.
 - If `npm run test:e2e` fails because the browser is missing, run `npx playwright install chromium` first.
 - If `npm run test:smoke:keycloak` fails, make sure the compose stack is fully started and the `deep-agent-dev` realm still accepts `alice / alice123`.
 - If E2E startup fails, confirm `python`, `uvicorn`, and the `apps/api` dependencies are available in the local shell.

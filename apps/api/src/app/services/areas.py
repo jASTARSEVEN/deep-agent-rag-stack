@@ -1,13 +1,14 @@
 """Knowledge Area CRUD 與 access management service。"""
 
 from collections.abc import Iterable
+from pathlib import PurePosixPath
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
-from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
+from app.db.models import Area, AreaGroupRole, AreaUserRole, Document, DocumentChunk, IngestJob, Role
 from app.schemas.areas import (
     AccessGroupEntry,
     AccessUserEntry,
@@ -17,6 +18,11 @@ from app.schemas.areas import (
 )
 from app.services.access import ROLE_PRIORITY, require_area_access, require_area_admin
 from app.services.directory import get_sub_by_username, get_usernames_by_subs
+from app.services.storage import ObjectStorage
+
+
+# parse artifact 儲存目錄名稱。
+PARSE_ARTIFACTS_DIRECTORY = "artifacts"
 
 
 def create_area(
@@ -111,6 +117,83 @@ def get_area_access_management(
 
     require_area_admin(session=session, principal=principal, area_id=area_id)
     return _load_area_access_management(session=session, area_id=area_id)
+
+
+def update_area(
+    session: Session,
+    principal: CurrentPrincipal,
+    area_id: str,
+    *,
+    name: str,
+    description: str | None,
+) -> AreaSummaryResponse:
+    """更新指定 area 的名稱與說明。
+
+    參數：
+    - `session`：用來更新 area 的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `area_id`：要更新的 area 識別碼。
+    - `name`：更新後的 area 名稱。
+    - `description`：更新後的 area 說明。
+
+    回傳：
+    - `AreaSummaryResponse`：更新後的 area 摘要資料。
+    """
+
+    require_area_admin(session=session, principal=principal, area_id=area_id)
+    area = session.get(Area, area_id)
+    if area is None:
+        raise _build_area_not_found_error()
+
+    area.name = name.strip()
+    area.description = _normalize_optional_text(description)
+    session.commit()
+    session.refresh(area)
+    return _build_area_summary(area=area, effective_role=Role.admin)
+
+
+def delete_area(
+    session: Session,
+    principal: CurrentPrincipal,
+    storage: ObjectStorage,
+    *,
+    area_id: str,
+) -> None:
+    """刪除指定 area 與其關聯資料，並先清理 storage 內容。
+
+    參數：
+    - `session`：用來刪除 area 的資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `storage`：原始檔物件儲存介面。
+    - `area_id`：要刪除的 area 識別碼。
+
+    回傳：
+    - `None`：此函式只負責完成刪除流程。
+
+    前置條件：
+    - 僅 area `admin` 可刪除 area。
+    - 若 storage 清理失敗，必須中止刪除，避免資料庫與物件儲存狀態分裂。
+    """
+
+    require_area_admin(session=session, principal=principal, area_id=area_id)
+    area = session.get(Area, area_id)
+    if area is None:
+        raise _build_area_not_found_error()
+
+    documents = session.scalars(select(Document).where(Document.area_id == area_id)).all()
+    for document in documents:
+        storage.delete_prefix(prefix=_build_parse_artifact_prefix(storage_key=document.storage_key))
+        storage.delete_object(object_key=document.storage_key)
+
+    document_ids = [document.id for document in documents]
+    if document_ids:
+        session.execute(delete(DocumentChunk).where(DocumentChunk.document_id.in_(document_ids)))
+        session.execute(delete(IngestJob).where(IngestJob.document_id.in_(document_ids)))
+        session.execute(delete(Document).where(Document.id.in_(document_ids)))
+    session.execute(delete(AreaUserRole).where(AreaUserRole.area_id == area_id))
+    session.execute(delete(AreaGroupRole).where(AreaGroupRole.area_id == area_id))
+    session.delete(area)
+    session.commit()
 
 
 def replace_area_access_management(
@@ -211,6 +294,19 @@ def _normalize_optional_text(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped or None
+
+
+def _build_parse_artifact_prefix(*, storage_key: str) -> str:
+    """依文件 storage key 建立 parse artifact 的固定前綴路徑。
+
+    參數：
+    - `storage_key`：文件原始檔在物件儲存中的鍵值。
+
+    回傳：
+    - `str`：對應 parse artifact 的固定前綴路徑。
+    """
+
+    return str(PurePosixPath(storage_key).parent / PARSE_ARTIFACTS_DIRECTORY)
 
 
 def _deduplicate_user_entries(entries: list[AccessUserEntry]) -> Iterable[AccessUserEntry]:

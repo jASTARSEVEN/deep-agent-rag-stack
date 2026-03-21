@@ -86,6 +86,15 @@ export interface AreaSummary {
 }
 
 
+/** Area 更新請求 payload。 */
+export interface UpdateAreaPayload {
+  /** 更新後的 Area 顯示名稱。 */
+  name: string;
+  /** 更新後的 Area 補充說明。 */
+  description: string | null;
+}
+
+
 /** Area list API payload。 */
 export interface AreaListPayload {
   /** 目前使用者可存取的 area 清單。 */

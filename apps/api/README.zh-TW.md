@@ -104,6 +104,8 @@
 - `POST /areas`
 - `GET /areas`
 - `GET /areas/{area_id}`
+- `PUT /areas/{area_id}`
+- `DELETE /areas/{area_id}`
 - `GET /areas/{area_id}/access`
 - `PUT /areas/{area_id}/access`
 - `GET /areas/{area_id}/access-check`
@@ -118,10 +120,11 @@
 
 - 若 API 行程無法啟動，請先確認已安裝 `langgraph-cli[inmem]`，且 `apps/api` 內存在 `langgraph.json`。
 - 若本機只想跑測試，可啟用 `AUTH_TEST_MODE=true`，以 `Bearer test::<sub>::<group1,group2>` 驗證 auth flow。
-- `GET /areas/{area_id}`、`GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
+- `GET /areas/{area_id}`、`PUT /areas/{area_id}`、`DELETE /areas/{area_id}` 與 `GET /areas/{area_id}/access` 對未授權與不存在資源都會回 `404`，此為 deny-by-default 的既定語意。
 - `AUTH_TEST_MODE=true` 常搭配 `STORAGE_BACKEND=filesystem` 供 API 測試使用；Playwright E2E 應一併啟動 API 與 worker。
 - upload 與 reindex route 只負責建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`；parse、chunking、indexing 與最終狀態推進都由 worker 負責。
 - reindex、delete 與新的 ingest 執行前都會先清理文件範圍內的 `artifacts/` 前綴，避免殘留舊 parse 產物。
+- area delete 採 hard delete；API 會先清掉 area 內每份文件的原始檔與 parse artifacts，再刪除 area 與 cascaded database rows。
 - `document_chunks` 已包含 `structure_kind=text|table`，供後續 retrieval 與 observability 直接辨識內容結構。
 - 文字 child 會以 `LangChain RecursiveCharacterTextSplitter` 切分；表格 child 則採整表保留或 row-group split。
 - `ready` 現在代表 chunk tree、embedding 與可供 PGroonga 使用的 retrieval content 都已完成。

@@ -55,7 +55,7 @@
 - 瀏覽器路由：`/areas`
 - 使用 `VITE_API_BASE_URL + /health` 顯示 API health 狀態
 - 使用 `VITE_API_BASE_URL + /auth/context` 建立登入後 principal
-- 使用 `VITE_API_BASE_URL + /areas*` 執行 Area create/list/detail、access management 與 files upload/list
+- 使用 `VITE_API_BASE_URL + /areas*` 執行 Area create/list/detail/update/delete、access management 與 files upload/list
 - 使用 `VITE_API_BASE_URL + /documents/*`、`/ingest-jobs/*` 顯示文件狀態、chunk 摘要、reindex、delete 與 job stage
 - `npm run test:e2e`：啟動 Playwright、web dev server 與 test-mode API 自動化驗證
 - `npm run test:smoke:keycloak`：直接對 compose 的真實 Keycloak / callback / logout 流程做 smoke 驗證
@@ -69,6 +69,7 @@
 - `VITE_AUTH_MODE=test` 僅供 Playwright 與本機測試，不可當成正式登入驗證結論。
 - `npm run test:e2e` 使用 test auth mode，不會覆蓋真實 Keycloak issuer、callback、logout 與 SSO 行為；這些問題需由 `npm run test:smoke:keycloak` 補驗。
 - files 仍整合在 `/areas` 頁；chat 則透過 `src/features/chat` 掛載，並使用 LangGraph SDK 預設 thread/run 端點串接。UI 會顯示 Deep Agents 任務進度，並顯示 assembler 後的 contexts，而不是 child-level citations。
+- admin 現在可直接在 Dashboard header 編輯 area 名稱/說明，或執行 area hard delete；刪除 area 時後端也會一併清理相關文件資產。
 - 若 `npm run test:e2e` 失敗於瀏覽器缺失，請先執行 `npx playwright install chromium`。
 - 若 `npm run test:smoke:keycloak` 失敗，請先確認 compose stack 已完成啟動，且 `deep-agent-dev` realm 仍可用 `alice / alice123` 登入。
 - 若 E2E 啟動失敗，請先確認 `python`、`uvicorn` 與 `apps/api` 依賴已可在本機 shell 執行。

@@ -1,7 +1,8 @@
 # Deep Agent RAG Stack
 
-![Access Modal Test](access-modal-test.png)
 ![Actual Dashboard Live](actual-dashboard-live.png)
+![Access Modal Test](access-modal-test.png)
+![Chunk Aware](chunk-aware.png)
 
 An enterprise knowledge assistant prototype with OAuth2-based authentication, RBAC, and multi-strategy retrieval.
 

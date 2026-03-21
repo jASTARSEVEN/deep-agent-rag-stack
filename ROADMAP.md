@@ -130,7 +130,7 @@
 - 視需要補齊完整 Areas CRUD 的 API、UI 與測試
 
 狀態：
-- `進行中`
+- `已完成`
 
 ## Phase 4.1 — Retrieval Foundation
 
@@ -222,4 +222,4 @@
 
 1. 補齊真實 compose / Keycloak / Supabase / Deep Agents smoke 與 E2E 驗證
 2. 完善一頁式戰情室 (Dashboard) UI 互動細節
-3. Post-Phase 3 Backlog：Area Management Hardening
+3. 擴充 Areas CRUD 其餘管理能力與回歸驗證

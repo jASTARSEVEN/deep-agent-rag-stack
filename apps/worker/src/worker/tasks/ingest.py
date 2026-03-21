@@ -58,9 +58,10 @@ def process_document_ingest(job_id: str, force_reparse: bool = False) -> str:
     settings = get_settings()
     session_factory = create_session_factory(create_database_engine(settings))
     storage = build_object_storage_reader(settings)
+    normalized_job_id = str(job_id)
 
     with session_scope(session_factory) as session:
-        job = session.get(IngestJob, job_id)
+        job = session.get(IngestJob, normalized_job_id)
         if job is None:
             return "job-missing"
         if job.status != IngestJobStatus.queued:

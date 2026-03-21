@@ -22,7 +22,7 @@
 - 提供 HTTP / SSE 介面
 - 負責 auth integration、RBAC 邊界、service orchestration
 - 對外暴露 areas、documents、jobs、chat 相關 API
-- 目前已提供 `auth/context`、`areas` 的 create/list/detail、`areas/{area_id}/access` 管理端點，以及 documents / ingest jobs 最小集合
+- 目前已提供 `auth/context`、`areas` 的 create/list/detail/update/delete、`areas/{area_id}/access` 管理端點，以及 documents / ingest jobs 最小集合
 - JWT 驗證目前以 Keycloak issuer + JWKS 為基礎，並要求 access token 內存在 `sub` 與 `groups`
 - chat runtime 透過 LangGraph Server 啟動；正式 Web transport 已改為 LangGraph SDK 預設 thread/run 端點，不再維護產品自訂 bridge chat routes
 
@@ -64,7 +64,13 @@
 ### 4. phase-by-phase 實作
 - 骨架完成前不實作完整 business logic
 - auth / areas / documents / retrieval / chat 按階段前進
-- area rename / delete 與完整 Areas CRUD 不屬於目前已驗證的 Areas MVP，預計在 Documents MVP 穩定後再補強
+- area rename / delete 已補齊；其餘 Areas CRUD 補強仍應維持最小、可驗證的垂直切片原則
+
+### 5. area hard delete 先清 storage 再刪資料
+- `DELETE /areas/{area_id}` 僅 `admin` 可執行
+- area hard delete 前，API 必須先依 area 內 documents 的 `storage_key` 清除原始檔與 parse artifacts
+- 若 storage cleanup 失敗，area/documents/jobs/chunks 不得刪除，避免資料庫與物件儲存狀態分裂
+- 已刪 area/document 對應的舊 worker job 若晚到，只能安全失敗，不得復活資料
 
 ## 未來資料流
 

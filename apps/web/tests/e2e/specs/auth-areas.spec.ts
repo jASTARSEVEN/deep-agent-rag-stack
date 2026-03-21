@@ -96,6 +96,7 @@ test("未登入進 /areas 會要求登入", async ({ page }) => {
 
 test("admin 可登入、建立 area 並更新 access 規則", async ({ page }) => {
   const newAreaName = `Playwright Area ${Date.now()}`;
+  const renamedAreaName = `${newAreaName} Updated`;
   sharedAreaName = newAreaName;
 
   await loginAs(page, "admin");
@@ -109,6 +110,15 @@ test("admin 可登入、建立 area 並更新 access 規則", async ({ page }) =
 
   await expect(page.getByTestId("areas-list")).toContainText(newAreaName);
   await expect(page.getByTestId("area-detail-panel")).toContainText(newAreaName);
+
+  await page.getByRole("button", { name: "編輯區域" }).click();
+  await page.getByTestId("edit-area-name").fill(renamedAreaName);
+  await page.getByTestId("edit-area-description").fill("由 Playwright 更新的 area。");
+  await page.getByTestId("save-area-settings").click();
+  await expect(page.getByLabel("Close area edit modal")).toHaveCount(0);
+  await expect(page.getByTestId("areas-list")).toContainText(renamedAreaName);
+  await expect(page.getByTestId("area-detail-panel")).toContainText(renamedAreaName);
+  sharedAreaName = renamedAreaName;
 
   // 打開權限設定
   await page.getByRole("button", { name: "權限設定" }).click();
@@ -147,6 +157,8 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
   await expect(page.getByTestId("areas-list")).toContainText(sharedAreaName);
   await expect(page.getByTestId("area-detail-panel")).toContainText(sharedAreaName);
   await expect(page.getByText("目前角色只能檢視 area detail。若需要管理 access，必須使用 admin 身分。")).toBeVisible();
+  await expect(page.getByRole("button", { name: "編輯區域" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "刪除區域" })).toHaveCount(0);
   
   // 打開管理文件
   await page.getByRole("button", { name: "管理文件" }).click();
@@ -196,6 +208,8 @@ test("maintainer 可看 detail 但 access 管理區不可操作", async ({ page 
   await expect(page.getByTestId("areas-list")).toContainText(sharedAreaName);
   await expect(page.getByTestId("area-detail-panel")).toContainText(sharedAreaName);
   await expect(page.getByTestId("access-users")).toHaveCount(0); // Access Modal 沒開的話本來就是 0，但原測試可能預期它在頁面中
+  await expect(page.getByRole("button", { name: "編輯區域" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "刪除區域" })).toHaveCount(0);
   
   // 打開管理文件
   await page.getByRole("button", { name: "管理文件" }).click();
@@ -276,6 +290,35 @@ test("maintainer 可刪除文件，刪除後列表應移除", async ({ page }) =
   const sharedDocumentCard = page.getByTestId("documents-list").locator("article").filter({ hasText: SHARED_DOCUMENT_NAME });
   await sharedDocumentCard.getByRole("button", { name: "刪除" }).click();
   await expect(page.getByTestId("documents-list")).not.toContainText(SHARED_DOCUMENT_NAME);
+});
+
+
+test("admin 可刪除 area，刪除後 sidebar 應移除該區域", async ({ page }) => {
+  const areaName = `Delete Area ${Date.now()}`;
+
+  await loginAs(page, "admin");
+
+  await page.getByTestId("create-area-name").fill(areaName);
+  await page.getByTestId("create-area-description").fill("Delete verification area");
+  await page.getByTestId("create-area-submit").click();
+  await expect(page.getByTestId("areas-list")).toContainText(areaName);
+  await expect(page.getByTestId("area-detail-panel")).toContainText(areaName);
+
+  await page.getByRole("button", { name: "管理文件" }).click();
+  await page.getByTestId("document-upload").setInputFiles({
+    name: "delete-area-doc.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Delete Area\ncontent\n"),
+  });
+  await page.getByTestId("upload-document-submit").click();
+  await expect(page.getByTestId("documents-list")).toContainText("delete-area-doc.md");
+  await page.getByLabel("Close documents drawer").click();
+
+  page.on("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "刪除區域" }).click();
+
+  await expect(page.getByTestId("areas-list")).not.toContainText(areaName);
+  await expect(page.getByTestId("workspace-notice")).toContainText(`已刪除區域：${areaName}`);
 });
 
 

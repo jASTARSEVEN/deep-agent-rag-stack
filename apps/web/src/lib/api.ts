@@ -6,6 +6,7 @@ import type {
   AreaAccessPayload,
   AreaListPayload,
   AreaSummary,
+  UpdateAreaPayload,
   DocumentListPayload,
   DocumentPreviewPayload,
   DocumentSummary,
@@ -264,6 +265,35 @@ export async function createArea(payload: { name: string; description: string })
 export async function fetchAreaDetail(areaId: string): Promise<AreaSummary> {
   const response = await fetchProtected(`/areas/${areaId}`);
   return (await response.json()) as AreaSummary;
+}
+
+
+/**
+ * 更新單一 area 的名稱與說明。
+ *
+ * @param areaId 要更新的 area 識別碼。
+ * @param payload 更新後的名稱與說明。
+ * @returns 更新後的 area 摘要資料。
+ */
+export async function updateArea(areaId: string, payload: UpdateAreaPayload): Promise<AreaSummary> {
+  const response = await fetchProtected(`/areas/${areaId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  return (await response.json()) as AreaSummary;
+}
+
+
+/**
+ * 刪除單一 area 與其關聯資料。
+ *
+ * @param areaId 要刪除的 area 識別碼。
+ * @returns 無；成功時僅代表刪除完成。
+ */
+export async function deleteArea(areaId: string): Promise<void> {
+  await fetchProtected(`/areas/${areaId}`, {
+    method: "DELETE",
+  });
 }
 
 

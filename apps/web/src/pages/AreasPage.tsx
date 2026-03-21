@@ -6,9 +6,11 @@ import { useAuth } from "../auth/AuthProvider";
 import { DashboardLayout } from "../components/layout/DashboardLayout";
 import { AreaSidebar } from "../features/areas/components/AreaSidebar";
 import { AccessModal } from "../features/areas/components/AccessModal";
+import { AreaEditModal } from "../features/areas/components/AreaEditModal";
 import { DocumentsDrawer } from "../features/documents/components/DocumentsDrawer";
 import { ChatPanel } from "../features/chat/components/ChatPanel";
 import {
+  deleteArea,
   fetchAreas,
   fetchAuthContext,
   fetchAreaDetail,
@@ -29,6 +31,8 @@ export function AreasPage(): JSX.Element {
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
+  const [isAreaEditOpen, setIsAreaEditOpen] = useState(false);
+  const [isDeletingArea, setIsDeletingArea] = useState(false);
 
   useEffect(() => {
     void loadWorkspace();
@@ -85,6 +89,35 @@ export function AreasPage(): JSX.Element {
     }
   }
 
+  /**
+   * 刪除目前 area，成功後自動切換到下一個可用 area。
+   */
+  async function handleDeleteArea(): Promise<void> {
+    if (!selectedArea) {
+      return;
+    }
+    if (!confirm(`確定要刪除 ${selectedArea.name} 嗎？這會一併刪除底下文件與索引資料。`)) {
+      return;
+    }
+
+    setIsDeletingArea(true);
+    setWorkspaceError(null);
+    setWorkspaceNotice(null);
+    try {
+      const deletedAreaName = selectedArea.name;
+      await deleteArea(selectedArea.id);
+      setIsAreaEditOpen(false);
+      setIsAccessOpen(false);
+      setIsDocumentsOpen(false);
+      await loadWorkspace(null);
+      setWorkspaceNotice(`已刪除區域：${deletedAreaName}`);
+    } catch (error) {
+      setWorkspaceError(error instanceof Error ? error.message : "刪除 area 失敗。");
+    } finally {
+      setIsDeletingArea(false);
+    }
+  }
+
   return (
     <DashboardLayout
       sidebar={
@@ -109,13 +142,30 @@ export function AreasPage(): JSX.Element {
               管理文件
             </button>
             {selectedArea.effective_role === "admin" && (
-              <button
-                onClick={() => setIsAccessOpen(true)}
-                className="rounded-full border border-stone-900/10 bg-white px-5 py-2 text-xs font-bold text-stone-900 shadow-sm hover:bg-stone-50 transition"
-                type="button"
-              >
-                權限設定
-              </button>
+              <>
+                <button
+                  onClick={() => setIsAreaEditOpen(true)}
+                  className="rounded-full border border-stone-900/10 bg-white px-5 py-2 text-xs font-bold text-stone-900 shadow-sm hover:bg-stone-50 transition"
+                  type="button"
+                >
+                  編輯區域
+                </button>
+                <button
+                  onClick={() => setIsAccessOpen(true)}
+                  className="rounded-full border border-stone-900/10 bg-white px-5 py-2 text-xs font-bold text-stone-900 shadow-sm hover:bg-stone-50 transition"
+                  type="button"
+                >
+                  權限設定
+                </button>
+                <button
+                  onClick={() => void handleDeleteArea()}
+                  className="rounded-full border border-red-200 bg-red-50 px-5 py-2 text-xs font-bold text-red-700 shadow-sm transition hover:bg-red-100 disabled:opacity-50"
+                  disabled={isDeletingArea}
+                  type="button"
+                >
+                  {isDeletingArea ? "刪除中..." : "刪除區域"}
+                </button>
+              </>
             )}
           </div>
         )
@@ -169,6 +219,16 @@ export function AreasPage(): JSX.Element {
               areaId={selectedArea.id}
               areaName={selectedArea.name}
               onAccessUpdated={() => void loadWorkspace(selectedArea.id)}
+            />
+
+            <AreaEditModal
+              isOpen={isAreaEditOpen}
+              onClose={() => setIsAreaEditOpen(false)}
+              areaId={selectedArea.id}
+              areaName={selectedArea.name}
+              initialName={selectedArea.name}
+              initialDescription={selectedArea.description}
+              onUpdated={() => void loadWorkspace(selectedArea.id)}
             />
           </div>
         ) : (

@@ -25,6 +25,23 @@ class CreateAreaRequest(BaseModel):
         return stripped
 
 
+class UpdateAreaRequest(BaseModel):
+    """更新 Knowledge Area 的請求 payload。"""
+
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        """拒絕只有空白的 area 名稱。"""
+
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("area 名稱不可為空白。")
+        return stripped
+
+
 class AreaSummaryResponse(BaseModel):
     """Area list 與 detail 共用的最小 area 表示。"""
 

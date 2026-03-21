@@ -1,7 +1,8 @@
 # Deep Agent RAG Stack
 
-![權限管理介面測試](access-modal-test.png)
 ![實際畫面預覽](actual-dashboard-live.png)
+![權限管理介面測試](access-modal-test.png)
+![文件處理預覽](chunk-aware.png)
 
 具備 OAuth2 認證、RBAC 與多策略檢索設計的企業知識助理雛形。
 
