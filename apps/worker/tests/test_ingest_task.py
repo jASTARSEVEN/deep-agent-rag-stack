@@ -6,6 +6,7 @@ from pathlib import Path
 from worker.chunking import ChunkingConfig, build_chunk_tree
 from worker.core.settings import WorkerSettings
 from worker.embedding_text import build_embedding_input_text
+from worker.embeddings import EmbeddingProvider
 from worker.db import (
     Base,
     ChunkStructureKind,
@@ -372,6 +373,57 @@ def test_index_document_chunks_embeddings_include_heading(monkeypatch, tmp_path:
             content="| item | value |\n| --- | --- |\n| alpha | 1 |",
         ),
     ]
+
+
+def test_process_document_ingest_marks_failed_for_embedding_provider_error(monkeypatch, tmp_path: Path) -> None:
+    """embedding provider 永久失敗時應轉為受控 failed，而非 unexpected exception。"""
+
+    settings = build_settings(tmp_path)
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+
+    class FailingEmbeddingProvider(EmbeddingProvider):
+        """固定拋出受控 provider 錯誤的測試替身。"""
+
+        def embed_texts(self, texts: list[str]) -> list[list[float]]:
+            """模擬 OpenAI embedding 永久性失敗。
+
+            參數：
+            - `texts`：原本要送入 provider 的文字清單。
+
+            回傳：
+            - `list[list[float]]`：此測試替身固定失敗，不會回傳結果。
+            """
+
+            del texts
+            raise ValueError("OpenAI embeddings 失敗：Invalid 'input': maximum request size is 300000 tokens per request.")
+
+    monkeypatch.setattr("worker.tasks.indexing.build_embedding_provider", lambda worker_settings: FailingEmbeddingProvider())
+
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = f"# Title\n{'A' * 320}\n\n## Next\n{'B' * 340}".encode()
+    document, job = seed_job(session_factory, file_name="notes.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    result = process_document_ingest(job.id)
+
+    with session_factory() as session:
+        refreshed_document = session.get(Document, document.id)
+        refreshed_job = session.get(IngestJob, job.id)
+        stored_chunks = session.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).all()
+        assert result == "failed"
+        assert refreshed_document is not None
+        assert refreshed_document.status == DocumentStatus.failed
+        assert refreshed_document.display_text is None
+        assert refreshed_job is not None
+        assert refreshed_job.status == IngestJobStatus.failed
+        assert refreshed_job.error_message is not None
+        assert "maximum request size is 300000 tokens per request" in refreshed_job.error_message
+        assert stored_chunks == []
 
 
 def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path) -> None:

@@ -27,6 +27,9 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_TXT_PARENT_GROUP_SIZE",
     "CHUNK_TABLE_PRESERVE_MAX_CHARS",
     "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
+    "EMBEDDING_MAX_BATCH_TEXTS",
+    "EMBEDDING_RETRY_MAX_ATTEMPTS",
+    "EMBEDDING_RETRY_BASE_DELAY_SECONDS",
     "EMBEDDING_DIMENSIONS",
     "MARKER_FORCE_OCR",
     "MARKER_STRIP_EXISTING_OCR",
@@ -106,6 +109,9 @@ class WorkerSettings(BaseSettings):
     llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False
     embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
     embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
+    embedding_max_batch_texts: Annotated[int, Field(alias="EMBEDDING_MAX_BATCH_TEXTS")] = 64
+    embedding_retry_max_attempts: Annotated[int, Field(alias="EMBEDDING_RETRY_MAX_ATTEMPTS")] = 3
+    embedding_retry_base_delay_seconds: Annotated[float, Field(alias="EMBEDDING_RETRY_BASE_DELAY_SECONDS")] = 2.0
     embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
     openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
 

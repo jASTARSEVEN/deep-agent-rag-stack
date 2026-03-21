@@ -21,6 +21,9 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         CHUNK_TXT_PARENT_GROUP_SIZE="",
         CHUNK_TABLE_PRESERVE_MAX_CHARS="",
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
+        EMBEDDING_MAX_BATCH_TEXTS="",
+        EMBEDDING_RETRY_MAX_ATTEMPTS="",
+        EMBEDDING_RETRY_BASE_DELAY_SECONDS="",
         MARKER_FORCE_OCR="",
         MARKER_STRIP_EXISTING_OCR="",
         MARKER_USE_LLM="",
@@ -47,6 +50,9 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.chunk_txt_parent_group_size == 4
     assert settings.chunk_table_preserve_max_chars == 4000
     assert settings.chunk_table_max_rows_per_child == 20
+    assert settings.embedding_max_batch_texts == 64
+    assert settings.embedding_retry_max_attempts == 3
+    assert settings.embedding_retry_base_delay_seconds == 2.0
     assert settings.marker_force_ocr is False
     assert settings.marker_strip_existing_ocr is False
     assert settings.marker_use_llm is False

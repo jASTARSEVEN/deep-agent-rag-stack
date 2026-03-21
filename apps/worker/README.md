@@ -60,6 +60,9 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`
+- `EMBEDDING_MAX_BATCH_TEXTS`
+- `EMBEDDING_RETRY_MAX_ATTEMPTS`
+- `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
 
@@ -101,6 +104,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
+- OpenAI embeddings are now sent in batches controlled by `EMBEDDING_MAX_BATCH_TEXTS`; if a batch is still rejected for request-size overflow, the worker recursively splits that batch and retries with smaller requests.
+- OpenAI embeddings now retry only transient failures such as `429`, `5xx`, and connection/timeout errors with bounded backoff. Permanent `400`-class request errors become controlled failed jobs instead of unexpected task crashes.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - File types outside the implemented parser set still move into controlled `failed` status.
 - Public retrieval APIs, rerank, and chat orchestration remain outside this module.
