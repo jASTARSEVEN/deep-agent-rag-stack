@@ -4,18 +4,29 @@
 
 ## 模組目的
 
-此模組包含本機 Docker Compose stack，以及啟動 Documents + Retrieval Foundation 所需的容器建置資產。
+此模組包含本機 Docker Compose stack，以及啟動整個自架平台所需的容器建置資產。
+目前正式對外部署模型採用 `Caddy` 提供單一公開 HTTPS origin，而 `web`、`api`、`keycloak` 則留在內部 Docker network。
 
 ## 啟動方式
 
 - 在專案根目錄執行：
   - `cp .env.example .env`
-  - `./scripts/compose.sh up --build`
-  - wrapper 會固定注入 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行 Compose 時把 `OPENAI_API_KEY` / `COHERE_API_KEY` 等值帶成空字串。
-  - Compose 檔已固定 project name 為 `deep-agent-rag-stack`，且 fallback host ports 也改為 repo 標準值（`13000/18000/18080/19000/19001/15432/16379`），降低漏帶 `--env-file` 時的漂移風險。
+  - 設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL`、`TLS_ACME_EMAIL`
+  - 將 `PUBLIC_HOST` 的 DNS 指向部署主機
+  - 將外部 `80` 與 `443` 轉發到 Docker 主機
+  - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
+- Compose 檔已固定 project name 為 `deep-agent-rag-stack`
+- `worker` 預設會透過 `WORKER_GPUS=all` 請求 GPU
 
 ## 環境變數
 
+- `PUBLIC_HOST`
+- `PUBLIC_BASE_URL`
+- `TLS_ACME_*`
+- `KEYCLOAK_EXPOSE_ADMIN`
+- `WEB_PUBLIC_URL`
+- `API_PUBLIC_URL`
+- `KEYCLOAK_PUBLIC_URL`
 - `POSTGRES_*`
 - `REDIS_PORT`
 - `MINIO_*`
@@ -25,10 +36,12 @@
 - `REDIS_URL`
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
-- `MAX_UPLOAD_SIZE_BYTES`
 - `PDF_PARSER_PROVIDER`
+- `MARKER_*`
 - `LLAMAPARSE_*`
 - `CELERY_*`
+- `WORKER_GPUS`
+- `NVIDIA_*`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -40,31 +53,34 @@
 ## 主要目錄結構
 
 - `docker-compose.yml`：本機服務編排設定
+- `docker/caddy`：reverse proxy 映像、Caddyfile 模板與啟動腳本
 - `docker/api`：API container 映像
-- `docker/worker`：Worker container 映像
-- `docker/web`：Web container 映像
-- `keycloak`：本機開發用的 realm bootstrap 匯入資產
+- `docker/worker`：worker container 映像
+- `docker/web`：web container 映像
+- `keycloak`：本機開發用 realm bootstrap 匯入資產
 
 ## 對外介面
 
-- 本機服務埠號：
-  - Web: `13000`
-  - API: `18000`
-  - Keycloak: `18080`
-  - MinIO API: `19000`
-  - MinIO Console: `19001`
-  - Postgres (Supabase): `15432`
-  - Redis: `16379`
+- 瀏覽器正式入口：
+  - `https://<PUBLIC_HOST>/`
+  - `https://<PUBLIC_HOST>/api/*`
+  - `https://<PUBLIC_HOST>/auth/*`
+- 正式公開埠號：
+  - `443`：主要客戶端 HTTPS 入口
+  - `80`：僅供 ACME 驗證與 HTTP 轉 HTTPS
+- 仍可能保留的本機管理用 host ports：
+  - MinIO API：`19000`
+  - MinIO Console：`19001`
+  - Postgres (Supabase)：`15432`
+  - Redis：`16379`
 
 ## 疑難排解
 
-- 若你曾在固定 project name 前啟動過 stack，可能仍殘留 `infra-*` 之類的舊 container；在判斷目前是哪一組服務佔用 port 前，應先清理這些舊 container。
-- `supabase-db` 服務使用 `supabase/postgres` 映像，內建 PGroonga 支援繁體中文檢索。
-- Keycloak 目前會在第一次啟動時自動匯入 `deep-agent-dev` realm、`deep-agent-web` client、groups mapper 與預設 users/groups。
-- `supabase/migrations/` 掛載到 `/docker-entrypoint-initdb.d` 只適用全新資料庫 volume；既有資料庫在專用 migration runner 落地前仍需走 Alembic 升級。
-- Compose health check 目前只驗證骨架 stack 是否就緒，不代表正式業務正確性。
-- 正式 compose 預設使用 `STORAGE_BACKEND=minio`；若做本機測試模式驗證，可改成 `filesystem`，並保持 `api` 與 `worker` 服務都在執行。
-- 若要讓 compose ingest 切換到 LlamaParse，除了在 `.env` 設定 `PDF_PARSER_PROVIDER=llamaparse` 外，也必須提供 `LLAMAPARSE_API_KEY`；修改後需重新啟動 `worker` 容器。
-- compose 會把 `MARKER_MODEL_CACHE_DIR` 預設掛到 `marker-model-cache` named volume，因此 Marker / Surya 模型下載結果可跨 worker 重啟與重建保留；若自訂 cache 路徑，應同步確認 volume target 仍落在同一路徑。
-- compose 的 worker 現在預設使用 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1`、`CELERY_WORKER_MAX_TASKS_PER_CHILD=1`、`CELERY_TASK_ACKS_LATE=true` 與 `CELERY_TASK_REJECT_ON_WORKER_LOST=true`，讓 worker 同時間只保有一個尚未完成的案件，並在 worker 異常中止時把未完成案件退回 queue；若要改回 prefork，應先確認容器記憶體餘裕。
-- 若要啟用 Cohere rerank，請確認 `.env` 內已提供 `COHERE_API_KEY`，並將 `RERANK_PROVIDER` 維持為 `cohere`。
+- 若憑證無法簽發，先確認 `PUBLIC_HOST` 可由公網解析，且 `80/443` 已正確轉發到 Docker 主機。
+- 若 reverse proxy 切換後登入失敗，請確認 `KEYCLOAK_PUBLIC_URL`、`KEYCLOAK_ISSUER`、`KEYCLOAK_JWKS_URL` 與 realm client redirect URI 都已對齊 `/auth`。
+- `Caddy` 會把 `/auth/callback` 轉給 web，並把其餘 `/auth*` 轉給 Keycloak，因為前端 callback 與 Keycloak 共用 `/auth` prefix。
+- `KEYCLOAK_EXPOSE_ADMIN=false` 會在 proxy 層封鎖 `/auth/admin*`；只有在你確定需要遠端管理主控台時，才應改成 `true`。
+- compose stack 已不再公開舊的 `13000/18000/18080`，因此直接從 host 連 web / API / Keycloak 失敗是預期行為。
+- 若 `worker` 在啟用 GPU 後無法啟動，請確認 Docker Desktop 已提供 NVIDIA runtime，並視需要調整 `WORKER_GPUS` 或 `NVIDIA_VISIBLE_DEVICES`。
+- `supabase-db` 使用 `supabase/postgres` 映像，內建 PGroonga 支援繁體中文檢索。
+- Compose health check 目前只驗證服務就緒，不代表完整業務正確性。

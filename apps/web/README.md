@@ -35,6 +35,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - `VITE_KEYCLOAK_URL`
 - `VITE_KEYCLOAK_REALM`
 - `VITE_KEYCLOAK_CLIENT_ID`
+- `WEB_ALLOWED_HOSTS`
 
 ## Main Directory Structure
 
@@ -65,6 +66,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - If the page shows API errors, make sure the API container is healthy and `VITE_API_BASE_URL` is correct.
 - If the Areas page shows `Failed to fetch` or cannot reach the API, make sure `API_CORS_ORIGINS` includes the current frontend origin. Local defaults should include at least `http://localhost:3000` and `http://localhost:13000`.
 - If callback cannot return to the frontend after login, verify the redirect URI for the Keycloak client `deep-agent-web` matches `VITE_KEYCLOAK_URL` and `VITE_KEYCLOAK_CLIENT_ID`.
+- If Vite shows `Blocked request. This host is not allowed.`, add the public hostname to `WEB_ALLOWED_HOSTS` so the dev server accepts the incoming Host header.
 - If area APIs keep returning `401`, verify the Keycloak token still contains the `groups` claim and that the API issuer / JWKS settings are correct.
 - `VITE_AUTH_MODE=test` is only for Playwright and local testing. It must not be treated as evidence of a production login flow.
 - `npm run test:e2e` uses test auth mode and does not validate real Keycloak issuer, callback, logout, or SSO behavior. Use `npm run test:smoke:keycloak` for that coverage.

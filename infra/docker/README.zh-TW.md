@@ -2,29 +2,31 @@
 
 [English README](README.md)
 
-## 模組目的
+## Purpose
 
-此目錄包含本機 Docker Compose stack 所需的容器建置定義。
+此目錄存放 Compose stack 使用的 container build 定義，現在也包含新的 `Caddy` reverse proxy 映像。
 
-## 啟動方式
+## How to Start
 
-- 這些 Dockerfile 是透過 `infra/docker-compose.yml` 啟動的。
-- 只有在除錯容器特定問題時，才需要單獨進行手動建置。
+- 這些 Dockerfile 會由 `infra/docker-compose.yml` 自動建置。
+- 只有在除錯特定 image 問題時，才需要手動逐一 build。
 
-## 環境變數
+## Environment Variables
 
-- 應用程式層級的變數是由 Compose 注入的，而非硬編碼於此。
+- 執行期環境變數由 Compose 注入。
+- `caddy` 映像主要使用 `PUBLIC_HOST`、`TLS_ACME_EMAIL`、`TLS_ACME_STAGING`、`KEYCLOAK_EXPOSE_ADMIN`。
 
-## 主要目錄結構
+## Main Directory Structure
 
 - `api`：FastAPI container 映像
 - `worker`：Celery worker container 映像
 - `web`：React 前端 container 映像
+- `caddy`：單一入口 reverse proxy 與 TLS bootstrap 映像
 
-## 對外介面
+## Public Interfaces
 
-- 提供本機 Compose stack 使用的容器映像。
+- 提供 Compose stack 使用的 container images。
 
-## 疑難排解
+## Troubleshooting
 
-- 若建置失敗，請透過 `docker compose -f infra/docker-compose.yml build <service>` 單獨重新建置該服務。
+- 若 image build 失敗，可使用 `docker compose -f infra/docker-compose.yml build <service>` 單獨重建該 service。

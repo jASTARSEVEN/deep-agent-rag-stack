@@ -37,6 +37,7 @@
 - Office 文件解析：`Unstructured partition_docx`、`partition_pptx`、`partition_xlsx`
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
+- 對外入口：`Caddy reverse proxy + automatic TLS`
 
 ## 產品範圍
 
@@ -48,6 +49,7 @@
 - 背景索引與進度顯示
 - 以 area 為範圍的問答與 citations
 - SQL gate + vector recall + FTS recall + `RRF` + rerank
+- 單一公開入口的 HTTPS 部署與自動憑證續期
 
 ### 範圍外
 - NotebookLM workspace / studio 類功能
@@ -100,6 +102,26 @@
 - 預設 `RRF_K = 60`
 - 不做 vector 分數與 FTS 分數的線性 normalization
 
+## 對外存取與部署邊界
+
+### 單一公開入口
+- 正式對外主機名稱固定為單一網域，例如 `https://easypinex.duckdns.org`
+- 對外只提供單一客戶端入口 `443`
+- `80` 僅保留給 ACME 驗證與 HTTP 轉 HTTPS
+- `13000`、`18000`、`18080` 不再作為客戶端直接連線入口
+
+### 對外路由
+- `/` -> Web
+- `/api/*` -> API
+- `/auth/*` -> Keycloak
+
+### 憑證與反向代理
+- `Caddy` 為唯一對外 reverse proxy
+- TLS 憑證由 `Caddy` 自動申請、續約與熱更新
+- Web、API、Keycloak 共用同一張以 `PUBLIC_HOST` 綁定的憑證
+- Keycloak 公開 base path 固定為 `/auth`
+- `/auth/admin*` 是否對外公開，必須由明確設定控制，預設應關閉
+
 ## 預期公開能力
 
 ### Areas
@@ -134,7 +156,7 @@
 9. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
 10. `table` child 優先保留整表，超大表格才依 row groups 切分
 11. 產生 embedding
-12. (跳過) PGroonga 直接使用 content 欄位索引，不需產生 tsvector
+12. PGroonga 直接使用 content 欄位索引，不需產生 `tsvector`
 13. 寫入 `document_chunks`
 14. 更新文件狀態
 
@@ -146,31 +168,31 @@
 - `local PDF parser` 僅作為自架 fallback，不承諾表格高保真
 - `TXT` 不做表格感知
 
-## 前端需求 (One-Page Dashboard)
+## 前端需求
 
-佈局架構：
-- **Login / Callback**: 基礎登入與 Session 恢復頁面。
-- **DashboardLayout**: 全螢幕戰情室佈局，整合頂部全局狀態。
-- **AreaSidebar**: 側邊區域導覽，提供快速切換、搜尋與建立 Area。
-- **ChatPanel**: 中央主視窗，提供串流對話、檢索追蹤與引用來源顯示。
-- **DocumentsDrawer**: 右側滑出式文件管理，不中斷對話即可管理文件。
-- **AccessModal**: 彈窗式權限設定，集中管理區域成員與角色。
-- **HomePage**: 匿名入口與產品簡介。
+### One-Page Dashboard
+- Login / Callback：基礎登入與 Session 恢復頁面
+- DashboardLayout：全螢幕戰情室佈局，整合頂部全局狀態
+- AreaSidebar：側邊區域導覽，提供快速切換、搜尋與建立 Area
+- ChatPanel：中央主視窗，提供串流對話、檢索追蹤與引用來源顯示
+- DocumentsDrawer：右側滑出式文件管理，不中斷對話即可管理文件
+- AccessModal：彈窗式權限設定，集中管理區域成員與角色
+- HomePage：匿名入口與產品簡介
 
-核心流程：
-1. 登入後進入 Dashboard 並自動加載最近使用的區域。
-2. 透過左側 `AreaSidebar` 快速切換不同知識庫。
-3. 在中央 `ChatPanel` 進行即時對話，並可隨時檢視檢索路徑與引用來源。
-4. 若需上傳或管理文件，點擊右上角按鈕開啟 `DocumentsDrawer`，操作過程中對話不中斷。
+### 核心流程
+1. 登入後進入 Dashboard 並自動加載最近使用的區域
+2. 透過左側 `AreaSidebar` 快速切換不同知識庫
+3. 在中央 `ChatPanel` 進行即時對話，並可隨時檢視檢索路徑與引用來源
+4. 若需上傳或管理文件，點擊右上角按鈕開啟 `DocumentsDrawer`，操作過程中對話不中斷
 
-## 未來雲端部署策略 (Supabase)
+## 未來雲端部署策略
 
-為降低維運成本並提升擴充性，專案計畫支援基於 Supabase 的雲端託管架構。此策略的核心為 **「SaaS 驅動的高效資料層 + 本地 Docker 開發一致性」**：
+為降低維運成本並提升擴充性，專案計畫支援基於 Supabase 的雲端託管架構。此策略的核心為**「SaaS 驅動的高效資料層 + 本地 Docker 開發一致性」**：
 
-- **高效檢索資料層 (PGroonga + pgvector + candidate RPC)**：利用 Supabase Cloud 原生支援的 **PGroonga** 與 `pgvector`，將 SQL gate 所需過濾、向量召回與中文全文召回放在資料庫側完成；最終 `RRF`、未來 ranking rules、rerank 與 assembler 仍保留在 Python 層，以維持可測試性與規則擴充彈性。
-- **單一路徑認證與儲存**：目前正式支援 `Keycloak` 作為身分來源，`MinIO / filesystem` 作為儲存後端；多 provider auth/storage 不在本輪完成範圍。
-- **本地/地端支援**：開發階段優先採用 **Docker Compose** 直接啟動 Supabase Postgres、API、Worker、Keycloak、MinIO 與 Web，降低額外 CLI 安裝門檻，並維持地端自架一致性。
-- **基礎設施簡化**：遷移完成後，將**完整移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴**，大幅降低基礎設施維護難度與映像檔體積。
+- 高效檢索資料層：利用 Supabase Cloud 原生支援的 `PGroonga` 與 `pgvector`，將 SQL gate 所需過濾、向量召回與中文全文召回放在資料庫側完成；最終 `RRF`、ranking rules、rerank 與 assembler 仍保留在 Python 層
+- 單一路徑認證與儲存：目前正式支援 `Keycloak` 作為身分來源，`MinIO / filesystem` 作為儲存後端
+- 本地/地端支援：開發階段優先採用 Docker Compose 直接啟動 Supabase Postgres、API、Worker、Keycloak、MinIO、Web、Caddy
+- 基礎設施簡化：遷移完成後，完整移除對純 PostgreSQL（自編譯 pg_jieba）的依賴，降低維護成本
 
 ## 非功能性要求
 
@@ -184,9 +206,11 @@
 ### 模組 README
 - `apps/*`、`infra/*`、`packages/*` 的每個頂層模組都要有 `README.md`
 - 每個獨立 `pyproject.toml` / `package.json` 模組也要有 `README.md`
+- 所有英文 README 都必須同步維護對應的 `README.zh-TW.md`
 
 ## 風險與假設
 
 - Keycloak token 中需穩定提供 `groups` claim；若 client mapper 缺失，group-based access 將無法成立
 - Rerank 候選數與 chunk 長度必須受控，避免成本失控
-- 本專案預設為單一組織、單 realm
+- 本專案預設為單一組織、單一 realm
+- 正式 HTTPS 環境假設 `PUBLIC_HOST` 可由公網解析，且 `80/443` 已正確轉發到部署主機

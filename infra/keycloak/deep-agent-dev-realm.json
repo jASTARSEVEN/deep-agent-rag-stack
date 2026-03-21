@@ -27,11 +27,16 @@
       "fullScopeAllowed": true,
       "frontchannelLogout": true,
       "redirectUris": [
-        "http://localhost:13000/*"
+        "https://easypinex.duckdns.org/auth/callback",
+        "https://easypinex.duckdns.org/silent-check-sso.html",
+        "http://localhost/auth/callback",
+        "http://localhost/silent-check-sso.html"
       ],
       "webOrigins": [
-        "+"
-      ],      "defaultClientScopes": [
+        "https://easypinex.duckdns.org",
+        "http://localhost"
+      ],
+      "defaultClientScopes": [
         "web-origins",
         "profile",
         "roles",

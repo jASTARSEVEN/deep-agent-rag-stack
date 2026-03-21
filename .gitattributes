@@ -6,6 +6,7 @@
 *.py text eol=lf
 *.toml text eol=lf
 *.ini text eol=lf
+*.python-version text eol=lf
 
 # JavaScript / TypeScript / Web
 *.js text eol=lf

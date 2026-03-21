@@ -8,6 +8,35 @@ import { clearTokenBundle, readTokenBundle, saveTokenBundle } from "./storage";
 
 /** 單例 Keycloak client，避免重複初始化。 */
 let keycloakClient: Keycloak | null = null;
+/**
+ * 判斷目前瀏覽器環境是否可提供 PKCE 所需的 Web Crypto API。
+ *
+ * @returns 若目前執行環境可安全使用 `window.crypto.subtle` 則回傳 `true`；否則回傳 `false`。
+ */
+function isWebCryptoAvailable(): boolean {
+  return (
+    window.isSecureContext &&
+    typeof window.crypto !== "undefined" &&
+    typeof window.crypto.subtle !== "undefined"
+  );
+}
+
+/**
+ * 根據瀏覽器能力決定是否啟用 Keycloak PKCE 流程。
+ *
+ * @returns 若可使用 Web Crypto API 則回傳 `S256`；否則回傳 `false` 以停用 PKCE。
+ */
+function resolvePkceMethod(): "S256" | false {
+  if (isWebCryptoAvailable()) {
+    return "S256";
+  }
+
+  console.warn(
+    "Web Crypto API is unavailable; falling back to Keycloak without PKCE. " +
+      "Use https:// or http://localhost during development to keep PKCE enabled.",
+  );
+  return false;
+}
 
 /** 單例初始化 promise，避免 callback 與 app bootstrap 並發重複 init。 */
 let keycloakInitializationPromise: Promise<Keycloak> | null = null;
@@ -38,7 +67,7 @@ export async function initializeKeycloak(): Promise<Keycloak> {
   keycloakInitializationPromise = (async () => {
     await keycloak.init({
       onLoad: "check-sso",
-      pkceMethod: "S256",
+      pkceMethod: resolvePkceMethod(),
       responseMode: "query",
       checkLoginIframe: false,
       silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,

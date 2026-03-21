@@ -1,0 +1,27 @@
+{
+	email ${TLS_ACME_EMAIL}
+	${CADDY_ACME_CA_LINE}
+}
+
+${PUBLIC_HOST} {
+	encode zstd gzip
+
+	@auth_callback path /auth/callback /auth/callback/*
+	handle @auth_callback {
+		reverse_proxy web:3000
+	}
+
+	${CADDY_KEYCLOAK_ADMIN_HANDLE}
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /auth* {
+		reverse_proxy keycloak:8080
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

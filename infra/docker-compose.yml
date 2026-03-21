@@ -3,6 +3,29 @@
 name: deep-agent-rag-stack
 
 services:
+  caddy:
+    build:
+      context: ..
+      dockerfile: infra/docker/caddy/Dockerfile
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-easypinex.duckdns.org}
+      TLS_ACME_EMAIL: ${TLS_ACME_EMAIL:-admin@example.com}
+      TLS_ACME_STAGING: ${TLS_ACME_STAGING:-false}
+      KEYCLOAK_EXPOSE_ADMIN: ${KEYCLOAK_EXPOSE_ADMIN:-false}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
   supabase-db:
     image: supabase/postgres:15.1.1.78
     command: postgres -c listen_addresses='*' -c shared_preload_libraries=pg_stat_statements,pg_net,pg_graphql,pg_cron -c cron.database_name=postgres
@@ -54,13 +77,12 @@ services:
     command: ["start-dev", "--import-realm"]
     environment:
       KC_DB: dev-file
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HTTP_PORT: 8080
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_URL: http://localhost:${KEYCLOAK_PORT:-18080}
-    ports:
-      - "${KEYCLOAK_PORT:-18080}:8080"
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-https://easypinex.duckdns.org/auth}
     volumes:
       - ./keycloak/deep-agent-dev-realm.json:/opt/keycloak/data/import/deep-agent-dev-realm.json:ro
     healthcheck:
@@ -78,7 +100,7 @@ services:
       API_VERSION: ${API_VERSION:-0.1.0}
       API_HOST: ${API_HOST:-0.0.0.0}
       API_PORT: 8000
-      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:3000,http://localhost:13000}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-https://easypinex.duckdns.org}
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
@@ -87,11 +109,11 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-.local-storage}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
-      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18080/realms/deep-agent-dev}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-https://easypinex.duckdns.org/auth/realms/deep-agent-dev}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/auth/realms/deep-agent-dev/protocol/openid-connect/certs}
       KEYCLOAK_GROUPS_CLAIM: ${KEYCLOAK_GROUPS_CLAIM:-groups}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -99,20 +121,18 @@ services:
     depends_on:
       supabase-db:
         condition: service_healthy
-    command: ["alembic", "upgrade", "head"]
+    command: ["python", "-m", "app.db.migration_runner"]
 
   api:
     build:
       context: ..
       dockerfile: infra/docker/api/Dockerfile
-    ports:
-      - "${API_PORT:-18000}:8000"
     environment:
       API_SERVICE_NAME: ${API_SERVICE_NAME:-deep-agent-api}
       API_VERSION: ${API_VERSION:-0.1.0}
       API_HOST: ${API_HOST:-0.0.0.0}
       API_PORT: 8000
-      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:3000,http://localhost:13000}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-https://easypinex.duckdns.org}
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
@@ -122,8 +142,8 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-.local-storage}
       MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-5242880}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-openai}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-3-small}
       EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-1536}
@@ -154,9 +174,9 @@ services:
       RETRIEVAL_MAX_CANDIDATES: ${RETRIEVAL_MAX_CANDIDATES:-12}
       RETRIEVAL_RRF_K: ${RETRIEVAL_RRF_K:-60}
       RETRIEVAL_HNSW_EF_SEARCH: ${RETRIEVAL_HNSW_EF_SEARCH:-100}
-      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-http://localhost:18080/realms/deep-agent-dev}
-      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs}
+      KEYCLOAK_URL: ${KEYCLOAK_URL:-http://keycloak:8080/auth}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER:-https://easypinex.duckdns.org/auth/realms/deep-agent-dev}
+      KEYCLOAK_JWKS_URL: ${KEYCLOAK_JWKS_URL:-http://keycloak:8080/auth/realms/deep-agent-dev/protocol/openid-connect/certs}
       KEYCLOAK_GROUPS_CLAIM: ${KEYCLOAK_GROUPS_CLAIM:-groups}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
@@ -182,13 +202,16 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/worker/Dockerfile
+    gpus: ${WORKER_GPUS:-all}
     volumes:
       - marker-model-cache:${MARKER_MODEL_CACHE_DIR:-/var/cache/marker-models}
     environment:
       WORKER_SERVICE_NAME: ${WORKER_SERVICE_NAME:-deep-agent-worker}
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
       DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_WORKER_POOL: ${CELERY_WORKER_POOL:-solo}
       CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-1}
       CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
@@ -242,17 +265,16 @@ services:
       dockerfile: infra/docker/web/Dockerfile
     environment:
       VITE_APP_NAME: ${VITE_APP_NAME:-Deep Agent RAG Stack}
-      VITE_API_BASE_URL: http://localhost:${API_PORT:-18000}
+      VITE_API_BASE_URL: ${API_PUBLIC_URL:-https://easypinex.duckdns.org/api}
       VITE_AUTH_MODE: ${VITE_AUTH_MODE:-keycloak}
-      VITE_KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-18080}
+      VITE_KEYCLOAK_URL: ${KEYCLOAK_PUBLIC_URL:-https://easypinex.duckdns.org/auth}
       VITE_KEYCLOAK_REALM: ${VITE_KEYCLOAK_REALM:-deep-agent-dev}
-      VITE_KEYCLOAK_CLIENT_ID: ${VITE_KEYCLOAK_CLIENT_ID:-deep-agent-web}
+      VITE_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-deep-agent-web}
+      WEB_ALLOWED_HOSTS: ${WEB_ALLOWED_HOSTS:-localhost,127.0.0.1,easypinex.duckdns.org}
       VITE_CHAT_STREAM_DEBUG: ${VITE_CHAT_STREAM_DEBUG:-false}
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "${WEB_PORT:-13000}:3000"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000"]
       interval: 10s
@@ -260,6 +282,8 @@ services:
       retries: 10
 
 volumes:
+  caddy-data:
+  caddy-config:
   supabase-db-data:
   minio-data:
   marker-model-cache:

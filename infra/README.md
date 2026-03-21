@@ -4,18 +4,29 @@
 
 ## Purpose
 
-This module contains the local Docker Compose stack and the container build assets required to run the Documents + Retrieval Foundation stack.
+This module contains the local Docker Compose stack and the container build assets required to run the self-hosted platform.
+The current deployment model uses a single public HTTPS origin through `Caddy`, while `web`, `api`, and `keycloak` remain on the internal Docker network.
 
 ## How to Start
 
 - From the repository root:
   - `cp .env.example .env`
-  - `./scripts/compose.sh up --build`
-  - The wrapper script always injects the repository root `.env` and `infra/docker-compose.yml`, which prevents empty `OPENAI_API_KEY` / `COHERE_API_KEY` values when Compose is invoked from a different working directory.
-  - The Compose file pins the project name to `deep-agent-rag-stack` and uses repo-standard fallback host ports (`13000/18000/18080/19000/19001/15432/16379`) so accidental omission of `--env-file` is less likely to create port drift.
+  - Set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, and `TLS_ACME_EMAIL`
+  - Point DNS for `PUBLIC_HOST` at the deployment machine
+  - Forward external `80` and `443` to the Docker host
+  - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
+- The compose file pins the project name to `deep-agent-rag-stack`.
+- The `worker` service requests GPU access by default through `WORKER_GPUS=all`.
 
 ## Environment Variables
 
+- `PUBLIC_HOST`
+- `PUBLIC_BASE_URL`
+- `TLS_ACME_*`
+- `KEYCLOAK_EXPOSE_ADMIN`
+- `WEB_PUBLIC_URL`
+- `API_PUBLIC_URL`
+- `KEYCLOAK_PUBLIC_URL`
 - `POSTGRES_*`
 - `REDIS_PORT`
 - `MINIO_*`
@@ -25,10 +36,12 @@ This module contains the local Docker Compose stack and the container build asse
 - `REDIS_URL`
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
-- `MAX_UPLOAD_SIZE_BYTES`
 - `PDF_PARSER_PROVIDER`
+- `MARKER_*`
 - `LLAMAPARSE_*`
 - `CELERY_*`
+- `WORKER_GPUS`
+- `NVIDIA_*`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -40,6 +53,7 @@ This module contains the local Docker Compose stack and the container build asse
 ## Main Directory Structure
 
 - `docker-compose.yml`: local service orchestration
+- `docker/caddy`: reverse proxy image, template, and startup renderer
 - `docker/api`: API container image
 - `docker/worker`: worker container image
 - `docker/web`: web container image
@@ -47,10 +61,14 @@ This module contains the local Docker Compose stack and the container build asse
 
 ## Public Interfaces
 
-- Local service ports:
-  - Web: `13000`
-  - API: `18000`
-  - Keycloak: `18080`
+- Public browser entrypoint:
+  - `https://<PUBLIC_HOST>/`
+  - `https://<PUBLIC_HOST>/api/*`
+  - `https://<PUBLIC_HOST>/auth/*`
+- Public ports:
+  - `443`: primary customer-facing HTTPS entrypoint
+  - `80`: ACME / redirect only
+- Operational host ports that may still be published for local administration:
   - MinIO API: `19000`
   - MinIO Console: `19001`
   - Postgres (Supabase): `15432`
@@ -58,13 +76,11 @@ This module contains the local Docker Compose stack and the container build asse
 
 ## Troubleshooting
 
-- If you previously started the stack before the pinned project name was added, you may still have older containers such as `infra-*`. Clean them up before assuming the current stack is serving the expected ports.
-- The `supabase-db` service uses the `supabase/postgres` image with built-in PGroonga for Traditional Chinese search.
-- Keycloak automatically imports the `deep-agent-dev` realm, the `deep-agent-web` client, the groups mapper, and default users/groups on first startup.
-- `supabase/migrations/` is mounted into `/docker-entrypoint-initdb.d` only for fresh database volumes. Existing databases still need Alembic-based upgrades until a dedicated migration runner lands.
-- Current compose health checks only verify stack readiness, not complete business correctness.
-- The default compose setup uses `STORAGE_BACKEND=minio`. For local test-mode verification, switch to `filesystem` and keep both the `api` and `worker` services running.
-- To switch compose ingest to LlamaParse, set `PDF_PARSER_PROVIDER=llamaparse` and provide `LLAMAPARSE_API_KEY` in `.env`, then restart the `worker` container so the new environment reaches the ingest runtime.
-- Compose now mounts `MARKER_MODEL_CACHE_DIR` on the `marker-model-cache` named volume, so Marker / Surya model downloads survive worker restarts and rebuilds. If you override the cache path, make sure the volume target still matches that path.
-- The compose worker now defaults to `CELERY_WORKER_POOL=solo`, `CELERY_WORKER_CONCURRENCY=1`, `CELERY_WORKER_PREFETCH_MULTIPLIER=1`, `CELERY_WORKER_MAX_TASKS_PER_CHILD=1`, `CELERY_TASK_ACKS_LATE=true`, and `CELERY_TASK_REJECT_ON_WORKER_LOST=true`, so the worker keeps only one unfinished job in flight and requeues it if the worker process dies unexpectedly. If you switch back to prefork, verify the container has enough memory headroom first.
-- To enable Cohere rerank in compose, provide `COHERE_API_KEY` in `.env` and keep `RERANK_PROVIDER=cohere`.
+- If certificates are not issued, verify that `PUBLIC_HOST` resolves publicly and ports `80/443` reach the Docker host.
+- If login fails after the reverse proxy cutover, verify that `KEYCLOAK_PUBLIC_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, and the realm client redirect URIs all point to `/auth`.
+- `Caddy` routes `/auth/callback` to the web app and the rest of `/auth*` to Keycloak because the frontend callback path shares the `/auth` prefix.
+- `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the proxy. Set it to `true` only when you intentionally need remote admin console access.
+- The compose stack no longer publishes the previous `13000/18000/18080` host ports, so direct host access to web / API / Keycloak is expected to fail.
+- If the worker cannot start after GPU enablement, verify that Docker Desktop exposes the NVIDIA runtime and narrow `WORKER_GPUS` or `NVIDIA_VISIBLE_DEVICES` if needed.
+- `supabase-db` uses the `supabase/postgres` image with built-in PGroonga for Traditional Chinese search.
+- Compose health checks only verify service readiness, not complete business correctness.

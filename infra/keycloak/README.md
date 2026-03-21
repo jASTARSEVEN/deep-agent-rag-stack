@@ -16,16 +16,19 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ```
 
 - The `keycloak` service reads the realm JSON from `/opt/keycloak/data/import` at startup.
-- If the `keycloak-db` volume is brand new, Keycloak creates the `deep-agent-dev` realm and the default identity dataset.
-- If the `keycloak-db` volume already exists, normal restarts do not overwrite the existing realm content.
-- If you change `deep-agent-dev-realm.json` and want the changes applied to an existing local environment, a simple `docker compose restart` or `up` on existing containers is not enough. You must reset Keycloak persistent data first.
-- Compose pins `KC_HOSTNAME` to `http://localhost:${KEYCLOAK_PORT}` so browser-side and container-side requests use the same issuer and do not break API JWT validation.
+- On the current single-entry deployment, Keycloak is published externally through `https://<PUBLIC_HOST>/auth`.
+- The compose runtime pins `KC_HTTP_RELATIVE_PATH=/auth` and `KC_HOSTNAME` to the public `/auth` URL so browser-side URLs, issuer metadata, and API JWT validation stay aligned.
+- If you change `deep-agent-dev-realm.json` and want the changes applied to an existing local environment, a simple restart is not enough. You must reset Keycloak persistent data first.
 
 ## Environment Variables
 
 - `KEYCLOAK_REALM`
 - `KEYCLOAK_CLIENT_ID`
 - `KEYCLOAK_GROUPS_CLAIM`
+- `KEYCLOAK_PUBLIC_URL`
+- `KEYCLOAK_ISSUER`
+- `KEYCLOAK_JWKS_URL`
+- `KEYCLOAK_EXPOSE_ADMIN`
 
 ## Main Directory Structure
 
@@ -49,6 +52,14 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
   - `erin / erin123`: `/dept/hr` + `/dept/rd`
   - `frank / frank123`: `/platform/knowledge-admins`
 
+## Redirect and Origin Rules
+
+- Browser-facing Keycloak URLs must use `/auth`.
+- The frontend callback URI is `https://<PUBLIC_HOST>/auth/callback`.
+- Silent SSO uses `https://<PUBLIC_HOST>/silent-check-sso.html`.
+- Realm client redirect URIs must explicitly allow both the callback URI and the silent SSO URI.
+- `webOrigins` should allow the public web origin `https://<PUBLIC_HOST>`.
+
 ## Group Design Principles
 
 - A Keycloak `group` represents an organizational or functional identity and does not directly equal an area role.
@@ -64,23 +75,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 ## Troubleshooting
 
-- If you already created or modified other realms, normal restarts will not reset the data back to defaults.
-- If you updated `deep-agent-dev-realm.json`, you must delete the `keycloak-db` volume and restart Keycloak for the new realm settings, users, or mappers to take effect.
-- Prefer resetting only the Keycloak-specific volume to avoid wiping unrelated service data:
-
-```bash
-docker compose -f infra/docker-compose.yml --env-file .env down
-docker volume rm deep-agent-rag-stack_keycloak-db-data
-docker compose -f infra/docker-compose.yml --env-file .env up --build -d keycloak-db keycloak
-```
-
-- If the frontend callback shows a "cannot validate access token" error, rebuild the Keycloak container with the latest `KC_HOSTNAME` setting, sign in again, and clear stale tokens from `sessionStorage` if needed.
-
-- Use `down -v` only when you intentionally want to rebuild the entire development stack:
-
-```bash
-docker compose -f infra/docker-compose.yml --env-file .env down -v
-docker compose -f infra/docker-compose.yml --env-file .env up --build
-```
-
-- API JWT validation currently assumes a stable `groups` claim exists in the access token. If the token is missing `groups`, verify that the `groups` protocol mapper still exists in `deep-agent-dev-realm.json`.
+- If you updated `deep-agent-dev-realm.json`, you must reset Keycloak persistent data before the new realm settings, users, mappers, redirect URIs, or web origins take effect.
+- If browser login shows `invalid_redirect_uri`, first verify that the realm client includes both `/auth/callback` and `/silent-check-sso.html`.
+- If the frontend callback shows an access token validation error, verify that `KEYCLOAK_PUBLIC_URL`, `KEYCLOAK_ISSUER`, and `KEYCLOAK_JWKS_URL` all point to the same `/auth`-scoped public origin.
+- `KEYCLOAK_EXPOSE_ADMIN=false` intentionally blocks `/auth/admin*` at the proxy. Set it to `true` only when you explicitly want remote admin console access.

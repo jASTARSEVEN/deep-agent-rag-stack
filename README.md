@@ -45,6 +45,12 @@ Unlike many RAG demos that focus only on a chat interface or a single vector ret
 
 ## Current Status
 
+The deployment entrypoint is now designed around a single HTTPS origin behind `Caddy`, with automatic TLS issuance and renewal for `easypinex.duckdns.org`. Public traffic is expected to use:
+
+- `https://easypinex.duckdns.org/` for the web app
+- `https://easypinex.duckdns.org/api/*` for the API
+- `https://easypinex.duckdns.org/auth/*` for Keycloak
+
 The project is currently in `Phase 5.1 — Chat MVP on LangGraph Server`. By the second day of off-hours, multi-agent-driven implementation, the repo had already advanced from the original auth / upload / retrieval foundations to a working area-scoped chat slice on top of `Deep Agents` and `LangGraph Server`.
 
 - Monorepo structure, Docker Compose, and the local development stack
@@ -104,18 +110,30 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
    - `pip install -e ./apps/api -e ./apps/worker`
    - Shared workspace sync: `uv sync`
    - If you need the Marker PDF path, use a dedicated worker environment instead of the shared workspace:
-     `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
+     Bash: `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
+     PowerShell: `uv venv .worker-venv --python 3.12; uv pip install --python .worker-venv\Scripts\python.exe -e ".\apps\worker[dev]" "marker-pdf>=1.9.2,<2.0.0"`
+   - On Windows PowerShell, prefer the repo scripts instead of typing the commands manually:
+     Install: `.\scripts\install-worker-marker.ps1`
+     Start: `.\scripts\start-worker-marker.ps1` (starts Compose dependencies first, then launches the local Marker worker)
 3. Build and start the local stack:
    - `./scripts/compose.sh up --build`
    - The wrapper always uses the repository root `.env` and `infra/docker-compose.yml`, which prevents secrets such as `OPENAI_API_KEY` from silently becoming empty when the command is run from a different working directory.
    - The Compose project name is pinned to `deep-agent-rag-stack`, so container names stay stable and do not drift to fallback names such as `infra-*`.
-4. Open the local services:
-   - Web: `http://localhost:13000`
-   - API: `http://localhost:18000`
-   - API health: `http://localhost:18000/health`
-   - Keycloak: `http://localhost:18080`
+4. Point `PUBLIC_HOST` DNS to the deployment host and forward external `80/443` to the Docker machine.
+5. Open the public services:
+   - Web: `https://easypinex.duckdns.org`
+   - API health: `https://easypinex.duckdns.org/api/health`
+   - Keycloak OIDC base: `https://easypinex.duckdns.org/auth`
    - MinIO API: `http://localhost:19000`
    - MinIO Console: `http://localhost:19001`
+
+## Public Access Model
+
+- Customers use a single public service port: `443`.
+- Port `80` is reserved for ACME validation and HTTP-to-HTTPS redirect.
+- Compose no longer publishes `13000`, `18000`, and `18080` to the host.
+- `Caddy` terminates TLS, renews certificates automatically, and reverse proxies to `web`, `api`, and `keycloak` over the internal Docker network.
+- `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the reverse proxy while keeping the login and OIDC endpoints reachable.
 
 ## Database Init and Upgrade
 
@@ -133,15 +151,15 @@ See `.env.example` for the full local default configuration. The template is gro
 ## Verification
 
 - API health:
-  - `curl http://localhost:18000/health`
+  - `curl https://easypinex.duckdns.org/api/health`
 - Auth context:
-  - `curl -H "Authorization: Bearer <access-token>" http://localhost:18000/auth/context`
+  - `curl -H "Authorization: Bearer <access-token>" https://easypinex.duckdns.org/api/auth/context`
 - LangGraph chat runtime:
   - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task:
   - `./scripts/compose.sh exec worker python -m worker.scripts.healthcheck`
 - Web / Areas / Files / Chat:
-  - Open `http://localhost:13000`, sign in, and verify area listing, file upload, document status, and area-scoped chat behavior
+  - Open `https://easypinex.duckdns.org`, sign in, and verify area listing, file upload, document status, and area-scoped chat behavior
 - Phase 1 auth verification guide:
   - `docs/phase1-auth-verification.md`
 
@@ -151,4 +169,4 @@ See `.env.example` for the full local default configuration. The template is gro
 - If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
 - If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.
 - If the API starts but Deep Agents retrieval fails only on an existing database, verify that the PostgreSQL schema and RPCs were upgraded with `alembic upgrade head` instead of assuming Compose restart applied them.
-- `uv sync` keeps the shared workspace on dependencies that can coexist. `deepagents` and `marker-pdf` currently require incompatible `anthropic` versions, so Marker must live in a dedicated worker virtualenv such as `.worker-venv`. The hybrid worker launcher will prefer `.worker-venv` automatically when `PDF_PARSER_PROVIDER=marker`; otherwise use `PDF_PARSER_PROVIDER=local` or `llamaparse` in the shared `.venv`.
+- `uv sync` keeps the shared workspace on dependencies that can coexist. `deepagents` and `marker-pdf` currently require incompatible `anthropic` versions, so Marker must live in a dedicated worker virtualenv such as `.worker-venv`. On Unix-like shells, the interpreter path is usually `.worker-venv/bin/python`; on Windows PowerShell, use `.worker-venv\Scripts\python.exe`. The hybrid worker launcher will prefer `.worker-venv` automatically when `PDF_PARSER_PROVIDER=marker`; otherwise use `PDF_PARSER_PROVIDER=local` or `llamaparse` in the shared `.venv`.

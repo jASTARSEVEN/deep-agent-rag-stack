@@ -8,6 +8,16 @@
 
 [English README](README.md)
 
+## 單一入口部署
+
+- 對外公開入口統一為 `https://easypinex.duckdns.org`
+- `https://easypinex.duckdns.org/` 對應 Web
+- `https://easypinex.duckdns.org/api/*` 對應 API
+- `https://easypinex.duckdns.org/auth/*` 對應 Keycloak
+- `Caddy` 負責自動申請、續期與更新 TLS 憑證
+- 客戶端只使用 `443`；`80` 僅供 ACME 驗證與 HTTP 轉 HTTPS
+- compose 已不再將舊的 `13000`、`18000`、`18080` 對外發佈給客戶端
+
 ## 模組目的
 
 此倉庫是一個以可自架、NotebookLM 風格企業知識聊天應用為主題的工程實作專案，並作為多 agent 協作開發流程的實驗性雛形。其開發過程採用 multi-agent collaboration 進行任務拆分與實作協作。專案聚焦在真實企業場景常見的系統問題，包括文件上傳與背景處理、`RAG` 多策略搜尋、`Keycloak` OAuth2 認證整合、以群組與角色為核心的 `RBAC` 授權模型，以及對 Knowledge Area 與文件資源採取 `deny-by-default` 的存取控制設計。
@@ -104,7 +114,11 @@
    - `pip install -e ./apps/api -e ./apps/worker`
    - 共享 workspace 可直接使用：`uv sync`
    - 若要使用 Marker PDF 路徑，請改用獨立 worker 環境，不要裝進共享 workspace：
-     `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
+     Bash：`uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e './apps/worker[dev]' 'marker-pdf>=1.9.2,<2.0.0'`
+     PowerShell：`uv venv .worker-venv --python 3.12; uv pip install --python .worker-venv\Scripts\python.exe -e ".\apps\worker[dev]" "marker-pdf>=1.9.2,<2.0.0"`
+   - 若在 Windows PowerShell，建議直接使用 repo 內建腳本，不要手動輸入完整命令：
+     安裝：`.\scripts\install-worker-marker.ps1`
+     啟動：`.\scripts\start-worker-marker.ps1`（會先啟動 Compose 依賴服務，再啟動本機 Marker worker）
 3. 建置並啟動本機 stack：
    - `./scripts/compose.sh up --build`
    - 此 wrapper 會固定使用 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行時，`OPENAI_API_KEY` 之類的敏感設定被悄悄帶成空值。
@@ -151,4 +165,4 @@
 - 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
 - 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
 - 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先確認是否已執行 `alembic upgrade head`，不要假設重啟 Compose 就會自動套用 schema 與 RPC 升級。
-- `uv sync` 只會同步共享 workspace 中可共存的依賴。由於 `deepagents` 與 `marker-pdf` 目前依賴彼此不相容的 `anthropic` 版本，Marker 必須放在獨立 worker virtualenv，例如 `.worker-venv`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會優先使用 `.worker-venv`；若沒有這個需求，請在共享 `.venv` 改用 `PDF_PARSER_PROVIDER=local` 或 `llamaparse`。
+- `uv sync` 只會同步共享 workspace 中可共存的依賴。由於 `deepagents` 與 `marker-pdf` 目前依賴彼此不相容的 `anthropic` 版本，Marker 必須放在獨立 worker virtualenv，例如 `.worker-venv`。類 Unix shell 通常使用 `.worker-venv/bin/python`，Windows PowerShell 則要改用 `.worker-venv\Scripts\python.exe`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會優先使用 `.worker-venv`；若沒有這個需求，請在共享 `.venv` 改用 `PDF_PARSER_PROVIDER=local` 或 `llamaparse`。

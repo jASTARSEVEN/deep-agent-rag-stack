@@ -12,7 +12,12 @@ This module contains the project's Celery worker. It currently provides the mini
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
   - If you need `PDF_PARSER_PROVIDER=marker`, use a dedicated worker virtualenv and install Marker there:
-    `uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
+    Bash: `uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
+    PowerShell: `uv venv ../../.worker-venv --python 3.12; uv pip install --python ..\..\.worker-venv\Scripts\python.exe -e ".[dev]" "marker-pdf>=1.9.2,<2.0.0"`
+  - On Windows PowerShell from the repository root, prefer:
+    Install: `.\scripts\install-worker-marker.ps1`
+    Install with CUDA Torch: `.\scripts\install-worker-marker-gpu.ps1`
+    Start: `.\scripts\start-worker-marker.ps1` (starts Compose dependencies first, then launches the local Marker worker)
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - Local health check:
   - `python -m worker.scripts.healthcheck`
@@ -92,7 +97,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - If no tasks are registered, make sure the `worker.tasks` package is loaded by Celery.
 - `TXT`, `Markdown`, `HTML`, and `PDF` files now produce SQL-first parent-child chunks.
 - `PDF_PARSER_PROVIDER=marker` is the default path. It converts PDFs to Markdown with Marker, persists only `marker.cleaned.md`, and then reuses the existing Markdown parser and chunk tree.
-- `marker-pdf` is intentionally not part of the shared workspace solve because `deepagents` and Marker currently require incompatible `anthropic` versions. If you want the Marker path locally, install it into a dedicated worker virtualenv such as `../../.worker-venv`. The hybrid worker launcher can pick that environment automatically for `PDF_PARSER_PROVIDER=marker`.
+- `marker-pdf` is intentionally not part of the shared workspace solve because `deepagents` and Marker currently require incompatible `anthropic` versions. If you want the Marker path locally, install it into a dedicated worker virtualenv such as `../../.worker-venv`. On Unix-like shells, the interpreter path is usually `../../.worker-venv/bin/python`; on Windows PowerShell, use `..\..\.worker-venv\Scripts\python.exe`. The hybrid worker launcher can pick that environment automatically for `PDF_PARSER_PROVIDER=marker`.
+- On Windows PowerShell, prefer `.\scripts\install-worker-marker-gpu.ps1` when you expect Marker / Surya to use NVIDIA GPU acceleration. The script installs CUDA wheels from the official PyTorch index and verifies `torch.cuda.is_available()` before it reports success.
 - `MARKER_MODEL_CACHE_DIR` should point to a writable directory so Marker / Surya model downloads do not fail on restricted cache paths. In compose, that directory is now backed by a named volume so the model cache survives worker restarts and rebuilds.
 - When `MARKER_USE_LLM=true`, the worker now forwards `MARKER_LLM_SERVICE`, `MARKER_OPENAI_API_KEY`, `MARKER_OPENAI_MODEL`, and `MARKER_OPENAI_BASE_URL` into Marker's OpenAI-compatible LLM config.
 - `PDF_PARSER_PROVIDER=local` uses `Unstructured partition_pdf(strategy="fast")` as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse and then reuses the existing Markdown parser and chunk tree.

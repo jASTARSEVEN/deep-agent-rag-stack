@@ -12,7 +12,12 @@
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
   - 若要使用 `PDF_PARSER_PROVIDER=marker`，請改用獨立 worker virtualenv 安裝 Marker：
-    `uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
+    Bash：`uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
+    PowerShell：`uv venv ../../.worker-venv --python 3.12; uv pip install --python ..\..\.worker-venv\Scripts\python.exe -e ".[dev]" "marker-pdf>=1.9.2,<2.0.0"`
+  - 若從 repo 根目錄使用 Windows PowerShell，建議直接執行：
+    安裝：`.\scripts\install-worker-marker.ps1`
+    GPU 安裝：`.\scripts\install-worker-marker-gpu.ps1`
+    啟動：`.\scripts\start-worker-marker.ps1`（會先啟動 Compose 依賴服務，再啟動本機 Marker worker）
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - 本機健康檢查命令：
   - `python -m worker.scripts.healthcheck`
@@ -92,7 +97,7 @@
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。
 - `TXT`、`Markdown`、`HTML` 與 `PDF` 目前都會建立 SQL-first 的 parent-child chunks。
 - `PDF_PARSER_PROVIDER=marker` 是目前預設路徑；它會先用 Marker 將 PDF 轉成 Markdown，只持久化 `marker.cleaned.md`，再回接既有 Markdown parser 與 chunk tree。
-- `marker-pdf` 刻意不放進共享 workspace 的解算圖，因為 `deepagents` 與 Marker 目前依賴彼此不相容的 `anthropic` 版本。若本機確定要走 Marker 路徑，請把它安裝到獨立 worker virtualenv，例如 `../../.worker-venv`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會自動優先挑選那個環境。
+- `marker-pdf` 刻意不放進共享 workspace 的解算圖，因為 `deepagents` 與 Marker 目前依賴彼此不相容的 `anthropic` 版本。若本機確定要走 Marker 路徑，請把它安裝到獨立 worker virtualenv，例如 `../../.worker-venv`。類 Unix shell 通常使用 `../../.worker-venv/bin/python`，Windows PowerShell 則要改用 `..\..\.worker-venv\Scripts\python.exe`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會自動優先挑選那個環境。
 - `MARKER_MODEL_CACHE_DIR` 應指向可寫目錄，避免 Marker / Surya 模型下載落到受限的 cache 路徑；compose 預設會把這個目錄掛到 named volume，因此 worker 重啟或重建後模型 cache 不會遺失。
 - 當 `MARKER_USE_LLM=true` 時，worker 現在會把 `MARKER_LLM_SERVICE`、`MARKER_OPENAI_API_KEY`、`MARKER_OPENAI_MODEL` 與 `MARKER_OPENAI_BASE_URL` 一起傳給 Marker 的 OpenAI-compatible LLM 設定。
 - `PDF_PARSER_PROVIDER=local` 會使用 `Unstructured partition_pdf(strategy="fast")` 作為自架 fallback；`PDF_PARSER_PROVIDER=llamaparse` 則會先把 PDF 轉成 Markdown，再交給既有 Markdown parser 與 chunk tree。
