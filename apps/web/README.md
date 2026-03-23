@@ -13,7 +13,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
   - `npm run dev`
 - Validate the real login flow locally:
   - Make sure Keycloak and the API are available
-  - Open `http://localhost:3000` or the compose-exposed URL
+  - Open `http://localhost:3000` for local Node dev, or `https://<PUBLIC_HOST>` for the compose-backed public entry
   - Start login from the landing page and confirm you return to `/areas`
 - Run Playwright E2E locally:
   - `npm install`
@@ -64,9 +64,10 @@ This module contains the project's React + Tailwind frontend. It currently provi
 ## Troubleshooting
 
 - If the page shows API errors, make sure the API container is healthy and `VITE_API_BASE_URL` is correct.
-- If the Areas page shows `Failed to fetch` or cannot reach the API, make sure `API_CORS_ORIGINS` includes the current frontend origin. Local defaults should include at least `http://localhost:3000` and `http://localhost:13000`.
+- If the Areas page shows `Failed to fetch` or cannot reach the API, make sure `API_CORS_ORIGINS` includes the current frontend origin. The compose default is the public `https://<PUBLIC_HOST>` origin; local Node dev should explicitly allow `http://localhost:3000`.
 - If callback cannot return to the frontend after login, verify the redirect URI for the Keycloak client `deep-agent-web` matches `VITE_KEYCLOAK_URL` and `VITE_KEYCLOAK_CLIENT_ID`.
 - If Vite shows `Blocked request. This host is not allowed.`, add the public hostname to `WEB_ALLOWED_HOSTS` so the dev server accepts the incoming Host header.
+- If the browser warns that Web Crypto is unavailable and PKCE was disabled, use `https://<PUBLIC_HOST>` or `http://localhost` instead of a non-secure custom host so Keycloak can keep PKCE enabled.
 - If area APIs keep returning `401`, verify the Keycloak token still contains the `groups` claim and that the API issuer / JWKS settings are correct.
 - `VITE_AUTH_MODE=test` is only for Playwright and local testing. It must not be treated as evidence of a production login flow.
 - `npm run test:e2e` uses test auth mode and does not validate real Keycloak issuer, callback, logout, or SSO behavior. Use `npm run test:smoke:keycloak` for that coverage.

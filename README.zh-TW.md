@@ -55,7 +55,7 @@
 
 ## 目前已完成
 
-目前專案處於 `Phase 5.1 — Chat MVP on LangGraph Server`。在下班後與零碎閒暇時間進行的 multi-agent 協作開發中，到了第二天，整個倉庫已從原本的 auth / upload / retrieval foundation 進一步推進到可運作的 `Deep Agents + LangGraph Server` area-scoped chat 垂直切片。
+目前最新完成里程碑為 `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`。專案除了既有的 `Deep Agents + LangGraph Server` area-scoped chat 垂直切片外，現在也已補上以 `Caddy` 為核心的單一公開 HTTPS 入口、以 `/auth` 為固定 base path 的 Keycloak 對外模型，以及可接手既有 Supabase bootstrap schema 的 API migration runner。
 
 - Monorepo、Docker Compose 與本機開發環境骨架
 - `FastAPI` API、`Celery` worker、`React + Tailwind` Web 應用基本串接
@@ -75,9 +75,9 @@
 
 ## 目前尚未完成
 
-- area rename / delete 等管理補強功能
 - 真實 `Keycloak + LangGraph + Deep Agents` compose smoke 的更完整覆蓋
 - tool failure、no-context answers 與 streaming edge cases 的更多整合驗證
+- area management 與 access / documents / chat 狀態切換交界的更廣泛回歸驗證
 - 未來 `Deep Agents` 擴充點，例如 sub-agents、`MCP` 與可重用 `Skill`
 
 ## TODO / 未來補充
@@ -123,20 +123,22 @@
    - `./scripts/compose.sh up --build`
    - 此 wrapper 會固定使用 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行時，`OPENAI_API_KEY` 之類的敏感設定被悄悄帶成空值。
    - Compose project name 已固定為 `deep-agent-rag-stack`，可避免 container 名稱漂移成 `infra-*` 這類 fallback 名稱。
-4. 開啟本機服務：
-   - Web: `http://localhost:13000`
-   - API: `http://localhost:18000`
-   - API health: `http://localhost:18000/health`
-   - Keycloak: `http://localhost:18080`
+4. 將 `PUBLIC_HOST` 的 DNS 指向部署主機，並將外部 `80/443` 轉發到 Docker 主機。
+5. 開啟公開服務：
+   - Web: `https://easypinex.duckdns.org`
+   - API health: `https://easypinex.duckdns.org/api/health`
+   - Keycloak OIDC base: `https://easypinex.duckdns.org/auth`
    - MinIO API: `http://localhost:19000`
    - MinIO Console: `http://localhost:19001`
 
 ## 資料庫初始化與升級
 
 - 全新的資料庫 volume 會透過 `supabase/migrations/` 自動初始化，因為該目錄會掛載到 Supabase container 的 `/docker-entrypoint-initdb.d`。
-- 已存在的資料庫 volume 在重啟後不會重新執行這些初始化 SQL，因此重啟 `docker compose` 不是 schema upgrade 機制。
-- 既有環境需要手動使用 Alembic 升級：
-  - `./scripts/compose.sh exec api alembic upgrade head`
+- 已存在的資料庫 volume 在重啟後不會重新執行這些初始化 SQL，因此 bootstrap SQL 本身不是 schema upgrade 機制。
+- compose stack 現在會透過 `python -m app.db.migration_runner` 執行 API schema 升級。
+- migration runner 會先偵測既有 Supabase bootstrap schema 是否尚未寫入 `alembic_version`，必要時先補 stamp，再升級到目前 Alembic head。
+- 若要在既有環境手動重跑升級流程，請使用：
+  - `./scripts/compose.sh exec api python -m app.db.migration_runner`
 - 若 retrieval SQL 或 PostgreSQL RPC 有變更，必須確認 Alembic 也有同步表達該變更，不能只依賴 `supabase/migrations/`，除非你能保證目標環境一定是全新 volume。
 - 升級完成後，應重新驗證 API 與 retrieval 路徑，再判定環境是否健康。
 
@@ -147,15 +149,15 @@
 ## 驗證方式
 
 - API health：
-  - `curl http://localhost:18000/health`
+  - `curl https://easypinex.duckdns.org/api/health`
 - Auth context：
-  - `curl -H "Authorization: Bearer <access-token>" http://localhost:18000/auth/context`
+  - `curl -H "Authorization: Bearer <access-token>" https://easypinex.duckdns.org/api/auth/context`
 - LangGraph chat runtime：
   - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Worker ping task：
   - `./scripts/compose.sh exec worker python -m worker.scripts.healthcheck`
 - Web / Areas / Files / Chat：
-  - 開啟 `http://localhost:13000`，登入後進入一頁式 Dashboard，驗證區域切換、對話串流、點擊右上角按鈕開啟文件抽屜並進行管理
+  - 開啟 `https://easypinex.duckdns.org`，登入後進入一頁式 Dashboard，驗證區域切換、對話串流、點擊右上角按鈕開啟文件抽屜並進行管理
 - Phase 1 auth 驗證手冊：
   - `docs/phase1-auth-verification.md`
 
@@ -164,5 +166,5 @@
 - 若 Docker 映像建置失敗，請確認 Docker Desktop 正在執行，且能存取套件來源。
 - 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
 - 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
-- 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先確認是否已執行 `alembic upgrade head`，不要假設重啟 Compose 就會自動套用 schema 與 RPC 升級。
+- 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先在 API container 內重跑 `python -m app.db.migration_runner`，確認 schema 與 RPC 已升到最新 Alembic head。
 - `uv sync` 只會同步共享 workspace 中可共存的依賴。由於 `deepagents` 與 `marker-pdf` 目前依賴彼此不相容的 `anthropic` 版本，Marker 必須放在獨立 worker virtualenv，例如 `.worker-venv`。類 Unix shell 通常使用 `.worker-venv/bin/python`，Windows PowerShell 則要改用 `.worker-venv\Scripts\python.exe`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會優先使用 `.worker-venv`；若沒有這個需求，請在共享 `.venv` 改用 `PDF_PARSER_PROVIDER=local` 或 `llamaparse`。

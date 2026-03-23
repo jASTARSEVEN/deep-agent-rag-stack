@@ -13,7 +13,7 @@
   - `npm run dev`
 - 本機驗證正式登入：
   - 確保 Keycloak 與 API 已可用
-  - 開啟 `http://localhost:3000` 或 compose 對外網址
+  - 本機 Node 開發請開啟 `http://localhost:3000`；若走 compose 正式入口則開啟 `https://<PUBLIC_HOST>`
   - 由首頁進入 Keycloak，完成登入後回到 `/areas`
 - 本機執行 Playwright E2E：
   - `npm install`
@@ -64,9 +64,10 @@
 ## 疑難排解
 
 - 若頁面顯示 API 錯誤，請確認 API container 健康且 `VITE_API_BASE_URL` 設定正確。
-- 若 Areas 頁出現 `Failed to fetch` 或無法連線到 API，請確認 `API_CORS_ORIGINS` 已包含目前前端來源；本機預設應至少包含 `http://localhost:3000` 與 `http://localhost:13000`。
+- 若 Areas 頁出現 `Failed to fetch` 或無法連線到 API，請確認 `API_CORS_ORIGINS` 已包含目前前端來源。compose 預設是公開 `https://<PUBLIC_HOST>`；若你用本機 Node dev，則要額外允許 `http://localhost:3000`。
 - 若登入後 callback 無法回到前端，請確認 Keycloak client `deep-agent-web` 的 redirect URI 與 `VITE_KEYCLOAK_URL`、`VITE_KEYCLOAK_CLIENT_ID` 一致。
 - 若 Vite 顯示 `Blocked request. This host is not allowed.`，請把公開網域加入 `WEB_ALLOWED_HOSTS`，讓 dev server 接受該 Host header。
+- 若瀏覽器顯示 Web Crypto 不可用、Keycloak PKCE 已停用，請改用 `https://<PUBLIC_HOST>` 或 `http://localhost`，避免在非 secure context 的自訂 host 上登入。
 - 若 area API 一直出現 `401`，請確認 Keycloak token 內仍含 `groups` claim，且 API issuer / JWKS 設定正確。
 - `VITE_AUTH_MODE=test` 僅供 Playwright 與本機測試，不可當成正式登入驗證結論。
 - `npm run test:e2e` 使用 test auth mode，不會覆蓋真實 Keycloak issuer、callback、logout 與 SSO 行為；這些問題需由 `npm run test:smoke:keycloak` 補驗。

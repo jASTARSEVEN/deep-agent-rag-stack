@@ -32,11 +32,13 @@
 - 目前已處理 parse routing、parent-child chunk tree、embedding、FTS payload 寫入與狀態轉換
 
 ### Infra
+- Caddy：唯一對外 reverse proxy，負責 `80/443`、自動 TLS、`/`、`/api/*`、`/auth/*` 路由與 `/auth/admin*` 封鎖策略
 - PostgreSQL：主要資料庫 (使用 Supabase / PGroonga 支援繁體中文檢索)
 - Redis：Celery broker/result backend
 - MinIO：原始檔案儲存 (未來兼容 AWS S3)
-- Keycloak：目前正式的身分與群組來源
+- Keycloak：目前正式的身分與群組來源，公開 base path 固定為 `/auth`
 - Supabase Migrations：位於 `supabase/migrations/`，是目前的 schema 正式來源
+- Migration Runner：由 `python -m app.db.migration_runner` 負責接手既有 Supabase bootstrap schema 並升級到 Alembic head
 
 ## 關鍵架構原則
 
@@ -64,7 +66,7 @@
 ### 4. phase-by-phase 實作
 - 骨架完成前不實作完整 business logic
 - auth / areas / documents / retrieval / chat 按階段前進
-- area rename / delete 已補齊；其餘 Areas CRUD 補強仍應維持最小、可驗證的垂直切片原則
+- Areas CRUD 已補齊；後續 area management 相關工作應以最小、可驗證的回歸與穩定性補強為主
 
 ### 5. area hard delete 先清 storage 再刪資料
 - `DELETE /areas/{area_id}` 僅 `admin` 可執行
@@ -114,7 +116,8 @@
 3. Keycloak callback 回到 `/auth/callback`
 4. 前端建立 session、取得 access token，並呼叫 `GET /auth/context`
 5. 之後受保護 API 請求自動帶上 bearer token
-6. token 接近過期時由前端 refresh；失敗則清 session 並回首頁
+6. 在瀏覽器具備 secure-context Web Crypto 時，前端使用 PKCE `S256`；若在非 secure context 無法取得 `window.crypto.subtle`，則退回無 PKCE 模式並記錄警告
+7. token 接近過期時由前端 refresh；失敗則清 session 並回首頁
 
 ## 已驗證的 foundation 路徑
 
@@ -221,7 +224,8 @@
 ### 2. Runtime 收斂
 - **正式 auth 路徑**：目前正式支援 `Keycloak` issuer + JWKS 驗證與 `sub/groups` claims。
 - **正式 storage 路徑**：目前正式支援 `MinIO` 與 `filesystem`。
-- **既有 DB 升級策略**：`supabase/migrations/` 是新環境 schema 的正式來源，但在專用 migration runner 落地前，既有資料庫仍由 Alembic 升級。
+- **正式公開入口**：`Caddy` 是唯一對外入口；客戶端正式只走 `https://<PUBLIC_HOST>/`、`/api/*`、`/auth/*`。
+- **既有 DB 升級策略**：`supabase/migrations/` 負責 fresh volume bootstrap；compose 與手動維運則統一走 `python -m app.db.migration_runner`，必要時先補 Alembic stamp 再升級。
 
 ### 3. 開發環境的一致性 (Local Development Parity)
 - **Supabase Docker Stack**：開發環境直接採用 Docker Compose 提供的 Supabase Postgres 容器。這套配置能重現 PGroonga / pgvector 能力，且不需要安裝額外 CLI 工具。

@@ -38,6 +38,7 @@
 - LLM / rerank：`OpenAI`、`Cohere Rerank v4`
 - 本機編排：`Docker Compose`
 - 對外入口：`Caddy reverse proxy + automatic TLS`
+- 資料庫升級：`Alembic + migration runner`
 
 ## 產品範圍
 
@@ -121,6 +122,7 @@
 - Web、API、Keycloak 共用同一張以 `PUBLIC_HOST` 綁定的憑證
 - Keycloak 公開 base path 固定為 `/auth`
 - `/auth/admin*` 是否對外公開，必須由明確設定控制，預設應關閉
+- compose 內既有資料庫升級入口固定為 `python -m app.db.migration_runner`
 
 ## 預期公開能力
 
@@ -193,6 +195,7 @@
 - 單一路徑認證與儲存：目前正式支援 `Keycloak` 作為身分來源，`MinIO / filesystem` 作為儲存後端
 - 本地/地端支援：開發階段優先採用 Docker Compose 直接啟動 Supabase Postgres、API、Worker、Keycloak、MinIO、Web、Caddy
 - 基礎設施簡化：遷移完成後，完整移除對純 PostgreSQL（自編譯 pg_jieba）的依賴，降低維護成本
+- 既有資料庫承接：由 migration runner 判斷可辨識的 Supabase bootstrap schema，先補 Alembic revision 再升級
 
 ## 非功能性要求
 

@@ -127,7 +127,7 @@
 內容：
 - area rename / update
 - area delete
-- 視需要補齊完整 Areas CRUD 的 API、UI 與測試
+- 補齊完整 Areas CRUD 的 API、UI 與測試
 
 狀態：
 - `已完成`
@@ -212,6 +212,21 @@
 狀態：
 - `已完成`
 
+## Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening
+
+目標：
+- 讓部署入口、Keycloak 公開 URL 與既有資料庫升級流程對齊目前正式的自架模型。
+
+內容：
+- 新增 `Caddy` 作為唯一對外 `80/443` 入口，統一路由 `/`、`/api/*`、`/auth/*`
+- 將 Keycloak 公開 base path 固定為 `/auth`，並以 `KEYCLOAK_EXPOSE_ADMIN` 控制 `/auth/admin*` 是否對外可達
+- 將 web / api / keycloak 的公開 URL 與 compose 預設環境變數改為 `PUBLIC_HOST` 單一來源
+- 新增 `python -m app.db.migration_runner`，可辨識既有 Supabase bootstrap schema、補 Alembic stamp，並升級到 head
+- 補上 `WEB_ALLOWED_HOSTS`、瀏覽器非 secure context 的 PKCE fallback，以及 Windows Marker worker 安裝 / 啟動腳本
+
+狀態：
+- `已完成`
+
 ## Milestone 規則
 
 - 每個 phase 至少要有一個可驗證的垂直切片
@@ -220,6 +235,6 @@
 
 ## 近期建議順序
 
-1. 補齊真實 compose / Keycloak / Supabase / Deep Agents smoke 與 E2E 驗證
-2. 完善一頁式戰情室 (Dashboard) UI 互動細節
-3. 擴充 Areas CRUD 其餘管理能力與回歸驗證
+1. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證
+2. 驗證既有 Supabase volume 經 `migration_runner` 升級後的 retrieval / chat 穩定性
+3. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證

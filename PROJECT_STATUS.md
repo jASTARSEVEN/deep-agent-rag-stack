@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 6 — Supabase & PGroonga Migration (Completed)`
+當前主階段：`Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening (Completed)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -32,6 +32,7 @@
 - `Phase 4.2` table-aware retrieval assembler slice 已完成
 - `Phase 5.1` Chat MVP on LangGraph Server 已完成
 - `Phase 6` Supabase & PGroonga Migration 已完成
+- `Phase 6.1` Public HTTPS Entry & Migration Bootstrap Hardening 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -59,6 +60,11 @@
 - 已支援 `PDF + llamaparse` 的短 `text -> table -> text` cluster parent 規則：單一 parent、混合 `text/table/text` children，維持 table-aware retrieval/citation 語意
 - 已新增 `XLSX -> Unstructured partition_xlsx -> HTML table-aware parser` 路徑，worksheet 可直接進入既有 table-aware chunking
 - 已新增 `DOCX/PPTX -> Unstructured partition_docx/partition_pptx` 路徑，回接既有 `text/table` block-aware parser contract
+- 已完成以 `Caddy` 為核心的單一公開 HTTPS 入口，將 Web、API、Keycloak 收斂到同一個 `PUBLIC_HOST`
+- 已將 Keycloak 對外模型固定為 `/auth` base path，並支援以 `KEYCLOAK_EXPOSE_ADMIN` 預設封鎖 `/auth/admin*`
+- 已新增 `app.db.migration_runner`，可接手既有 Supabase bootstrap schema、補 Alembic stamp 並升級到最新 head
+- 已補上 `WEB_ALLOWED_HOSTS` 與瀏覽器非 secure context 的 Keycloak PKCE fallback，降低公開網域與本機開發切換時的登入失敗風險
+- 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 預設可請求 GPU runtime
 
 ## 已完成功能
 
@@ -185,9 +191,17 @@
 - 已實作 `match_chunks` candidate-generation RPC，供 PostgreSQL 路徑回傳受 SQL gate 保護的 vector/FTS 候選與排序輸入
 - 已將最終 `RRF`、未來 ranking policy、rerank 與 assembler 保留在 Python 層，為後續 business rules 預留擴充點
 - 已移除未接線的 multi-provider auth/storage staged 內容，正式路徑維持 Keycloak + MinIO/filesystem
-- 已恢復 Alembic 作為既有資料庫升級路徑，直到專用 migration runner 落地
 - 已移除對純 PostgreSQL (自編譯 pg_jieba) 的依賴，簡化基礎設施
 - 已更新相關環境變數範本與系統文件
+
+### Phase 6.1 — 已完成的 Public HTTPS Entry & Migration Bootstrap Hardening
+- 已新增 `caddy` service，將正式對外流量收斂為 `https://<PUBLIC_HOST>/`、`/api/*` 與 `/auth/*`
+- 已將 compose 內 `web`、`api`、`keycloak` 改為內部服務，正式客戶端入口只保留 `80/443`
+- 已將 Keycloak bootstrap 與公開 issuer 對齊 `/auth` relative path，並更新 realm redirect URI / web origins
+- 已新增 `app.db.migration_runner`，可辨識既有 Supabase bootstrap schema 是否缺少 `alembic_version`，必要時先補 stamp 再升級
+- 已將 compose migration command 收斂為 `python -m app.db.migration_runner`，避免既有 volume 僅靠 bootstrap SQL 或手動判斷 schema 版本
+- 已在前端補上 `WEB_ALLOWED_HOSTS` 與 PKCE fallback，讓 `https://<PUBLIC_HOST>` 與 `http://localhost` 都能維持可預期的登入行為
+- 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 可透過 `WORKER_GPUS` 與 `NVIDIA_*` 控制 GPU runtime
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
@@ -211,27 +225,26 @@
 ## 目前階段重點
 
 ### Current Focus
-- 交付 `Phase 5.1` 的 LangGraph Server built-in thread/run chat MVP
-- 完善一頁式戰情室 (Dashboard) 的各項組件互動細節，實現「現代化 RAG 戰情室體驗」
+- 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程
+- 驗證既有 Supabase volume 經 `migration_runner` 升級後，retrieval / chat / preview 路徑不退化
 - 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
-- 驗證 citation chips、全文 preview、child chunk hover highlighting 與 ready-only preview API 在 compose 環境下的整體一致性
+- 穩定 citation chips、全文 preview、child chunk hover highlighting 與 ready-only preview API 在公開 HTTPS 環境下的整體一致性
 - 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
 - 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
-- 穩定 LangGraph 啟動方式與既有 areas/documents 路由的相容性
 - 穩定 area update/delete 與既有 documents/access/chat 狀態切換的 UI 一致性
 
 ## 下一步
 
 ### 最適合立即進行的工作
 1. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-2. 在 compose 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+2. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
 3. 驗證 LangSmith tracing 在真實 provider 下的 trace、tags 與 metadata 是否符合預期
-4. 補完 Deep Agents greeting / no-context / tool failure fallback 的更多整合測試
-5. 擴充完整 Areas CRUD 的其餘管理能力與更多 area management 回歸驗證
+4. 補完 `migration_runner` 對既有 volume、缺少 `alembic_version` 與已在 head 狀態的回歸測試
+5. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證
 
 ## 尚未開始的功能
 
-- 完整 Areas CRUD 的其餘補強項目
+- 更完整的 area management 跨模組回歸驗證與誤用案例覆蓋
 
 ## Agent Rules
 
