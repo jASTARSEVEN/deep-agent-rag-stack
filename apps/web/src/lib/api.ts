@@ -71,6 +71,15 @@ async function readErrorMessage(response: Response): Promise<string> {
 
 
 interface RawPreviewChunkPayload {
+  /** chunk 關聯的 locator。 */
+  regions?: Array<{
+    page_number: number;
+    region_order: number;
+    bbox_left: number;
+    bbox_bottom: number;
+    bbox_right: number;
+    bbox_top: number;
+  }>;
   /** chunk 唯一識別碼。 */
   chunk_id: string;
   /** chunk 所屬 parent chunk 識別碼。 */
@@ -85,6 +94,10 @@ interface RawPreviewChunkPayload {
   start_offset: number;
   /** chunk 在全文中的結束 offset。 */
   end_offset: number;
+  /** 起始頁碼。 */
+  page_start?: number | null;
+  /** 結束頁碼。 */
+  page_end?: number | null;
 }
 
 
@@ -135,6 +148,9 @@ function normalizeDocumentPreviewPayload(payload: RawDocumentPreviewPayload): Do
       structure_kind: chunk.structure_kind,
       start_offset: chunk.start_offset,
       end_offset: chunk.end_offset,
+      page_start: typeof chunk.page_start === "number" ? chunk.page_start : null,
+      page_end: typeof chunk.page_end === "number" ? chunk.page_end : null,
+      regions: Array.isArray(chunk.regions) ? chunk.regions : [],
     })),
   };
 }

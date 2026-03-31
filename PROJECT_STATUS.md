@@ -52,8 +52,8 @@
 - 已完成一頁式戰情室 (Dashboard) UI 重構，提供左側 Area 導覽、中央滿版對話、右側文件管理抽屜與彈窗權限管理
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba 進行高效中文檢索
 - 已完成將 `match_chunks` 收斂為資料庫候選召回 RPC；最終 `RRF`、ranking policy、rerank 與 assembler 由 Python 層負責
-- 已完成 provider-based PDF parsing：預設 `marker` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
-- 已補上 `MARKER_MODEL_CACHE_DIR` 設定，讓 Marker / Surya 模型快取可落在 compose 與本機可寫路徑
+- 已完成 provider-based PDF parsing：預設 `opendataloader` 走 `PDF -> JSON + Markdown -> 現有 parser/chunk tree`，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 走 PDF -> Markdown -> 現有 Markdown parser -> 現有 chunk tree
+- 已完成 OpenDataLoader JSON-aware PDF ingest，將 `page + bounding box` 落入 SQL-first locator 與 chat/document API payload
 - 已將 parse artifact 收斂為可重建 parser 結果的最小 `md/html` 集合；reindex 會優先重用既有 artifacts，delete 與真正需要重跑 parser 的 ingest 才會清理舊 artifacts
 - 已支援 `POST /documents/{document_id}/reindex?force_reparse=true`，可由前端要求 worker 忽略既有 `md/html` artifacts 並強制重跑 parser
 - 已補上 `llamaparse` 的 Markdown noise cleanup 與 PDF-specific block consolidation，降低 parent chunks 在 PDF 路徑上的過度碎片化
@@ -64,7 +64,8 @@
 - 已將 Keycloak 對外模型固定為 `/auth` base path，並支援以 `KEYCLOAK_EXPOSE_ADMIN` 預設封鎖 `/auth/admin*`
 - 已新增並收斂 `app.db.migration_runner`，作為 fresh 與既有資料庫共用的唯一 Alembic 升級入口
 - 已補上 `WEB_ALLOWED_HOSTS` 與瀏覽器非 secure context 的 Keycloak PKCE fallback，降低公開網域與本機開發切換時的登入失敗風險
-- 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 預設可請求 GPU runtime
+- 已補上 Windows PowerShell 的本地 worker 啟動腳本，相容保留 `start-worker-marker.ps1` 入口，支援 `compose` 與 `hybrid` 兩種模式
+- 本機 hybrid worker 已改為固定共用專案根目錄 `.venv`，不再維護獨立 worker virtualenv
 - 已將資料庫 migration 收斂為單一 Alembic 路徑，移除 `supabase/migrations` 與 Alembic 並存造成的雙軌 schema 風險
 
 ## 已完成功能
@@ -120,7 +121,7 @@
 - Web 已在 `/areas` 補上 Files 區塊、單檔 upload、文件狀態與失敗訊息顯示
 - API 測試與 worker task 測試已補 upload 驗證、權限邊界、deny-by-default、狀態轉換與未支援格式案例
 - Playwright E2E 已補 admin/maintainer upload、reader read-only 與 failed upload 顯示案例
-- 已為 `PDF` 新增 provider-based parsing，正式支援 `marker`、`local` 與 `llamaparse` 三條解析路徑
+- 已為 `PDF` 新增 provider-based parsing，正式支援 `opendataloader`、`local` 與 `llamaparse` 三條解析路徑
 - 已新增 `LLAMAPARSE_DO_NOT_CACHE` 與 `LLAMAPARSE_MERGE_CONTINUED_TABLES` 設定，並將 agentic mode 保留為未來規劃
 
 ### Phase 3.5 — 已完成的 lifecycle hardening 與 chunk tree 基礎
@@ -201,7 +202,7 @@
 - 已將 Keycloak bootstrap 與公開 issuer 對齊 `/auth` relative path，並更新 realm redirect URI / web origins
 - 已將 compose migration command 收斂為 `python -m app.db.migration_runner`，fresh 與既有 volume 均走同一條 Alembic 升級路徑
 - 已在前端補上 `WEB_ALLOWED_HOSTS` 與 PKCE fallback，讓 `https://<PUBLIC_HOST>` 與 `http://localhost` 都能維持可預期的登入行為
-- 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 可透過 `WORKER_GPUS` 與 `NVIDIA_*` 控制 GPU runtime
+- 已補上 Windows PowerShell 的本地 worker 啟動腳本，相容保留 `start-worker-marker.ps1` 入口；compose worker 現在預設為 CPU-safe 啟動，不再主動要求 GPU runtime
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口

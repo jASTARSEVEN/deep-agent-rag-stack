@@ -7,9 +7,10 @@ ENV PYTHONUNBUFFERED=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 ENV PYTHONPATH=/app/src
 
-# Marker / OpenCV runtime shared libraries.
+# OpenDataLoader / Java runtime shared libraries.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        default-jre-headless \
         libxcb1 \
         libxext6 \
         libxrender1 \
@@ -24,7 +25,7 @@ RUN pip install --upgrade pip && \
     python -c "import tomllib; f = open('pyproject.toml', 'rb'); data = tomllib.load(f); deps = data['project'].get('dependencies', []); print('\n'.join(deps))" > requirements.txt && \
     pip install -r requirements.txt
 
-# Marker 透過 Python 套件安裝執行期依賴；目前 compose 路徑不額外要求 GPU 或系統套件。
+# OpenDataLoader 透過 Python 套件安裝執行期依賴；目前 compose 路徑要求 Java 11+。
 
 # 複製應用程式原始碼；執行期透過 PYTHONPATH 載入，不在 image 內重跑 editable install。
 COPY apps/worker /app

@@ -11,13 +11,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - If you need `PDF_PARSER_PROVIDER=marker`, use a dedicated worker virtualenv and install Marker there:
-    Bash: `uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
-    PowerShell: `uv venv ../../.worker-venv --python 3.12; uv pip install --python ..\..\.worker-venv\Scripts\python.exe -e ".[dev]" "marker-pdf>=1.9.2,<2.0.0"`
-  - On Windows PowerShell from the repository root, prefer:
-    Install: `.\scripts\install-worker-marker.ps1`
-    Install with CUDA Torch: `.\scripts\install-worker-marker-gpu.ps1`
-    Start: `.\scripts\start-worker-marker.ps1` (starts Compose dependencies first, then launches the local Marker worker)
+  - `PDF_PARSER_PROVIDER=opendataloader` is the default path and requires `Java 11+`
+  - This repository follows the official OpenDataLoader `json,markdown` recommendation and keeps AI safety filters enabled
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - Local health check:
   - `python -m worker.scripts.healthcheck`
@@ -44,15 +39,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
-- `MARKER_MODEL_CACHE_DIR`
-- `MARKER_FORCE_OCR`
-- `MARKER_STRIP_EXISTING_OCR`
-- `MARKER_USE_LLM`
-- `MARKER_LLM_SERVICE`
-- `MARKER_OPENAI_API_KEY`
-- `MARKER_OPENAI_MODEL`
-- `MARKER_OPENAI_BASE_URL`
-- `MARKER_DISABLE_IMAGE_EXTRACTION`
+- `OPENDATALOADER_USE_STRUCT_TREE`
+- `OPENDATALOADER_QUIET`
 - `LLAMAPARSE_API_KEY`
 - `LLAMAPARSE_DO_NOT_CACHE`
 - `LLAMAPARSE_MERGE_CONTINUED_TABLES`
@@ -90,17 +78,14 @@ This module contains the project's Celery worker. It currently provides the mini
 ## Troubleshooting
 
 - If the worker cannot connect to Redis, verify `CELERY_BROKER_URL`.
-- If `marker` PDF ingest fails with `Worker exited prematurely: signal 9 (SIGKILL)` in Celery logs, the usual cause is the OS killing a prefork child during a heavy PDF runtime. Compose now defaults to `CELERY_WORKER_POOL=solo`, `CELERY_WORKER_CONCURRENCY=1`, `CELERY_WORKER_PREFETCH_MULTIPLIER=1`, `CELERY_WORKER_MAX_TASKS_PER_CHILD=1`, and `CELERY_TASK_ACKS_LATE=true` so the worker keeps only one in-flight job at a time.
 - `CELERY_TASK_REJECT_ON_WORKER_LOST=true` pushes an unfinished job back to the queue if the worker process dies unexpectedly, instead of letting the job disappear after it was already reserved.
 - If ingest tasks cannot update the database, make sure `DATABASE_URL` points to the same database used by the API.
 - If the runtime cannot read document content, confirm that `MINIO_*` and `MINIO_BUCKET` match the deployment settings.
 - If no tasks are registered, make sure the `worker.tasks` package is loaded by Celery.
 - `TXT`, `Markdown`, `HTML`, and `PDF` files now produce SQL-first parent-child chunks.
-- `PDF_PARSER_PROVIDER=marker` is the default path. It converts PDFs to Markdown with Marker, persists only `marker.cleaned.md`, and then reuses the existing Markdown parser and chunk tree.
-- `marker-pdf` is intentionally not part of the shared workspace solve because `deepagents` and Marker currently require incompatible `anthropic` versions. If you want the Marker path locally, install it into a dedicated worker virtualenv such as `../../.worker-venv`. On Unix-like shells, the interpreter path is usually `../../.worker-venv/bin/python`; on Windows PowerShell, use `..\..\.worker-venv\Scripts\python.exe`. The hybrid worker launcher can pick that environment automatically for `PDF_PARSER_PROVIDER=marker`.
-- On Windows PowerShell, prefer `.\scripts\install-worker-marker-gpu.ps1` when you expect Marker / Surya to use NVIDIA GPU acceleration. The script installs CUDA wheels from the official PyTorch index and verifies `torch.cuda.is_available()` before it reports success.
-- `MARKER_MODEL_CACHE_DIR` should point to a writable directory so Marker / Surya model downloads do not fail on restricted cache paths. In compose, that directory is now backed by a named volume so the model cache survives worker restarts and rebuilds.
-- When `MARKER_USE_LLM=true`, the worker now forwards `MARKER_LLM_SERVICE`, `MARKER_OPENAI_API_KEY`, `MARKER_OPENAI_MODEL`, and `MARKER_OPENAI_BASE_URL` into Marker's OpenAI-compatible LLM config.
+- `PDF_PARSER_PROVIDER=opendataloader` is the default path. It runs OpenDataLoader with `format=json,markdown`, `use_struct_tree=true`, `image_output=off`, and `hybrid=off`, then persists `opendataloader.json` and `opendataloader.cleaned.md`.
+- Windows local development can use `scripts/start-worker-marker.ps1 -Mode hybrid` to keep Docker Compose for infra while running Celery from the project root `.venv`, or `-Mode compose` to start the containerized worker. The worker shares the same virtual environment as the main project.
+- If OpenDataLoader fails immediately on the local machine, check `java -version` first; the worker now requires Java 11+ for the default PDF path.
 - `PDF_PARSER_PROVIDER=local` uses `Unstructured partition_pdf(strategy="fast")` as the self-hosted fallback; `PDF_PARSER_PROVIDER=llamaparse` converts PDFs to Markdown through LlamaParse and then reuses the existing Markdown parser and chunk tree.
 - `.xlsx` files use `unstructured.partition_xlsx`, prefer worksheet `text_as_html`, and then reuse the existing HTML table-aware parser and chunk tree.
 - `.docx` and `.pptx` files use `unstructured.partition_docx` / `partition_pptx`, then map Unstructured elements back into the existing `text/table` block-aware parser contract.

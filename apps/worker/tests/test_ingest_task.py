@@ -96,8 +96,9 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         CHUNK_TXT_PARENT_GROUP_SIZE=4,
         CHUNK_TABLE_PRESERVE_MAX_CHARS=4000,
         CHUNK_TABLE_MAX_ROWS_PER_CHILD=20,
-        PDF_PARSER_PROVIDER="local",
-        MARKER_MODEL_CACHE_DIR=tmp_path / "marker-model-cache",
+        PDF_PARSER_PROVIDER="opendataloader",
+        OPENDATALOADER_USE_STRUCT_TREE=True,
+        OPENDATALOADER_QUIET=True,
         LLAMAPARSE_API_KEY="",
         LLAMAPARSE_DO_NOT_CACHE=True,
         LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
@@ -169,6 +170,7 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
     """支援的 md 文件應推進到 ready/succeeded，並寫入 parent-child chunks。"""
 
     settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "local"
     settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
@@ -456,6 +458,7 @@ def test_process_document_ingest_supports_local_pdf(monkeypatch, tmp_path: Path)
     )
 
     settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "local"
     settings.chunk_min_parent_section_length = 1
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     engine = create_database_engine(settings)
@@ -711,15 +714,28 @@ def test_process_document_ingest_supports_llamaparse_pdf(monkeypatch, tmp_path: 
         assert "| Alice | 95 |" in cleaned_artifact_path.read_text(encoding="utf-8")
 
 
-def test_process_document_ingest_supports_marker_pdf(monkeypatch, tmp_path: Path) -> None:
-    """marker provider 應能將 Markdown 結果交回既有 chunking 流程。"""
+def test_process_document_ingest_supports_opendataloader_pdf(monkeypatch, tmp_path: Path) -> None:
+    """opendataloader provider 應能將 JSON+Markdown 結果交回既有 chunking 流程。"""
 
     settings = build_settings(tmp_path)
-    settings.pdf_parser_provider = "marker"
+    settings.pdf_parser_provider = "opendataloader"
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "worker.parsers._extract_pdf_markdown_with_marker",
-        lambda *, payload, pdf_config: "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+        "worker.parsers._extract_pdf_content_with_opendataloader",
+        lambda *, payload, pdf_config: (
+            "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+            {
+                "markdown": "# PDF Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                "elements": [
+                    {
+                        "type": "table",
+                        "markdown": "| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                        "page_number": 1,
+                        "bbox": {"page_number": 1, "left": 1, "bottom": 2, "right": 3, "top": 4},
+                    }
+                ],
+            },
+        ),
     )
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -744,20 +760,22 @@ def test_process_document_ingest_supports_marker_pdf(monkeypatch, tmp_path: Path
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
-        artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
-        assert artifact_path.exists()
-        assert artifact_path.read_text(encoding="utf-8").strip().startswith("# PDF Report")
+        markdown_artifact_path = storage_path.parent / "artifacts" / "opendataloader.cleaned.md"
+        json_artifact_path = storage_path.parent / "artifacts" / "opendataloader.json"
+        assert markdown_artifact_path.exists()
+        assert json_artifact_path.exists()
+        assert markdown_artifact_path.read_text(encoding="utf-8").strip().startswith("# PDF Report")
 
 
-def test_process_document_ingest_reuses_existing_markdown_artifact_on_reindex(monkeypatch, tmp_path: Path) -> None:
-    """reindex 若已存在 PDF Markdown artifact，應直接重建 chunks 而不重跑 parser。"""
+def test_process_document_ingest_reuses_existing_opendataloader_json_artifact_on_reindex(monkeypatch, tmp_path: Path) -> None:
+    """reindex 若已存在 OpenDataLoader JSON artifact，應直接重建 chunks 而不重跑 parser。"""
 
     settings = build_settings(tmp_path)
-    settings.pdf_parser_provider = "marker"
+    settings.pdf_parser_provider = "opendataloader"
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "worker.parsers._extract_pdf_markdown_with_marker",
-        lambda *, payload, pdf_config: (_ for _ in ()).throw(AssertionError("不應重跑 marker parser")),
+        "worker.parsers._extract_pdf_content_with_opendataloader",
+        lambda *, payload, pdf_config: (_ for _ in ()).throw(AssertionError("不應重跑 opendataloader parser")),
     )
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -767,9 +785,15 @@ def test_process_document_ingest_reuses_existing_markdown_artifact_on_reindex(mo
     storage_path = Path(settings.local_storage_path) / document.storage_key
     storage_path.parent.mkdir(parents=True, exist_ok=True)
     storage_path.write_bytes(MINIMAL_TEXT_PDF)
-    artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
+    artifact_path = storage_path.parent / "artifacts" / "opendataloader.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.write_text("# Reused Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |", encoding="utf-8")
+    artifact_path.write_text(
+        (
+            '{"cleaned_markdown":"# Reused Report\\n\\n| Name | Score |\\n| --- | --- |\\n| Alice | 95 |",'
+            '"elements":[{"type":"table","markdown":"| Name | Score |\\n| --- | --- |\\n| Alice | 95 |","page_number":1}]}'
+        ),
+        encoding="utf-8",
+    )
 
     result = process_document_ingest(job.id)
 
@@ -788,15 +812,21 @@ def test_process_document_ingest_reuses_existing_markdown_artifact_on_reindex(mo
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
 
 
-def test_process_document_ingest_force_reparse_ignores_existing_markdown_artifact(monkeypatch, tmp_path: Path) -> None:
-    """force_reparse 應忽略既有 Markdown artifact 並重跑 parser。"""
+def test_process_document_ingest_force_reparse_ignores_existing_opendataloader_artifact(monkeypatch, tmp_path: Path) -> None:
+    """force_reparse 應忽略既有 OpenDataLoader artifact 並重跑 parser。"""
 
     settings = build_settings(tmp_path)
-    settings.pdf_parser_provider = "marker"
+    settings.pdf_parser_provider = "opendataloader"
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "worker.parsers._extract_pdf_markdown_with_marker",
-        lambda *, payload, pdf_config: "# Fresh Report\n\n| Name | Score |\n| --- | --- |\n| Bob | 88 |",
+        "worker.parsers._extract_pdf_content_with_opendataloader",
+        lambda *, payload, pdf_config: (
+            "# Fresh Report\n\n| Name | Score |\n| --- | --- |\n| Bob | 88 |",
+            {
+                "markdown": "# Fresh Report\n\n| Name | Score |\n| --- | --- |\n| Bob | 88 |",
+                "elements": [{"type": "table", "markdown": "| Name | Score |\n| --- | --- |\n| Bob | 88 |", "page_number": 1}],
+            },
+        ),
     )
     engine = create_database_engine(settings)
     Base.metadata.create_all(bind=engine)
@@ -806,9 +836,15 @@ def test_process_document_ingest_force_reparse_ignores_existing_markdown_artifac
     storage_path = Path(settings.local_storage_path) / document.storage_key
     storage_path.parent.mkdir(parents=True, exist_ok=True)
     storage_path.write_bytes(MINIMAL_TEXT_PDF)
-    artifact_path = storage_path.parent / "artifacts" / "marker.cleaned.md"
+    artifact_path = storage_path.parent / "artifacts" / "opendataloader.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
-    artifact_path.write_text("# Stale Report\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |", encoding="utf-8")
+    artifact_path.write_text(
+        (
+            '{"cleaned_markdown":"# Stale Report\\n\\n| Name | Score |\\n| --- | --- |\\n| Alice | 95 |",'
+            '"elements":[{"type":"table","markdown":"| Name | Score |\\n| --- | --- |\\n| Alice | 95 |","page_number":1}]}'
+        ),
+        encoding="utf-8",
+    )
 
     result = process_document_ingest(job.id, force_reparse=True)
 
@@ -869,16 +905,16 @@ def test_process_document_ingest_reuses_existing_html_artifact_on_reindex(monkey
         assert any(chunk.structure_kind == ChunkStructureKind.table for chunk in refreshed_chunks)
 
 
-def test_process_document_ingest_marks_failed_for_marker_missing_dependency(monkeypatch, tmp_path: Path) -> None:
-    """marker provider 缺少依賴時應轉為受控 failed。"""
+def test_process_document_ingest_marks_failed_for_opendataloader_missing_dependency(monkeypatch, tmp_path: Path) -> None:
+    """opendataloader provider 缺少依賴時應轉為受控 failed。"""
 
     settings = build_settings(tmp_path)
-    settings.pdf_parser_provider = "marker"
+    settings.pdf_parser_provider = "opendataloader"
     monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "worker.parsers._extract_pdf_markdown_with_marker",
+        "worker.parsers._extract_pdf_content_with_opendataloader",
         lambda *, payload, pdf_config: (_ for _ in ()).throw(
-            ValueError("marker provider 需要安裝 marker-pdf 與其相依套件。")
+            ValueError("opendataloader provider 需要安裝 opendataloader-pdf 與 Java 11+。")
         ),
     )
     engine = create_database_engine(settings)
@@ -904,7 +940,7 @@ def test_process_document_ingest_marks_failed_for_marker_missing_dependency(monk
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
         assert refreshed_job.error_message is not None
-        assert "marker-pdf" in refreshed_job.error_message.lower()
+        assert "opendataloader-pdf" in refreshed_job.error_message.lower()
         assert refreshed_chunk_count == 0
 
 

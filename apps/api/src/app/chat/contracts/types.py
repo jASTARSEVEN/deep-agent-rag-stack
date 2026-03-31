@@ -9,6 +9,23 @@ from pydantic import BaseModel
 from app.db.models import ChunkStructureKind
 
 
+class ChatCitationRegion(BaseModel):
+    """單一 citation 的 PDF locator。"""
+
+    # 所屬頁碼。
+    page_number: int
+    # 同一 citation/chunk 內的區域順序。
+    region_order: int
+    # 左邊界座標。
+    bbox_left: float
+    # 下邊界座標。
+    bbox_bottom: float
+    # 右邊界座標。
+    bbox_right: float
+    # 上邊界座標。
+    bbox_top: float
+
+
 class ChatDisplayCitation(BaseModel):
     """前端顯示用的單一 citation chip。"""
 
@@ -22,6 +39,10 @@ class ChatDisplayCitation(BaseModel):
     document_name: str
     # 引用所屬段落標題。
     heading: str | None
+    # 引用涵蓋的起始頁碼。
+    page_start: int | None = None
+    # 引用涵蓋的結束頁碼。
+    page_end: int | None = None
 
 
 class ChatAnswerBlock(BaseModel):
@@ -64,6 +85,12 @@ class ChatCitation(BaseModel):
     source: str
     # 此 context 是否發生文字裁切。
     truncated: bool
+    # context 涵蓋的起始頁碼。
+    page_start: int | None = None
+    # context 涵蓋的結束頁碼。
+    page_end: int | None = None
+    # context 關聯的 PDF locator。
+    regions: list[ChatCitationRegion] = []
 
 
 class ChatTrace(BaseModel):

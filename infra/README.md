@@ -17,7 +17,7 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
   - For public deployment, forward external `80` and `443` to the Docker host
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
 - The compose file pins the project name to `deep-agent-rag-stack`.
-- The `worker` service requests GPU access by default through `WORKER_GPUS=all`.
+- The `worker` service now starts in CPU-safe mode by default and no longer requests Docker GPU devices automatically.
 
 ## Environment Variables
 
@@ -38,10 +38,9 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
-- `MARKER_*`
+- `OPENDATALOADER_*`
 - `LLAMAPARSE_*`
 - `CELERY_*`
-- `WORKER_GPUS`
 - `NVIDIA_*`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
@@ -82,6 +81,6 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `Caddy` routes `/auth/callback` to the web app and the rest of `/auth*` to Keycloak because the frontend callback path shares the `/auth` prefix.
 - `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the proxy. Set it to `true` only when you intentionally need remote admin console access.
 - The compose stack no longer publishes the previous `13000/18000/18080` host ports, so direct host access to web / API / Keycloak is expected to fail.
-- If the worker cannot start after GPU enablement, verify that Docker Desktop exposes the NVIDIA runtime and narrow `WORKER_GPUS` or `NVIDIA_VISIBLE_DEVICES` if needed.
+- If you need GPU acceleration, add Docker GPU runtime settings explicitly for your environment before starting the worker. The default Compose path intentionally avoids requesting GPU devices.
 - `supabase-db` uses the `supabase/postgres` image with built-in PGroonga for Traditional Chinese search.
 - Compose health checks only verify service readiness, not complete business correctness.

@@ -14,6 +14,7 @@ from worker.db import (
     ChunkType,
     Document,
     DocumentChunk,
+    DocumentChunkRegion,
     DocumentStatus,
     IngestJob,
     IngestJobStatus,
@@ -259,23 +260,36 @@ def _replace_document_chunks(*, session, document: Document, chunking_result: Ch
         parent_id_by_section[draft.section_index] = chunk.id
 
     for draft in chunking_result.child_chunks:
-        session.add(
-            DocumentChunk(
-                document_id=document.id,
-                parent_chunk_id=parent_id_by_section[draft.section_index],
-                chunk_type=ChunkType.child,
-                structure_kind=ChunkStructureKind(draft.structure_kind),
-                position=draft.position,
-                section_index=draft.section_index,
-                child_index=draft.child_index,
-                heading=_sanitize_chunk_heading(draft.heading),
-                content=draft.content,
-                content_preview=_sanitize_content_preview(draft.content_preview),
-                char_count=draft.char_count,
-                start_offset=draft.start_offset,
-                end_offset=draft.end_offset,
-            )
+        chunk = DocumentChunk(
+            document_id=document.id,
+            parent_chunk_id=parent_id_by_section[draft.section_index],
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind(draft.structure_kind),
+            position=draft.position,
+            section_index=draft.section_index,
+            child_index=draft.child_index,
+            heading=_sanitize_chunk_heading(draft.heading),
+            content=draft.content,
+            content_preview=_sanitize_content_preview(draft.content_preview),
+            char_count=draft.char_count,
+            start_offset=draft.start_offset,
+            end_offset=draft.end_offset,
         )
+        session.add(chunk)
+        session.flush()
+        if draft.regions:
+            for region in draft.regions:
+                session.add(
+                    DocumentChunkRegion(
+                        chunk_id=chunk.id,
+                        page_number=region.page_number,
+                        region_order=region.region_order,
+                        bbox_left=region.bbox_left,
+                        bbox_bottom=region.bbox_bottom,
+                        bbox_right=region.bbox_right,
+                        bbox_top=region.bbox_top,
+                    )
+                )
 
     session.flush()
 
@@ -473,15 +487,8 @@ def _build_pdf_parser_config(settings) -> PdfParserConfig:
 
     return PdfParserConfig(
         provider=settings.pdf_parser_provider,
-        marker_model_cache_dir=str(settings.marker_model_cache_dir),
-        marker_force_ocr=settings.marker_force_ocr,
-        marker_strip_existing_ocr=settings.marker_strip_existing_ocr,
-        marker_use_llm=settings.marker_use_llm,
-        marker_llm_service=settings.marker_llm_service,
-        marker_openai_api_key=settings.marker_openai_api_key,
-        marker_openai_model=settings.marker_openai_model,
-        marker_openai_base_url=settings.marker_openai_base_url,
-        marker_disable_image_extraction=settings.marker_disable_image_extraction,
+        opendataloader_use_struct_tree=settings.opendataloader_use_struct_tree,
+        opendataloader_quiet=settings.opendataloader_quiet,
         llamaparse_api_key=settings.llamaparse_api_key,
         llamaparse_do_not_cache=settings.llamaparse_do_not_cache,
         llamaparse_merge_continued_tables=settings.llamaparse_merge_continued_tables,

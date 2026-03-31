@@ -24,14 +24,8 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         EMBEDDING_MAX_BATCH_TEXTS="",
         EMBEDDING_RETRY_MAX_ATTEMPTS="",
         EMBEDDING_RETRY_BASE_DELAY_SECONDS="",
-        MARKER_FORCE_OCR="",
-        MARKER_STRIP_EXISTING_OCR="",
-        MARKER_USE_LLM="",
-        MARKER_LLM_SERVICE="",
-        MARKER_OPENAI_API_KEY="",
-        MARKER_OPENAI_MODEL="",
-        MARKER_OPENAI_BASE_URL="",
-        MARKER_DISABLE_IMAGE_EXTRACTION="",
+        OPENDATALOADER_USE_STRUCT_TREE="",
+        OPENDATALOADER_QUIET="",
         LLAMAPARSE_DO_NOT_CACHE="",
         LLAMAPARSE_MERGE_CONTINUED_TABLES="",
     )
@@ -53,13 +47,7 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.embedding_max_batch_texts == 64
     assert settings.embedding_retry_max_attempts == 3
     assert settings.embedding_retry_base_delay_seconds == 2.0
-    assert settings.marker_force_ocr is False
-    assert settings.marker_strip_existing_ocr is False
-    assert settings.marker_use_llm is False
-    assert settings.marker_llm_service == "marker.services.openai.OpenAIService"
-    assert settings.marker_openai_api_key is None
-    assert settings.marker_openai_model == "gpt-4.1-mini"
-    assert settings.marker_openai_base_url is None
-    assert settings.marker_disable_image_extraction is True
+    assert settings.opendataloader_use_struct_tree is True
+    assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True
     assert settings.llamaparse_merge_continued_tables is False

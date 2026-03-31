@@ -11,13 +11,8 @@
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - 若要使用 `PDF_PARSER_PROVIDER=marker`，請改用獨立 worker virtualenv 安裝 Marker：
-    Bash：`uv venv ../../.worker-venv --python 3.12 && uv pip install --python ../../.worker-venv/bin/python -e .[dev] "marker-pdf>=1.9.2,<2.0.0"`
-    PowerShell：`uv venv ../../.worker-venv --python 3.12; uv pip install --python ..\..\.worker-venv\Scripts\python.exe -e ".[dev]" "marker-pdf>=1.9.2,<2.0.0"`
-  - 若從 repo 根目錄使用 Windows PowerShell，建議直接執行：
-    安裝：`.\scripts\install-worker-marker.ps1`
-    GPU 安裝：`.\scripts\install-worker-marker-gpu.ps1`
-    啟動：`.\scripts\start-worker-marker.ps1`（會先啟動 Compose 依賴服務，再啟動本機 Marker worker）
+  - `PDF_PARSER_PROVIDER=opendataloader` 已是預設路徑，執行 worker 的主機必須先安裝 `Java 11+`
+  - 本 repo 依 OpenDataLoader 官方建議採用 `json,markdown` 雙輸出，並維持 AI safety filters 開啟
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
 - 本機健康檢查命令：
   - `python -m worker.scripts.healthcheck`
@@ -44,15 +39,8 @@
 - `MINIO_BUCKET`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
-- `MARKER_MODEL_CACHE_DIR`
-- `MARKER_FORCE_OCR`
-- `MARKER_STRIP_EXISTING_OCR`
-- `MARKER_USE_LLM`
-- `MARKER_LLM_SERVICE`
-- `MARKER_OPENAI_API_KEY`
-- `MARKER_OPENAI_MODEL`
-- `MARKER_OPENAI_BASE_URL`
-- `MARKER_DISABLE_IMAGE_EXTRACTION`
+- `OPENDATALOADER_USE_STRUCT_TREE`
+- `OPENDATALOADER_QUIET`
 - `LLAMAPARSE_API_KEY`
 - `LLAMAPARSE_DO_NOT_CACHE`
 - `LLAMAPARSE_MERGE_CONTINUED_TABLES`
@@ -90,16 +78,14 @@
 ## 疑難排解
 
 - 若 worker 無法連到 Redis，請確認 `CELERY_BROKER_URL`。
-- 若 `marker` PDF ingest 在 Celery log 中出現 `Worker exited prematurely: signal 9 (SIGKILL)`，通常代表 prefork 子程序在重型 PDF runtime 期間被系統 OOM killer 終止；compose 預設已改為 `CELERY_WORKER_POOL=solo`、`CELERY_WORKER_CONCURRENCY=1`、`CELERY_WORKER_PREFETCH_MULTIPLIER=1`、`CELERY_WORKER_MAX_TASKS_PER_CHILD=1`，並搭配 `CELERY_TASK_ACKS_LATE=true`，讓 worker 同時間只會保有一個尚未完成的案件。
 - `CELERY_TASK_REJECT_ON_WORKER_LOST=true` 會在 worker 行程異常中止時把尚未完成的案件退回 queue，避免案件在「尚未做完但已被視為接收」的狀態下遺失。
 - 若 ingest task 無法更新資料庫，請確認 `DATABASE_URL` 指向與 API 相同的資料庫。
 - 若正式環境無法讀取文件內容，請確認 `MINIO_*` 與 `MINIO_BUCKET` 一致。
 - 若沒有 task 被註冊，請確認 `worker.tasks` 套件有被 Celery 載入。
 - `TXT`、`Markdown`、`HTML` 與 `PDF` 目前都會建立 SQL-first 的 parent-child chunks。
-- `PDF_PARSER_PROVIDER=marker` 是目前預設路徑；它會先用 Marker 將 PDF 轉成 Markdown，只持久化 `marker.cleaned.md`，再回接既有 Markdown parser 與 chunk tree。
-- `marker-pdf` 刻意不放進共享 workspace 的解算圖，因為 `deepagents` 與 Marker 目前依賴彼此不相容的 `anthropic` 版本。若本機確定要走 Marker 路徑，請把它安裝到獨立 worker virtualenv，例如 `../../.worker-venv`。類 Unix shell 通常使用 `../../.worker-venv/bin/python`，Windows PowerShell 則要改用 `..\..\.worker-venv\Scripts\python.exe`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會自動優先挑選那個環境。
-- `MARKER_MODEL_CACHE_DIR` 應指向可寫目錄，避免 Marker / Surya 模型下載落到受限的 cache 路徑；compose 預設會把這個目錄掛到 named volume，因此 worker 重啟或重建後模型 cache 不會遺失。
-- 當 `MARKER_USE_LLM=true` 時，worker 現在會把 `MARKER_LLM_SERVICE`、`MARKER_OPENAI_API_KEY`、`MARKER_OPENAI_MODEL` 與 `MARKER_OPENAI_BASE_URL` 一起傳給 Marker 的 OpenAI-compatible LLM 設定。
+- `PDF_PARSER_PROVIDER=opendataloader` 已是預設路徑。worker 會以 `format=json,markdown`、`use_struct_tree=true`、`image_output=off`、`hybrid=off` 執行 OpenDataLoader，並持久化 `opendataloader.json` 與 `opendataloader.cleaned.md`。
+- Windows 本地開發可使用 `scripts/start-worker-marker.ps1 -Mode hybrid` 讓基礎服務維持在 Docker Compose、Celery 跑在專案根目錄 `.venv`；若要直接啟動 container worker，改用 `-Mode compose`。worker 固定與主專案共用同一個虛擬環境。
+- 若 OpenDataLoader 在本機一開始就失敗，請先確認 `java -version` 能解析到 Java 11 以上版本。
 - `PDF_PARSER_PROVIDER=local` 會使用 `Unstructured partition_pdf(strategy="fast")` 作為自架 fallback；`PDF_PARSER_PROVIDER=llamaparse` 則會先把 PDF 轉成 Markdown，再交給既有 Markdown parser 與 chunk tree。
 - `.xlsx` 會使用 `unstructured.partition_xlsx`，優先採用 worksheet `text_as_html`，再回接既有 HTML table-aware parser 與 chunk tree。
 - `.docx` 與 `.pptx` 會使用 `unstructured.partition_docx` / `partition_pptx`，再把 Unstructured elements 映射回既有 `text/table` block-aware parser contract。

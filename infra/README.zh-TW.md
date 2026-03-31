@@ -17,7 +17,7 @@
   - 對外部署時再將外部 `80` 與 `443` 轉發到 Docker 主機
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
 - Compose 檔已固定 project name 為 `deep-agent-rag-stack`
-- `worker` 預設會透過 `WORKER_GPUS=all` 請求 GPU
+- `worker` 現在預設以 CPU-safe 模式啟動，不會自動要求 Docker GPU 裝置
 
 ## 環境變數
 
@@ -38,10 +38,9 @@
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
-- `MARKER_*`
+- `OPENDATALOADER_*`
 - `LLAMAPARSE_*`
 - `CELERY_*`
-- `WORKER_GPUS`
 - `NVIDIA_*`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
@@ -82,6 +81,6 @@
 - `Caddy` 會把 `/auth/callback` 轉給 web，並把其餘 `/auth*` 轉給 Keycloak，因為前端 callback 與 Keycloak 共用 `/auth` prefix。
 - `KEYCLOAK_EXPOSE_ADMIN=false` 會在 proxy 層封鎖 `/auth/admin*`；只有在你確定需要遠端管理主控台時，才應改成 `true`。
 - compose stack 已不再公開舊的 `13000/18000/18080`，因此直接從 host 連 web / API / Keycloak 失敗是預期行為。
-- 若 `worker` 在啟用 GPU 後無法啟動，請確認 Docker Desktop 已提供 NVIDIA runtime，並視需要調整 `WORKER_GPUS` 或 `NVIDIA_VISIBLE_DEVICES`。
+- 若你需要 GPU 加速，請先依實際執行環境明確加入 Docker GPU runtime 設定；預設 Compose 路徑刻意不再主動要求 GPU 裝置。
 - `supabase-db` 使用 `supabase/postgres` 映像，內建 PGroonga 支援繁體中文檢索。
 - Compose health check 目前只驗證服務就緒，不代表完整業務正確性。

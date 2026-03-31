@@ -113,12 +113,8 @@
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
    - 共享 workspace 可直接使用：`uv sync`
-   - 若要使用 Marker PDF 路徑，請改用獨立 worker 環境，不要裝進共享 workspace：
-     Bash：`uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e './apps/worker[dev]' 'marker-pdf>=1.9.2,<2.0.0'`
-     PowerShell：`uv venv .worker-venv --python 3.12; uv pip install --python .worker-venv\Scripts\python.exe -e ".\apps\worker[dev]" "marker-pdf>=1.9.2,<2.0.0"`
-   - 若在 Windows PowerShell，建議直接使用 repo 內建腳本，不要手動輸入完整命令：
-     安裝：`.\scripts\install-worker-marker.ps1`
-     啟動：`.\scripts\start-worker-marker.ps1`（會先啟動 Compose 依賴服務，再啟動本機 Marker worker）
+   - `PDF_PARSER_PROVIDER=opendataloader` 已成為預設路徑，執行 worker 的主機必須先安裝 `Java 11+`
+   - 本 repo 依 OpenDataLoader 官方建議採用 `json,markdown` 雙輸出；worker 會持久化 `opendataloader.json` 與 `opendataloader.cleaned.md`，維持 AI safety filters 開啟，並預設 `use_struct_tree=true`
 3. 建置並啟動本機 stack：
    - `./scripts/compose.sh up --build`
    - 此 wrapper 會固定使用 repo 根目錄 `.env` 與 `infra/docker-compose.yml`，避免從不同工作目錄執行時，`OPENAI_API_KEY` 之類的敏感設定被悄悄帶成空值。
@@ -165,4 +161,5 @@
 - 若 Keycloak 啟動較慢，請等到 `keycloak` health check 通過後再開啟 UI。
 - 若 web 無法連到 API，請確認 `.env` 中的 `VITE_API_BASE_URL`。
 - 若 API 可啟動，但 Deep Agents retrieval 只在既有資料庫上失敗，請優先在 API container 內重跑 `python -m app.db.migration_runner`，確認 schema 與 RPC 已升到最新 Alembic head。
-- `uv sync` 只會同步共享 workspace 中可共存的依賴。由於 `deepagents` 與 `marker-pdf` 目前依賴彼此不相容的 `anthropic` 版本，Marker 必須放在獨立 worker virtualenv，例如 `.worker-venv`。類 Unix shell 通常使用 `.worker-venv/bin/python`，Windows PowerShell 則要改用 `.worker-venv\Scripts\python.exe`。`./scripts/start-hybrid-worker.sh` 在 `PDF_PARSER_PROVIDER=marker` 時會優先使用 `.worker-venv`；若沒有這個需求，請在共享 `.venv` 改用 `PDF_PARSER_PROVIDER=local` 或 `llamaparse`。
+- 若 hybrid worker 使用 `PDF_PARSER_PROVIDER=opendataloader`，請先確認 `java -version` 可解析到 Java 11 以上版本，再啟動 Celery。
+- 為了維持 Windows 本地開發流程，相容入口 `scripts/start-worker-marker.ps1` 仍保留。可用 `-Mode compose` 啟動 container worker，或用 `-Mode hybrid` 保持基礎服務跑在 Compose、Celery 跑在專案根目錄 `.venv`。worker 現在固定與主專案共用同一個虛擬環境。

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
-from app.db.models import ChunkStructureKind, ChunkType, DocumentChunk
+from app.db.models import ChunkStructureKind, ChunkType, DocumentChunk, DocumentChunkRegion
 from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace
 from app.services.retrieval_text import merge_chunk_contents
 
@@ -34,6 +34,8 @@ class Citation:
     end_offset: int
     # citation 摘錄文字。
     excerpt: str
+    # citation 關聯的 PDF locator。
+    regions: list[DocumentChunkRegion] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -58,6 +60,8 @@ class AssembledContext:
     start_offset: int
     # context 在 normalized text 的結束 offset。
     end_offset: int
+    # context 關聯的 PDF locator。
+    regions: list[DocumentChunkRegion] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -172,6 +176,7 @@ def assemble_retrieval_result(
         session=session,
         parent_chunk_ids=[candidate.parent_chunk_id for candidate in retrieval_result.candidates if candidate.parent_chunk_id],
     )
+    regions_by_chunk_id = _load_regions_by_chunk_ids(session=session, chunk_ids=candidate_ids)
 
     grouped_records: OrderedDict[tuple[str, str | None], list[_CandidateRecord]] = OrderedDict()
     for order, candidate in enumerate(retrieval_result.candidates):
@@ -244,6 +249,7 @@ def assemble_retrieval_result(
                 source=context_source,
                 start_offset=start_offset,
                 end_offset=end_offset,
+                regions=[region for chunk in included_chunks for region in regions_by_chunk_id.get(str(chunk.id), [])],
             )
         )
         citations.extend(
@@ -256,6 +262,7 @@ def assemble_retrieval_result(
                 start_offset=record.candidate.start_offset,
                 end_offset=record.candidate.end_offset,
                 excerpt=record.candidate.content,
+                regions=regions_by_chunk_id.get(str(record.candidate.chunk_id), []),
             )
             for record in kept_records
         )
@@ -313,6 +320,23 @@ def _load_child_chunks(*, session: Session, chunk_ids: list[str]) -> dict[str, D
         )
     ).all()
     return {str(chunk.id): chunk for chunk in chunks}
+
+
+def _load_regions_by_chunk_ids(*, session: Session, chunk_ids: list[str]) -> dict[str, list[DocumentChunkRegion]]:
+    """依 chunk ids 補查 PDF locator regions。"""
+
+    if not chunk_ids:
+        return {}
+
+    regions = session.scalars(
+        select(DocumentChunkRegion)
+        .where(DocumentChunkRegion.chunk_id.in_(chunk_ids))
+        .order_by(DocumentChunkRegion.chunk_id.asc(), DocumentChunkRegion.region_order.asc())
+    ).all()
+    regions_by_chunk_id: dict[str, list[DocumentChunkRegion]] = {}
+    for region in regions:
+        regions_by_chunk_id.setdefault(str(region.chunk_id), []).append(region)
+    return regions_by_chunk_id
 
 
 def _load_parent_chunks(*, session: Session, parent_chunk_ids: list[str]) -> dict[str, DocumentChunk]:

@@ -200,9 +200,7 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/worker/Dockerfile
-    gpus: ${WORKER_GPUS:-all}
-    volumes:
-      - marker-model-cache:${MARKER_MODEL_CACHE_DIR:-/var/cache/marker-models}
+    # gpus: ${WORKER_GPUS:-all}
     environment:
       WORKER_SERVICE_NAME: ${WORKER_SERVICE_NAME:-deep-agent-worker}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
@@ -222,16 +220,9 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minio123}
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       LOCAL_STORAGE_PATH: ${LOCAL_STORAGE_PATH:-.local-storage}
-      PDF_PARSER_PROVIDER: ${PDF_PARSER_PROVIDER:-marker}
-      MARKER_MODEL_CACHE_DIR: ${MARKER_MODEL_CACHE_DIR:-/var/cache/marker-models}
-      MARKER_FORCE_OCR: ${MARKER_FORCE_OCR:-false}
-      MARKER_STRIP_EXISTING_OCR: ${MARKER_STRIP_EXISTING_OCR:-false}
-      MARKER_USE_LLM: ${MARKER_USE_LLM:-false}
-      MARKER_LLM_SERVICE: ${MARKER_LLM_SERVICE:-marker.services.openai.OpenAIService}
-      MARKER_OPENAI_API_KEY: ${MARKER_OPENAI_API_KEY:-}
-      MARKER_OPENAI_MODEL: ${MARKER_OPENAI_MODEL:-gpt-4.1-mini}
-      MARKER_OPENAI_BASE_URL: ${MARKER_OPENAI_BASE_URL:-}
-      MARKER_DISABLE_IMAGE_EXTRACTION: ${MARKER_DISABLE_IMAGE_EXTRACTION:-true}
+      PDF_PARSER_PROVIDER: ${PDF_PARSER_PROVIDER:-opendataloader}
+      OPENDATALOADER_USE_STRUCT_TREE: ${OPENDATALOADER_USE_STRUCT_TREE:-true}
+      OPENDATALOADER_QUIET: ${OPENDATALOADER_QUIET:-true}
       LLAMAPARSE_API_KEY: ${LLAMAPARSE_API_KEY:-}
       LLAMAPARSE_DO_NOT_CACHE: ${LLAMAPARSE_DO_NOT_CACHE:-true}
       LLAMAPARSE_MERGE_CONTINUED_TABLES: ${LLAMAPARSE_MERGE_CONTINUED_TABLES:-false}
@@ -284,4 +275,3 @@ volumes:
   caddy-config:
   supabase-db-data:
   minio-data:
-  marker-model-cache:

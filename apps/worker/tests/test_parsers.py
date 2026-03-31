@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 from types import ModuleType
 from types import SimpleNamespace
 import sys
 
-from worker.parsers import PdfParserConfig, parse_document, parse_document_from_artifact
+from worker.parsers import (
+    PdfParserConfig,
+    _extract_pdf_content_with_opendataloader,
+    parse_document,
+    parse_document_from_artifact,
+)
 
 
 # 測試 local PDF provider 路徑的最小 PDF 樣本。
@@ -134,99 +141,77 @@ def test_parse_document_uses_llamaparse_markdown_and_forwards_flags(monkeypatch)
     ]
 
 
-def test_parse_document_uses_marker_markdown_and_forwards_flags(monkeypatch) -> None:
-    """marker provider 應正確轉發設定，並沿用既有 Markdown parser。"""
-
-    captured_config: dict[str, object] = {}
-
-    class FakeConfigParser:
-        """模擬 Marker ConfigParser。"""
-
-        def __init__(self, config: dict[str, object]) -> None:
-            captured_config.update(config)
-
-        def generate_config_dict(self) -> dict[str, object]:
-            return dict(captured_config)
-
-        def get_processors(self) -> list[object]:
-            return []
-
-        def get_renderer(self) -> None:
-            return None
-
-        def get_llm_service(self) -> None:
-            return None
-
-    class FakePdfConverter:
-        """模擬 Marker PdfConverter。"""
-
-        def __init__(self, **kwargs) -> None:
-            captured_config["converter_kwargs"] = kwargs
-
-        def __call__(self, _path: str) -> str:
-            return "rendered"
-
-    monkeypatch.setitem(sys.modules, "marker", ModuleType("marker"))
-    monkeypatch.setitem(sys.modules, "marker.config", ModuleType("marker.config"))
-    monkeypatch.setitem(sys.modules, "marker.converters", ModuleType("marker.converters"))
-    monkeypatch.setitem(sys.modules, "marker.config.parser", SimpleNamespace(ConfigParser=FakeConfigParser))
-    monkeypatch.setitem(sys.modules, "marker.converters.pdf", SimpleNamespace(PdfConverter=FakePdfConverter))
-    monkeypatch.setitem(sys.modules, "marker.models", SimpleNamespace(create_model_dict=lambda: {"fake": "model"}))
-    monkeypatch.setitem(
-        sys.modules,
-        "marker.output",
-        SimpleNamespace(
-            text_from_rendered=lambda rendered: (
-                "# Heading\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
-                {"rendered": rendered},
-                {},
-            )
-        ),
-    )
-
-    parsed = parse_document(
-        file_name="sample.pdf",
-        payload=MINIMAL_TEXT_PDF,
-        pdf_config=PdfParserConfig(
-            provider="marker",
-            marker_force_ocr=True,
-            marker_strip_existing_ocr=True,
-            marker_use_llm=True,
-            marker_llm_service="marker.services.openai.OpenAIService",
-            marker_openai_api_key="marker-openai-key",
-            marker_openai_model="gpt-4.1-mini",
-            marker_openai_base_url="https://example.openai.local/v1",
-            marker_disable_image_extraction=True,
-        ),
-    )
-
-    assert captured_config["output_format"] == "markdown"
-    assert captured_config["disable_image_extraction"] is True
-    assert captured_config["force_ocr"] is True
-    assert captured_config["strip_existing_ocr"] is True
-    assert captured_config["use_llm"] is True
-    assert captured_config["llm_service"] == "marker.services.openai.OpenAIService"
-    assert captured_config["openai_api_key"] == "marker-openai-key"
-    assert captured_config["openai_model"] == "gpt-4.1-mini"
-    assert captured_config["openai_base_url"] == "https://example.openai.local/v1"
-    assert [block.block_kind for block in parsed.blocks] == ["table"]
-    assert parsed.blocks[0].heading == "Heading"
-    assert "| Alice | 95 |" in parsed.blocks[0].content
-    assert [artifact.file_name for artifact in parsed.artifacts] == ["marker.cleaned.md"]
-
-
-def test_parse_document_cleans_marker_page_noise(monkeypatch) -> None:
-    """Marker Markdown 中的常見頁碼與分隔符應在 parse 前被清理。"""
+def test_parse_document_uses_opendataloader_json_markdown_and_preserves_regions(monkeypatch) -> None:
+    """opendataloader provider 應產生 JSON+Markdown artifacts 並保留 regions。"""
 
     monkeypatch.setattr(
-        "worker.parsers._extract_pdf_markdown_with_marker",
-        lambda *, payload, pdf_config: "Page 1 of 2\n\n# Heading\n\n---\n\nUseful paragraph\n\nPage 2",
+        "worker.parsers._extract_pdf_content_with_opendataloader",
+        lambda *, payload, pdf_config: (
+            "# Heading\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+            {
+                "markdown": "# Heading\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                "elements": [
+                    {
+                        "type": "table",
+                        "markdown": "| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+                        "page_number": 2,
+                        "regions": [
+                            {
+                                "page_number": 2,
+                                "left": 10,
+                                "bottom": 20,
+                                "right": 200,
+                                "top": 120,
+                            }
+                        ],
+                    }
+                ],
+            },
+        ),
     )
 
     parsed = parse_document(
         file_name="sample.pdf",
         payload=MINIMAL_TEXT_PDF,
-        pdf_config=PdfParserConfig(provider="marker"),
+        pdf_config=PdfParserConfig(provider="opendataloader"),
+    )
+
+    assert [block.block_kind for block in parsed.blocks] == ["table"]
+    assert parsed.blocks[0].heading == "Heading"
+    assert parsed.blocks[0].page_start == 2
+    assert parsed.blocks[0].page_end == 2
+    assert parsed.blocks[0].regions is not None
+    assert parsed.blocks[0].regions[0].page_number == 2
+    assert [artifact.file_name for artifact in parsed.artifacts] == [
+        "opendataloader.json",
+        "opendataloader.cleaned.md",
+    ]
+
+
+def test_parse_document_cleans_opendataloader_page_noise(monkeypatch) -> None:
+    """OpenDataLoader Markdown 中的常見頁碼與分隔符應在 parse 前被清理。"""
+
+    monkeypatch.setattr(
+        "worker.parsers._extract_pdf_content_with_opendataloader",
+        lambda *, payload, pdf_config: (
+            "Page 1 of 2\n\n# Heading\n\n---\n\nUseful paragraph\n\nPage 2",
+            {
+                "markdown": "Page 1 of 2\n\n# Heading\n\n---\n\nUseful paragraph\n\nPage 2",
+                "elements": [
+                    {
+                        "type": "paragraph",
+                        "text": "Useful paragraph",
+                        "page_number": 1,
+                    }
+                ],
+            },
+        ),
+    )
+
+    parsed = parse_document(
+        file_name="sample.pdf",
+        payload=MINIMAL_TEXT_PDF,
+        pdf_config=PdfParserConfig(provider="opendataloader"),
     )
 
     assert len(parsed.blocks) == 1
@@ -234,18 +219,23 @@ def test_parse_document_cleans_marker_page_noise(monkeypatch) -> None:
     assert parsed.blocks[0].content == "Useful paragraph"
 
 
-def test_parse_document_from_markdown_artifact_preserves_pdf_source_format() -> None:
-    """PDF Markdown artifact 重建後仍應保留 `pdf` source_format。"""
+def test_parse_document_from_json_artifact_preserves_pdf_source_format() -> None:
+    """OpenDataLoader JSON artifact 重建後仍應保留 `pdf` source_format。"""
 
     parsed = parse_document_from_artifact(
         file_name="sample.pdf",
-        artifact_file_name="marker.cleaned.md",
-        payload=b"# Heading\n\n| Name | Score |\n| --- | --- |\n| Alice | 95 |",
+        artifact_file_name="opendataloader.json",
+        payload=(
+            b'{"cleaned_markdown":"# Heading\\n\\n| Name | Score |\\n| --- | --- |\\n| Alice | 95 |",'
+            b'"elements":[{"type":"table","markdown":"| Name | Score |\\n| --- | --- |\\n| Alice | 95 |","page_number":3,'
+            b'"bbox":{"page_number":3,"left":1,"bottom":2,"right":3,"top":4}}]}'
+        ),
     )
 
     assert parsed.source_format == "pdf"
     assert [block.block_kind for block in parsed.blocks] == ["table"]
     assert parsed.blocks[0].heading == "Heading"
+    assert parsed.blocks[0].page_start == 3
 
 
 def test_parse_document_from_html_artifact_preserves_office_source_format() -> None:
@@ -265,14 +255,14 @@ def test_parse_document_from_html_artifact_preserves_office_source_format() -> N
     assert parsed.blocks[0].heading == "Plan"
 
 
-def test_parse_document_rejects_marker_without_dependency() -> None:
-    """缺少 Marker 套件時應明確失敗。"""
+def test_parse_document_rejects_opendataloader_without_dependency() -> None:
+    """缺少 OpenDataLoader 套件時應明確失敗。"""
 
     original_import = __import__
 
     def _fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name.startswith("marker"):
-            raise ImportError("missing marker")
+        if name.startswith("opendataloader_pdf"):
+            raise ImportError("missing opendataloader")
         return original_import(name, globals, locals, fromlist, level)
 
     import builtins
@@ -283,14 +273,70 @@ def test_parse_document_rejects_marker_without_dependency() -> None:
         parse_document(
             file_name="sample.pdf",
             payload=MINIMAL_TEXT_PDF,
-            pdf_config=PdfParserConfig(provider="marker"),
+            pdf_config=PdfParserConfig(provider="opendataloader"),
         )
     except ValueError as exc:
-        assert "marker-pdf" in str(exc)
+        assert "opendataloader-pdf" in str(exc)
     else:  # pragma: no cover - 失敗時才會進來。
-        raise AssertionError("預期缺少 marker-pdf 時應拋出 ValueError。")
+        raise AssertionError("預期缺少 opendataloader-pdf 時應拋出 ValueError。")
     finally:
         builtins.__import__ = builtins_import
+
+
+def test_extract_pdf_content_with_opendataloader_reads_output_files(monkeypatch, tmp_path) -> None:
+    """OpenDataLoader wrapper 若僅寫檔不回傳 payload，仍應能讀回 JSON 與 Markdown。"""
+
+    output_dir = tmp_path / "opendataloader-output"
+    written_pdf_path: Path | None = None
+
+    def _fake_mkdtemp(*, prefix: str) -> str:
+        assert prefix == "opendataloader-output-"
+        output_dir.mkdir()
+        return str(output_dir)
+
+    def _fake_write_temporary_pdf(*, payload: bytes) -> Path:
+        del payload
+        nonlocal written_pdf_path
+        written_pdf_path = tmp_path / "input.pdf"
+        written_pdf_path.write_bytes(MINIMAL_TEXT_PDF)
+        return written_pdf_path
+
+    def _fake_convert(**kwargs) -> None:
+        assert kwargs["format"] == "json,markdown"
+        assert kwargs["quiet"] is True
+        assert kwargs["use_struct_tree"] is True
+        assert kwargs["image_output"] == "off"
+        assert kwargs["hybrid"] == "off"
+        assert kwargs["include_header_footer"] is False
+        (output_dir / "sample.json").write_text(
+            json.dumps(
+                {
+                    "elements": [
+                        {
+                            "type": "paragraph",
+                            "text": "Useful paragraph",
+                            "page_number": 1,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "sample.md").write_text("# Heading\n\nUseful paragraph", encoding="utf-8")
+
+    monkeypatch.setattr("worker.parsers.tempfile.mkdtemp", _fake_mkdtemp)
+    monkeypatch.setattr("worker.parsers._write_temporary_pdf", _fake_write_temporary_pdf)
+    monkeypatch.setitem(sys.modules, "opendataloader_pdf", SimpleNamespace(convert=_fake_convert))
+
+    markdown, payload = _extract_pdf_content_with_opendataloader(
+        payload=MINIMAL_TEXT_PDF,
+        pdf_config=PdfParserConfig(provider="opendataloader"),
+    )
+
+    assert markdown == "# Heading\n\nUseful paragraph"
+    assert payload["elements"][0]["text"] == "Useful paragraph"
+    assert written_pdf_path is not None
+    assert not written_pdf_path.exists()
 
 
 def test_parse_document_cleans_llamaparse_page_noise(monkeypatch) -> None:

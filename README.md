@@ -109,12 +109,8 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
    - `python -m venv .venv && source .venv/bin/activate`
    - `pip install -e ./apps/api -e ./apps/worker`
    - Shared workspace sync: `uv sync`
-   - If you need the Marker PDF path, use a dedicated worker environment instead of the shared workspace:
-     Bash: `uv venv .worker-venv --python 3.12 && uv pip install --python .worker-venv/bin/python -e ./apps/worker[dev] "marker-pdf>=1.9.2,<2.0.0"`
-     PowerShell: `uv venv .worker-venv --python 3.12; uv pip install --python .worker-venv\Scripts\python.exe -e ".\apps\worker[dev]" "marker-pdf>=1.9.2,<2.0.0"`
-   - On Windows PowerShell, prefer the repo scripts instead of typing the commands manually:
-     Install: `.\scripts\install-worker-marker.ps1`
-     Start: `.\scripts\start-worker-marker.ps1` (starts Compose dependencies first, then launches the local Marker worker)
+   - `PDF_PARSER_PROVIDER=opendataloader` is now the default path and requires `Java 11+` on the machine running the worker.
+   - OpenDataLoader follows the official `json,markdown` recommendation in this repository. The worker persists `opendataloader.json` and `opendataloader.cleaned.md`, keeps AI safety filters enabled, and enables `use_struct_tree=true` with automatic fallback when tags are missing.
 3. Build and start the local stack:
    - `./scripts/compose.sh up --build`
    - The wrapper always uses the repository root `.env` and `infra/docker-compose.yml`, which prevents secrets such as `OPENAI_API_KEY` from silently becoming empty when the command is run from a different working directory.
@@ -169,4 +165,5 @@ See `.env.example` for the full local default configuration. The template is gro
 - If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
 - If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.
 - If the API starts but Deep Agents retrieval fails only on an existing database, rerun `python -m app.db.migration_runner` inside the API container and verify that the PostgreSQL schema and RPCs reached the latest Alembic head.
-- `uv sync` keeps the shared workspace on dependencies that can coexist. `deepagents` and `marker-pdf` currently require incompatible `anthropic` versions, so Marker must live in a dedicated worker virtualenv such as `.worker-venv`. On Unix-like shells, the interpreter path is usually `.worker-venv/bin/python`; on Windows PowerShell, use `.worker-venv\Scripts\python.exe`. The hybrid worker launcher will prefer `.worker-venv` automatically when `PDF_PARSER_PROVIDER=marker`; otherwise use `PDF_PARSER_PROVIDER=local` or `llamaparse` in the shared `.venv`.
+- If the hybrid worker runs with `PDF_PARSER_PROVIDER=opendataloader`, confirm `java -version` resolves to Java 11 or newer before starting Celery.
+- Windows local worker entrypoint is available at `scripts/start-worker-marker.ps1` for compatibility. Use `-Mode compose` to start the container worker, or `-Mode hybrid` to keep infra in Compose and run Celery from the project root `.venv`. The worker now shares the same virtual environment as the main project.

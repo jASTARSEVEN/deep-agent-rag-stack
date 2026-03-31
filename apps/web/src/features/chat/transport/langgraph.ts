@@ -114,6 +114,23 @@ function normalizeChatContextReference(value: unknown): ChatContextReference | n
     structure_kind: value.structure_kind === "table" ? "table" : "text",
     start_offset: typeof value.start_offset === "number" ? value.start_offset : 0,
     end_offset: typeof value.end_offset === "number" ? value.end_offset : 0,
+    page_start: typeof value.page_start === "number" ? value.page_start : null,
+    page_end: typeof value.page_end === "number" ? value.page_end : null,
+    regions: Array.isArray(value.regions)
+      ? value.regions.flatMap((item) => {
+          if (!isRecord(item)) {
+            return [];
+          }
+          return [{
+            page_number: typeof item.page_number === "number" ? item.page_number : 0,
+            region_order: typeof item.region_order === "number" ? item.region_order : 0,
+            bbox_left: typeof item.bbox_left === "number" ? item.bbox_left : 0,
+            bbox_bottom: typeof item.bbox_bottom === "number" ? item.bbox_bottom : 0,
+            bbox_right: typeof item.bbox_right === "number" ? item.bbox_right : 0,
+            bbox_top: typeof item.bbox_top === "number" ? item.bbox_top : 0,
+          }];
+        })
+      : [],
     excerpt: typeof value.assembled_text === "string"
       ? value.assembled_text
       : (typeof value.excerpt === "string" ? value.excerpt : ""),
@@ -145,6 +162,8 @@ function normalizeAnswerBlock(value: unknown): ChatAnswerBlock | null {
             document_id: typeof item.document_id === "string" ? item.document_id : "",
             document_name: typeof item.document_name === "string" ? item.document_name : "Unknown document",
             heading: typeof item.heading === "string" ? item.heading : null,
+            page_start: typeof item.page_start === "number" ? item.page_start : null,
+            page_end: typeof item.page_end === "number" ? item.page_end : null,
           },
         ];
       })

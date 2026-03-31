@@ -527,6 +527,9 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
         excerpt: str
         source: str
         truncated: bool
+        page_start: int | None = None
+        page_end: int | None = None
+        regions: list[dict[str, object]] | None = None
 
         def model_dump(self, *, mode: str = "json") -> dict[str, object]:
             """回傳與 Pydantic model 類似的 dump 結果。
@@ -550,10 +553,13 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
                 "structure_kind": self.structure_kind,
                 "start_offset": self.start_offset,
                 "end_offset": self.end_offset,
-                "excerpt": self.excerpt,
-                "source": self.source,
-                "truncated": self.truncated,
-            }
+                    "excerpt": self.excerpt,
+                    "source": self.source,
+                    "truncated": self.truncated,
+                    "page_start": self.page_start,
+                    "page_end": self.page_end,
+                    "regions": self.regions or [],
+                }
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
     monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
@@ -698,6 +704,9 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
         excerpt: str
         source: str
         truncated: bool
+        page_start: int | None = None
+        page_end: int | None = None
+        regions: list[dict[str, object]] | None = None
 
         def model_dump(self, *, mode: str = "json") -> dict[str, object]:
             """回傳與 Pydantic model 類似的 dump 結果。
@@ -721,10 +730,13 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
                 "structure_kind": self.structure_kind,
                 "start_offset": self.start_offset,
                 "end_offset": self.end_offset,
-                "excerpt": self.excerpt,
-                "source": self.source,
-                "truncated": self.truncated,
-            }
+                    "excerpt": self.excerpt,
+                    "source": self.source,
+                    "truncated": self.truncated,
+                    "page_start": self.page_start,
+                    "page_end": self.page_end,
+                    "regions": self.regions or [],
+                }
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
     monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
@@ -1020,6 +1032,9 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "excerpt": "alpha intro\n\nalpha details",
             "source": "hybrid",
             "truncated": False,
+            "page_start": None,
+            "page_end": None,
+            "regions": [],
         }
     ]
     assert result["assembled_contexts"] == [
@@ -1037,6 +1052,9 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "source": "hybrid",
             "start_offset": 0,
             "end_offset": 27,
+            "page_start": None,
+            "page_end": None,
+            "regions": [],
             "truncated": False,
         }
     ]

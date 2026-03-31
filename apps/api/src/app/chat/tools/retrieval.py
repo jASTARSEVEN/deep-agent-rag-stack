@@ -7,7 +7,7 @@ from dataclasses import dataclass, asdict
 from sqlalchemy import select
 
 from app.auth.verifier import CurrentPrincipal
-from app.chat.contracts.types import ChatCitation
+from app.chat.contracts.types import ChatCitation, ChatCitationRegion
 from app.core.settings import AppSettings
 from app.db.models import Document
 from app.services.retrieval import retrieve_area_candidates
@@ -118,6 +118,19 @@ def build_assembled_context_payload(
             "source": context.source,
             "start_offset": context.start_offset,
             "end_offset": context.end_offset,
+            "page_start": min((region.page_number for region in context.regions), default=None),
+            "page_end": max((region.page_number for region in context.regions), default=None),
+            "regions": [
+                {
+                    "page_number": region.page_number,
+                    "region_order": region.region_order,
+                    "bbox_left": region.bbox_left,
+                    "bbox_bottom": region.bbox_bottom,
+                    "bbox_right": region.bbox_right,
+                    "bbox_top": region.bbox_top,
+                }
+                for region in context.regions
+            ],
             "truncated": truncated_by_index.get(index, False),
         }
         for index, context in enumerate(retrieval_result.assembled_contexts)
@@ -242,6 +255,19 @@ def build_chat_citations(
                 excerpt=context.assembled_text,
                 source=context.source,
                 truncated=truncated_by_index.get(index, False),
+                page_start=min((region.page_number for region in context.regions), default=None),
+                page_end=max((region.page_number for region in context.regions), default=None),
+                regions=[
+                    ChatCitationRegion(
+                        page_number=region.page_number,
+                        region_order=region.region_order,
+                        bbox_left=region.bbox_left,
+                        bbox_bottom=region.bbox_bottom,
+                        bbox_right=region.bbox_right,
+                        bbox_top=region.bbox_top,
+                    )
+                    for region in context.regions
+                ],
             )
         )
     return references

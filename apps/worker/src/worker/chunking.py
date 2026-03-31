@@ -8,7 +8,7 @@ import re
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from worker.parsers import ParsedDocument
+from worker.parsers import ParsedDocument, ParsedRegion
 
 
 @dataclass(slots=True)
@@ -49,6 +49,12 @@ class SectionDraft:
     end_offset: int
     # 此 parent 內部保留的 component blocks；若為空值代表整段視為單一 component。
     components: list["SectionComponent"] | None = None
+    # 此 section 涵蓋的起始頁碼。
+    page_start: int | None = None
+    # 此 section 涵蓋的結束頁碼。
+    page_end: int | None = None
+    # 此 section 關聯的 PDF regions。
+    regions: list[ParsedRegion] | None = None
 
 
 @dataclass(slots=True)
@@ -65,6 +71,12 @@ class SectionComponent:
     start_offset: int
     # component 相對於 parent content 的結束 offset。
     end_offset: int
+    # component 涵蓋的起始頁碼。
+    page_start: int | None = None
+    # component 涵蓋的結束頁碼。
+    page_end: int | None = None
+    # component 關聯的 PDF regions。
+    regions: list[ParsedRegion] | None = None
 
 
 @dataclass(slots=True)
@@ -93,6 +105,12 @@ class ChunkDraft:
     start_offset: int
     # chunk 在 display_text 中的結束 offset。
     end_offset: int
+    # chunk 涵蓋的起始頁碼。
+    page_start: int | None = None
+    # chunk 涵蓋的結束頁碼。
+    page_end: int | None = None
+    # chunk 關聯的 PDF regions。
+    regions: list[ParsedRegion] | None = None
 
 
 @dataclass(slots=True)
@@ -155,6 +173,9 @@ def build_chunk_tree(*, parsed_document: ParsedDocument, config: ChunkingConfig)
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         )
         child_chunks.extend(
@@ -209,8 +230,14 @@ def _build_sections(*, parsed_document: ParsedDocument, config: ChunkingConfig) 
                     content=block.content,
                     start_offset=0,
                     end_offset=len(block.content),
+                    page_start=block.page_start,
+                    page_end=block.page_end,
+                    regions=block.regions,
                 )
             ],
+            page_start=block.page_start,
+            page_end=block.page_end,
+            regions=block.regions,
         )
         for index, block in enumerate(parsed_document.blocks)
         if block.content.strip()
@@ -577,6 +604,9 @@ def _reindex_sections(*, sections: list[SectionDraft]) -> list[SectionDraft]:
                 start_offset=start_offset,
                 end_offset=end_offset,
                 components=section.components,
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         )
         cursor = end_offset + 2
@@ -744,6 +774,9 @@ def _merge_section_sequence(
                         content=component.content,
                         start_offset=cursor + component.start_offset,
                         end_offset=cursor + component.end_offset,
+                        page_start=component.page_start,
+                        page_end=component.page_end,
+                        regions=component.regions,
                     )
                 )
         cursor += len(section.content)
@@ -756,6 +789,20 @@ def _merge_section_sequence(
         start_offset=sections[0].start_offset if sections else 0,
         end_offset=sections[-1].end_offset if sections else 0,
         components=merged_components if preserve_components else None,
+        page_start=min((section.page_start for section in sections if section.page_start is not None), default=None),
+        page_end=max((section.page_end for section in sections if section.page_end is not None), default=None),
+        regions=[
+            ParsedRegion(
+                page_number=region.page_number,
+                region_order=index,
+                bbox_left=region.bbox_left,
+                bbox_bottom=region.bbox_bottom,
+                bbox_right=region.bbox_right,
+                bbox_top=region.bbox_top,
+            )
+            for index, region in enumerate(region for section in sections for region in (section.regions or []))
+        ]
+        or None,
     )
 
 
@@ -778,6 +825,9 @@ def _section_components(section: SectionDraft) -> list[SectionComponent]:
             content=section.content,
             start_offset=0,
             end_offset=len(section.content),
+            page_start=section.page_start,
+            page_end=section.page_end,
+            regions=section.regions,
         )
     ]
 
@@ -853,6 +903,9 @@ def _build_child_chunks(
             start_offset=section.start_offset + component.start_offset,
             end_offset=section.start_offset + component.end_offset,
             components=[component],
+            page_start=component.page_start,
+            page_end=component.page_end,
+            regions=component.regions,
         )
         if component.structure_kind == "table":
             component_children = _build_table_child_chunks(
@@ -920,6 +973,9 @@ def _build_text_child_chunks(
                 char_count=len(chunk_content),
                 start_offset=display_start,
                 end_offset=display_end,
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         )
         child_index += 1
@@ -989,6 +1045,9 @@ def _build_table_child_chunks(
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         ]
 
@@ -1007,6 +1066,9 @@ def _build_table_child_chunks(
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         ]
 
@@ -1032,6 +1094,9 @@ def _build_table_child_chunks(
                 char_count=len(child_content),
                 start_offset=display_content_start + row_start,
                 end_offset=display_content_start + row_end,
+                page_start=section.page_start,
+                page_end=section.page_end,
+                regions=section.regions,
             )
         )
     return children

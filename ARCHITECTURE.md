@@ -80,9 +80,9 @@
 1. Web 上傳檔案
 2. API 驗證請求並建立 `documents` / `ingest_jobs`
 3. API 將原始檔存入 MinIO
-4. Worker 會先嘗試從同一文件既有 parse artifacts 重建 `ParsedDocument`；可重用的 artifact 目前包含 `marker.cleaned.md`、`llamaparse.cleaned.md`、`pdf.unstructured.extracted.html`、`xlsx.extracted.html`、`docx.extracted.html` 與 `pptx.extracted.html`
-5. 若找不到可重用 artifact，Worker 才執行 parse routing；其中 `PDF` 會先經 provider-based parsing：預設 `marker` 先轉成 Markdown，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 先轉成 Markdown
-6. PDF 的 Markdown 會回到既有 Markdown parser，與 `TXT/MD/HTML` 一樣輸出 block-aware `ParsedDocument`
+4. Worker 會先嘗試從同一文件既有 parse artifacts 重建 `ParsedDocument`；可重用的 artifact 目前包含 `opendataloader.json`、`llamaparse.cleaned.md`、`pdf.unstructured.extracted.html`、`xlsx.extracted.html`、`docx.extracted.html` 與 `pptx.extracted.html`
+5. 若找不到可重用 artifact，Worker 才執行 parse routing；其中 `PDF` 會先經 provider-based parsing：預設 `opendataloader` 輸出 `JSON + Markdown`，`local` 走 `Unstructured partition_pdf(strategy="fast")`，`llamaparse` 先轉成 Markdown
+6. OpenDataLoader 的 Markdown 會回到既有 Markdown parser，而 JSON semantic elements 會補強 page/bbox locator，與 `TXT/MD/HTML` 路徑共用 block-aware `ParsedDocument`
 7. `XLSX` 會先由 `Unstructured partition_xlsx` 解析 worksheet，優先取 `text_as_html` 並回接既有 HTML table-aware parser
 8. `DOCX` 與 `PPTX` 會先由 `Unstructured partition_docx` / `partition_pptx` 解析，再映射為既有 `text/table` block-aware contract
 9. Worker 依 ParsedDocument 建立 parent section 與 child chunk
@@ -145,9 +145,9 @@
 2. API 先將原始檔寫入物件儲存，再建立 `documents=status=uploaded` 與 `ingest_jobs=status=queued`
 3. 所有環境都由 Celery worker 執行 ingest；API 只負責建立 `documents` / `ingest_jobs` 並 dispatch 背景工作
 4. Worker 目前真正解析 `TXT`、`Markdown`、`HTML`、`PDF`、`XLSX`、`DOCX` 與 `PPTX`
-5. `PDF` 採 provider-based parsing：`PDF_PARSER_PROVIDER=marker|local|llamaparse`；其中 `marker` 為預設值，`llamaparse` 只使用標準 Markdown 輸出，不啟用 agentic mode
-6. `marker` 與 `llamaparse` 路徑都會在進入既有 Markdown parser 前先清理常見頁碼 / 分隔符噪音；進入 chunking 前再做 PDF-specific block consolidation，優先合併同 heading 的碎片 text/table runs
-7. Marker / Surya 模型快取路徑必須由 `MARKER_MODEL_CACHE_DIR` 映射到可寫目錄，避免 compose 或受限執行環境因使用者 home cache 權限不足而失敗
+5. `PDF` 採 provider-based parsing：`PDF_PARSER_PROVIDER=opendataloader|local|llamaparse`；其中 `opendataloader` 為預設值，採 `json,markdown`、`use_struct_tree=true`、`hybrid=off`
+6. `opendataloader` 與 `llamaparse` 路徑都會在進入既有 Markdown parser 前先清理常見頁碼 / 分隔符噪音；進入 chunking 前再做 PDF-specific block consolidation，優先合併同 heading 的碎片 text/table runs
+7. OpenDataLoader 預設要求 Java 11+，並維持 AI safety filters 開啟；本輪不納入 hybrid/docling backend
 7. `local` PDF parser 僅提供自架 fallback 與基本文字擷取；不承諾表格高保真，也不支援 OCR / 掃描 PDF
 8. `POST /documents/{document_id}/reindex` 會先清除同 document 舊 chunks、保留既有 parse artifacts，再建立新 ingest job 重建 chunk tree；若帶 `force_reparse=true`，worker 需忽略既有 artifacts 並重跑 parser
 9. `DELETE /documents/{document_id}` 會移除 document、相關 jobs、document chunks 與原始檔

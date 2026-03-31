@@ -10,7 +10,16 @@ from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import ChunkType, Document, DocumentChunk, DocumentStatus, IngestJob, IngestJobStatus, Role
+from app.db.models import (
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentChunkRegion,
+    DocumentStatus,
+    IngestJob,
+    IngestJobStatus,
+    Role,
+)
 from app.schemas.documents import (
     ChunkSummary,
     DocumentPreviewChunk,
@@ -177,6 +186,15 @@ def get_document_preview(session: Session, principal: CurrentPrincipal, *, docum
         )
         .order_by(DocumentChunk.section_index.asc(), DocumentChunk.child_index.asc(), DocumentChunk.position.asc())
     ).all()
+    chunk_ids = [chunk.id for chunk in chunks]
+    regions = session.scalars(
+        select(DocumentChunkRegion)
+        .where(DocumentChunkRegion.chunk_id.in_(chunk_ids))
+        .order_by(DocumentChunkRegion.chunk_id.asc(), DocumentChunkRegion.region_order.asc())
+    ).all() if chunk_ids else []
+    regions_by_chunk_id: dict[str, list[DocumentChunkRegion]] = {}
+    for region in regions:
+        regions_by_chunk_id.setdefault(region.chunk_id, []).append(region)
     return DocumentPreviewResponse(
         document_id=document.id,
         file_name=document.file_name,
@@ -191,6 +209,19 @@ def get_document_preview(session: Session, principal: CurrentPrincipal, *, docum
                 structure_kind=chunk.structure_kind,
                 start_offset=chunk.start_offset,
                 end_offset=chunk.end_offset,
+                page_start=min((region.page_number for region in regions_by_chunk_id.get(chunk.id, [])), default=None),
+                page_end=max((region.page_number for region in regions_by_chunk_id.get(chunk.id, [])), default=None),
+                regions=[
+                    DocumentPreviewChunk.PreviewRegion(
+                        page_number=region.page_number,
+                        region_order=region.region_order,
+                        bbox_left=region.bbox_left,
+                        bbox_bottom=region.bbox_bottom,
+                        bbox_right=region.bbox_right,
+                        bbox_top=region.bbox_top,
+                    )
+                    for region in regions_by_chunk_id.get(chunk.id, [])
+                ],
             )
             for chunk in chunks
         ],

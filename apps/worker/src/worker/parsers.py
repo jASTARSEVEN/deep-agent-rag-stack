@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from html import escape
 from html.parser import HTMLParser
-import os
+import json
 from pathlib import Path
 import re
 import tempfile
@@ -15,12 +15,12 @@ import tempfile
 SUPPORTED_TEXT_EXTENSIONS = {".txt", ".md", ".html", ".pdf", ".xlsx", ".docx", ".pptx"}
 
 # 支援的 PDF parser provider 名稱。
-SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse", "marker"}
+SUPPORTED_PDF_PARSER_PROVIDERS = {"local", "llamaparse", "opendataloader"}
 
 # 可在 reindex 時重用的 parse artifact 檔名。
 REUSABLE_PARSE_ARTIFACT_FILE_NAMES = {
     "pdf:local": "pdf.unstructured.extracted.html",
-    "pdf:marker": "marker.cleaned.md",
+    "pdf:opendataloader": "opendataloader.json",
     "pdf:llamaparse": "llamaparse.cleaned.md",
     "xlsx": "xlsx.extracted.html",
     "docx": "docx.extracted.html",
@@ -51,31 +51,35 @@ class PdfParserConfig:
     """PDF parser provider 使用的設定。"""
 
     # 要使用的 PDF parser provider 名稱。
-    provider: str = "marker"
-    # Marker / Surya 模型快取目錄。
-    marker_model_cache_dir: str = ".marker-cache/models"
-    # 是否強制 Marker 對整份 PDF 執行 OCR。
-    marker_force_ocr: bool = False
-    # 是否移除 PDF 中既有 OCR 文字，改由 Marker 重做 OCR。
-    marker_strip_existing_ocr: bool = False
-    # 是否啟用 Marker 的 LLM 強化模式。
-    marker_use_llm: bool = False
-    # Marker 使用的 LLM service 類別路徑。
-    marker_llm_service: str = "marker.services.openai.OpenAIService"
-    # Marker OpenAI-compatible API key。
-    marker_openai_api_key: str | None = None
-    # Marker OpenAI-compatible model 名稱。
-    marker_openai_model: str = "gpt-4.1-mini"
-    # Marker OpenAI-compatible base URL。
-    marker_openai_base_url: str | None = None
-    # 是否停用 Marker 的圖片擷取，避免產生額外 artifact。
-    marker_disable_image_extraction: bool = True
+    provider: str = "opendataloader"
+    # 是否要求 OpenDataLoader 儘量使用 tagged PDF struct tree。
+    opendataloader_use_struct_tree: bool = True
+    # 是否要求 OpenDataLoader 以 quiet mode 執行。
+    opendataloader_quiet: bool = True
     # LlamaParse API 金鑰。
     llamaparse_api_key: str | None = None
     # 是否要求 LlamaParse 不快取文件內容。
     llamaparse_do_not_cache: bool = True
     # 是否啟用跨頁延續表格合併。
     llamaparse_merge_continued_tables: bool = False
+
+
+@dataclass(slots=True)
+class ParsedRegion:
+    """單一文字或表格片段對應的 PDF 區域定位資訊。"""
+
+    # 所屬頁碼，從 1 開始。
+    page_number: int
+    # 區域在同一 block / chunk 內的順序。
+    region_order: int
+    # 左邊界座標。
+    bbox_left: float
+    # 下邊界座標。
+    bbox_bottom: float
+    # 右邊界座標。
+    bbox_right: float
+    # 上邊界座標。
+    bbox_top: float
 
 
 @dataclass(slots=True)
@@ -92,6 +96,16 @@ class ParsedBlock:
     start_offset: int
     # 區塊在 normalized text 的結束 offset。
     end_offset: int
+    # PDF semantic element 類型；非 PDF 可為空值。
+    element_kind: str | None = None
+    # heading 等級；若無則為空值。
+    heading_level: int | None = None
+    # 此 block 橫跨的起始頁碼。
+    page_start: int | None = None
+    # 此 block 橫跨的結束頁碼。
+    page_end: int | None = None
+    # 此 block 關聯的 PDF regions。
+    regions: list[ParsedRegion] | None = None
 
 
 @dataclass(slots=True)
@@ -118,6 +132,26 @@ class ParsedDocument:
     blocks: list[ParsedBlock]
     # parser 產生並需持久化的中介 artifact。
     artifacts: list[ParseArtifact]
+
+
+@dataclass(slots=True)
+class _OpenDataLoaderElement:
+    """OpenDataLoader JSON element 的內部正規化表示。"""
+
+    # element 類型名稱。
+    element_kind: str
+    # element 文字內容。
+    content: str
+    # element heading。
+    heading: str | None
+    # heading 等級。
+    heading_level: int | None
+    # element 起始頁碼。
+    page_start: int | None
+    # element 結束頁碼。
+    page_end: int | None
+    # element 關聯的 regions。
+    regions: list[ParsedRegion]
 
 
 def parse_document(
@@ -207,6 +241,13 @@ def parse_document_from_artifact(
         text = _decode_payload(payload=payload).strip()
         return _parse_markdown_text(text=text, source_format=_resolve_artifact_source_format(file_name=file_name))
 
+    if artifact_file_name.endswith(".json"):
+        artifact_payload = _decode_json_payload(payload=payload)
+        return _parse_opendataloader_json_artifact_payload(
+            artifact_payload=artifact_payload,
+            source_format=_resolve_artifact_source_format(file_name=file_name),
+        )
+
     if artifact_file_name.endswith(".html"):
         text = _decode_payload(payload=payload)
         return _materialize_blocks(
@@ -260,6 +301,18 @@ def _decode_payload(*, payload: bytes) -> str:
     if not text.strip():
         raise ValueError("文件內容不可為空白。")
     return text
+
+
+def _decode_json_payload(*, payload: bytes) -> dict[str, object]:
+    """將 JSON artifact 解碼為物件。"""
+
+    try:
+        decoded = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("JSON parse artifact 內容無法解碼。") from exc
+    if not isinstance(decoded, dict):
+        raise ValueError("JSON parse artifact 格式不正確。")
+    return decoded
 
 
 def _parse_txt_document(*, payload: bytes) -> ParsedDocument:
@@ -361,17 +414,24 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
             artifacts=artifacts,
         )
 
-    if provider == "marker":
-        markdown = _extract_pdf_markdown_with_marker(payload=payload, pdf_config=pdf_config)
-        cleaned_markdown = _clean_marker_markdown(markdown)
-        parsed_document = _parse_markdown_text(text=cleaned_markdown, source_format="pdf")
+    if provider == "opendataloader":
+        markdown, json_payload = _extract_pdf_content_with_opendataloader(payload=payload, pdf_config=pdf_config)
+        cleaned_markdown = _clean_pdf_markdown(markdown=markdown, provider_name="OpenDataLoader")
+        parsed_document = _parse_opendataloader_payload(markdown=cleaned_markdown, artifact_payload=json_payload)
         return ParsedDocument(
             normalized_text=parsed_document.normalized_text,
             source_format=parsed_document.source_format,
             blocks=parsed_document.blocks,
             artifacts=[
+                _build_json_artifact(
+                    file_name="opendataloader.json",
+                    payload_obj=_build_opendataloader_artifact_payload(
+                        raw_payload=json_payload,
+                        cleaned_markdown=cleaned_markdown,
+                    ),
+                ),
                 _build_text_artifact(
-                    file_name="marker.cleaned.md",
+                    file_name="opendataloader.cleaned.md",
                     content_type="text/markdown; charset=utf-8",
                     text=cleaned_markdown,
                 ),
@@ -754,6 +814,243 @@ def _materialize_blocks(
     )
 
 
+def _build_opendataloader_artifact_payload(*, raw_payload: dict[str, object], cleaned_markdown: str) -> dict[str, object]:
+    """建立可供 reindex 重用的 OpenDataLoader JSON artifact。"""
+
+    artifact_payload = dict(raw_payload)
+    artifact_payload["schema_version"] = "deep-agent-opendataloader-v1"
+    artifact_payload["cleaned_markdown"] = cleaned_markdown
+    return artifact_payload
+
+
+def _parse_opendataloader_json_artifact_payload(
+    *,
+    artifact_payload: dict[str, object],
+    source_format: str,
+) -> ParsedDocument:
+    """從 OpenDataLoader JSON artifact 重建 ParsedDocument。"""
+
+    cleaned_markdown = str(artifact_payload.get("cleaned_markdown", "") or "").strip()
+    if not cleaned_markdown:
+        raise ValueError("OpenDataLoader JSON artifact 缺少 cleaned_markdown。")
+    parsed_document = _parse_opendataloader_payload(markdown=cleaned_markdown, artifact_payload=artifact_payload)
+    return ParsedDocument(
+        normalized_text=parsed_document.normalized_text,
+        source_format=source_format,
+        blocks=parsed_document.blocks,
+        artifacts=[],
+    )
+
+
+def _parse_opendataloader_payload(*, markdown: str, artifact_payload: dict[str, object]) -> ParsedDocument:
+    """依 OpenDataLoader JSON+Markdown 建立帶 locator metadata 的 ParsedDocument。"""
+
+    parsed_markdown = _parse_markdown_text(text=markdown, source_format="pdf")
+    elements = _extract_opendataloader_elements(artifact_payload=artifact_payload)
+    enriched_blocks = _enrich_blocks_with_opendataloader_elements(
+        blocks=parsed_markdown.blocks,
+        elements=elements,
+    )
+    return ParsedDocument(
+        normalized_text=parsed_markdown.normalized_text,
+        source_format=parsed_markdown.source_format,
+        blocks=enriched_blocks,
+        artifacts=[],
+    )
+
+
+def _extract_opendataloader_elements(*, artifact_payload: dict[str, object]) -> list[_OpenDataLoaderElement]:
+    """從 OpenDataLoader artifact 中擷取可對齊 Markdown blocks 的 elements。"""
+
+    raw_elements = artifact_payload.get("elements")
+    if not isinstance(raw_elements, list):
+        raw_content = artifact_payload.get("content")
+        if isinstance(raw_content, dict):
+            raw_elements = raw_content.get("elements")
+        elif isinstance(artifact_payload.get("document"), dict):
+            raw_elements = artifact_payload["document"].get("elements")
+    if not isinstance(raw_elements, list):
+        return []
+
+    extracted_elements: list[_OpenDataLoaderElement] = []
+    for item in raw_elements:
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("markdown") or item.get("text") or item.get("content") or "").strip()
+        if not content:
+            continue
+        element_kind = str(item.get("type") or item.get("kind") or item.get("label") or "text").strip().lower()
+        heading = item.get("heading")
+        heading_level = item.get("heading_level") or item.get("level")
+        page_start, page_end = _extract_page_span(item)
+        extracted_elements.append(
+            _OpenDataLoaderElement(
+                element_kind=element_kind,
+                content=content,
+                heading=str(heading).strip() if isinstance(heading, str) and heading.strip() else None,
+                heading_level=int(heading_level) if isinstance(heading_level, int) else None,
+                page_start=page_start,
+                page_end=page_end,
+                regions=_extract_parsed_regions(item),
+            )
+        )
+    return extracted_elements
+
+
+def _enrich_blocks_with_opendataloader_elements(
+    *,
+    blocks: list[ParsedBlock],
+    elements: list[_OpenDataLoaderElement],
+) -> list[ParsedBlock]:
+    """將 OpenDataLoader semantic metadata 依序對齊到 Markdown blocks。"""
+
+    if not elements:
+        return blocks
+
+    enriched_blocks: list[ParsedBlock] = []
+    element_index = 0
+    for block in blocks:
+        matched_elements, next_index = _match_elements_for_block(
+            block=block,
+            elements=elements,
+            starting_index=element_index,
+        )
+        element_index = next_index
+        if not matched_elements:
+            enriched_blocks.append(block)
+            continue
+
+        page_numbers = [region.page_number for element in matched_elements for region in element.regions]
+        all_regions = [
+            ParsedRegion(
+                page_number=region.page_number,
+                region_order=index,
+                bbox_left=region.bbox_left,
+                bbox_bottom=region.bbox_bottom,
+                bbox_right=region.bbox_right,
+                bbox_top=region.bbox_top,
+            )
+            for index, region in enumerate(region for element in matched_elements for region in element.regions)
+        ]
+        first_element = matched_elements[0]
+        enriched_blocks.append(
+            ParsedBlock(
+                block_kind=block.block_kind,
+                heading=block.heading,
+                content=block.content,
+                start_offset=block.start_offset,
+                end_offset=block.end_offset,
+                element_kind=first_element.element_kind,
+                heading_level=first_element.heading_level,
+                page_start=min(page_numbers) if page_numbers else first_element.page_start,
+                page_end=max(page_numbers) if page_numbers else first_element.page_end,
+                regions=all_regions or None,
+            )
+        )
+    return enriched_blocks
+
+
+def _match_elements_for_block(
+    *,
+    block: ParsedBlock,
+    elements: list[_OpenDataLoaderElement],
+    starting_index: int,
+) -> tuple[list[_OpenDataLoaderElement], int]:
+    """依序為單一 Markdown block 找出最合理的 OpenDataLoader elements。"""
+
+    normalized_block = _normalize_whitespace(block.content)
+    expected_kind = "table" if block.block_kind == "table" else "text"
+    matched: list[_OpenDataLoaderElement] = []
+    concatenated = ""
+    index = starting_index
+
+    while index < len(elements):
+        element = elements[index]
+        element_kind = _normalize_element_kind(element.element_kind)
+        if matched:
+            if element_kind != expected_kind:
+                break
+        elif element_kind != expected_kind:
+            index += 1
+            continue
+
+        matched.append(element)
+        concatenated = _normalize_whitespace(f"{concatenated} {element.content}")
+        if not normalized_block:
+            break
+        if normalized_block in concatenated or concatenated in normalized_block:
+            index += 1
+            break
+        if len(matched) >= 4:
+            index += 1
+            break
+        index += 1
+
+    return matched, index
+
+
+def _normalize_element_kind(value: str) -> str:
+    """將 OpenDataLoader element 類型映射為既有 text/table 類別。"""
+
+    normalized = value.strip().lower()
+    if "table" in normalized:
+        return "table"
+    return "text"
+
+
+def _extract_page_span(item: dict[str, object]) -> tuple[int | None, int | None]:
+    """從 OpenDataLoader element 擷取頁碼範圍。"""
+
+    page_number = item.get("page_number") or item.get("page")
+    page_start = item.get("page_start")
+    page_end = item.get("page_end")
+    if isinstance(page_number, int):
+        return page_number, page_number
+    return (
+        page_start if isinstance(page_start, int) else None,
+        page_end if isinstance(page_end, int) else (page_start if isinstance(page_start, int) else None),
+    )
+
+
+def _extract_parsed_regions(item: dict[str, object]) -> list[ParsedRegion]:
+    """從 OpenDataLoader element 擷取 bounding box regions。"""
+
+    raw_regions = item.get("regions") or item.get("bboxes") or item.get("boxes")
+    if isinstance(raw_regions, dict):
+        raw_regions = [raw_regions]
+    if raw_regions is None:
+        raw_bbox = item.get("bbox")
+        raw_regions = [raw_bbox] if isinstance(raw_bbox, dict) else []
+    if not isinstance(raw_regions, list):
+        return []
+
+    parsed_regions: list[ParsedRegion] = []
+    fallback_page, _ = _extract_page_span(item)
+    for region_order, region in enumerate(raw_regions):
+        if not isinstance(region, dict):
+            continue
+        page_number = region.get("page_number") or region.get("page") or fallback_page
+        if not isinstance(page_number, int):
+            continue
+        left = region.get("left", region.get("x0"))
+        bottom = region.get("bottom", region.get("y0"))
+        right = region.get("right", region.get("x1"))
+        top = region.get("top", region.get("y1"))
+        if not all(isinstance(value, (int, float)) for value in (left, bottom, right, top)):
+            continue
+        parsed_regions.append(
+            ParsedRegion(
+                page_number=page_number,
+                region_order=region_order,
+                bbox_left=float(left),
+                bbox_bottom=float(bottom),
+                bbox_right=float(right),
+                bbox_top=float(top),
+            )
+        )
+    return parsed_regions
+
+
 def _build_pdf_block_inputs_from_unstructured_elements(
     *,
     elements: list[object],
@@ -879,6 +1176,16 @@ def _build_text_artifact(*, file_name: str, content_type: str, text: str) -> Par
     return ParseArtifact(file_name=file_name, content_type=content_type, payload=text.encode("utf-8"))
 
 
+def _build_json_artifact(*, file_name: str, payload_obj: dict[str, object]) -> ParseArtifact:
+    """建立 JSON artifact。"""
+
+    return ParseArtifact(
+        file_name=file_name,
+        content_type="application/json; charset=utf-8",
+        payload=json.dumps(payload_obj, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+    )
+
+
 def _render_html_artifact_document(*, html_fragments: list[tuple[str | None, str]]) -> str:
     """將多段 HTML fragment 包成單一可閱讀的 HTML 文件。"""
 
@@ -967,60 +1274,54 @@ def _extract_pdf_markdown_with_llamaparse(*, payload: bytes, pdf_config: PdfPars
     return markdown
 
 
-def _extract_pdf_markdown_with_marker(*, payload: bytes, pdf_config: PdfParserConfig) -> str:
-    """使用 Marker 將 PDF 轉為 Markdown。
-
-    參數：
-    - `payload`：PDF 原始位元組內容。
-    - `pdf_config`：Marker 設定。
-
-    回傳：
-    - `str`：Marker 回傳的 Markdown 內容。
-    """
-
-    os.environ["MODEL_CACHE_DIR"] = pdf_config.marker_model_cache_dir
+def _extract_pdf_content_with_opendataloader(
+    *,
+    payload: bytes,
+    pdf_config: PdfParserConfig,
+) -> tuple[str, dict[str, object]]:
+    """使用 OpenDataLoader 將 PDF 轉為 Markdown 與 JSON。"""
 
     try:
-        from marker.config.parser import ConfigParser
-        from marker.converters.pdf import PdfConverter
-        from marker.models import create_model_dict
-        from marker.output import text_from_rendered
+        from opendataloader_pdf import convert
     except ImportError as exc:
-        raise ValueError("marker provider 需要安裝 marker-pdf 與其相依套件。") from exc
+        raise ValueError("opendataloader provider 需要安裝 opendataloader-pdf 與 Java 11+。") from exc
 
-    config_parser = ConfigParser(
-        {
-            "output_format": "markdown",
-            "disable_image_extraction": pdf_config.marker_disable_image_extraction,
-            "force_ocr": pdf_config.marker_force_ocr,
-            "strip_existing_ocr": pdf_config.marker_strip_existing_ocr,
-            "use_llm": pdf_config.marker_use_llm,
-            "llm_service": pdf_config.marker_llm_service,
-            "openai_api_key": pdf_config.marker_openai_api_key,
-            "openai_model": pdf_config.marker_openai_model,
-            "openai_base_url": pdf_config.marker_openai_base_url,
-        }
-    )
     temp_path = _write_temporary_pdf(payload=payload)
+    output_dir = Path(tempfile.mkdtemp(prefix="opendataloader-output-"))
     try:
-        converter = PdfConverter(
-            config=config_parser.generate_config_dict(),
-            artifact_dict=create_model_dict(),
-            processor_list=config_parser.get_processors(),
-            renderer=config_parser.get_renderer(),
-            llm_service=config_parser.get_llm_service(),
+        result = convert(
+            input_path=[str(temp_path)],
+            output_dir=str(output_dir),
+            format="json,markdown",
+            quiet=pdf_config.opendataloader_quiet,
+            use_struct_tree=pdf_config.opendataloader_use_struct_tree,
+            image_output="off",
+            hybrid="off",
+            include_header_footer=False,
         )
-        rendered = converter(str(temp_path))
-        markdown, _, _images = text_from_rendered(rendered)
     except Exception as exc:  # noqa: BLE001 - 對第三方 parser 失敗統一包成受控錯誤。
-        raise ValueError(f"Marker PDF 解析失敗：{exc}") from exc
+        raise ValueError(f"OpenDataLoader PDF 解析失敗：{exc}") from exc
     finally:
         temp_path.unlink(missing_ok=True)
 
-    normalized_markdown = markdown.strip()
-    if not normalized_markdown:
-        raise ValueError("Marker 未回傳可用的 Markdown 內容。")
-    return normalized_markdown
+    json_path = next(output_dir.rglob("*.json"), None)
+    if json_path is None:
+        raise ValueError("OpenDataLoader 未回傳可用的 JSON 內容。")
+
+    try:
+        payload_obj = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError("OpenDataLoader JSON artifact 不是有效的 JSON。") from exc
+
+    markdown = str(payload_obj.get("markdown") or payload_obj.get("text") or "").strip()
+    if not markdown:
+        markdown_path = next(output_dir.rglob("*.md"), None)
+        if markdown_path is not None:
+            markdown = markdown_path.read_text(encoding="utf-8").strip()
+    if not markdown:
+        raise ValueError("OpenDataLoader 未回傳可用的 Markdown 內容。")
+
+    return markdown, payload_obj
 
 
 def _extract_xlsx_elements_with_unstructured(*, payload: bytes) -> list[object]:
@@ -1402,19 +1703,6 @@ def _clean_llamaparse_markdown(markdown: str) -> str:
     """
 
     return _clean_pdf_markdown(markdown=markdown, provider_name="LlamaParse")
-
-
-def _clean_marker_markdown(markdown: str) -> str:
-    """清理 Marker Markdown 中常見的頁碼與分隔噪音。
-
-    參數：
-    - `markdown`：Marker 回傳的 Markdown 文字。
-
-    回傳：
-    - `str`：移除常見頁面噪音後的 Markdown。
-    """
-
-    return _clean_pdf_markdown(markdown=markdown, provider_name="Marker")
 
 
 def _clean_pdf_markdown(*, markdown: str, provider_name: str) -> str:

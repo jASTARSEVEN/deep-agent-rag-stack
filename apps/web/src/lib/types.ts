@@ -237,6 +237,10 @@ export interface ChatDisplayCitation {
   document_name: string;
   /** context 所屬段落標題。 */
   heading: string | null;
+  /** 起始頁碼。 */
+  page_start?: number | null;
+  /** 結束頁碼。 */
+  page_end?: number | null;
 }
 
 
@@ -253,6 +257,15 @@ export interface ChatAnswerBlock {
 
 /** 單一 assembled context reference。 */
 export interface ChatContextReference {
+  /** 單一 PDF locator。 */
+  regions?: Array<{
+    page_number: number;
+    region_order: number;
+    bbox_left: number;
+    bbox_bottom: number;
+    bbox_right: number;
+    bbox_top: number;
+  }>;
   /** context 在回傳列表中的順序。 */
   context_index: number;
   /** 前端顯示用的穩定 citation label。 */
@@ -273,6 +286,10 @@ export interface ChatContextReference {
   start_offset: number;
   /** context 在 normalized text 的結束 offset。 */
   end_offset: number;
+  /** 起始頁碼。 */
+  page_start?: number | null;
+  /** 結束頁碼。 */
+  page_end?: number | null;
   /** context 組裝後文字摘要。 */
   excerpt: string;
   /** context 組裝後全文；若未提供則回退使用 excerpt。 */
@@ -313,6 +330,15 @@ export interface ChatToolCallState {
 
 /** 全文預覽使用的 child chunk 範圍。 */
 export interface PreviewChunk {
+  /** 單一 PDF locator。 */
+  regions?: Array<{
+    page_number: number;
+    region_order: number;
+    bbox_left: number;
+    bbox_bottom: number;
+    bbox_right: number;
+    bbox_top: number;
+  }>;
   /** child chunk 識別碼。 */
   chunk_id: string;
   /** 所屬 parent chunk 識別碼。 */
@@ -327,6 +353,10 @@ export interface PreviewChunk {
   start_offset: number;
   /** chunk 在全文中的結束 offset。 */
   end_offset: number;
+  /** 起始頁碼。 */
+  page_start?: number | null;
+  /** 結束頁碼。 */
+  page_end?: number | null;
 }
 
 

@@ -101,6 +101,22 @@ class ReindexDocumentResponse(BaseModel):
 class DocumentPreviewChunk(BaseModel):
     """全文 preview 使用的 child chunk 邊界資料。"""
 
+    class PreviewRegion(BaseModel):
+        """單一 child chunk 的 PDF locator。"""
+
+        # 所屬頁碼。
+        page_number: int
+        # 同一 chunk 內的區域順序。
+        region_order: int
+        # 左邊界座標。
+        bbox_left: float
+        # 下邊界座標。
+        bbox_bottom: float
+        # 右邊界座標。
+        bbox_right: float
+        # 上邊界座標。
+        bbox_top: float
+
     # chunk 唯一識別碼。
     chunk_id: UUID
     # chunk 所屬 parent chunk 識別碼。
@@ -115,6 +131,12 @@ class DocumentPreviewChunk(BaseModel):
     start_offset: int
     # chunk 在全文 display_text 的結束 offset。
     end_offset: int
+    # chunk 涵蓋的起始頁碼。
+    page_start: int | None = None
+    # chunk 涵蓋的結束頁碼。
+    page_end: int | None = None
+    # chunk 關聯的 PDF locator。
+    regions: list[PreviewRegion] = []
 
 
 class DocumentPreviewResponse(BaseModel):

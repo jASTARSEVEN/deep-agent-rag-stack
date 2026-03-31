@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -226,3 +226,31 @@ class DocumentChunk(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # chunk 最後更新時間。
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class DocumentChunkRegion(Base):
+    """PDF chunk 的 SQL-first 頁碼與 bounding box locator。"""
+
+    __tablename__ = "document_chunk_regions"
+    __table_args__ = (
+        UniqueConstraint("chunk_id", "region_order", name="uq_document_chunk_regions_chunk_order"),
+    )
+
+    # region 唯一識別碼。
+    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid)
+    # 所屬 child chunk。
+    chunk_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False)
+    # 所屬頁碼，從 1 開始。
+    page_number: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # 在同一 chunk 內的穩定順序。
+    region_order: Mapped[int] = mapped_column(Integer(), nullable=False)
+    # 左邊界座標。
+    bbox_left: Mapped[float] = mapped_column(Float(), nullable=False)
+    # 下邊界座標。
+    bbox_bottom: Mapped[float] = mapped_column(Float(), nullable=False)
+    # 右邊界座標。
+    bbox_right: Mapped[float] = mapped_column(Float(), nullable=False)
+    # 上邊界座標。
+    bbox_top: Mapped[float] = mapped_column(Float(), nullable=False)
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

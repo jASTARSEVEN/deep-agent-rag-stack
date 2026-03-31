@@ -31,14 +31,8 @@ EMPTY_STRING_ENV_KEYS = {
     "EMBEDDING_RETRY_MAX_ATTEMPTS",
     "EMBEDDING_RETRY_BASE_DELAY_SECONDS",
     "EMBEDDING_DIMENSIONS",
-    "MARKER_FORCE_OCR",
-    "MARKER_STRIP_EXISTING_OCR",
-    "MARKER_USE_LLM",
-    "MARKER_LLM_SERVICE",
-    "MARKER_OPENAI_API_KEY",
-    "MARKER_OPENAI_MODEL",
-    "MARKER_OPENAI_BASE_URL",
-    "MARKER_DISABLE_IMAGE_EXTRACTION",
+    "OPENDATALOADER_USE_STRUCT_TREE",
+    "OPENDATALOADER_QUIET",
     "LLAMAPARSE_DO_NOT_CACHE",
     "LLAMAPARSE_MERGE_CONTINUED_TABLES",
 }
@@ -94,16 +88,9 @@ class WorkerSettings(BaseSettings):
     chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
     chunk_table_preserve_max_chars: Annotated[int, Field(alias="CHUNK_TABLE_PRESERVE_MAX_CHARS")] = 4000
     chunk_table_max_rows_per_child: Annotated[int, Field(alias="CHUNK_TABLE_MAX_ROWS_PER_CHILD")] = 20
-    pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "marker"
-    marker_model_cache_dir: Annotated[Path, Field(alias="MARKER_MODEL_CACHE_DIR")] = Path(".marker-cache/models")
-    marker_force_ocr: Annotated[bool, Field(alias="MARKER_FORCE_OCR")] = False
-    marker_strip_existing_ocr: Annotated[bool, Field(alias="MARKER_STRIP_EXISTING_OCR")] = False
-    marker_use_llm: Annotated[bool, Field(alias="MARKER_USE_LLM")] = False
-    marker_llm_service: Annotated[str, Field(alias="MARKER_LLM_SERVICE")] = "marker.services.openai.OpenAIService"
-    marker_openai_api_key: Annotated[str | None, Field(alias="MARKER_OPENAI_API_KEY")] = None
-    marker_openai_model: Annotated[str, Field(alias="MARKER_OPENAI_MODEL")] = "gpt-4.1-mini"
-    marker_openai_base_url: Annotated[str | None, Field(alias="MARKER_OPENAI_BASE_URL")] = None
-    marker_disable_image_extraction: Annotated[bool, Field(alias="MARKER_DISABLE_IMAGE_EXTRACTION")] = True
+    pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "opendataloader"
+    opendataloader_use_struct_tree: Annotated[bool, Field(alias="OPENDATALOADER_USE_STRUCT_TREE")] = True
+    opendataloader_quiet: Annotated[bool, Field(alias="OPENDATALOADER_QUIET")] = True
     llamaparse_api_key: Annotated[str | None, Field(alias="LLAMAPARSE_API_KEY")] = None
     llamaparse_do_not_cache: Annotated[bool, Field(alias="LLAMAPARSE_DO_NOT_CACHE")] = True
     llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False

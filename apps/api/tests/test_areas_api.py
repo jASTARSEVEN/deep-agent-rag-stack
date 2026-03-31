@@ -339,7 +339,7 @@ def test_delete_area_cascades_related_data_and_cleans_storage(client, db_session
 
     storage_root = Path(app_settings.local_storage_path)
     source_path = storage_root / document.storage_key
-    artifact_path = storage_root / area.id / "doc-1" / "artifacts" / "marker.cleaned.md"
+    artifact_path = storage_root / area.id / "doc-1" / "artifacts" / "opendataloader.json"
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.parent.mkdir(parents=True, exist_ok=True)
     source_path.write_text("source", encoding="utf-8")
