@@ -7,8 +7,7 @@ import { fetchDocumentPreview, type AccessTokenGetter } from "../../../lib/api";
 import type { ChatContextReference, ChatMessageViewModel, DocumentPreviewPayload } from "../../../lib/types";
 import { applyStreamUpdate, createAssistantMessage, createUserMessage, updateLastAssistantMessage } from "../state/messages";
 import { loadAreaThreadHistory, streamAreaThreadChat } from "../transport/langgraph";
-import { AnswerBlocks } from "./AnswerBlocks";
-import { ContextViewer } from "./ContextViewer";
+import { AnswerBlocks, resolveStreamingStatusLabel } from "./AnswerBlocks";
 import { DocumentPreviewPane } from "./DocumentPreviewPane";
 import { ToolCallViewer } from "./ToolCallViewer";
 
@@ -170,13 +169,14 @@ export function ChatPanel({
         setChatMessages((current) => applyStreamUpdate(current, streamUpdate));
       });
     } catch (streamError) {
-      const errorMessage = streamError instanceof Error ? streamError.message : "chat 失敗。";
-      setChatMessages((current) =>
-        updateLastAssistantMessage(current, (assistantMessage) => ({
-          ...assistantMessage,
-          content: errorMessage,
-          citations: [],
-          phaseState: null,
+          const errorMessage = streamError instanceof Error ? streamError.message : "chat 失敗。";
+          setChatMessages((current) =>
+            updateLastAssistantMessage(current, (assistantMessage) => ({
+              ...assistantMessage,
+              rawContent: errorMessage,
+              content: errorMessage,
+              citations: [],
+              phaseState: null,
           toolCalls: [],
           isStreaming: false,
           isError: true,
@@ -222,7 +222,7 @@ export function ChatPanel({
                       {message.role === "user" ? "You" : "Assistant"}
                     </p>
                     {message.isStreaming ? (
-                      <span className="text-[10px] font-medium text-amber-600 animate-pulse">Streaming...</span>
+                      <span className="text-[10px] font-medium text-amber-600 animate-pulse">回應中...</span>
                     ) : null}
                   </div>
 
@@ -231,6 +231,7 @@ export function ChatPanel({
                       answerBlocks={message.answerBlocks}
                       fallbackContent={message.content}
                       isStreaming={message.isStreaming}
+                      phaseState={message.phaseState}
                       selectedCitationContextIndex={message.selectedCitationContextIndex}
                       onCitationClick={(contextIndex) => {
                         const citation = message.citations.find((item) => item.context_index === contextIndex);
@@ -243,10 +244,10 @@ export function ChatPanel({
                     <MarkdownContent content={message.content} className="text-sm leading-7 text-inherit" />
                   )}
 
-                  {message.role === "assistant" && message.phaseState ? (
+                  {message.role === "assistant" && message.phaseState && !message.content ? (
                     <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-stone-900/5 px-3 py-1 text-[10px] font-medium text-stone-600">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                      <span>{message.phaseState.message}</span>
+                      <span>{resolveStreamingStatusLabel(message.phaseState)}</span>
                     </div>
                   ) : null}
 
@@ -255,10 +256,9 @@ export function ChatPanel({
                       <ToolCallViewer toolCalls={message.toolCalls} />
                       {message.usedKnowledgeBase === false && !message.isStreaming && (
                         <p className="text-[10px] font-medium text-stone-400 italic">
-                          No knowledge base references used in this turn.
+                          本輪回答未使用知識庫引用。
                         </p>
                       )}
-                      <ContextViewer citations={message.citations} />
                     </div>
                   )}
                 </article>

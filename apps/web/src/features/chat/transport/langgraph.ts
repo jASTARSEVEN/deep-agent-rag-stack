@@ -532,6 +532,7 @@ async function streamAreaThreadChatInternal(
   const streamStartedAt = performance.now();
   const client = createLangGraphClient(token);
   let pendingCompletion: PendingCompletionUpdate | null = null;
+  let hasPrimaryTokenStream = false;
   try {
     const assistantId = await ensureAssistant(client);
     const threadId = await ensureAreaThreadId(areaId, accessTokenGetter);
@@ -553,6 +554,7 @@ async function streamAreaThreadChatInternal(
       if ((part.event === "messages" || part.event === PRIMARY_TOKEN_STREAM_EVENT)) {
         const delta = extractMessageDelta(part.data);
         if (delta) {
+          hasPrimaryTokenStream = true;
           logChatStreamDebug(streamStartedAt, "messages_tuple", {
             deltaLength: delta.length,
             deltaPreview: delta.slice(0, 80),
@@ -566,7 +568,11 @@ async function streamAreaThreadChatInternal(
         const status = part.data.status;
         const message = part.data.message;
         if (
-          (phase === "thinking" || phase === "searching" || phase === "tool_calling")
+          (phase === "preparing"
+            || phase === "thinking"
+            || phase === "searching"
+            || phase === "tool_calling"
+            || phase === "drafting")
           && (status === "started" || status === "completed")
           && typeof message === "string"
         ) {
@@ -584,10 +590,13 @@ async function streamAreaThreadChatInternal(
       if (part.event === "custom" && isRecord(part.data) && part.data.type === "token") {
         const delta = part.data.delta;
         if (typeof delta === "string" && delta) {
-          logChatStreamDebug(streamStartedAt, "custom_token_ignored", {
+          logChatStreamDebug(streamStartedAt, hasPrimaryTokenStream ? "custom_token_ignored" : "custom_token_fallback", {
             deltaLength: delta.length,
             deltaPreview: delta.slice(0, 80),
           });
+          if (!hasPrimaryTokenStream) {
+            onUpdate({ delta });
+          }
         }
         continue;
       }

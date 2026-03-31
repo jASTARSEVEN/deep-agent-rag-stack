@@ -297,6 +297,23 @@ class DeepAgentsChatRuntime:
                 }
             )
 
+        def emit_token(delta: str) -> None:
+            """透過 LangGraph custom stream 發送回答 token 增量。
+
+            參數：
+            - `delta`：本次新增的回答文字片段。
+
+            回傳：
+            - `None`：僅將 token delta 寫入 custom stream。
+            """
+
+            if not delta:
+                return
+            log_stream_debug(event="token", delta_length=len(delta), delta_preview=delta[:80])
+            if writer is None:
+                return
+            writer({"type": "token", "delta": delta})
+
         @tool
         def retrieve_area_contexts(focus_query: str | None = None) -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。"""
@@ -327,8 +344,17 @@ class DeepAgentsChatRuntime:
                     contexts_count=len(retrieval_result.assembled_contexts),
                     citations_count=len(retrieval_result.citations),
                 )
-                emit_phase(phase="searching", status="completed", message="知識庫搜尋完成")
-                emit_phase(phase="tool_calling", status="completed", message="知識庫工具呼叫完成")
+                emit_phase(
+                    phase="searching",
+                    status="completed",
+                    message=f"知識庫搜尋完成，找到 {len(retrieval_result.assembled_contexts)} 個候選片段",
+                )
+                emit_phase(
+                    phase="tool_calling",
+                    status="completed",
+                    message=f"知識庫工具呼叫完成，整理出 {len(retrieval_result.citations)} 則引用",
+                )
+                emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
                 emit_tool_call(
                     name="retrieve_area_contexts",
                     status="completed",
@@ -351,6 +377,7 @@ class DeepAgentsChatRuntime:
             streaming=True,
         )
         tracing_manager = nullcontext()
+        emit_phase(phase="preparing", status="started", message="正在建立回答流程")
         if settings.langsmith_tracing:
             if tracing_context is None:  # pragma: no cover - 依賴缺失時於執行期明確失敗。
                 raise RuntimeError("缺少 langsmith 依賴，無法啟用 LangSmith tracing。")
@@ -368,6 +395,7 @@ class DeepAgentsChatRuntime:
                 ),
             )
 
+        emit_phase(phase="preparing", status="completed", message="回答流程準備完成")
         emit_phase(phase="thinking", status="started", message="正在思考如何回答")
         main_agent = build_main_agent(model=llm, retrieve_area_contexts_tool=retrieve_area_contexts)
         log_stream_debug(event="agent_stream_start")
@@ -390,12 +418,14 @@ class DeepAgentsChatRuntime:
                     if text_delta:
                         if not first_token_emitted:
                             first_token_emitted = True
+                            emit_phase(phase="drafting", status="started", message="正在生成回答內容")
                             log_stream_debug(
                                 event="first_answer_token",
                                 delta_preview=text_delta[:80],
                                 delta_length=len(text_delta),
                             )
                         streamed_answer_parts.append(text_delta)
+                        emit_token(text_delta)
                     continue
                 if stream_mode == "values" and isinstance(stream_payload, dict):
                     log_stream_debug(
@@ -421,6 +451,7 @@ class DeepAgentsChatRuntime:
             answer_length=len(answer),
             retrieval_invoked=retrieval_invoked,
         )
+        emit_phase(phase="drafting", status="completed", message="回答草稿已完成")
         emit_phase(phase="thinking", status="completed", message="回答內容已整理完成")
 
         trace = {

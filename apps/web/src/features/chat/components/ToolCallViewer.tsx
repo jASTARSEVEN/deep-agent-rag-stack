@@ -22,7 +22,6 @@ export function ToolCallViewer({ toolCalls }: ToolCallViewerProps): JSX.Element 
         <details
           key={toolCall.name}
           className="rounded-2xl border border-stone-200 bg-white/85 px-4 py-3"
-          open={toolCall.status === "started"}
         >
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-stone-900">
             <span>{toolCall.name}</span>

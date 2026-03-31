@@ -2,7 +2,7 @@
 
 import type { ChatMessageViewModel, ChatToolCallState } from "../../../lib/types";
 import type { LangGraphChatStreamUpdate } from "../transport/langgraph";
-import { resolveAnswerBlocks } from "./answerBlocks";
+import { containsCitationMarkerPrefix, resolveAnswerBlocks } from "./answerBlocks";
 
 /** 可覆寫的助理訊息預設值。 */
 interface AssistantMessageOverrides {
@@ -27,6 +27,7 @@ export function createUserMessage(question: string, id?: string): ChatMessageVie
   return {
     id: id ?? `user-${Date.now()}`,
     role: "user",
+    rawContent: question,
     content: question,
     answerBlocks: [],
     citations: [],
@@ -45,6 +46,7 @@ export function createAssistantMessage(overrides: AssistantMessageOverrides = {}
   return {
     id: overrides.id ?? `assistant-${Date.now()}`,
     role: "assistant",
+    rawContent: overrides.content ?? "",
     content: overrides.content ?? "",
     answerBlocks: overrides.answerBlocks ?? [],
     citations: overrides.citations ?? [],
@@ -85,16 +87,45 @@ export function applyStreamUpdate(
   let nextMessages = messages;
 
   if (typeof streamUpdate.delta === "string" && streamUpdate.delta) {
-    nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
-      ...current,
-      content: `${current.content}${streamUpdate.delta}`,
-    }));
+    nextMessages = updateLastAssistantMessage(nextMessages, (current) => {
+      const nextRawContent = `${current.rawContent}${streamUpdate.delta}`;
+      const shouldResolveCitationBlocks =
+        current.answerBlocks.length > 0 || containsCitationMarkerPrefix(nextRawContent);
+      if (!shouldResolveCitationBlocks) {
+        return {
+          ...current,
+          rawContent: nextRawContent,
+          content: nextRawContent,
+        };
+      }
+      const resolvedAnswer = resolveAnswerBlocks(nextRawContent, current.answerBlocks, current.citations);
+      return {
+        ...current,
+        rawContent: nextRawContent,
+        content: resolvedAnswer.cleanAnswer,
+        answerBlocks: resolvedAnswer.answerBlocks,
+      };
+    });
   }
   if (Array.isArray(streamUpdate.references)) {
-    nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
-      ...current,
-      citations: streamUpdate.references ?? [],
-    }));
+    nextMessages = updateLastAssistantMessage(nextMessages, (current) => {
+      const nextCitations = streamUpdate.references ?? [];
+      const shouldResolveCitationBlocks =
+        current.answerBlocks.length > 0 || containsCitationMarkerPrefix(current.rawContent);
+      if (!shouldResolveCitationBlocks) {
+        return {
+          ...current,
+          citations: nextCitations,
+        };
+      }
+      const resolvedAnswer = resolveAnswerBlocks(current.rawContent, current.answerBlocks, nextCitations);
+      return {
+        ...current,
+        citations: nextCitations,
+        content: resolvedAnswer.cleanAnswer,
+        answerBlocks: resolvedAnswer.answerBlocks,
+      };
+    });
   }
   if (streamUpdate.phaseState) {
     nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
@@ -124,6 +155,7 @@ export function applyStreamUpdate(
 
       return {
         ...current,
+        rawContent: nextAnswer,
         content: resolvedAnswer.cleanAnswer,
         answerBlocks: resolvedAnswer.answerBlocks,
         citations: nextCitations,

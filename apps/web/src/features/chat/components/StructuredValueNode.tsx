@@ -18,6 +18,20 @@ function isStructuredRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** 將純量值格式化為可直接顯示的完整文字。 */
+function formatStructuredScalarValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (value === null) {
+    return "null";
+  }
+  if (typeof value === "undefined") {
+    return "undefined";
+  }
+  return String(value);
+}
+
 
 /** 產生結構化資料節點摘要文字。 */
 function formatStructuredPreview(value: unknown): string {
@@ -27,16 +41,10 @@ function formatStructuredPreview(value: unknown): string {
   if (isStructuredRecord(value)) {
     return `object(${Object.keys(value).length})`;
   }
-  if (typeof value === "string") {
-    return value.length > 40 ? `${value.slice(0, 40)}...` : value;
+  if (typeof value === "string" && value.length > 40) {
+    return `${value.slice(0, 40)}...`;
   }
-  if (value === null) {
-    return "null";
-  }
-  if (typeof value === "undefined") {
-    return "undefined";
-  }
-  return String(value);
+  return formatStructuredScalarValue(value);
 }
 
 
@@ -60,7 +68,7 @@ export function StructuredValueNode({
     return (
       <div className="rounded-xl bg-stone-100 px-3 py-2 text-xs text-stone-700">
         <span className="font-semibold text-stone-900">{label}</span>
-        <span className="ml-2 whitespace-pre-wrap break-all">{formatStructuredPreview(value)}</span>
+        <span className="ml-2 whitespace-pre-wrap break-all">{formatStructuredScalarValue(value)}</span>
       </div>
     );
   }

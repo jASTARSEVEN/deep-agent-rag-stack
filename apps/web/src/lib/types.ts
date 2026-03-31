@@ -302,7 +302,7 @@ export interface ChatContextReference {
 
 
 /** LangGraph custom event 對應的高層 chat 階段。 */
-export type ChatPhase = "thinking" | "searching" | "tool_calling";
+export type ChatPhase = "preparing" | "thinking" | "searching" | "tool_calling" | "drafting";
 
 
 /** 前端顯示用的 chat 階段狀態。 */
@@ -380,6 +380,8 @@ export interface ChatMessageViewModel {
   id: string;
   /** 訊息角色。 */
   role: "user" | "assistant";
+  /** 保留原始串流文字，供增量解析 citation marker 使用。 */
+  rawContent: string;
   /** 訊息內容。 */
   content: string;
   /** assistant 回答區塊。 */

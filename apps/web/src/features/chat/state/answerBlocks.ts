@@ -6,6 +6,11 @@ import type { ChatAnswerBlock, ChatContextReference, ChatDisplayCitation } from 
 /** 回答中的 citation marker，例如 `[[C1]]` 或 `[[C1,C2]]`。 */
 const CITATION_MARKER_PATTERN = /\[\[(?<labels>C\d+(?:\s*,\s*C\d+)*)\]\]/g;
 
+/** 判斷文字中是否已出現 citation marker 的起始語法。 */
+export function containsCitationMarkerPrefix(answer: string): boolean {
+  return answer.includes("[[");
+}
+
 
 /**
  * 依既有 citations 建立 label 對照表。

@@ -340,8 +340,8 @@ def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch
     assert captured_inputs == [{"messages": conversation_messages}]
 
 
-def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch) -> None:
-    """Deep Agents 應透過 writer 發出階段與工具呼叫事件。
+def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkeypatch) -> None:
+    """Deep Agents 應透過 writer 發出階段、工具呼叫與 token 事件。
 
     參數：
     - `monkeypatch`：pytest monkeypatch fixture。
@@ -464,11 +464,16 @@ def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch)
     phase_events = [event for event in emitted_events if event["type"] == "phase"]
     tool_events = [event for event in emitted_events if event["type"] == "tool_call"]
     assert [event["phase"] for event in phase_events] == [
+        "preparing",
+        "preparing",
         "thinking",
         "tool_calling",
         "searching",
         "searching",
         "tool_calling",
+        "thinking",
+        "drafting",
+        "drafting",
         "thinking",
     ]
     assert [event["status"] for event in tool_events] == ["started", "completed"]
@@ -480,7 +485,7 @@ def test_deepagents_runtime_emits_phase_and_tool_call_custom_events(monkeypatch)
         "contexts": [],
     }
     token_events = [event for event in emitted_events if event["type"] == "token"]
-    assert token_events == []
+    assert token_events == [{"type": "token", "delta": "這是帶搜尋流程的回答。"}]
 
 
 def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypatch) -> None:
