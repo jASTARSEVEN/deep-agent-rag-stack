@@ -38,11 +38,11 @@ export function AnswerBlocks({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="rounded-2xl bg-white/70 px-4 py-3">
       {answerBlocks.map((block, index) => (
         <div
           key={`${index}-${block.text.slice(0, 24)}`}
-          className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-[0_10px_24px_rgba(120,113,108,0.08)]"
+          className={index === 0 ? "" : "mt-4 border-t border-stone-200/70 pt-4"}
         >
           <MarkdownContent content={block.text} className="text-sm leading-7 text-stone-800" />
           {block.display_citations.length > 0 ? (

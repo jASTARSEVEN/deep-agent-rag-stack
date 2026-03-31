@@ -11,9 +11,10 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 
 - From the repository root:
   - `cp .env.example .env`
-  - Set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, and `TLS_ACME_EMAIL`
-  - Point DNS for `PUBLIC_HOST` at the deployment machine
-  - Forward external `80` and `443` to the Docker host
+  - For local development, keep the default `PUBLIC_HOST=localhost`
+  - For public deployment, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, and `TLS_ACME_EMAIL`
+  - For public deployment, point DNS for `PUBLIC_HOST` at the deployment machine
+  - For public deployment, forward external `80` and `443` to the Docker host
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
 - The compose file pins the project name to `deep-agent-rag-stack`.
 - The `worker` service requests GPU access by default through `WORKER_GPUS=all`.
@@ -62,12 +63,11 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 ## Public Interfaces
 
 - Public browser entrypoint:
-  - `https://<PUBLIC_HOST>/`
-  - `https://<PUBLIC_HOST>/api/*`
-  - `https://<PUBLIC_HOST>/auth/*`
+  - Local development: `http://localhost/`, `http://localhost/api/*`, `http://localhost/auth/*`
+  - Public deployment: `https://<PUBLIC_HOST>/`, `https://<PUBLIC_HOST>/api/*`, `https://<PUBLIC_HOST>/auth/*`
 - Public ports:
-  - `443`: primary customer-facing HTTPS entrypoint
-  - `80`: ACME / redirect only
+  - Local development: `80`
+  - Public deployment: `443` primary HTTPS, `80` ACME / redirect
 - Operational host ports that may still be published for local administration:
   - MinIO API: `19000`
   - MinIO Console: `19001`
@@ -76,6 +76,7 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 
 ## Troubleshooting
 
+- When `PUBLIC_HOST=localhost` or `127.0.0.1`, Caddy intentionally serves plain HTTP so local development does not depend on ACME certificates.
 - If certificates are not issued, verify that `PUBLIC_HOST` resolves publicly and ports `80/443` reach the Docker host.
 - If login fails after the reverse proxy cutover, verify that `KEYCLOAK_PUBLIC_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, and the realm client redirect URIs all point to `/auth`.
 - `Caddy` routes `/auth/callback` to the web app and the rest of `/auth*` to Keycloak because the frontend callback path shares the `/auth` prefix.

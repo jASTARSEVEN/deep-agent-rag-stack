@@ -3,7 +3,7 @@
 	${CADDY_ACME_CA_LINE}
 }
 
-${PUBLIC_HOST} {
+${CADDY_SITE_ADDRESS} {
 	encode zstd gzip
 
 	@auth_callback path /auth/callback /auth/callback/*

@@ -27,13 +27,13 @@
       "fullScopeAllowed": true,
       "frontchannelLogout": true,
       "redirectUris": [
-        "https://easypinex.duckdns.org/auth/callback",
-        "https://easypinex.duckdns.org/silent-check-sso.html",
-        "http://localhost/auth/callback",
-        "http://localhost/silent-check-sso.html"
+        "https://easypinex.duckdns.org/*",
+        "http://localhost/*",
+        "http://localhost:3000/*"
       ],
       "webOrigins": [
         "https://easypinex.duckdns.org",
+        "http://localhost:3000",
         "http://localhost"
       ],
       "defaultClientScopes": [

@@ -11,9 +11,10 @@
 
 - 在專案根目錄執行：
   - `cp .env.example .env`
-  - 設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL`、`TLS_ACME_EMAIL`
-  - 將 `PUBLIC_HOST` 的 DNS 指向部署主機
-  - 將外部 `80` 與 `443` 轉發到 Docker 主機
+  - 本機開發請保留預設 `PUBLIC_HOST=localhost`
+  - 對外部署時再設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL`、`TLS_ACME_EMAIL`
+  - 對外部署時再將 `PUBLIC_HOST` 的 DNS 指向部署主機
+  - 對外部署時再將外部 `80` 與 `443` 轉發到 Docker 主機
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
 - Compose 檔已固定 project name 為 `deep-agent-rag-stack`
 - `worker` 預設會透過 `WORKER_GPUS=all` 請求 GPU
@@ -62,12 +63,11 @@
 ## 對外介面
 
 - 瀏覽器正式入口：
-  - `https://<PUBLIC_HOST>/`
-  - `https://<PUBLIC_HOST>/api/*`
-  - `https://<PUBLIC_HOST>/auth/*`
+  - 本機開發：`http://localhost/`、`http://localhost/api/*`、`http://localhost/auth/*`
+  - 對外部署：`https://<PUBLIC_HOST>/`、`https://<PUBLIC_HOST>/api/*`、`https://<PUBLIC_HOST>/auth/*`
 - 正式公開埠號：
-  - `443`：主要客戶端 HTTPS 入口
-  - `80`：僅供 ACME 驗證與 HTTP 轉 HTTPS
+  - 本機開發：`80`
+  - 對外部署：`443` 為主要 HTTPS 入口，`80` 僅供 ACME 驗證與 HTTP 轉 HTTPS
 - 仍可能保留的本機管理用 host ports：
   - MinIO API：`19000`
   - MinIO Console：`19001`
@@ -76,6 +76,7 @@
 
 ## 疑難排解
 
+- 當 `PUBLIC_HOST=localhost` 或 `127.0.0.1` 時，Caddy 會刻意改走純 HTTP，避免本機開發依賴 ACME 憑證。
 - 若憑證無法簽發，先確認 `PUBLIC_HOST` 可由公網解析，且 `80/443` 已正確轉發到 Docker 主機。
 - 若 reverse proxy 切換後登入失敗，請確認 `KEYCLOAK_PUBLIC_URL`、`KEYCLOAK_ISSUER`、`KEYCLOAK_JWKS_URL` 與 realm client redirect URI 都已對齊 `/auth`。
 - `Caddy` 會把 `/auth/callback` 轉給 web，並把其餘 `/auth*` 轉給 Keycloak，因為前端 callback 與 Keycloak 共用 `/auth` prefix。

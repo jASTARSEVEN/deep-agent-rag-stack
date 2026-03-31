@@ -3,9 +3,14 @@
 
 set -eu
 
-if [ "${TLS_ACME_STAGING:-false}" = "true" ]; then
+if [ "${PUBLIC_HOST:-}" = "localhost" ] || [ "${PUBLIC_HOST:-}" = "127.0.0.1" ]; then
+  CADDY_SITE_ADDRESS="http://${PUBLIC_HOST}"
+  CADDY_ACME_CA_LINE=''
+elif [ "${TLS_ACME_STAGING:-false}" = "true" ]; then
+  CADDY_SITE_ADDRESS="${PUBLIC_HOST}"
   CADDY_ACME_CA_LINE='acme_ca https://acme-staging-v02.api.letsencrypt.org/directory'
 else
+  CADDY_SITE_ADDRESS="${PUBLIC_HOST}"
   CADDY_ACME_CA_LINE=''
 fi
 
@@ -15,6 +20,7 @@ else
   CADDY_KEYCLOAK_ADMIN_HANDLE='handle /auth/admin* {|respond 404|}'
 fi
 
+export CADDY_SITE_ADDRESS
 export CADDY_ACME_CA_LINE
 export CADDY_KEYCLOAK_ADMIN_HANDLE
 

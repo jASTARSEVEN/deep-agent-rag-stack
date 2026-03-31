@@ -85,7 +85,7 @@ fi
 mkdir -p "${MARKER_MODEL_CACHE_DIR}"
 
 echo "啟動 Compose 服務（不含 container worker，會先自動執行 API migration）..."
-"${COMPOSE_SCRIPT}" up -d supabase-db redis minio keycloak api-migrate keycloak api web --build
+"${COMPOSE_SCRIPT}" up -d supabase-db redis minio keycloak api-migrate keycloak api web caddy --build
 
 echo "以本機 worker 啟動 Celery..."
 echo "  DATABASE_URL=postgresql://${POSTGRES_USER}:***@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}"
