@@ -21,7 +21,7 @@ This module contains the project's FastAPI service. It currently provides:
 - Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - (Note: `supabase/migrations/` is the schema source of truth for new environments; existing database upgrades still use Alembic until a dedicated migration runner is in place.)
+  - (Note: Alembic is the single schema migration source of truth. Run `python -m app.db.migration_runner` before starting the API against a fresh or existing PostgreSQL database.)
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Run tests locally:
   - `pytest`

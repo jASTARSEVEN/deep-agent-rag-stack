@@ -221,7 +221,7 @@
 - 新增 `Caddy` 作為唯一對外 `80/443` 入口，統一路由 `/`、`/api/*`、`/auth/*`
 - 將 Keycloak 公開 base path 固定為 `/auth`，並以 `KEYCLOAK_EXPOSE_ADMIN` 控制 `/auth/admin*` 是否對外可達
 - 將 web / api / keycloak 的公開 URL 與 compose 預設環境變數改為 `PUBLIC_HOST` 單一來源
-- 新增 `python -m app.db.migration_runner`，可辨識既有 Supabase bootstrap schema、補 Alembic stamp，並升級到 head
+- 新增 `python -m app.db.migration_runner`，作為 fresh 與既有資料庫共用的 Alembic 升級入口
 - 補上 `WEB_ALLOWED_HOSTS`、瀏覽器非 secure context 的 PKCE fallback，以及 Windows Marker worker 安裝 / 啟動腳本
 
 狀態：

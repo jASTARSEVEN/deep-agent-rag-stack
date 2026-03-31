@@ -1,4 +1,4 @@
-"""加入 retrieval foundation 所需的 vector、FTS 與 pg_jieba schema。"""
+"""加入 retrieval foundation 所需的 vector 與 PGroonga schema。"""
 
 from alembic import op
 import sqlalchemy as sa
@@ -27,26 +27,9 @@ def upgrade() -> None:
 
     if dialect_name == "postgresql":
         op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        op.execute("CREATE EXTENSION IF NOT EXISTS pg_jieba")
-        op.execute(
-            """
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM pg_ts_config
-                    WHERE cfgname = 'deep_agent_jieba'
-                ) THEN
-                    CREATE TEXT SEARCH CONFIGURATION deep_agent_jieba (COPY = jiebacfg);
-                END IF;
-            END
-            $$;
-            """
-        )
+        op.execute("CREATE EXTENSION IF NOT EXISTS pgroonga")
         if "embedding" not in chunk_columns:
             op.execute("ALTER TABLE document_chunks ADD COLUMN embedding vector(1536)")
-        if "fts_document" not in chunk_columns:
-            op.execute("ALTER TABLE document_chunks ADD COLUMN fts_document tsvector")
         op.execute(
             """
             CREATE INDEX IF NOT EXISTS ix_document_chunks_embedding_ivfflat
@@ -57,20 +40,18 @@ def upgrade() -> None:
         )
         op.execute(
             """
-            CREATE INDEX IF NOT EXISTS ix_document_chunks_fts_document_gin
+            CREATE INDEX IF NOT EXISTS ix_document_chunks_content_pgroonga
             ON document_chunks
-            USING gin (fts_document)
-            WHERE fts_document IS NOT NULL;
+            USING pgroonga (content)
+            WHERE chunk_type = 'child';
             """
         )
         return
 
     if "embedding" not in chunk_columns:
         op.add_column("document_chunks", sa.Column("embedding", sa.JSON(), nullable=True))
-    if "fts_document" not in chunk_columns:
-        op.add_column("document_chunks", sa.Column("fts_document", sa.Text(), nullable=True))
     op.create_index("ix_document_chunks_embedding_ivfflat", "document_chunks", ["embedding"], unique=False)
-    op.create_index("ix_document_chunks_fts_document_gin", "document_chunks", ["fts_document"], unique=False)
+    op.create_index("ix_document_chunks_content_idx", "document_chunks", ["content"], unique=False)
 
 
 def downgrade() -> None:
@@ -82,17 +63,12 @@ def downgrade() -> None:
 
     if dialect_name == "postgresql":
         op.execute("DROP INDEX IF EXISTS ix_document_chunks_embedding_ivfflat")
-        op.execute("DROP INDEX IF EXISTS ix_document_chunks_fts_document_gin")
+        op.execute("DROP INDEX IF EXISTS ix_document_chunks_content_pgroonga")
         if "embedding" in chunk_columns:
             op.execute("ALTER TABLE document_chunks DROP COLUMN embedding")
-        if "fts_document" in chunk_columns:
-            op.execute("ALTER TABLE document_chunks DROP COLUMN fts_document")
-        op.execute("DROP TEXT SEARCH CONFIGURATION IF EXISTS deep_agent_jieba")
         return
 
     op.drop_index("ix_document_chunks_embedding_ivfflat", table_name="document_chunks")
-    op.drop_index("ix_document_chunks_fts_document_gin", table_name="document_chunks")
+    op.drop_index("ix_document_chunks_content_idx", table_name="document_chunks")
     if "embedding" in chunk_columns:
         op.drop_column("document_chunks", "embedding")
-    if "fts_document" in chunk_columns:
-        op.drop_column("document_chunks", "fts_document")

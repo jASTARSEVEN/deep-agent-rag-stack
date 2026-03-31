@@ -37,8 +37,6 @@ services:
       - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - supabase-db-data:/var/lib/postgresql/data
-      # 僅供新 volume 初始化；既有 DB 升級仍應走 Alembic。
-      - ../supabase/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-deep_agent_rag}"]
       interval: 10s

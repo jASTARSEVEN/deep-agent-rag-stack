@@ -51,7 +51,7 @@ The deployment entrypoint is now designed around a single HTTPS origin behind `C
 - `https://easypinex.duckdns.org/api/*` for the API
 - `https://easypinex.duckdns.org/auth/*` for Keycloak
 
-The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`. The repository now includes a single public HTTPS entrypoint behind `Caddy`, a `/auth`-prefixed Keycloak deployment model, and an API-side migration runner that can adopt existing Supabase bootstrap schemas before upgrading them to the current Alembic head.
+The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`. The repository now includes a single public HTTPS entrypoint behind `Caddy`, a `/auth`-prefixed Keycloak deployment model, and a unified API-side migration runner based on Alembic.
 
 - Monorepo structure, Docker Compose, and the local development stack
 - Basic wiring across the `FastAPI` API, `Celery` worker, and `React + Tailwind` web app
@@ -137,13 +137,11 @@ This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the
 
 ## Database Init and Upgrade
 
-- Fresh database volumes initialize automatically through `supabase/migrations/` because the folder is mounted into the Supabase container's `/docker-entrypoint-initdb.d`.
-- Existing database volumes do not re-run those init scripts on restart, so bootstrap SQL alone is not a schema upgrade mechanism.
-- The compose stack now upgrades the API schema through `python -m app.db.migration_runner`.
-- The migration runner detects supported Supabase bootstrap schemas that do not yet have `alembic_version`, stamps the matching baseline revision, and then upgrades to the current Alembic head.
+- The repository uses Alembic as the single schema migration source of truth.
+- The compose stack upgrades both fresh and existing databases through `python -m app.db.migration_runner`.
 - If you need to rerun the upgrade path manually in an existing environment, use:
   - `./scripts/compose.sh exec api python -m app.db.migration_runner`
-- If retrieval SQL or PostgreSQL RPCs change, make sure the change is also represented in Alembic. Do not rely only on `supabase/migrations/` unless the target environment is guaranteed to be a fresh volume.
+- If retrieval SQL or PostgreSQL RPCs change, make sure the change is represented in Alembic revisions before shipping the code change.
 - After an upgrade, verify the API and retrieval path before assuming the environment is healthy.
 
 ## Environment Variables

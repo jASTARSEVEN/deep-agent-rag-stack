@@ -21,7 +21,7 @@
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
-  - (註：`supabase/migrations/` 是新環境的 schema 正式來源；既有資料庫升級在專用 migration runner 落地前仍使用 Alembic)
+  - (註：Alembic 是唯一正式 schema migration 來源；無論 fresh 或既有 PostgreSQL，都先執行 `python -m app.db.migration_runner` 再啟動 API)
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - 本機執行測試：
   - `pytest`

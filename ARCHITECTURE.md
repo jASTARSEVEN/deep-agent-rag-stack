@@ -37,8 +37,8 @@
 - Redis：Celery broker/result backend
 - MinIO：原始檔案儲存 (未來兼容 AWS S3)
 - Keycloak：目前正式的身分與群組來源，公開 base path 固定為 `/auth`
-- Supabase Migrations：位於 `supabase/migrations/`，是目前的 schema 正式來源
-- Migration Runner：由 `python -m app.db.migration_runner` 負責接手既有 Supabase bootstrap schema 並升級到 Alembic head
+- Alembic Migrations：位於 `apps/api/alembic/`，是目前唯一的 schema 正式來源
+- Migration Runner：由 `python -m app.db.migration_runner` 統一執行 Alembic 升級，涵蓋 fresh 與既有資料庫
 
 ## 關鍵架構原則
 
@@ -225,7 +225,7 @@
 - **正式 auth 路徑**：目前正式支援 `Keycloak` issuer + JWKS 驗證與 `sub/groups` claims。
 - **正式 storage 路徑**：目前正式支援 `MinIO` 與 `filesystem`。
 - **正式公開入口**：`Caddy` 是唯一對外入口；客戶端正式只走 `https://<PUBLIC_HOST>/`、`/api/*`、`/auth/*`。
-- **既有 DB 升級策略**：`supabase/migrations/` 負責 fresh volume bootstrap；compose 與手動維運則統一走 `python -m app.db.migration_runner`，必要時先補 Alembic stamp 再升級。
+- **既有 DB 升級策略**：fresh 與既有資料庫都統一走 `python -m app.db.migration_runner`；不再維持另一套 bootstrap SQL migration。
 
 ### 3. 開發環境的一致性 (Local Development Parity)
 - **Supabase Docker Stack**：開發環境直接採用 Docker Compose 提供的 Supabase Postgres 容器。這套配置能重現 PGroonga / pgvector 能力，且不需要安裝額外 CLI 工具。

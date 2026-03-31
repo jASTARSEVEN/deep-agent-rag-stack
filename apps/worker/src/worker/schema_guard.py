@@ -32,8 +32,8 @@ def ensure_schema_compatibility(engine: Engine) -> None:
     if "documents" not in table_names:
         raise RuntimeError(
             "資料庫尚未初始化或 schema 不完整：缺少 `documents` 資料表。"
-            "請先執行 Alembic migration；compose 環境可重新 `docker compose up`，"
-            "非 compose 環境請在 `apps/api` 執行 `alembic upgrade head`。"
+            "請先執行 migration runner；compose 環境可重新 `docker compose up`，"
+            "非 compose 環境請在 `apps/api` 執行 `python -m app.db.migration_runner`。"
         )
 
     document_columns = {column["name"] for column in inspector.get_columns("documents")}
@@ -44,7 +44,7 @@ def ensure_schema_compatibility(engine: Engine) -> None:
     missing_label = ", ".join(f"`documents.{name}`" for name in missing_columns)
     raise RuntimeError(
         "資料庫 schema 與目前 worker 程式碼不相容，缺少欄位："
-        f"{missing_label}。請先執行 Alembic migration；compose 環境可重新 "
+        f"{missing_label}。請先執行 migration runner；compose 環境可重新 "
         "`docker compose up` 讓 migration runner 自動補齊，非 compose 環境請在 "
-        "`apps/api` 執行 `alembic upgrade head`。"
+        "`apps/api` 執行 `python -m app.db.migration_runner`。"
     )

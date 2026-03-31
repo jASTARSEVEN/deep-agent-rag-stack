@@ -195,7 +195,7 @@
 - 單一路徑認證與儲存：目前正式支援 `Keycloak` 作為身分來源，`MinIO / filesystem` 作為儲存後端
 - 本地/地端支援：開發階段優先採用 Docker Compose 直接啟動 Supabase Postgres、API、Worker、Keycloak、MinIO、Web、Caddy
 - 基礎設施簡化：遷移完成後，完整移除對純 PostgreSQL（自編譯 pg_jieba）的依賴，降低維護成本
-- 既有資料庫承接：由 migration runner 判斷可辨識的 Supabase bootstrap schema，先補 Alembic revision 再升級
+- 既有資料庫承接：統一由 migration runner 執行 Alembic 升級，不再維持雙軌 bootstrap / upgrade migration
 
 ## 非功能性要求
 

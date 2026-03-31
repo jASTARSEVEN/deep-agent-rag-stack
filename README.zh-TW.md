@@ -55,7 +55,7 @@
 
 ## 目前已完成
 
-目前最新完成里程碑為 `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`。專案除了既有的 `Deep Agents + LangGraph Server` area-scoped chat 垂直切片外，現在也已補上以 `Caddy` 為核心的單一公開 HTTPS 入口、以 `/auth` 為固定 base path 的 Keycloak 對外模型，以及可接手既有 Supabase bootstrap schema 的 API migration runner。
+目前最新完成里程碑為 `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`。專案除了既有的 `Deep Agents + LangGraph Server` area-scoped chat 垂直切片外，現在也已補上以 `Caddy` 為核心的單一公開 HTTPS 入口、以 `/auth` 為固定 base path 的 Keycloak 對外模型，以及以 Alembic 為唯一來源的 API migration runner。
 
 - Monorepo、Docker Compose 與本機開發環境骨架
 - `FastAPI` API、`Celery` worker、`React + Tailwind` Web 應用基本串接
@@ -133,13 +133,11 @@
 
 ## 資料庫初始化與升級
 
-- 全新的資料庫 volume 會透過 `supabase/migrations/` 自動初始化，因為該目錄會掛載到 Supabase container 的 `/docker-entrypoint-initdb.d`。
-- 已存在的資料庫 volume 在重啟後不會重新執行這些初始化 SQL，因此 bootstrap SQL 本身不是 schema upgrade 機制。
-- compose stack 現在會透過 `python -m app.db.migration_runner` 執行 API schema 升級。
-- migration runner 會先偵測既有 Supabase bootstrap schema 是否尚未寫入 `alembic_version`，必要時先補 stamp，再升級到目前 Alembic head。
+- 本專案以 Alembic 作為唯一正式 schema migration 來源。
+- compose stack 會透過 `python -m app.db.migration_runner` 升級 fresh 與既有資料庫。
 - 若要在既有環境手動重跑升級流程，請使用：
   - `./scripts/compose.sh exec api python -m app.db.migration_runner`
-- 若 retrieval SQL 或 PostgreSQL RPC 有變更，必須確認 Alembic 也有同步表達該變更，不能只依賴 `supabase/migrations/`，除非你能保證目標環境一定是全新 volume。
+- 若 retrieval SQL 或 PostgreSQL RPC 有變更，必須先以 Alembic revision 表達 schema 變更，再交付程式碼。
 - 升級完成後，應重新驗證 API 與 retrieval 路徑，再判定環境是否健康。
 
 ## 環境變數

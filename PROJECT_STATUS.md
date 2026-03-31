@@ -62,9 +62,10 @@
 - 已新增 `DOCX/PPTX -> Unstructured partition_docx/partition_pptx` 路徑，回接既有 `text/table` block-aware parser contract
 - 已完成以 `Caddy` 為核心的單一公開 HTTPS 入口，將 Web、API、Keycloak 收斂到同一個 `PUBLIC_HOST`
 - 已將 Keycloak 對外模型固定為 `/auth` base path，並支援以 `KEYCLOAK_EXPOSE_ADMIN` 預設封鎖 `/auth/admin*`
-- 已新增 `app.db.migration_runner`，可接手既有 Supabase bootstrap schema、補 Alembic stamp 並升級到最新 head
+- 已新增並收斂 `app.db.migration_runner`，作為 fresh 與既有資料庫共用的唯一 Alembic 升級入口
 - 已補上 `WEB_ALLOWED_HOSTS` 與瀏覽器非 secure context 的 Keycloak PKCE fallback，降低公開網域與本機開發切換時的登入失敗風險
 - 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 預設可請求 GPU runtime
+- 已將資料庫 migration 收斂為單一 Alembic 路徑，移除 `supabase/migrations` 與 Alembic 並存造成的雙軌 schema 風險
 
 ## 已完成功能
 
@@ -198,8 +199,7 @@
 - 已新增 `caddy` service，將正式對外流量收斂為 `https://<PUBLIC_HOST>/`、`/api/*` 與 `/auth/*`
 - 已將 compose 內 `web`、`api`、`keycloak` 改為內部服務，正式客戶端入口只保留 `80/443`
 - 已將 Keycloak bootstrap 與公開 issuer 對齊 `/auth` relative path，並更新 realm redirect URI / web origins
-- 已新增 `app.db.migration_runner`，可辨識既有 Supabase bootstrap schema 是否缺少 `alembic_version`，必要時先補 stamp 再升級
-- 已將 compose migration command 收斂為 `python -m app.db.migration_runner`，避免既有 volume 僅靠 bootstrap SQL 或手動判斷 schema 版本
+- 已將 compose migration command 收斂為 `python -m app.db.migration_runner`，fresh 與既有 volume 均走同一條 Alembic 升級路徑
 - 已在前端補上 `WEB_ALLOWED_HOSTS` 與 PKCE fallback，讓 `https://<PUBLIC_HOST>` 與 `http://localhost` 都能維持可預期的登入行為
 - 已補上 Windows PowerShell 的 Marker worker 安裝 / 啟動腳本，並讓 compose worker 可透過 `WORKER_GPUS` 與 `NVIDIA_*` 控制 GPU runtime
 
