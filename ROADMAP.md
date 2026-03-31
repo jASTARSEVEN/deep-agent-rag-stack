@@ -238,3 +238,123 @@
 1. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證
 2. 驗證既有 Supabase volume 經 `migration_runner` 升級後的 retrieval / chat 穩定性
 3. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證
+4. 規劃文件級摘要 / 比較能力的 retrieval 與 synthesis phase，避免 chat 只依賴固定 top-n chunk assemble
+
+## Phase 7.1 — Query-Aware Retrieval Profiles
+
+目標：
+- 讓 retrieval 不再只依賴單一固定 `top_n -> rerank -> assemble` 路徑，而能依問題型態切換不同策略。
+- 先補齊「事實查詢 vs 文件摘要 vs 跨文件比較」三類主要問答場景的最小能力。
+
+內容：
+- 在 chat / retrieval 入口新增 query intent classification，至少區分：
+  - `fact_lookup`
+  - `document_summary`
+  - `cross_document_compare`
+- 依 query type 套用不同 retrieval profile，而不是共用同一組固定參數。
+- `fact_lookup` 維持現有 precision-first 路線。
+- `document_summary` 提高 recall coverage，允許較大的候選集與較寬鬆的 assembled context budget。
+- `cross_document_compare` 強制保留跨文件 coverage，避免 rerank 後的 top hits 被單一文件壟斷。
+- 將 profile 相關參數顯式設定化，例如：
+  - recall candidate 上限
+  - rerank top-n
+  - assembler contexts 上限
+  - 每文件可採信 parent 數上限
+- retrieval trace metadata 補上 query type 與所套用 profile，便於觀測與回歸測試。
+
+狀態：
+- `未開始`
+
+## Phase 7.2 — Diversified Selection Before Assembly
+
+目標：
+- 在不破壞 SQL gate、deny-by-default 與 ready-only 保護前提下，提升摘要 / 比較問題的文件覆蓋率。
+
+內容：
+- 在 RRF / rerank 之後、assembler 之前，新增 diversified selection layer。
+- selection policy 不再只按分數排序，還要納入：
+  - 文件分散度
+  - parent 分散度
+  - 每份文件的代表片段數上限
+- 比較型問題優先保留「每份入選文件至少一個代表 parent」。
+- 摘要型問題優先保留「多文件代表片段」，而不是同文件相鄰高相似片段連續佔滿 budget。
+- assembler trace 補上：
+  - 被保留的文件數
+  - 每文件採信的 parent 數
+  - 因 diversity guardrail 被淘汰的候選
+- 測試補齊多文件 coverage 與單文件壟斷退化案例。
+
+狀態：
+- `未開始`
+
+## Phase 7.3 — Document-Level Representations
+
+目標：
+- 補齊文件級任務所需的高階語意表示，避免系統只能以 child chunk 作為唯一召回單位。
+
+內容：
+- 在 ingest pipeline 為每份 `ready` 文件建立 document-level synopsis。
+- 本 phase 明確不做 section-level synopsis，避免在尚未驗證 document-level 路徑前過早擴張索引與成本。
+- document synopsis 需保持 SQL-first 可查詢與可觀測，不可只存在暫時記憶體。
+- retrieval 新增兩階段策略：
+  - 第一階段先做 document-level recall，找出值得深入的文件集合
+  - 第二階段再於入選文件內做既有 parent / child recall 與 assembler
+- document synopsis 應涵蓋：
+  - 主題
+  - 重要章節
+  - 主要結論
+  - 可辨識的表格 / 結構重點
+- 評估 synopsis 的 embedding、更新時機、reindex 一致性與失敗回復策略。
+- section-level synopsis 若未來要做，需等 document-level recall 的品質與成本先被驗證後，再另立 phase 規劃。
+
+狀態：
+- `未開始`
+
+## Phase 7.4 — Hierarchical Synthesis for Summary / Compare
+
+目標：
+- 讓長文件摘要與多文件比較改走分階段 synthesize，而不是單次把 assemble 結果全部塞進 LLM。
+
+內容：
+- 在 LangGraph chat runtime 導入 hierarchical synthesis flow。
+- 對 `document_summary` 與 `cross_document_compare` 類問題，採用至少兩段式流程：
+  - map：先對單文件或單群組 context 產生局部摘要 / 比較筆記
+  - reduce：再合成最終回答與 citations
+- 必要時支援 refine step，處理 context 過長或文件數偏多的情境。
+- citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
+- trace metadata 補上 map/reduce 階段輸入輸出摘要，便於 debug 與成本觀測。
+- 對比較型問題定義較穩定的輸出結構，例如：
+  - 共通點
+  - 差異點
+  - 各文件立場 / 結論
+  - 不足證據或矛盾處
+
+狀態：
+- `未開始`
+
+## Phase 7.5 — Evaluation & Guardrails for Coverage-Oriented RAG
+
+目標：
+- 為文件級摘要 / 比較能力建立可回歸的品質衡量，避免只調大 top-n 導致成本上升卻沒有真正改善答案品質。
+
+內容：
+- 建立摘要 / 比較專用 evaluation set，覆蓋：
+  - 單長文件摘要
+  - 多文件共同主題摘要
+  - 多文件差異比較
+  - 文件間互相矛盾資訊
+- 量測與追蹤至少以下指標：
+  - 文件覆蓋率
+  - citation 覆蓋率
+  - answer faithfulness
+  - rerank / synthesis token 成本
+  - 回答延遲
+- 補 guardrails，限制：
+  - 最大入選文件數
+  - 最大 map/reduce token 預算
+  - synopsis 長度
+  - 比較型問題的每文件 context 配額
+- 將 evaluation 結果回饋到 profile 參數調整，避免單次 heuristic 長期失真。
+
+狀態：
+- `未開始`
