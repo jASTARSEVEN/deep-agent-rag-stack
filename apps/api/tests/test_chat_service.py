@@ -484,6 +484,8 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "citations_count": 0,
         "contexts": [],
     }
+    reference_events = [event for event in emitted_events if event["type"] == "references"]
+    assert reference_events == [{"type": "references", "references": []}]
     token_events = [event for event in emitted_events if event["type"] == "token"]
     assert token_events == [{"type": "token", "delta": "這是帶搜尋流程的回答。"}]
 
@@ -1084,6 +1086,28 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     completed_tool_event = [
         event for event in emitted_events if event["type"] == "tool_call" and event["status"] == "completed"
     ][0]
+    reference_event = [event for event in emitted_events if event["type"] == "references"][0]
+    assert reference_event["references"] == [
+        {
+            "context_index": 0,
+            "context_label": "C1",
+            "document_id": document.id,
+            "document_name": "reader-policy.md",
+            "parent_chunk_id": parent.id,
+            "child_chunk_ids": [child_one.id, child_two.id],
+            "structure_kind": "text",
+            "heading": "Reader Policy",
+            "excerpt": "alpha intro\n\nalpha details",
+            "assembled_text": "alpha intro\n\nalpha details",
+            "source": "hybrid",
+            "start_offset": 0,
+            "end_offset": 27,
+            "page_start": None,
+            "page_end": None,
+            "regions": [],
+            "truncated": False,
+        }
+    ]
     assert completed_tool_event["output"] == {
         "contexts_count": 1,
         "citations_count": 1,

@@ -33,6 +33,27 @@ function buildCitationLookup(citations: ChatContextReference[]): Map<string, Cha
   );
 }
 
+/** 依 citation label 建立暫時顯示用的 fallback citation。 */
+function buildFallbackDisplayCitation(label: string): ChatDisplayCitation | null {
+  const match = /^C(?<index>\d+)$/.exec(label);
+  if (!match?.groups?.index) {
+    return null;
+  }
+  const contextIndex = Number.parseInt(match.groups.index, 10) - 1;
+  if (!Number.isFinite(contextIndex) || contextIndex < 0) {
+    return null;
+  }
+  return {
+    context_index: contextIndex,
+    context_label: label,
+    document_id: "",
+    document_name: label,
+    heading: null,
+    page_start: null,
+    page_end: null,
+  };
+}
+
 
 /**
  * 將原始文字中的 citation marker 解析為 answer blocks。
@@ -77,8 +98,8 @@ export function deriveAnswerBlocksFromText(
     }
 
     const displayCitations = labels
-      .map((label) => citationLookup.get(label))
-      .filter((citation): citation is ChatDisplayCitation => citation !== undefined);
+      .map((label) => citationLookup.get(label) ?? buildFallbackDisplayCitation(label))
+      .filter((citation): citation is ChatDisplayCitation => citation !== null && citation !== undefined);
 
     answerBlocks.push({
       text: cleanedText,

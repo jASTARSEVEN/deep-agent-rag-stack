@@ -314,6 +314,21 @@ class DeepAgentsChatRuntime:
                 return
             writer({"type": "token", "delta": delta})
 
+        def emit_references(references: list[dict[str, object]]) -> None:
+            """透過 LangGraph custom stream 提前發送 citation / context metadata。
+
+            參數：
+            - `references`：可供前端提早建立引用按鈕的 assembled context metadata。
+
+            回傳：
+            - `None`：僅將 references 寫入 custom stream。
+            """
+
+            log_stream_debug(event="references", references_count=len(references))
+            if writer is None:
+                return
+            writer({"type": "references", "references": references})
+
         @tool
         def retrieve_area_contexts(focus_query: str | None = None) -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。"""
@@ -339,6 +354,7 @@ class DeepAgentsChatRuntime:
                 assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
                 llm_tool_contexts_payload = build_agent_tool_context_payload(session, retrieval_result)
                 retrieval_invoked = True
+                emit_references(assembled_contexts_payload)
                 log_stream_debug(
                     event="retrieval_complete",
                     contexts_count=len(retrieval_result.assembled_contexts),

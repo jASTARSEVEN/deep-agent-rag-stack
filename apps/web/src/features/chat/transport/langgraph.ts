@@ -623,6 +623,18 @@ async function streamAreaThreadChatInternal(
         }
         continue;
       }
+      if (part.event === "custom" && isRecord(part.data) && part.data.type === "references") {
+        const references = Array.isArray(part.data.references)
+          ? part.data.references
+              .map((reference) => normalizeChatContextReference(reference))
+              .filter((reference): reference is ChatContextReference => reference !== null)
+          : [];
+        logChatStreamDebug(streamStartedAt, "references", { referencesCount: references.length });
+        if (references.length > 0) {
+          onUpdate({ references });
+        }
+        continue;
+      }
       if (part.event === "values" && isRecord(part.data) && isCurrentQuestionState(part.data, areaId, question)) {
         const citations = Array.isArray(part.data.citations) ? (part.data.citations as ChatContextReference[]) : [];
         const normalizedCitations = citations
