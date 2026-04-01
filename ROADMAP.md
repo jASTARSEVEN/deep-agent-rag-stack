@@ -240,17 +240,71 @@
 3. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證
 4. 規劃文件級摘要 / 比較能力的 retrieval 與 synthesis phase，避免 chat 只依賴固定 top-n chunk assemble
 
-## Phase 7.1 — Query-Aware Retrieval Profiles
+## Phase 7 — Retrieval Correctness Evaluation
+
+目標：
+- 建立獨立於最終 LLM 回答品質的 retrieval correctness evaluation，專注評估 evidence 是否正確、排序是否合理、coverage 是否足夠。
+- 本 phase 明確不以 answer wording、answer completeness 或 answer faithfulness 作為主要評分對象。
+- 第一版評估範圍先鎖定 `fact_lookup`，以控制標註成本並建立穩定的 retrieval benchmark。
+- retrieval correctness evaluation 必須同時涵蓋繁體中文、英文與必要時的中英混合查詢。
+
+內容：
+- 正式 benchmark corpus 以自家文件為主，不以外部 benchmark 作為第一版主資料來源。
+- benchmark 文件需走正式 ingest pipeline，並以系統內的 `display_text` 作為標註與 offset 對齊基準。
+- 建立 retrieval evaluation dataset，第一版只覆蓋 `fact_lookup` query。
+- 長期 gold truth 以 source span 保存，而非直接綁定某一版 chunk 或 assembled context。
+- 主評分單位固定採 `assembled context`，以對齊目前實際送進 LLM 的 evidence 單位；評分前由程式將 gold source spans 映射到當前版本的 chunk 與 assembled context。
+- dataset 標註需保留 evidence traceability，可追回原始 `document / parent / child chunks`。
+- relevance 標註採簡化 graded relevance，第一版至少支援：
+  - `3`：核心證據
+  - `2`：可接受但非最佳證據
+  - `0`：不相關
+- 標註流程採半自動對齊 + 人工複核，而非純人工從零搜尋。
+- 系統需先為每題 `fact_lookup` query 產生 top candidates，供標註者快速複核。
+- 人工複核介面不得假設正確答案一定出現在 top 3~5；除快速複核入口外，還需提供 fallback：
+  - 展開更多候選（例如 top 20）
+  - 文件內搜尋
+  - 直接在全文中框選正確 source span
+  - 將案例標記為 `retrieval_miss`
+- 建立 retrieval-only benchmark runner，分層輸出至少以下階段的結果：
+  - recall
+  - rerank
+  - assembled evidence
+- 至少量測以下 retrieval metrics：
+  - `nDCG@k`
+  - `Recall@k`
+  - `MRR@k`
+  - `Precision@k`
+  - `Document Coverage@k`
+- 指標報表需可按以下維度切分：
+  - `zh-TW`
+  - `en`
+  - `mixed`
+  - `fact_lookup`
+  - `recall / rerank / assembled` pipeline stage
+- benchmark 輸出先以離線報表為主，至少包含：
+  - summary metrics
+  - per-query 明細
+  - 與 baseline run 的 regression compare
+- per-query 明細需能看出正確證據首次出現的 rank，以及是否屬於 `retrieval_miss`。
+- Phase 7 完成後需固定一組 retrieval profile 作為 baseline；後續 `Phase 8.*` 的 retrieval profile、selection、synopsis 或 synthesis 相關調整，都應回到本 phase benchmark 比較 evidence ranking 與 coverage 是否退化。
+
+狀態：
+- `未開始`
+
+## Phase 8.1 — Query-Aware Retrieval Profiles
 
 目標：
 - 讓 retrieval 不再只依賴單一固定 `top_n -> rerank -> assemble` 路徑，而能依問題型態切換不同策略。
 - 先補齊「事實查詢 vs 文件摘要 vs 跨文件比較」三類主要問答場景的最小能力。
+- 本 phase 的 query-aware retrieval 必須同時支援台灣繁體中文與英文，不可只以單一語言調參後視為完成。
 
 內容：
 - 在 chat / retrieval 入口新增 query intent classification，至少區分：
   - `fact_lookup`
   - `document_summary`
   - `cross_document_compare`
+- query intent classification、retrieval profile 與 trace metadata 必須可覆蓋繁體中文 query、英文 query，以及中英混合關鍵詞的真實使用情境。
 - 依 query type 套用不同 retrieval profile，而不是共用同一組固定參數。
 - `fact_lookup` 維持現有 precision-first 路線。
 - `document_summary` 提高 recall coverage，允許較大的候選集與較寬鬆的 assembled context budget。
@@ -265,10 +319,11 @@
 狀態：
 - `未開始`
 
-## Phase 7.2 — Diversified Selection Before Assembly
+## Phase 8.2 — Diversified Selection Before Assembly
 
 目標：
 - 在不破壞 SQL gate、deny-by-default 與 ready-only 保護前提下，提升摘要 / 比較問題的文件覆蓋率。
+- diversified selection 的策略與 guardrails 必須同時適用於繁體中文與英文查詢，不得只以中文檢索分布校調。
 
 內容：
 - 在 RRF / rerank 之後、assembler 之前，新增 diversified selection layer。
@@ -287,10 +342,11 @@
 狀態：
 - `未開始`
 
-## Phase 7.3 — Document-Level Representations
+## Phase 8.3 — Document-Level Representations
 
 目標：
 - 補齊文件級任務所需的高階語意表示，避免系統只能以 child chunk 作為唯一召回單位。
+- document-level representation 必須可支撐繁體中文與英文文件，不得只對單一語言建立 synopsis 品質假設。
 
 內容：
 - 在 ingest pipeline 為每份 `ready` 文件建立 document-level synopsis。
@@ -304,16 +360,18 @@
   - 重要章節
   - 主要結論
   - 可辨識的表格 / 結構重點
+- synopsis 生成、embedding 與更新策略需明確驗證繁體中文與英文文件的品質、成本與 reindex 一致性。
 - 評估 synopsis 的 embedding、更新時機、reindex 一致性與失敗回復策略。
 - section-level synopsis 若未來要做，需等 document-level recall 的品質與成本先被驗證後，再另立 phase 規劃。
 
 狀態：
 - `未開始`
 
-## Phase 7.4 — Hierarchical Synthesis for Summary / Compare
+## Phase 8.4 — Hierarchical Synthesis for Summary / Compare
 
 目標：
 - 讓長文件摘要與多文件比較改走分階段 synthesize，而不是單次把 assemble 結果全部塞進 LLM。
+- synthesis prompt、map/reduce 結構與 citation 組裝需同時適用於繁體中文與英文問答輸出。
 
 內容：
 - 在 LangGraph chat runtime 導入 hierarchical synthesis flow。
@@ -332,29 +390,35 @@
 狀態：
 - `未開始`
 
-## Phase 7.5 — Evaluation & Guardrails for Coverage-Oriented RAG
+## Phase 8.5 — Evaluation & Guardrails for Summary / Compare Synthesis
 
 目標：
-- 為文件級摘要 / 比較能力建立可回歸的品質衡量，避免只調大 top-n 導致成本上升卻沒有真正改善答案品質。
+- 為文件級摘要 / 比較能力建立可回歸的品質衡量，避免只調大 top-n 或放寬 synthesis budget 導致成本上升卻沒有真正改善 summary / compare 品質。
+- 本 phase 僅處理 `document_summary` 與 `cross_document_compare` 的 synthesis / coverage evaluation，不負責 `fact_lookup` 的 retrieval correctness。
+- evaluation 與 guardrails 必須把繁體中文、英文與必要時的中英混合查詢都納入正式驗證範圍。
 
 內容：
+- 本 phase 依賴 `Phase 8.3 — Document-Level Representations` 與 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare` 已具備可評估的 runtime。
 - 建立摘要 / 比較專用 evaluation set，覆蓋：
   - 單長文件摘要
   - 多文件共同主題摘要
   - 多文件差異比較
   - 文件間互相矛盾資訊
+- evaluation set 需同時包含繁體中文、英文與中英混合 query，避免 profile 只對單一語言穩定。
 - 量測與追蹤至少以下指標：
   - 文件覆蓋率
   - citation 覆蓋率
+  - synthesis completeness
   - answer faithfulness
-  - rerank / synthesis token 成本
+  - map / reduce token 成本
   - 回答延遲
 - 補 guardrails，限制：
   - 最大入選文件數
   - 最大 map/reduce token 預算
   - synopsis 長度
   - 比較型問題的每文件 context 配額
-- 將 evaluation 結果回饋到 profile 參數調整，避免單次 heuristic 長期失真。
+- 將 evaluation 結果回饋到 profile、selection、synopsis 與 synthesis 參數調整，避免單次 heuristic 長期失真。
+- `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
 狀態：
 - `未開始`
