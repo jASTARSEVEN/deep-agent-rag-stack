@@ -301,6 +301,20 @@
 - baseline compare：新 run 完成後可與 dataset baseline run 比較 summary / per-query 差異
 - 單機自測：`api + worker + web` 本機啟動，SQLite + filesystem + deterministic providers，可直接執行 Playwright E2E reviewer flow
 
+目前 benchmark 現況：
+- 最新一輪以真實 provider 執行的 benchmark，已觀察到 `recall -> rerank` 有明顯提升，代表 rerank 對 ranking 品質有實質幫助：
+  - `recall`：`nDCG@k 0.644`、`Recall@k 0.897`、`MRR@k 0.570`
+  - `rerank`：`nDCG@k 0.834`、`Recall@k 0.897`、`MRR@k 0.814`
+  - `assembled`：`nDCG@k 0.824`、`Recall@k 0.862`、`MRR@k 0.810`
+- `Doc Coverage@k = 1.000` 代表正確文件基本都有進入候選集合；目前主要缺口已不在文件級 coverage，而在最後 evidence materialization。
+- `assembled` 指標仍略低於 `rerank`，表示少數題目雖已在 rerank 前段命中，但進入最終 context 時仍有 evidence 流失。
+
+後續改善重點：
+- 以 `rerank hit / assembled miss` 題目為主，檢查 assembler 的 `max_contexts`、`max_chars_per_context`、`max_children_per_parent` 與 materialization 策略，避免 evidence 在最後一層被裁掉。
+- 針對 table-heavy 題目持續補強 row-aware retrieval / row-header-aware rerank text，優先處理「章節有命中、表格列沒命中」的案例。
+- benchmark 主流程預設只顯示最新 completed run，但資料庫仍保留歷史 run 以供回歸比較與異常追查。
+- 若要做穩定 regression gate，應補一條 deterministic evaluation profile，避免真實 provider rate limit 與暫時性外部失敗污染品質判讀。
+
 ## Phase 8.1 — Query-Aware Retrieval Profiles
 
 目標：
