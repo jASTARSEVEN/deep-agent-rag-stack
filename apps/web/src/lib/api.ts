@@ -14,6 +14,11 @@ import type {
   IngestJobSummary,
   ReindexDocumentPayload,
   UploadDocumentPayload,
+  EvaluationCandidatePreviewPayload,
+  EvaluationDatasetDetailPayload,
+  EvaluationDatasetSummary,
+  EvaluationItemSummary,
+  EvaluationRunReportPayload,
 } from "./types";
 
 
@@ -281,6 +286,164 @@ export async function createArea(payload: { name: string; description: string })
 export async function fetchAreaDetail(areaId: string): Promise<AreaSummary> {
   const response = await fetchProtected(`/areas/${areaId}`);
   return (await response.json()) as AreaSummary;
+}
+
+
+/**
+ * 讀取指定 area 的 evaluation datasets。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @returns 指定 area 的 evaluation dataset 清單。
+ */
+export async function fetchEvaluationDatasets(areaId: string): Promise<{ items: EvaluationDatasetSummary[] }> {
+  const response = await fetchProtected(`/areas/${areaId}/evaluation/datasets`);
+  return (await response.json()) as { items: EvaluationDatasetSummary[] };
+}
+
+
+/**
+ * 建立新的 evaluation dataset。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param payload 建立 payload。
+ * @returns 新建立的 dataset。
+ */
+export async function createEvaluationDataset(areaId: string, payload: { name: string }): Promise<EvaluationDatasetSummary> {
+  const response = await fetchProtected(`/areas/${areaId}/evaluation/datasets`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return (await response.json()) as EvaluationDatasetSummary;
+}
+
+
+/**
+ * 讀取 evaluation dataset detail。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @returns dataset detail。
+ */
+export async function fetchEvaluationDatasetDetail(datasetId: string): Promise<EvaluationDatasetDetailPayload> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}`);
+  return (await response.json()) as EvaluationDatasetDetailPayload;
+}
+
+
+/**
+ * 建立 evaluation item。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @param payload 建立 payload。
+ * @returns 新建立的題目摘要。
+ */
+export async function createEvaluationItem(
+  datasetId: string,
+  payload: { query_text: string; language: "zh-TW" | "en" | "mixed"; query_type?: "fact_lookup"; notes?: string | null },
+): Promise<EvaluationItemSummary> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return (await response.json()) as EvaluationItemSummary;
+}
+
+
+/**
+ * 刪除單一 evaluation 題目。
+ *
+ * @param datasetId 題目所屬 dataset 識別碼。
+ * @param itemId 要刪除的題目識別碼。
+ * @returns 無；刪除成功時只回傳 204。
+ */
+export async function deleteEvaluationItem(datasetId: string, itemId: string): Promise<void> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}`, {
+    method: "DELETE",
+  });
+  if (response.status !== 204) {
+    throw new Error(`未預期的 API 回應狀態：${response.status}`);
+  }
+}
+
+
+/**
+ * 讀取單題的 candidate preview。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @param itemId 目標 item 識別碼。
+ * @returns candidate preview。
+ */
+export async function fetchEvaluationCandidatePreview(
+  datasetId: string,
+  itemId: string,
+): Promise<EvaluationCandidatePreviewPayload> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/candidate-preview`, {
+    method: "POST",
+  });
+  return (await response.json()) as EvaluationCandidatePreviewPayload;
+}
+
+
+/**
+ * 為題目新增 gold span。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @param itemId 目標 item 識別碼。
+ * @param payload span payload。
+ * @returns 更新後的題目摘要。
+ */
+export async function createEvaluationSpan(
+  datasetId: string,
+  itemId: string,
+  payload: { document_id: string; start_offset: number; end_offset: number; relevance_grade: 2 | 3 },
+): Promise<EvaluationItemSummary> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/spans`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return (await response.json()) as EvaluationItemSummary;
+}
+
+
+/**
+ * 將題目標記為 retrieval miss。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @param itemId 目標 item 識別碼。
+ * @returns 更新後的題目摘要。
+ */
+export async function markEvaluationMiss(datasetId: string, itemId: string): Promise<EvaluationItemSummary> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/mark-miss`, {
+    method: "POST",
+  });
+  return (await response.json()) as EvaluationItemSummary;
+}
+
+
+/**
+ * 執行 benchmark run。
+ *
+ * @param datasetId 目標 dataset 識別碼。
+ * @param payload run payload。
+ * @returns 完整 benchmark report。
+ */
+export async function runEvaluationDataset(datasetId: string, payload: { top_k?: number } = {}): Promise<EvaluationRunReportPayload> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}/runs`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  return (await response.json()) as EvaluationRunReportPayload;
+}
+
+
+/**
+ * 讀取既有 benchmark run。
+ *
+ * @param runId 目標 run 識別碼。
+ * @returns 完整 benchmark report。
+ */
+export async function fetchEvaluationRun(runId: string): Promise<EvaluationRunReportPayload> {
+  const response = await fetchProtected(`/evaluation/runs/${runId}`);
+  return (await response.json()) as EvaluationRunReportPayload;
 }
 
 

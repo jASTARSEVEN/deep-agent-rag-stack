@@ -1,5 +1,4 @@
 """API 端 Celery dispatch 輔助。"""
-
 from typing import Any
 
 from fastapi import Request
@@ -56,6 +55,23 @@ def build_celery_client(settings: AppSettings) -> Any:
         backend=settings.celery_result_backend,
     )
     client.conf.update(task_default_queue=DEFAULT_TASK_QUEUE_NAME)
+    if settings.celery_broker_url.startswith("filesystem://"):
+        broker_path = settings.celery_broker_path.resolve()
+        inbound_path = (broker_path / "in").resolve()
+        outbound_path = (broker_path / "out").resolve()
+        processed_path = (broker_path / "processed").resolve()
+        control_path = (broker_path / "control").resolve()
+        inbound_path.mkdir(parents=True, exist_ok=True)
+        outbound_path.mkdir(parents=True, exist_ok=True)
+        processed_path.mkdir(parents=True, exist_ok=True)
+        control_path.mkdir(parents=True, exist_ok=True)
+        client.conf.broker_transport_options = {
+            "data_folder_in": str(inbound_path),
+            "data_folder_out": str(outbound_path),
+            "processed_folder": str(processed_path),
+            "control_folder": str(control_path),
+            "store_processed": True,
+        }
     return client
 
 

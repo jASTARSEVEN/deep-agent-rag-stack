@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from sqlalchemy import delete, select
 
 from worker.chunking import ChunkingConfig, build_chunk_tree
 from worker.core.settings import WorkerSettings
@@ -1633,3 +1634,58 @@ def test_process_document_ingest_clears_display_text_on_failure(monkeypatch, tmp
         assert refreshed_document.display_text is None
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.failed
+
+
+def test_process_document_ingest_reindex_keeps_display_text_offsets_stable(monkeypatch, tmp_path: Path) -> None:
+    """同文件重跑 ingest 後，display_text 與 child offsets 應維持穩定。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "local"
+    settings.chunk_min_parent_section_length = 1
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"# Intro\nAlpha body\n\n## Next\nBeta body"
+    document, job = seed_job(session_factory, file_name="stable.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    assert process_document_ingest(job.id) == "succeeded"
+
+    with session_factory() as session:
+        first_document = session.get(Document, document.id)
+        first_children = session.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document.id, DocumentChunk.chunk_type == ChunkType.child)
+            .order_by(DocumentChunk.position.asc())
+        ).all()
+        assert first_document is not None
+        first_display_text = first_document.display_text
+        first_offsets = [(chunk.start_offset, chunk.end_offset, chunk.content) for chunk in first_children]
+
+        session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+        first_document.status = DocumentStatus.uploaded
+        first_document.display_text = None
+        first_document.normalized_text = None
+        session.add(IngestJob(id="job-2", document_id=document.id, status=IngestJobStatus.queued))
+        session.commit()
+
+    assert process_document_ingest("job-2") == "succeeded"
+
+    with session_factory() as session:
+        second_document = session.get(Document, document.id)
+        second_children = session.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.document_id == document.id, DocumentChunk.chunk_type == ChunkType.child)
+            .order_by(DocumentChunk.position.asc())
+        ).all()
+        assert second_document is not None
+        assert second_document.display_text == first_display_text
+        second_offsets = [(chunk.start_offset, chunk.end_offset, chunk.content) for chunk in second_children]
+        assert second_offsets == first_offsets
+        for chunk in second_children:
+            assert second_document.display_text is not None
+            assert second_document.display_text[chunk.start_offset:chunk.end_offset] == chunk.content

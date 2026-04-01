@@ -8,6 +8,7 @@ import { AreaSidebar } from "../features/areas/components/AreaSidebar";
 import { AccessModal } from "../features/areas/components/AccessModal";
 import { AreaEditModal } from "../features/areas/components/AreaEditModal";
 import { DocumentsDrawer } from "../features/documents/components/DocumentsDrawer";
+import { EvaluationDrawer } from "../features/evaluation/components/EvaluationDrawer";
 import { ChatPanel } from "../features/chat/components/ChatPanel";
 import {
   deleteArea,
@@ -32,6 +33,7 @@ export function AreasPage(): JSX.Element {
   const [isDocumentsOpen, setIsDocumentsOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   const [isAreaEditOpen, setIsAreaEditOpen] = useState(false);
+  const [isEvaluationOpen, setIsEvaluationOpen] = useState(false);
   const [isDeletingArea, setIsDeletingArea] = useState(false);
 
   useEffect(() => {
@@ -109,6 +111,7 @@ export function AreasPage(): JSX.Element {
       setIsAreaEditOpen(false);
       setIsAccessOpen(false);
       setIsDocumentsOpen(false);
+      setIsEvaluationOpen(false);
       await loadWorkspace(null);
       setWorkspaceNotice(`已刪除區域：${deletedAreaName}`);
     } catch (error) {
@@ -141,6 +144,15 @@ export function AreasPage(): JSX.Element {
             >
               管理文件
             </button>
+            {(selectedArea.effective_role === "admin" || selectedArea.effective_role === "maintainer") && (
+              <button
+                onClick={() => setIsEvaluationOpen(true)}
+                className="rounded-full border border-stone-900/10 bg-white px-5 py-2 text-xs font-bold text-stone-900 shadow-sm hover:bg-stone-50 transition"
+                type="button"
+              >
+                評測 / 標註
+              </button>
+            )}
             {selectedArea.effective_role === "admin" && (
               <>
                 <button
@@ -208,6 +220,14 @@ export function AreasPage(): JSX.Element {
             <DocumentsDrawer
               isOpen={isDocumentsOpen}
               onClose={() => setIsDocumentsOpen(false)}
+              areaId={selectedArea.id}
+              areaName={selectedArea.name}
+              effectiveRole={selectedArea.effective_role}
+            />
+
+            <EvaluationDrawer
+              isOpen={isEvaluationOpen}
+              onClose={() => setIsEvaluationOpen(false)}
               areaId={selectedArea.id}
               areaName={selectedArea.name}
               effectiveRole={selectedArea.effective_role}

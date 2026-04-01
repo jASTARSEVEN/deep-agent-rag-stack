@@ -18,7 +18,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening (Completed)`
+當前主階段：`Phase 7 — Retrieval Correctness Evaluation v1 (Completed)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -33,6 +33,7 @@
 - `Phase 5.1` Chat MVP on LangGraph Server 已完成
 - `Phase 6` Supabase & PGroonga Migration 已完成
 - `Phase 6.1` Public HTTPS Entry & Migration Bootstrap Hardening 已完成
+- `Phase 7` Retrieval Correctness Evaluation v1 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -46,6 +47,9 @@
 - 專案已具備 `phase`、`tool_call` 與工具輸入/輸出檢視的 chat custom event UI
 - 專案已具備可選的 LangSmith tracing 與前後端 chat stream debug 設定，供 Phase 5.1 除錯與觀測使用
 - 專案已具備 `documents.display_text` 全文持久化來源與 `GET /documents/{document_id}/preview`，供 ready-only 文件全文預覽與 chunk-aware UI 使用
+- 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
+- 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
+- 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
 - 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
 - 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
@@ -67,6 +71,7 @@
 - 已補上 Windows PowerShell 的本地 worker 啟動腳本，相容保留 `start-worker-marker.ps1` 入口，支援 `compose` 與 `hybrid` 兩種模式
 - 本機 hybrid worker 已改為固定共用專案根目錄 `.venv`，不再維護獨立 worker virtualenv
 - 已將資料庫 migration 收斂為單一 Alembic 路徑，移除 `supabase/migrations` 與 Alembic 並存造成的雙軌 schema 風險
+- 已完成單機版自測路徑：`api + worker + web` 本機啟動、SQLite + filesystem + deterministic providers、Playwright E2E 可直接驗證 retrieval evaluation 主流程
 
 ## 已完成功能
 
@@ -204,6 +209,16 @@
 - 已在前端補上 `WEB_ALLOWED_HOSTS` 與 PKCE fallback，讓 `https://<PUBLIC_HOST>` 與 `http://localhost` 都能維持可預期的登入行為
 - 已補上 Windows PowerShell 的本地 worker 啟動腳本，相容保留 `start-worker-marker.ps1` 入口；compose worker 現在預設為 CPU-safe 啟動，不再主動要求 GPU runtime
 
+### Phase 7 — 已完成的 Retrieval Correctness Evaluation v1
+- 已新增 `retrieval_eval_datasets`、`retrieval_eval_items`、`retrieval_eval_item_spans`、`retrieval_eval_runs`、`retrieval_eval_run_artifacts` SQL-first schema 與 migration
+- 已新增 evaluation services：dataset、mapping、metrics、runner；run 會直接重用既有 `retrieve_area_candidates()` 與 `assemble_retrieval_result()`
+- 已新增 area-scoped evaluation APIs，涵蓋 dataset/item/span 建立、candidate preview、`retrieval_miss`、benchmark run 與 run report 查詢
+- 已新增 `python -m app.scripts.run_retrieval_eval` CLI，支援 `prepare-candidates`、`run` 與 `report`
+- 已新增 `EvaluationDrawer`，支援 dataset 建立、`fact_lookup` 題目、候選複核、文件內搜尋、span 標註、`retrieval_miss` 與 benchmark report 檢視
+- 已落實權限邊界：`admin` 與 `maintainer` 可操作，`reader` 與無權限者維持 deny-by-default / same-404
+- 已落實 ready-only 邊界：non-ready 文件不得進入 evaluation candidate preview、document search 或 benchmark run
+- 已新增 evaluation 專屬 API/worker/Web 測試矩陣，涵蓋 metrics、runner、artifact、same-404、權限與本機 E2E reviewer flow
+
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
 - 已將 `CHAT_PROVIDER=deepagents` 改為真正使用 `create_deep_agent()` 的主 agent 回答路徑，不再映射為 OpenAI Responses provider
@@ -226,22 +241,19 @@
 ## 目前階段重點
 
 ### Current Focus
-- 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程
-- 驗證既有 Supabase volume 經 `migration_runner` 升級後，retrieval / chat / preview 路徑不退化
-- 穩定 Deep Agents answer generation、tool call custom events、assembled-context references 與 LangGraph stream contract
-- 穩定 citation chips、全文 preview、child chunk hover highlighting 與 ready-only preview API 在公開 HTTPS 環境下的整體一致性
-- 穩定 LangSmith tracing 與前後端 chat stream debug 在 compose / 真實 provider 環境下的觀測一致性
-- 保持 deny-by-default、same-404 與 rerank fail-open fallback 不退化
-- 穩定 area update/delete 與既有 documents/access/chat 狀態切換的 UI 一致性
+- 規劃 `Phase 8.1 — Query-Aware Retrieval Profiles`，將 `fact_lookup / document_summary / cross_document_compare` 收斂為顯式 profile
+- 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
+- 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
+- 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-2. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-3. 驗證 LangSmith tracing 在真實 provider 下的 trace、tags 與 metadata 是否符合預期
-4. 補完 `migration_runner` 對既有 volume、缺少 `alembic_version` 與已在 head 狀態的回歸測試
-5. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證
+1. 進入 `Phase 8.1 — Query-Aware Retrieval Profiles`，補上 query intent classification 與 profile trace metadata
+2. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
+3. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
+4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+5. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## 尚未開始的功能
 

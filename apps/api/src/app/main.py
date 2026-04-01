@@ -14,6 +14,7 @@ from app.routes.areas import router as areas_router
 from app.routes.auth import router as auth_router
 from app.routes.directory import router as directory_router
 from app.routes.documents import router as documents_router
+from app.routes.evaluation import router as evaluation_router
 from app.routes.jobs import router as jobs_router
 from app.routes.root import router as root_router
 from app.services.tasks import build_celery_client
@@ -61,6 +62,7 @@ def create_app(settings: AppSettings | None = None) -> FastAPI:
     application.include_router(directory_router)
     application.include_router(areas_router)
     application.include_router(documents_router)
+    application.include_router(evaluation_router)
     application.include_router(jobs_router)
     return application
 

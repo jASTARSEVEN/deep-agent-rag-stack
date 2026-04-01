@@ -2,7 +2,7 @@
 
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 
 /** 目前腳本所在目錄。 */
@@ -23,6 +23,9 @@ const databasePath = join(webRoot, ".tmp", "playwright-e2e.sqlite");
 /** Playwright E2E 共用的本機檔案儲存路徑。 */
 const storagePath = join(webRoot, ".tmp", "playwright-storage");
 
+/** Playwright E2E 共用的 Celery filesystem broker 路徑。 */
+const celeryBrokerPath = join(webRoot, ".tmp", "celery-broker");
+
 /** E2E API / worker 共用環境變數。 */
 const sharedEnv = {
   ...process.env,
@@ -37,8 +40,9 @@ const sharedEnv = {
   LOCAL_STORAGE_PATH: storagePath,
   MAX_UPLOAD_SIZE_BYTES: "1048576",
   PDF_PARSER_PROVIDER: "local",
-  CELERY_BROKER_URL: "redis://localhost:16379/0",
-  CELERY_RESULT_BACKEND: "redis://localhost:16379/1",
+  CELERY_BROKER_URL: "filesystem://",
+  CELERY_RESULT_BACKEND: "cache+memory://",
+  CELERY_BROKER_PATH: celeryBrokerPath,
   EMBEDDING_PROVIDER: "deterministic",
   EMBEDDING_MODEL: "text-embedding-3-small",
   EMBEDDING_DIMENSIONS: "1536",
@@ -80,16 +84,6 @@ const workerEnv = {
   PYTHONPATH: process.env.PYTHONPATH ? `${join(workerRoot, "src")}:${process.env.PYTHONPATH}` : join(workerRoot, "src"),
 };
 
-/** `langgraph` CLI 是否可直接執行。 */
-const hasLangGraphCli = spawnSync("sh", ["-lc", "command -v langgraph >/dev/null 2>&1"], {
-  cwd: apiRoot,
-}).status === 0;
-
-/** Python 環境是否可透過 module 啟動 LangGraph CLI。 */
-const hasLangGraphCliModule = spawnSync("python", ["-c", "import langgraph_cli"], {
-  cwd: apiRoot,
-}).status === 0;
-
 /** Worker 啟動用子行程。 */
 const workerProcess = spawn(
   "python",
@@ -102,35 +96,15 @@ const workerProcess = spawn(
 );
 
 /** API server 啟動用子行程。 */
-const apiProcess = hasLangGraphCli
-  ? spawn(
-      "langgraph",
-      ["dev", "--config", "langgraph.json", "--host", "127.0.0.1", "--port", "18001", "--no-browser", "--no-reload"],
-      {
-        cwd: apiRoot,
-        stdio: "inherit",
-        env: apiEnv,
-      },
-    )
-  : hasLangGraphCliModule
-    ? spawn(
-        "python",
-        ["-m", "langgraph_cli", "dev", "--config", "langgraph.json", "--host", "127.0.0.1", "--port", "18001", "--no-browser", "--no-reload"],
-        {
-          cwd: apiRoot,
-          stdio: "inherit",
-          env: apiEnv,
-        },
-      )
-  : spawn(
-      "python",
-      ["-m", "uvicorn", "app.chat.runtime.langgraph_http_app:app", "--app-dir", "src", "--host", "127.0.0.1", "--port", "18001"],
-      {
-        cwd: apiRoot,
-        stdio: "inherit",
-        env: apiEnv,
-      },
-    );
+const apiProcess = spawn(
+  "python",
+  ["-m", "uvicorn", "app.chat.runtime.langgraph_http_app:app", "--app-dir", "src", "--host", "127.0.0.1", "--port", "18001"],
+  {
+    cwd: apiRoot,
+    stdio: "inherit",
+    env: apiEnv,
+  },
+);
 
 const childProcesses = [workerProcess, apiProcess];
 

@@ -1,0 +1,552 @@
+"""Retrieval evaluation benchmark runner。"""
+
+from __future__ import annotations
+
+import json
+from collections import defaultdict
+from datetime import UTC, datetime
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.auth.verifier import CurrentPrincipal
+from app.core.settings import AppSettings
+from app.db.models import (
+    DocumentChunk,
+    EvaluationRunStatus,
+    RetrievalEvalDataset,
+    RetrievalEvalItem,
+    RetrievalEvalItemSpan,
+    RetrievalEvalRun,
+    RetrievalEvalRunArtifact,
+)
+from app.schemas.evaluation import (
+    EvaluationPerQueryDetail,
+    EvaluationPerQueryStageDetail,
+    EvaluationRunReportResponse,
+    EvaluationRunSummary,
+    EvaluationStageMetricSummary,
+    EvaluationSummaryByDimension,
+)
+from app.services.access import require_minimum_area_role
+from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
+from app.services.evaluation_metrics import (
+    document_coverage_at_k,
+    mean_reciprocal_rank_at_k,
+    normalized_discounted_cumulative_gain,
+    precision_at_k,
+    recall_at_k,
+)
+from app.services.retrieval import (
+    RetrievalResult,
+    _apply_python_rrf,
+    _apply_ranking_policy,
+    _apply_rerank,
+    _build_retrieval_candidate,
+    _recall_ranked_candidates,
+)
+from app.services.retrieval_assembler import assemble_retrieval_result
+from app.services.evaluation_dataset import build_dataset_summary, build_item_summary
+
+
+def run_evaluation_dataset(
+    *,
+    session: Session,
+    principal: CurrentPrincipal,
+    settings: AppSettings,
+    dataset: RetrievalEvalDataset,
+    items: list[RetrievalEvalItem],
+    spans_by_item_id: dict[str, list[RetrievalEvalItemSpan]],
+    top_k: int,
+) -> EvaluationRunReportResponse:
+    """執行單一 dataset 的 benchmark run。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `settings`：應用程式設定。
+    - `dataset`：要執行的 dataset。
+    - `items`：dataset 內題目列表。
+    - `spans_by_item_id`：各題對應的 gold spans。
+    - `top_k`：指標截斷排名。
+
+    回傳：
+    - `EvaluationRunReportResponse`：完整 benchmark run 結果。
+    """
+
+    require_minimum_area_role(
+        session=session,
+        principal=principal,
+        area_id=dataset.area_id,
+        minimum_role=build_required_role(),
+    )
+
+    run = RetrievalEvalRun(
+        dataset_id=dataset.id,
+        status=EvaluationRunStatus.running,
+        baseline_run_id=dataset.baseline_run_id,
+        created_by_sub=principal.sub,
+        total_items=len(items),
+        error_message=None,
+    )
+    session.add(run)
+    session.commit()
+    session.refresh(run)
+
+    try:
+        report_payload = _build_run_report_payload(
+            session=session,
+            settings=settings,
+            dataset=dataset,
+            items=items,
+            spans_by_item_id=spans_by_item_id,
+            top_k=top_k,
+        )
+        baseline_compare = _build_baseline_compare(
+            session=session,
+            baseline_run_id=dataset.baseline_run_id,
+            current_summary=report_payload["summary_metrics"],
+        )
+        artifact = RetrievalEvalRunArtifact(
+            run_id=run.id,
+            report_json=json.dumps(report_payload, ensure_ascii=False, default=str),
+            baseline_compare_json=json.dumps(baseline_compare, ensure_ascii=False, default=str) if baseline_compare is not None else None,
+        )
+        run.status = EvaluationRunStatus.completed
+        run.completed_at = datetime.now(UTC)
+        session.add(artifact)
+        if dataset.baseline_run_id is None:
+            dataset.baseline_run_id = run.id
+        session.commit()
+        session.refresh(run)
+        return EvaluationRunReportResponse(
+            run=build_run_summary(run),
+            dataset=build_dataset_summary(session=session, dataset=dataset),
+            summary_metrics={stage: EvaluationStageMetricSummary(**metrics) for stage, metrics in report_payload["summary_metrics"].items()},
+            breakdowns=[EvaluationSummaryByDimension(**item) for item in report_payload["breakdowns"]],
+            per_query=[EvaluationPerQueryDetail(**item) for item in report_payload["per_query"]],
+            baseline_compare=baseline_compare,
+        )
+    except Exception as exc:
+        run.status = EvaluationRunStatus.failed
+        run.error_message = str(exc)
+        session.commit()
+        raise
+
+
+def build_run_summary(run: RetrievalEvalRun) -> EvaluationRunSummary:
+    """將 ORM run 轉為 API summary。
+
+    參數：
+    - `run`：ORM run。
+
+    回傳：
+    - `EvaluationRunSummary`：API summary。
+    """
+
+    return EvaluationRunSummary.model_validate(run)
+
+
+def build_required_role():
+    """回傳 evaluation 功能要求的最小角色。
+
+    參數：
+    - 無。
+
+    回傳：
+    - `Role`：evaluation 最小角色。
+    """
+
+    from app.db.models import Role
+
+    return Role.maintainer
+
+
+def _build_run_report_payload(
+    *,
+    session: Session,
+    settings: AppSettings,
+    dataset: RetrievalEvalDataset,
+    items: list[RetrievalEvalItem],
+    spans_by_item_id: dict[str, list[RetrievalEvalItemSpan]],
+    top_k: int,
+) -> dict[str, object]:
+    """建立完整 benchmark 報表 payload。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：應用程式設定。
+    - `dataset`：要執行的 dataset。
+    - `items`：dataset 內題目列表。
+    - `spans_by_item_id`：各題 gold spans。
+    - `top_k`：指標截斷排名。
+
+    回傳：
+    - `dict[str, object]`：可序列化的完整報表。
+    """
+
+    per_query: list[dict[str, object]] = []
+    summary_bucket: dict[str, list[dict[str, float]]] = defaultdict(list)
+    breakdown_bucket: dict[tuple[str, str], dict[str, list[dict[str, float]]]] = defaultdict(lambda: defaultdict(list))
+
+    for item in items:
+        spans = spans_by_item_id.get(item.id, [])
+        detail = _evaluate_single_item(
+            session=session,
+            settings=settings,
+            area_id=dataset.area_id,
+            item=item,
+            spans=spans,
+            top_k=top_k,
+        )
+        per_query.append(detail)
+        for stage_name in ("recall", "rerank", "assembled"):
+            metrics = detail["_metrics"][stage_name]
+            summary_bucket[stage_name].append(metrics)
+            breakdown_bucket[("language", item.language.value)][stage_name].append(metrics)
+            breakdown_bucket[("query_type", item.query_type.value)][stage_name].append(metrics)
+
+    return {
+        "summary_metrics": {
+            stage_name: _average_metric_bucket(metric_list)
+            for stage_name, metric_list in summary_bucket.items()
+        },
+        "breakdowns": [
+            {
+                "dimension": dimension,
+                "value": value,
+                "metrics": {
+                    stage_name: _average_metric_bucket(metric_list)
+                    for stage_name, metric_list in stage_bucket.items()
+                },
+            }
+            for (dimension, value), stage_bucket in sorted(breakdown_bucket.items())
+        ],
+        "per_query": [
+            {key: value for key, value in detail.items() if key != "_metrics"}
+            for detail in per_query
+        ],
+    }
+
+
+def _evaluate_single_item(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    item: RetrievalEvalItem,
+    spans: list[RetrievalEvalItemSpan],
+    top_k: int,
+) -> dict[str, object]:
+    """執行單題評估並產出 per-query detail。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：應用程式設定。
+    - `area_id`：dataset 所屬 area。
+    - `item`：評估題目。
+    - `spans`：該題的 gold spans。
+    - `top_k`：指標截斷排名。
+
+    回傳：
+    - `dict[str, object]`：可序列化的 per-query 明細。
+    """
+
+    recall_matches = _apply_ranking_policy(
+        matches=_apply_python_rrf(
+            matches=_recall_ranked_candidates(session=session, settings=settings, area_id=area_id, query=item.query_text),
+            settings=settings,
+        ),
+        query=item.query_text,
+        settings=settings,
+    )
+    rerank_matches = _apply_rerank(matches=recall_matches, query=item.query_text, settings=settings)
+    rerank_result = RetrievalResult(
+        candidates=[_build_retrieval_candidate(match) for match in rerank_matches],
+        trace={
+            "query": item.query_text,
+            "vector_top_k": settings.retrieval_vector_top_k,
+            "fts_top_k": settings.retrieval_fts_top_k,
+            "max_candidates": settings.retrieval_max_candidates,
+            "rerank_top_n": min(settings.rerank_top_n, len(rerank_matches)),
+            "candidates": [],
+        },
+    )
+    assembled_result = assemble_retrieval_result(session=session, settings=settings, retrieval_result=rerank_result)
+    gold_spans = [
+        GoldSpan(
+            document_id=span.document_id,
+            start_offset=span.start_offset,
+            end_offset=span.end_offset,
+            relevance_grade=span.relevance_grade,
+            is_retrieval_miss=span.is_retrieval_miss,
+        )
+        for span in spans
+    ]
+    recall_relevances = [
+        match_gold_relevance(
+            gold_spans,
+            CandidateWindow(
+                document_id=match.chunk.document_id,
+                start_offset=match.chunk.start_offset,
+                end_offset=match.chunk.end_offset,
+            ),
+        )
+        for match in recall_matches[:top_k]
+    ]
+    rerank_relevances = [
+        item["matched_relevance"] for item in _build_rerank_runtime_items(candidates=rerank_result.candidates, gold_spans=gold_spans)[:top_k]
+    ]
+    assembled_relevances = [
+        item["matched_relevance"]
+        for item in _build_assembled_runtime_items(
+            session=session,
+            contexts=assembled_result.assembled_contexts,
+            gold_spans=gold_spans,
+        )[:top_k]
+    ]
+    gold_document_ids = {span.document_id for span in gold_spans if span.document_id}
+    metrics = {
+        "recall": _build_stage_metrics(
+            relevances=recall_relevances,
+            document_ids=[match.chunk.document_id for match in recall_matches[:top_k]],
+            gold_document_ids=gold_document_ids,
+            top_k=top_k,
+        ),
+        "rerank": _build_stage_metrics(
+            relevances=rerank_relevances,
+            document_ids=[item["document_id"] for item in _build_rerank_runtime_items(candidates=rerank_result.candidates, gold_spans=gold_spans)[:top_k]],
+            gold_document_ids=gold_document_ids,
+            top_k=top_k,
+        ),
+        "assembled": _build_stage_metrics(
+            relevances=assembled_relevances,
+            document_ids=[
+                item["document_id"]
+                for item in _build_assembled_runtime_items(session=session, contexts=assembled_result.assembled_contexts, gold_spans=gold_spans)[:top_k]
+            ],
+            gold_document_ids=gold_document_ids,
+            top_k=top_k,
+        ),
+    }
+    return {
+        "item_id": item.id,
+        "query_text": item.query_text,
+        "language": item.language.value,
+        "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
+        "gold_spans": [build_item_summary_span(span) for span in spans],
+        "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
+        "rerank": _build_stage_detail(rerank_relevances).model_dump(mode="json"),
+        "assembled": _build_stage_detail(assembled_relevances).model_dump(mode="json"),
+        "baseline_delta": {
+            "recall_first_hit_rank_delta": None,
+            "rerank_first_hit_rank_delta": None,
+            "assembled_first_hit_rank_delta": None,
+        },
+        "_metrics": metrics,
+    }
+
+
+def _build_rerank_runtime_items(
+    *,
+    candidates,
+    gold_spans: list[GoldSpan],
+) -> list[dict[str, object]]:
+    """將 rerank child candidates 依 parent 群組成 stage 評分單位。"""
+
+    grouped: dict[tuple[str, str | None], list[object]] = defaultdict(list)
+    order: list[tuple[str, str | None]] = []
+    for candidate in candidates:
+        group_key = (str(candidate.document_id), str(candidate.parent_chunk_id) if candidate.parent_chunk_id is not None else None)
+        if group_key not in grouped:
+            order.append(group_key)
+        grouped[group_key].append(candidate)
+
+    runtime_items: list[dict[str, object]] = []
+    for group_key in order:
+        group_candidates = grouped[group_key]
+        windows = [
+            CandidateWindow(
+                document_id=str(candidate.document_id),
+                start_offset=candidate.start_offset,
+                end_offset=candidate.end_offset,
+            )
+            for candidate in group_candidates
+        ]
+        runtime_items.append(
+            {
+                "document_id": str(group_candidates[0].document_id),
+                "parent_chunk_id": str(group_candidates[0].parent_chunk_id) if group_candidates[0].parent_chunk_id is not None else None,
+                "matched_relevance": match_gold_relevance_for_windows(gold_spans, windows),
+            }
+        )
+    return runtime_items
+
+
+def _build_assembled_runtime_items(
+    *,
+    session: Session,
+    contexts,
+    gold_spans: list[GoldSpan],
+) -> list[dict[str, object]]:
+    """將 assembled contexts 依實際納入 child chunk 視窗建立 stage 評分單位。"""
+
+    all_chunk_ids = [str(chunk_id) for context in contexts for chunk_id in context.chunk_ids]
+    chunk_rows = session.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(all_chunk_ids))).all() if all_chunk_ids else []
+    chunk_by_id = {str(chunk.id): chunk for chunk in chunk_rows}
+
+    runtime_items: list[dict[str, object]] = []
+    for context in contexts:
+        windows = [
+            CandidateWindow(
+                document_id=str(chunk.document_id),
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+            )
+            for chunk_id in context.chunk_ids
+            if (chunk := chunk_by_id.get(str(chunk_id))) is not None
+        ]
+        if not windows:
+            windows = [
+                CandidateWindow(
+                    document_id=str(context.document_id),
+                    start_offset=context.start_offset,
+                    end_offset=context.end_offset,
+                )
+            ]
+        runtime_items.append(
+            {
+                "document_id": str(context.document_id),
+                "parent_chunk_id": str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
+                "matched_relevance": match_gold_relevance_for_windows(gold_spans, windows),
+            }
+        )
+    return runtime_items
+
+
+def build_item_summary_span(span: RetrievalEvalItemSpan) -> dict[str, object]:
+    """將 ORM span 轉為可序列化輸出。
+
+    參數：
+    - `span`：ORM span。
+
+    回傳：
+    - `dict[str, object]`：可序列化 span。
+    """
+
+    return {
+        "id": span.id,
+        "document_id": span.document_id,
+        "start_offset": span.start_offset,
+        "end_offset": span.end_offset,
+        "relevance_grade": span.relevance_grade,
+        "is_retrieval_miss": span.is_retrieval_miss,
+        "created_by_sub": span.created_by_sub,
+        "created_at": span.created_at.isoformat(),
+    }
+
+
+def _build_stage_detail(relevances: list[int | None]) -> EvaluationPerQueryStageDetail:
+    """建立單題單階段 detail。
+
+    參數：
+    - `relevances`：依排名排序的 relevance。
+
+    回傳：
+    - `EvaluationPerQueryStageDetail`：單階段 detail。
+    """
+
+    first_rank = first_hit_rank(relevances)
+    matched_relevance = max((value or 0 for value in relevances), default=0) or None
+    return EvaluationPerQueryStageDetail(
+        first_hit_rank=first_rank,
+        matched_core_evidence=matched_relevance == 3,
+        matched_relevance=matched_relevance,
+    )
+
+
+def _build_stage_metrics(
+    *,
+    relevances: list[int | None],
+    document_ids: list[str],
+    gold_document_ids: set[str],
+    top_k: int,
+) -> dict[str, float]:
+    """建立單階段 metrics。
+
+    參數：
+    - `relevances`：依排名排序的 relevance。
+    - `document_ids`：依排名排序的文件 id。
+    - `gold_document_ids`：gold files。
+    - `top_k`：指標截斷排名。
+
+    回傳：
+    - `dict[str, float]`：單階段 metrics。
+    """
+
+    normalized = [value or 0 for value in relevances]
+    return {
+        "nDCG_at_k": normalized_discounted_cumulative_gain(normalized, k=top_k),
+        "recall_at_k": recall_at_k(normalized, k=top_k),
+        "mrr_at_k": mean_reciprocal_rank_at_k(normalized, k=top_k),
+        "precision_at_k": precision_at_k(normalized, k=top_k),
+        "document_coverage_at_k": document_coverage_at_k(document_ids, gold_document_ids=gold_document_ids, k=top_k),
+    }
+
+
+def _average_metric_bucket(metric_list: list[dict[str, float]]) -> dict[str, float]:
+    """計算一組 metrics 的平均值。
+
+    參數：
+    - `metric_list`：多筆單題 metrics。
+
+    回傳：
+    - `dict[str, float]`：平均 metrics。
+    """
+
+    if not metric_list:
+        return {
+            "nDCG_at_k": 0.0,
+            "recall_at_k": 0.0,
+            "mrr_at_k": 0.0,
+            "precision_at_k": 0.0,
+            "document_coverage_at_k": 0.0,
+        }
+    keys = metric_list[0].keys()
+    return {key: sum(item[key] for item in metric_list) / len(metric_list) for key in keys}
+
+
+def _build_baseline_compare(
+    *,
+    session: Session,
+    baseline_run_id: str | None,
+    current_summary: dict[str, object],
+) -> dict[str, object] | None:
+    """建立與 baseline 的 summary compare。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `baseline_run_id`：baseline run id。
+    - `current_summary`：目前 run 的 summary metrics。
+
+    回傳：
+    - `dict[str, object] | None`：baseline compare；無 baseline 時回傳空值。
+    """
+
+    if baseline_run_id is None:
+        return None
+    artifact = session.scalars(
+        select(RetrievalEvalRunArtifact).where(RetrievalEvalRunArtifact.run_id == baseline_run_id)
+    ).one_or_none()
+    if artifact is None:
+        return None
+    baseline_payload = json.loads(artifact.report_json)
+    baseline_summary = baseline_payload.get("summary_metrics", {})
+    compare: dict[str, object] = {"baseline_run_id": baseline_run_id, "delta": {}}
+    for stage_name, metrics in current_summary.items():
+        baseline_stage = baseline_summary.get(stage_name, {})
+        compare["delta"][stage_name] = {
+            key: metrics[key] - baseline_stage.get(key, 0.0)
+            for key in metrics.keys()
+        }
+    return compare

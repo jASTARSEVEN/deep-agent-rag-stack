@@ -60,6 +60,23 @@ def create_celery_app():
         worker_prefetch_multiplier=settings.worker_prefetch_multiplier,
         worker_max_tasks_per_child=settings.worker_max_tasks_per_child,
     )
+    if settings.broker_url.startswith("filesystem://"):
+        broker_path = settings.broker_path.resolve()
+        inbound_path = (broker_path / "out").resolve()
+        outbound_path = (broker_path / "in").resolve()
+        processed_path = (broker_path / "processed").resolve()
+        control_path = (broker_path / "control").resolve()
+        inbound_path.mkdir(parents=True, exist_ok=True)
+        outbound_path.mkdir(parents=True, exist_ok=True)
+        processed_path.mkdir(parents=True, exist_ok=True)
+        control_path.mkdir(parents=True, exist_ok=True)
+        application.conf.broker_transport_options = {
+            "data_folder_in": str(inbound_path),
+            "data_folder_out": str(outbound_path),
+            "processed_folder": str(processed_path),
+            "control_folder": str(control_path),
+            "store_processed": True,
+        }
     application.autodiscover_tasks(["worker.tasks"])
 
     from celery.signals import worker_init

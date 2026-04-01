@@ -290,7 +290,16 @@
 - Phase 7 完成後需固定一組 retrieval profile 作為 baseline；後續 `Phase 8.*` 的 retrieval profile、selection、synopsis 或 synthesis 相關調整，都應回到本 phase benchmark 比較 evidence ranking 與 coverage 是否退化。
 
 狀態：
-- `未開始`
+- `已完成（v1：Full Reviewer UI + CLI-first runner + baseline compare + 單機 E2E）`
+
+本 phase 已交付：
+- SQL-first evaluation schema：`retrieval_eval_datasets`、`retrieval_eval_items`、`retrieval_eval_item_spans`、`retrieval_eval_runs`、`retrieval_eval_run_artifacts`
+- area-scoped API：dataset/item/span/run CRUD、candidate preview、`retrieval_miss`、run report
+- CLI：`python -m app.scripts.run_retrieval_eval prepare-candidates|run|report`
+- reviewer UI：`EvaluationDrawer`，提供 dataset 建立、`fact_lookup` 題目、候選複核、文件內搜尋、span 標註與 benchmark report
+- metrics：`nDCG@k`、`Recall@k`、`MRR@k`、`Precision@k`、`Document Coverage@k`
+- baseline compare：新 run 完成後可與 dataset baseline run 比較 summary / per-query 差異
+- 單機自測：`api + worker + web` 本機啟動，SQLite + filesystem + deterministic providers，可直接執行 Playwright E2E reviewer flow
 
 ## Phase 8.1 — Query-Aware Retrieval Profiles
 

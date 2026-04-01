@@ -12,6 +12,9 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 /** `apps/web` 模組根目錄。 */
 const webRoot = resolve(currentDirectory, "../../..");
 
+/** `apps/worker` 模組根目錄。 */
+const workerRoot = resolve(webRoot, "../worker");
+
 /** E2E 暫存目錄。 */
 const tempDirectory = join(webRoot, ".tmp");
 
@@ -21,9 +24,15 @@ const databasePath = join(tempDirectory, "playwright-e2e.sqlite");
 /** E2E 本機物件儲存路徑。 */
 const storagePath = join(tempDirectory, "playwright-storage");
 
+/** E2E Celery filesystem broker 路徑。 */
+const celeryBrokerPath = join(tempDirectory, "celery-broker");
+
 mkdirSync(tempDirectory, { recursive: true });
 rmSync(databasePath, { force: true });
 rmSync(storagePath, { recursive: true, force: true });
+rmSync(celeryBrokerPath, { recursive: true, force: true });
+rmSync(join(workerRoot, "control"), { recursive: true, force: true });
+rmSync(join(workerRoot, "processed"), { recursive: true, force: true });
 
 const seedProcess = spawnSync("python", [join(currentDirectory, "seed_e2e_data.py"), databasePath, storagePath], {
   cwd: webRoot,

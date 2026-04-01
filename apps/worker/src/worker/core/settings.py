@@ -68,6 +68,7 @@ class WorkerSettings(BaseSettings):
     database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://app:app@postgres:5432/deep_agent_rag"
     broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
+    broker_path: Annotated[Path, Field(alias="CELERY_BROKER_PATH")] = Path(".celery-broker")
     worker_pool: Annotated[str, Field(alias="CELERY_WORKER_POOL")] = "solo"
     worker_concurrency: Annotated[int, Field(alias="CELERY_WORKER_CONCURRENCY")] = 1
     worker_prefetch_multiplier: Annotated[int, Field(alias="CELERY_WORKER_PREFETCH_MULTIPLIER")] = 1

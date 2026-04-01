@@ -14,6 +14,7 @@
 - **ChatPanel**: 視窗核心，負責多輪對話、串流狀態顯示、句尾 citation chips、工具調用透明化檢視，以及右側全文預覽欄的互動狀態。
 - **DocumentPreviewPane**: 右側固定全文預覽欄，依 citation 所屬 `start_offset/end_offset` scroll 到對應位置，並以 child chunk 邊界做強/弱/hover 高亮。
 - **DocumentsDrawer**: 負責不中斷對話的文件生命週期管理，透過右側滑出式抽屜提供文件上傳、列表、狀態追蹤，以及 ready 文件的 chunk-aware 全文檢視。
+- **EvaluationDrawer**: 負責 area 內部的 retrieval correctness reviewer workflow，提供 dataset 建立、`fact_lookup` 題目管理、候選複核、source span 標註、`retrieval_miss` 標記與 benchmark run 檢視；其責任獨立於 `ChatPanel` 與 `DocumentsDrawer`。
 - **AccessModal**: 彈窗式權限管理，確保區域權限與角色設定不干擾主對話流程。
 - 提供「登入 -> 側邊欄選取區域 -> 中央即時對話」的流暢戰情室體驗。
 
@@ -21,7 +22,7 @@
 - FastAPI
 - 提供 HTTP / SSE 介面
 - 負責 auth integration、RBAC 邊界、service orchestration
-- 對外暴露 areas、documents、jobs、chat 相關 API
+- 對外暴露 areas、documents、jobs、chat 與 evaluation 相關 API
 - 目前已提供 `auth/context`、`areas` 的 create/list/detail/update/delete、`areas/{area_id}/access` 管理端點，以及 documents / ingest jobs 最小集合
 - JWT 驗證目前以 Keycloak issuer + JWKS 為基礎，並要求 access token 內存在 `sub` 與 `groups`
 - chat runtime 透過 LangGraph Server 啟動；正式 Web transport 已改為 LangGraph SDK 預設 thread/run 端點，不再維護產品自訂 bridge chat routes
@@ -109,6 +110,14 @@
 3. API 維持 ready-only、same-404 與 deny-by-default 語意
 4. 前端以 `display_text + child chunk map` 建立 chunk list 與全文高亮，不新增第二條 inspector API
 5. 點擊 chunk list 或全文中的 chunk 時，兩側同步作用中的 child chunk 狀態
+
+### Retrieval evaluation reviewer 流程
+1. 只有 area `admin` 與 `maintainer` 可開啟 `EvaluationDrawer`；`reader` 與無權限者不得看到入口，API 端仍維持 deny-by-default / same-404。
+2. reviewer 透過 `POST /areas/{area_id}/evaluation/datasets` 建立 area-scoped dataset；目前 query type 固定為 `fact_lookup`，language 固定支援 `zh-TW | en | mixed`。
+3. reviewer 透過 `POST /evaluation/datasets/{dataset_id}/items` 建立題目後，前端呼叫 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview` 取得 `recall / rerank / assembled` 三階段候選與文件內搜尋結果。
+4. reviewer 一律透過既有 `GET /documents/{document_id}/preview` 的 `display_text + offsets` contract 檢視全文，再以 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/spans` 標註 `document_id + start_offset + end_offset + relevance_grade`，或以 `mark-miss` 標記 `retrieval_miss`。
+5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；runner 必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
+6. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示。
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
@@ -204,6 +213,10 @@
 27. retrieval tool 回給 LLM 的 payload 只保留 `context_label`、`context_index`、`document_name`、`heading` 與 `assembled_text`；`start_offset/end_offset` 僅屬於 UI locator payload，不送入 LLM
 28. public documents API 新增 `GET /documents/{document_id}/preview`；此 route 必須維持 same-404 與 ready-only，且回傳 `display_text + child chunk map`
 29. 全文預覽欄的 hover 高亮以 child chunk 為最小單位；主 citation 命中 chunk 強高亮，同一 context 其他 child 弱高亮，hover chunk 淡高亮
+30. retrieval correctness evaluation 為 retrieval pipeline 的正式內部 benchmark；第一版只覆蓋 `fact_lookup`，評分單位固定為 `recall / rerank / assembled`
+31. evaluation dataset 的 gold truth 長期來源固定為 source spans，不直接綁定 chunk id；run 前必須先把 span 映射到當前版本的 child chunk、parent 與 assembled context
+32. evaluation candidate preview 與 benchmark run 一律沿用正式 retrieval pipeline，因此 non-ready 文件不得出現在候選、document search 或 assembled evidence
+33. evaluation metrics 正式輸出 `nDCG@k`、`Recall@k`、`MRR@k`、`Precision@k` 與 `Document Coverage@k`，並可按 `zh-TW / en / mixed / recall / rerank / assembled` 切分
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表
@@ -240,7 +253,7 @@
 - `chat`：Deep Agents 主 agent、agent tools 與 LangGraph runtime glue
 - `db`：session / repository wiring
 - `routes`：HTTP routes
-- `services`：業務邏輯協調
+- `services`：業務邏輯協調，包含 retrieval、evaluation dataset、mapping、metrics 與 runner
 
 ### `apps/worker`
 - `core`：worker settings
@@ -253,6 +266,7 @@
 - `features/chat`：LangGraph SDK transport、`ChatPanel` 與對話狀態管理
 - `features/areas`：`AreaSidebar` 與區域管理邏輯
 - `features/documents`：`DocumentsDrawer` 與文件管理邏輯
+- `features/evaluation`：`EvaluationDrawer` 與 reviewer/benchmark UI
 - `pages`：匿名首頁、callback、`AreasPage` (Dashboard 主頁)
 - `components`：可重用元件與 `AccessModal`
 - `lib`：API / config / types

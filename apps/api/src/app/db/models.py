@@ -1,10 +1,10 @@
-"""授權、文件、chunking 與 retrieval foundation 使用的 ORM models。"""
+"""授權、文件、chunking、retrieval 與 evaluation 使用的 ORM models。"""
 
 from datetime import UTC, datetime
 from enum import Enum
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, Float, ForeignKey, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -65,6 +65,28 @@ class ChunkStructureKind(str, Enum):
 
     text = "text"
     table = "table"
+
+
+class EvaluationQueryType(str, Enum):
+    """Retrieval evaluation 題型。"""
+
+    fact_lookup = "fact_lookup"
+
+
+class EvaluationLanguage(str, Enum):
+    """Retrieval evaluation 查詢語言維度。"""
+
+    zh_tw = "zh-TW"
+    en = "en"
+    mixed = "mixed"
+
+
+class EvaluationRunStatus(str, Enum):
+    """Retrieval evaluation run 狀態。"""
+
+    running = "running"
+    completed = "completed"
+    failed = "failed"
 
 
 class Area(Base):
@@ -252,5 +274,144 @@ class DocumentChunkRegion(Base):
     bbox_right: Mapped[float] = mapped_column(Float(), nullable=False)
     # 上邊界座標。
     bbox_top: Mapped[float] = mapped_column(Float(), nullable=False)
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
+
+class RetrievalEvalDataset(Base):
+    """Area 範圍內的 retrieval evaluation dataset。"""
+
+    __tablename__ = "retrieval_eval_datasets"
+
+    # Dataset 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # Dataset 所屬 area。
+    area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
+    # Dataset 顯示名稱。
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 第一版固定為 fact_lookup。
+    query_type: Mapped[EvaluationQueryType] = mapped_column(
+        SqlEnum(EvaluationQueryType, native_enum=False),
+        nullable=False,
+        default=EvaluationQueryType.fact_lookup,
+    )
+    # 建立此 dataset 的使用者 sub。
+    created_by_sub: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 目前指定的 baseline run。
+    baseline_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("retrieval_eval_runs.id", ondelete="SET NULL", use_alter=True, name="fk_retrieval_eval_datasets_baseline_run"),
+        nullable=True,
+    )
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # 最後更新時間。
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class RetrievalEvalItem(Base):
+    """Dataset 內單一 fact lookup 題目。"""
+
+    __tablename__ = "retrieval_eval_items"
+
+    # 題目唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 題目所屬 dataset。
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("retrieval_eval_datasets.id", ondelete="CASCADE"), nullable=False)
+    # 第一版固定為 fact_lookup。
+    query_type: Mapped[EvaluationQueryType] = mapped_column(
+        SqlEnum(EvaluationQueryType, native_enum=False),
+        nullable=False,
+        default=EvaluationQueryType.fact_lookup,
+    )
+    # 題目查詢文字。
+    query_text: Mapped[str] = mapped_column(Text(), nullable=False)
+    # 題目語言維度。
+    language: Mapped[EvaluationLanguage] = mapped_column(SqlEnum(EvaluationLanguage, native_enum=False), nullable=False)
+    # 題目補充說明。
+    notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # 最後更新時間。
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class RetrievalEvalItemSpan(Base):
+    """Fact lookup 題目的 gold source span。"""
+
+    __tablename__ = "retrieval_eval_item_spans"
+    __table_args__ = (
+        UniqueConstraint(
+            "item_id",
+            "document_id",
+            "start_offset",
+            "end_offset",
+            "is_retrieval_miss",
+            name="uq_retrieval_eval_item_spans_span",
+        ),
+    )
+
+    # Source span 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 所屬題目。
+    item_id: Mapped[str] = mapped_column(ForeignKey("retrieval_eval_items.id", ondelete="CASCADE"), nullable=False)
+    # 對應文件；retrieval miss 時可為空值。
+    document_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=True)
+    # span 在 display_text 的起始 offset。
+    start_offset: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    # span 在 display_text 的結束 offset。
+    end_offset: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    # 第一版 relevance 僅支援 3/2。
+    relevance_grade: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    # 是否標記為 retrieval miss。
+    is_retrieval_miss: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=False)
+    # 建立此 span 的使用者 sub。
+    created_by_sub: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # 最後更新時間。
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
+class RetrievalEvalRun(Base):
+    """單次 retrieval evaluation benchmark run。"""
+
+    __tablename__ = "retrieval_eval_runs"
+
+    # Run 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # Run 所屬 dataset。
+    dataset_id: Mapped[str] = mapped_column(ForeignKey("retrieval_eval_datasets.id", ondelete="CASCADE"), nullable=False)
+    # 目前 run 狀態。
+    status: Mapped[EvaluationRunStatus] = mapped_column(SqlEnum(EvaluationRunStatus, native_enum=False), nullable=False)
+    # 本次 run 使用的 baseline run。
+    baseline_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("retrieval_eval_runs.id", ondelete="SET NULL", use_alter=True, name="fk_retrieval_eval_runs_baseline_run"),
+        nullable=True,
+    )
+    # 建立此 run 的使用者 sub。
+    created_by_sub: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 本次 run 評估題數。
+    total_items: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    # 錯誤訊息。
+    error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # 完成時間。
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class RetrievalEvalRunArtifact(Base):
+    """單次 run 的完整 JSON 報表與 baseline compare artifact。"""
+
+    __tablename__ = "retrieval_eval_run_artifacts"
+
+    # Artifact 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # 所屬 run。
+    run_id: Mapped[str] = mapped_column(ForeignKey("retrieval_eval_runs.id", ondelete="CASCADE"), nullable=False)
+    # 完整 benchmark report JSON。
+    report_json: Mapped[str] = mapped_column(Text(), nullable=False)
+    # 與 baseline run 的 compare JSON。
+    baseline_compare_json: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

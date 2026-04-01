@@ -374,6 +374,162 @@ export interface DocumentPreviewPayload {
   chunks: PreviewChunk[];
 }
 
+/** Evaluation 支援的查詢類型。 */
+export type EvaluationQueryType = "fact_lookup";
+
+/** Evaluation 語言維度。 */
+export type EvaluationLanguage = "zh-TW" | "en" | "mixed";
+
+/** Evaluation run 狀態。 */
+export type EvaluationRunStatus = "running" | "completed" | "failed";
+
+/** Evaluation dataset 摘要。 */
+export interface EvaluationDatasetSummary {
+  id: string;
+  area_id: string;
+  name: string;
+  query_type: EvaluationQueryType;
+  baseline_run_id: string | null;
+  created_by_sub: string;
+  created_at: string;
+  updated_at: string;
+  item_count: number;
+}
+
+/** Evaluation gold span。 */
+export interface EvaluationItemSpan {
+  id: string;
+  document_id: string | null;
+  start_offset: number;
+  end_offset: number;
+  relevance_grade: number | null;
+  is_retrieval_miss: boolean;
+  created_by_sub: string;
+  created_at: string;
+}
+
+/** Evaluation 題目摘要。 */
+export interface EvaluationItemSummary {
+  id: string;
+  dataset_id: string;
+  query_type: EvaluationQueryType;
+  query_text: string;
+  language: EvaluationLanguage;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  spans: EvaluationItemSpan[];
+}
+
+/** 評估階段候選。 */
+export interface EvaluationStageCandidate {
+  document_id: string;
+  document_name: string;
+  parent_chunk_id: string | null;
+  child_chunk_ids: string[];
+  heading: string | null;
+  start_offset: number;
+  end_offset: number;
+  excerpt: string;
+  source: string;
+  rank: number;
+  matched_relevance: number | null;
+}
+
+/** 評估階段回應。 */
+export interface EvaluationCandidateStage {
+  stage: "recall" | "rerank" | "assembled";
+  first_hit_rank: number | null;
+  items: EvaluationStageCandidate[];
+}
+
+/** 文件內搜尋命中。 */
+export interface EvaluationDocumentSearchHit {
+  document_id: string;
+  document_name: string;
+  chunk_id: string;
+  heading: string | null;
+  start_offset: number;
+  end_offset: number;
+  excerpt: string;
+}
+
+/** Candidate preview 回應。 */
+export interface EvaluationCandidatePreviewPayload {
+  dataset: EvaluationDatasetSummary;
+  item: EvaluationItemSummary;
+  recall: EvaluationCandidateStage;
+  rerank: EvaluationCandidateStage;
+  assembled: EvaluationCandidateStage;
+  document_search_hits: EvaluationDocumentSearchHit[];
+}
+
+/** 單階段 metrics。 */
+export interface EvaluationStageMetricSummary {
+  nDCG_at_k: number;
+  recall_at_k: number;
+  mrr_at_k: number;
+  precision_at_k: number;
+  document_coverage_at_k: number;
+}
+
+/** 依維度切分的 metrics。 */
+export interface EvaluationSummaryByDimension {
+  dimension: string;
+  value: string;
+  metrics: Record<string, EvaluationStageMetricSummary>;
+}
+
+/** 單題單階段明細。 */
+export interface EvaluationPerQueryStageDetail {
+  first_hit_rank: number | null;
+  matched_core_evidence: boolean;
+  matched_relevance: number | null;
+}
+
+/** 單題 detail。 */
+export interface EvaluationPerQueryDetail {
+  item_id: string;
+  query_text: string;
+  language: EvaluationLanguage;
+  retrieval_miss: boolean;
+  gold_spans: EvaluationItemSpan[];
+  recall: EvaluationPerQueryStageDetail;
+  rerank: EvaluationPerQueryStageDetail;
+  assembled: EvaluationPerQueryStageDetail;
+  baseline_delta: Record<string, number | null>;
+}
+
+/** Benchmark run 摘要。 */
+export interface EvaluationRunSummary {
+  id: string;
+  dataset_id: string;
+  status: EvaluationRunStatus;
+  baseline_run_id: string | null;
+  created_by_sub: string;
+  total_items: number;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+/** Benchmark run 報表。 */
+export interface EvaluationRunReportPayload {
+  run: EvaluationRunSummary;
+  dataset: EvaluationDatasetSummary;
+  summary_metrics: Record<string, EvaluationStageMetricSummary>;
+  breakdowns: EvaluationSummaryByDimension[];
+  per_query: EvaluationPerQueryDetail[];
+  baseline_compare: Record<string, unknown> | null;
+}
+
+/** Dataset detail。 */
+export interface EvaluationDatasetDetailPayload {
+  dataset: EvaluationDatasetSummary;
+  items: EvaluationItemSummary[];
+  runs: EvaluationRunSummary[];
+}
+
 /** 前端 chat 訊息 view model。 */
 export interface ChatMessageViewModel {
   /** 訊息唯一識別碼。 */

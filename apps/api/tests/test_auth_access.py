@@ -13,12 +13,14 @@ from app.auth.verifier import InvalidTokenError
 from app.auth.verifier import KeycloakJwtVerifier
 from app.auth.verifier import _build_principal_from_payload
 from app.chat.runtime import langgraph_auth as langgraph_auth_runtime
-from app.db.models import Area, AreaGroupRole, AreaUserRole, Role
+from app.db.models import Area, AreaGroupRole, AreaUserRole, RetrievalEvalDataset, Role
 from app.services.access import resolve_effective_role_for_area, resolve_highest_role
 
 
 # 測試模式使用的 Bearer token，格式由 TestModeTokenVerifier 定義。
 READER_TOKEN = "Bearer test::user-reader::/group/reader"
+MAINTAINER_TOKEN = "Bearer test::user-maintainer::/group/maintainer"
+OUTSIDER_TOKEN = "Bearer test::user-outsider::/group/outsider"
 
 
 def _uuid() -> str:
@@ -114,6 +116,48 @@ def test_auth_context_returns_principal(client) -> None:
         "name": None,
         "preferred_username": None,
     }
+
+
+def test_evaluation_dataset_routes_allow_maintainer_but_hide_from_reader_and_outsider(client, db_session) -> None:
+    """evaluation dataset routes 應只允許 maintainer/admin，並維持 same-404。"""
+
+    area = Area(id=_uuid(), name="Evaluation Protected")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-maintainer", role=Role.maintainer))
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    db_session.add(
+        RetrievalEvalDataset(
+            id=_uuid(),
+            area_id=area.id,
+            name="Protected Dataset",
+            created_by_sub="user-maintainer",
+        )
+    )
+    db_session.commit()
+
+    maintainer_response = client.get(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": MAINTAINER_TOKEN},
+    )
+    reader_response = client.get(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": READER_TOKEN},
+    )
+    outsider_response = client.get(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": OUTSIDER_TOKEN},
+    )
+    missing_response = client.get(
+        "/areas/missing-area/evaluation/datasets",
+        headers={"Authorization": OUTSIDER_TOKEN},
+    )
+
+    assert maintainer_response.status_code == 200
+    assert maintainer_response.json()["items"][0]["name"] == "Protected Dataset"
+    assert reader_response.status_code == 403
+    assert outsider_response.status_code == 404
+    assert missing_response.status_code == 404
+    assert outsider_response.json() == missing_response.json()
 
 
 def test_auth_context_rejects_invalid_groups_claim_shape(client) -> None:

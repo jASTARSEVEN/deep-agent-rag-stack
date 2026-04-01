@@ -1,0 +1,420 @@
+"""Retrieval evaluation dataset、preview 與 run API 測試。"""
+
+import json
+from uuid import uuid4
+
+from sqlalchemy import select
+
+from app.db.models import (
+    Area,
+    AreaUserRole,
+    ChunkStructureKind,
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    RetrievalEvalRunArtifact,
+    Role,
+)
+
+
+ADMIN_TOKEN = "Bearer test::user-admin::/group/admin"
+MAINTAINER_TOKEN = "Bearer test::user-maintainer::/group/maintainer"
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
+
+
+def test_evaluation_preview_and_run_return_multistage_report(client, db_session, app_settings) -> None:
+    """candidate preview 與 benchmark run 應回傳 recall/rerank/assembled 三階段資訊。"""
+
+    area = Area(id=_uuid(), name="Evaluation Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="facts.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/facts.md",
+        display_text="Alpha policy keeps zh-TW facts.\n\nBeta policy keeps English facts.",
+        normalized_text="Alpha policy keeps zh-TW facts.\n\nBeta policy keeps English facts.",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Policy",
+        content=document.display_text or "",
+        content_preview="Alpha policy keeps zh-TW facts.",
+        char_count=len(document.display_text or ""),
+        start_offset=0,
+        end_offset=len(document.display_text or ""),
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Policy",
+        content="Alpha policy keeps zh-TW facts.",
+        content_preview="Alpha policy keeps zh-TW facts.",
+        char_count=len("Alpha policy keeps zh-TW facts."),
+        start_offset=0,
+        end_offset=len("Alpha policy keeps zh-TW facts."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, parent, child])
+    db_session.commit()
+
+    dataset_response = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Phase 7 Dataset"},
+    )
+    assert dataset_response.status_code == 201
+    dataset_id = dataset_response.json()["id"]
+
+    item_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "zh-TW facts", "language": "zh-TW", "query_type": "fact_lookup"},
+    )
+    assert item_response.status_code == 201
+    item_id = item_response.json()["id"]
+
+    span_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha policy keeps zh-TW facts."),
+            "relevance_grade": 3,
+        },
+    )
+    assert span_response.status_code == 200
+    assert span_response.json()["spans"][0]["relevance_grade"] == 3
+
+    preview_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["recall"]["items"]
+    assert preview_payload["rerank"]["items"]
+    assert preview_payload["assembled"]["items"]
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5},
+    )
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["run"]["status"] == "completed"
+    assert "recall" in run_payload["summary_metrics"]
+    assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
+    assert run_payload["dataset"]["baseline_run_id"] == run_payload["run"]["id"]
+    artifact = db_session.scalar(
+        select(RetrievalEvalRunArtifact).where(RetrievalEvalRunArtifact.run_id == run_payload["run"]["id"])
+    )
+    assert artifact is not None
+    persisted_report = json.loads(artifact.report_json)
+    assert persisted_report["per_query"][0]["item_id"] == item_id
+
+
+def test_evaluation_mark_miss_replaces_existing_spans(client, db_session) -> None:
+    """標記 retrieval miss 後應以 miss span 取代既有 spans。"""
+
+    area = Area(id=_uuid(), name="Evaluation Miss Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Miss Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "missing fact", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+
+    miss_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/mark-miss",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+
+    assert miss_response.status_code == 200
+    assert miss_response.json()["spans"] == [
+        {
+            "id": miss_response.json()["spans"][0]["id"],
+            "document_id": None,
+            "start_offset": 0,
+            "end_offset": 0,
+            "relevance_grade": None,
+            "is_retrieval_miss": True,
+            "created_by_sub": "user-admin",
+            "created_at": miss_response.json()["spans"][0]["created_at"],
+        }
+    ]
+
+
+def test_evaluation_preview_and_run_map_rerank_and_assembled_by_runtime_windows(client, db_session, app_settings) -> None:
+    """rerank 與 assembled 應以 runtime child windows 判定命中，而非只看粗略 parent 視窗。"""
+
+    area = Area(id=_uuid(), name="Runtime Mapping Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    display_text = "# Policy\n\nAlpha policy keeps zh-TW facts.\n\nBeta policy keeps English facts."
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="runtime-mapping.md",
+        content_type="text/markdown",
+        file_size=256,
+        storage_key="evaluation/runtime-mapping.md",
+        display_text=display_text,
+        normalized_text=display_text,
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Policy",
+        content=display_text,
+        content_preview="Alpha policy keeps zh-TW facts.",
+        char_count=len(display_text),
+        start_offset=0,
+        end_offset=len(display_text),
+    )
+    alpha_text = "Alpha policy keeps zh-TW facts."
+    alpha_start = display_text.index(alpha_text)
+    alpha_end = alpha_start + len(alpha_text)
+    alpha_child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Policy",
+        content=alpha_text,
+        content_preview=alpha_text,
+        char_count=len(alpha_text),
+        start_offset=alpha_start,
+        end_offset=alpha_end,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    beta_text = "Beta policy keeps English facts."
+    beta_start = display_text.index(beta_text)
+    beta_end = beta_start + len(beta_text)
+    beta_child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Policy",
+        content=beta_text,
+        content_preview=beta_text,
+        char_count=len(beta_text),
+        start_offset=beta_start,
+        end_offset=beta_end,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, parent, alpha_child, beta_child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Runtime Mapping Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "zh-TW facts", "language": "zh-TW", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": alpha_start,
+            "end_offset": alpha_end,
+            "relevance_grade": 3,
+        },
+    )
+
+    preview_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["rerank"]["first_hit_rank"] == 1
+    assert preview_payload["assembled"]["first_hit_rank"] == 1
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5},
+    )
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["per_query"][0]["rerank"]["first_hit_rank"] == 1
+    assert run_payload["per_query"][0]["assembled"]["first_hit_rank"] == 1
+
+
+def test_evaluation_adding_same_span_twice_updates_existing_record(client, db_session, app_settings) -> None:
+    """重複新增同一個 span 不應 500，且應更新既有 relevance。"""
+
+    area = Area(id=_uuid(), name="Duplicate Span Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="facts.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/facts.md",
+        display_text="Alpha policy keeps zh-TW facts.",
+        normalized_text="Alpha policy keeps zh-TW facts.",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Policy",
+        content=document.display_text or "",
+        content_preview="Alpha policy keeps zh-TW facts.",
+        char_count=len(document.display_text or ""),
+        start_offset=0,
+        end_offset=len(document.display_text or ""),
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Policy",
+        content="Alpha policy keeps zh-TW facts.",
+        content_preview="Alpha policy keeps zh-TW facts.",
+        char_count=len("Alpha policy keeps zh-TW facts."),
+        start_offset=0,
+        end_offset=len("Alpha policy keeps zh-TW facts."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, parent, child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Duplicate Span Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "zh-TW facts", "language": "zh-TW", "query_type": "fact_lookup"},
+    ).json()["id"]
+
+    first_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha policy keeps zh-TW facts."),
+            "relevance_grade": 3,
+        },
+    )
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha policy keeps zh-TW facts."),
+            "relevance_grade": 2,
+        },
+    )
+    assert second_response.status_code == 200
+    assert len(second_response.json()["spans"]) == 1
+    assert second_response.json()["spans"][0]["relevance_grade"] == 2
+
+
+def test_evaluation_item_can_be_deleted(client, db_session) -> None:
+    """evaluation 題目應可被刪除，且 dataset detail 不再包含該題。"""
+
+    area = Area(id=_uuid(), name="Delete Item Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Delete Item Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "delete me", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+
+    delete_response = client.delete(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert delete_response.status_code == 204
+
+    detail_response = client.get(
+        f"/evaluation/datasets/{dataset_id}",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["items"] == []

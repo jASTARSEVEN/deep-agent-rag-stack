@@ -239,6 +239,9 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
             "source": "hybrid",
             "start_offset": 0,
             "end_offset": 11,
+            "page_start": None,
+            "page_end": None,
+            "regions": [],
             "truncated": True,
         }
     ]
@@ -262,14 +265,14 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
                 "document_name": "tool-payload.md",
                 "parent_chunk_id": parent.id,
                 "child_chunk_ids": [child.id],
-                "heading": "Payload Section",
-                "structure_kind": "text",
-                "source": "hybrid",
-                "truncated": True,
-                "excerpt": "alpha intr",
-            }
-        ],
-    }
+                    "heading": "Payload Section",
+                    "structure_kind": "text",
+                    "source": "hybrid",
+                    "truncated": True,
+                    "excerpt": "alpha intr",
+                }
+            ],
+        }
 
 
 def test_retrieval_tool_payload_builders_accept_none() -> None:

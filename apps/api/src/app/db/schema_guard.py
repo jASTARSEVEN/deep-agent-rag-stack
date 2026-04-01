@@ -9,6 +9,17 @@ from sqlalchemy.engine import Engine
 # preview contract 升級後 documents 必須存在的欄位。
 REQUIRED_DOCUMENT_COLUMNS = frozenset({"display_text"})
 
+# Phase 7 evaluation 必須存在的資料表。
+REQUIRED_EVALUATION_TABLES = frozenset(
+    {
+        "retrieval_eval_datasets",
+        "retrieval_eval_items",
+        "retrieval_eval_item_spans",
+        "retrieval_eval_runs",
+        "retrieval_eval_run_artifacts",
+    }
+)
+
 
 def ensure_schema_compatibility(engine: Engine) -> None:
     """確認目前資料庫 schema 與 API 程式碼相容。
@@ -34,6 +45,16 @@ def ensure_schema_compatibility(engine: Engine) -> None:
             "資料庫尚未初始化或 schema 不完整：缺少 `documents` 資料表。"
             "請先執行 migration runner；compose 環境可重新 `docker compose up`，"
             "非 compose 環境請在 `apps/api` 執行 `python -m app.db.migration_runner`。"
+        )
+
+    missing_tables = sorted(REQUIRED_EVALUATION_TABLES - table_names)
+    if missing_tables:
+        missing_label = ", ".join(f"`{name}`" for name in missing_tables)
+        raise RuntimeError(
+            "資料庫 schema 與目前 API 程式碼不相容，缺少 evaluation 資料表："
+            f"{missing_label}。請先執行 migration runner；compose 環境可重新 "
+            "`docker compose up` 讓 migration runner 自動補齊，非 compose 環境請在 "
+            "`apps/api` 執行 `python -m app.db.migration_runner`。"
         )
 
     document_columns = {column["name"] for column in inspector.get_columns("documents")}
