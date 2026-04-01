@@ -18,6 +18,7 @@ import type {
   EvaluationDatasetDetailPayload,
   EvaluationDatasetSummary,
   EvaluationItemSummary,
+  EvaluationProfile,
   EvaluationRunReportPayload,
 } from "./types";
 
@@ -426,7 +427,10 @@ export async function markEvaluationMiss(datasetId: string, itemId: string): Pro
  * @param payload run payload。
  * @returns 完整 benchmark report。
  */
-export async function runEvaluationDataset(datasetId: string, payload: { top_k?: number } = {}): Promise<EvaluationRunReportPayload> {
+export async function runEvaluationDataset(
+  datasetId: string,
+  payload: { top_k?: number; evaluation_profile?: EvaluationProfile } = {},
+): Promise<EvaluationRunReportPayload> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/runs`, {
     method: "POST",
     body: JSON.stringify(payload),

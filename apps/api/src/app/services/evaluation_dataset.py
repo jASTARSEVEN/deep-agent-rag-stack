@@ -435,6 +435,7 @@ def create_evaluation_run(
     settings: AppSettings,
     dataset_id: str,
     top_k: int,
+    evaluation_profile: str = "production_like_v1",
 ) -> EvaluationRunReportResponse:
     """執行 dataset benchmark。
 
@@ -462,6 +463,7 @@ def create_evaluation_run(
         items=items,
         spans_by_item_id=spans_by_item_id,
         top_k=top_k,
+        evaluation_profile=evaluation_profile,
     )
 
 
@@ -574,7 +576,20 @@ def build_run_summary(run: RetrievalEvalRun) -> EvaluationRunSummary:
     - `EvaluationRunSummary`：API run summary。
     """
 
-    return EvaluationRunSummary.model_validate(run)
+    payload = {
+        "id": run.id,
+        "dataset_id": run.dataset_id,
+        "status": run.status,
+        "baseline_run_id": run.baseline_run_id,
+        "created_by_sub": run.created_by_sub,
+        "total_items": run.total_items,
+        "evaluation_profile": run.evaluation_profile,
+        "config_snapshot": json.loads(run.config_snapshot) if run.config_snapshot else {},
+        "error_message": run.error_message,
+        "created_at": run.created_at,
+        "completed_at": run.completed_at,
+    }
+    return EvaluationRunSummary.model_validate(payload)
 
 
 def _get_authorized_dataset(

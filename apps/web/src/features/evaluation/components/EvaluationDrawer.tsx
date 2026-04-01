@@ -21,6 +21,7 @@ import type {
   EvaluationDatasetDetailPayload,
   EvaluationDatasetSummary,
   EvaluationLanguage,
+  EvaluationProfile,
   EvaluationRunReportPayload,
 } from "../../../lib/types";
 
@@ -35,6 +36,10 @@ interface EvaluationDrawerProps {
 
 
 const LANGUAGE_OPTIONS: EvaluationLanguage[] = ["zh-TW", "en", "mixed"];
+const EVALUATION_PROFILE_OPTIONS: Array<{ value: EvaluationProfile; label: string }> = [
+  { value: "production_like_v1", label: "production_like_v1" },
+  { value: "deterministic_gate_v1", label: "deterministic_gate_v1" },
+];
 
 type PreviewMode = "markdown" | "raw";
 type EvaluationStageKey = "recall" | "rerank" | "assembled";
@@ -71,6 +76,7 @@ export function EvaluationDrawer({
   const [datasetName, setDatasetName] = useState("");
   const [queryText, setQueryText] = useState("");
   const [language, setLanguage] = useState<EvaluationLanguage>("zh-TW");
+  const [evaluationProfile, setEvaluationProfile] = useState<EvaluationProfile>("production_like_v1");
   const [startOffset, setStartOffset] = useState(0);
   const [endOffset, setEndOffset] = useState(0);
   const [relevanceGrade, setRelevanceGrade] = useState<2 | 3>(3);
@@ -115,6 +121,7 @@ export function EvaluationDrawer({
       setEndOffset(0);
       setSelectedText("");
       setPreviewMode("raw");
+      setEvaluationProfile("production_like_v1");
       setIsDocumentPreviewExpanded(true);
       setPreviewSearchQuery("");
       setActiveSearchMatchIndex(0);
@@ -459,7 +466,7 @@ export function EvaluationDrawer({
     setError(null);
     setNotice(null);
     try {
-      const report = await runEvaluationDataset(selectedDatasetId, { top_k: 10 });
+      const report = await runEvaluationDataset(selectedDatasetId, { top_k: 10, evaluation_profile: evaluationProfile });
       setRunReport(report);
       setNotice(`已完成 benchmark run，run id：${report.run.id}`);
       await loadDatasetDetail(selectedDatasetId, selectedItemId);
@@ -626,15 +633,28 @@ export function EvaluationDrawer({
               <section className="border-r border-stone-200 p-5 overflow-y-auto" data-testid="evaluation-review-section">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-stone-900">Review</h3>
-                  <button
-                    data-testid="evaluation-run-benchmark"
-                    type="button"
-                    onClick={() => void handleRun()}
-                    className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
-                    disabled={!selectedDatasetId || isSubmitting}
-                  >
-                    執行 Benchmark
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <select
+                      className="rounded-xl border border-stone-200 px-3 py-2 text-xs"
+                      value={evaluationProfile}
+                      onChange={(event) => setEvaluationProfile(event.target.value as EvaluationProfile)}
+                    >
+                      {EVALUATION_PROFILE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      data-testid="evaluation-run-benchmark"
+                      type="button"
+                      onClick={() => void handleRun()}
+                      className="rounded-xl bg-stone-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                      disabled={!selectedDatasetId || isSubmitting}
+                    >
+                      執行 Benchmark
+                    </button>
+                  </div>
                 </div>
 
                 {candidatePreview ? (
@@ -960,6 +980,7 @@ export function EvaluationDrawer({
                           <div className="mt-2 space-y-1 text-[11px] text-stone-500">
                             <div data-testid="evaluation-run-id">Run ID: {runReport.run.id}</div>
                             <div>Run Status: {runReport.run.status}</div>
+                            <div>Profile: {runReport.run.evaluation_profile}</div>
                           </div>
                         </div>
                         <div className="text-right text-[11px] text-stone-500">
@@ -987,6 +1008,14 @@ export function EvaluationDrawer({
                           </div>
                         ))}
                       </div>
+                      <details className="mt-4 rounded-xl border border-stone-100 bg-stone-50 p-3">
+                        <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-stone-500">
+                          Config Snapshot
+                        </summary>
+                        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-all text-[11px] text-stone-700">
+                          {JSON.stringify(runReport.run.config_snapshot, null, 2)}
+                        </pre>
+                      </details>
                     </div>
 
                     <div className="rounded-xl border border-stone-200 bg-white p-4">

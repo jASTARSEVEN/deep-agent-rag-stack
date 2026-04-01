@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--dataset-id", required=True)
     run_parser.add_argument("--top-k", type=int, default=10)
+    run_parser.add_argument("--evaluation-profile", choices=["production_like_v1", "deterministic_gate_v1"], default="production_like_v1")
     run_parser.add_argument("--actor-sub", default="cli-evaluator")
 
     report_parser = subparsers.add_parser("report")
@@ -91,6 +92,7 @@ def main() -> None:
                 settings=settings,
                 dataset_id=args.dataset_id,
                 top_k=args.top_k,
+                evaluation_profile=args.evaluation_profile,
             )
             print(json.dumps(report.model_dump(mode="json"), ensure_ascii=False))
         elif args.command == "report":

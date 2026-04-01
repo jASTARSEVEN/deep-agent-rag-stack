@@ -253,6 +253,7 @@ def run_evaluation_dataset_route(
         settings=settings,
         dataset_id=dataset_id,
         top_k=payload.top_k,
+        evaluation_profile=payload.evaluation_profile,
     )
 
 

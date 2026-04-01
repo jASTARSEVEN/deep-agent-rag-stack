@@ -392,6 +392,10 @@ class RetrievalEvalRun(Base):
     created_by_sub: Mapped[str] = mapped_column(String(255), nullable=False)
     # 本次 run 評估題數。
     total_items: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    # 本次 benchmark 使用的 evaluation profile。
+    evaluation_profile: Mapped[str] = mapped_column(String(64), nullable=False, default="production_like_v1")
+    # 本次 benchmark 固定下來的設定快照 JSON。
+    config_snapshot: Mapped[str] = mapped_column("config_snapshot_json", Text(), nullable=False, default="{}")
     # 錯誤訊息。
     error_message: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # 建立時間。

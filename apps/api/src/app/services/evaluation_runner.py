@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from copy import deepcopy
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -48,6 +49,7 @@ def run_evaluation_dataset(
     items: list[RetrievalEvalItem],
     spans_by_item_id: dict[str, list[RetrievalEvalItemSpan]],
     top_k: int,
+    evaluation_profile: str = "production_like_v1",
 ) -> EvaluationRunReportResponse:
     """執行單一 dataset 的 benchmark run。
 
@@ -71,12 +73,17 @@ def run_evaluation_dataset(
         minimum_role=build_required_role(),
     )
 
+    effective_settings = _resolve_evaluation_settings(settings=settings, evaluation_profile=evaluation_profile)
+    config_snapshot = _build_evaluation_config_snapshot(settings=effective_settings, top_k=top_k)
+
     run = RetrievalEvalRun(
         dataset_id=dataset.id,
         status=EvaluationRunStatus.running,
         baseline_run_id=dataset.baseline_run_id,
         created_by_sub=principal.sub,
         total_items=len(items),
+        evaluation_profile=evaluation_profile,
+        config_snapshot=json.dumps(config_snapshot, ensure_ascii=False, sort_keys=True),
         error_message=None,
     )
     session.add(run)
@@ -86,7 +93,7 @@ def run_evaluation_dataset(
     try:
         report_payload = _build_run_report_payload(
             session=session,
-            settings=settings,
+            settings=effective_settings,
             dataset=dataset,
             items=items,
             spans_by_item_id=spans_by_item_id,
@@ -134,7 +141,68 @@ def build_run_summary(run: RetrievalEvalRun) -> EvaluationRunSummary:
     - `EvaluationRunSummary`：API summary。
     """
 
-    return EvaluationRunSummary.model_validate(run)
+    payload = {
+        "id": run.id,
+        "dataset_id": run.dataset_id,
+        "status": run.status,
+        "baseline_run_id": run.baseline_run_id,
+        "created_by_sub": run.created_by_sub,
+        "total_items": run.total_items,
+        "evaluation_profile": run.evaluation_profile,
+        "config_snapshot": json.loads(run.config_snapshot) if run.config_snapshot else {},
+        "error_message": run.error_message,
+        "created_at": run.created_at,
+        "completed_at": run.completed_at,
+    }
+    return EvaluationRunSummary.model_validate(payload)
+
+
+def _resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
+    """依 benchmark profile 產生本次 run 的固定設定。"""
+
+    if evaluation_profile == "production_like_v1":
+        return settings
+    if evaluation_profile == "deterministic_gate_v1":
+        return settings.model_copy(
+            update={
+                "rerank_provider": "deterministic",
+                "rerank_top_n": min(settings.rerank_top_n, 4),
+                "retrieval_vector_top_k": min(settings.retrieval_vector_top_k, 6),
+                "retrieval_fts_top_k": min(settings.retrieval_fts_top_k, 6),
+                "retrieval_max_candidates": min(settings.retrieval_max_candidates, 8),
+                "assembler_max_contexts": min(settings.assembler_max_contexts, 4),
+                "assembler_max_children_per_parent": min(settings.assembler_max_children_per_parent, 2),
+            }
+        )
+    raise ValueError(f"不支援的 evaluation profile：{evaluation_profile}")
+
+
+def _build_evaluation_config_snapshot(*, settings: AppSettings, top_k: int) -> dict[str, object]:
+    """建立 benchmark run 的設定快照。"""
+
+    return deepcopy(
+        {
+            "top_k": top_k,
+            "retrieval": {
+                "vector_top_k": settings.retrieval_vector_top_k,
+                "fts_top_k": settings.retrieval_fts_top_k,
+                "max_candidates": settings.retrieval_max_candidates,
+                "rrf_k": settings.retrieval_rrf_k,
+                "hnsw_ef_search": settings.retrieval_hnsw_ef_search,
+            },
+            "rerank": {
+                "provider": settings.rerank_provider,
+                "model": settings.rerank_model,
+                "top_n": settings.rerank_top_n,
+                "max_chars_per_doc": settings.rerank_max_chars_per_doc,
+            },
+            "assembler": {
+                "max_contexts": settings.assembler_max_contexts,
+                "max_chars_per_context": settings.assembler_max_chars_per_context,
+                "max_children_per_parent": settings.assembler_max_children_per_parent,
+            },
+        }
+    )
 
 
 def build_required_role():

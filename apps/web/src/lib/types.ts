@@ -482,6 +482,9 @@ export interface EvaluationSummaryByDimension {
   metrics: Record<string, EvaluationStageMetricSummary>;
 }
 
+/** Evaluation benchmark profile。 */
+export type EvaluationProfile = "production_like_v1" | "deterministic_gate_v1";
+
 /** 單題單階段明細。 */
 export interface EvaluationPerQueryStageDetail {
   first_hit_rank: number | null;
@@ -512,6 +515,8 @@ export interface EvaluationRunSummary {
   baseline_run_id: string | null;
   created_by_sub: string;
   total_items: number;
+  evaluation_profile: EvaluationProfile;
+  config_snapshot: Record<string, unknown>;
   error_message: string | null;
   created_at: string;
   completed_at: string | null;

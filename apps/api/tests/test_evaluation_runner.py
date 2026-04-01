@@ -128,6 +128,9 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_response.status_code == 201
     run_payload = run_response.json()
     assert run_payload["run"]["status"] == "completed"
+    assert run_payload["run"]["evaluation_profile"] == "production_like_v1"
+    assert run_payload["run"]["config_snapshot"]["top_k"] == 5
+    assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] == app_settings.rerank_top_n
     assert "recall" in run_payload["summary_metrics"]
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]
@@ -140,6 +143,79 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert artifact is not None
     persisted_report = json.loads(artifact.report_json)
     assert persisted_report["per_query"][0]["item_id"] == item_id
+
+
+def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_session, app_settings) -> None:
+    """benchmark run 應可指定 deterministic profile，並回傳對應 snapshot。"""
+
+    area = Area(id=_uuid(), name="Evaluation Profile Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="profile.md",
+        content_type="text/markdown",
+        file_size=64,
+        storage_key="evaluation/profile.md",
+        display_text="Alpha benchmark profile fact.",
+        normalized_text="Alpha benchmark profile fact.",
+        status=DocumentStatus.ready,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Profile",
+        content="Alpha benchmark profile fact.",
+        content_preview="Alpha benchmark profile fact.",
+        char_count=len("Alpha benchmark profile fact."),
+        start_offset=0,
+        end_offset=len("Alpha benchmark profile fact."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Profile Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "benchmark profile", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha benchmark profile fact."),
+            "relevance_grade": 3,
+        },
+    )
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5, "evaluation_profile": "deterministic_gate_v1"},
+    )
+
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["run"]["evaluation_profile"] == "deterministic_gate_v1"
+    assert run_payload["run"]["config_snapshot"]["top_k"] == 5
+    assert run_payload["run"]["config_snapshot"]["rerank"]["provider"] == "deterministic"
+    assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] <= app_settings.rerank_top_n
+    assert run_payload["run"]["config_snapshot"]["assembler"]["max_children_per_parent"] <= app_settings.assembler_max_children_per_parent
 
 
 def test_evaluation_mark_miss_replaces_existing_spans(client, db_session) -> None:
