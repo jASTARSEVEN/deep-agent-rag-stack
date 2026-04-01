@@ -1,6 +1,6 @@
 """Retrieval evaluation dataset、review 與 run 路由。"""
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_principal
@@ -15,6 +15,7 @@ from app.schemas.evaluation import (
     EvaluationDatasetListResponse,
     EvaluationDatasetSummary,
     EvaluationItemSummary,
+    EvaluationPreviewDebugRequest,
     EvaluationRunReportResponse,
     MarkEvaluationSpanRequest,
     RunEvaluationDatasetRequest,
@@ -147,7 +148,7 @@ def delete_evaluation_item_route(
 def preview_evaluation_candidates_route(
     dataset_id: str,
     item_id: str,
-    top_k: int = Query(default=20, ge=1, le=20),
+    payload: EvaluationPreviewDebugRequest,
     principal: CurrentPrincipal = Depends(get_current_principal),
     settings: AppSettings = Depends(get_app_settings),
     session: Session = Depends(get_database_session),
@@ -157,7 +158,7 @@ def preview_evaluation_candidates_route(
     參數：
     - `dataset_id`：目標 dataset；僅作為路徑穩定性用途。
     - `item_id`：目標題目。
-    - `top_k`：預覽上限。
+    - `payload`：preview 臨時調參 payload。
     - `principal`：目前已驗證使用者。
     - `settings`：應用程式設定。
     - `session`：目前資料庫 session。
@@ -167,7 +168,13 @@ def preview_evaluation_candidates_route(
     """
 
     _ = dataset_id
-    return preview_evaluation_candidates(session=session, principal=principal, settings=settings, item_id=item_id, top_k=top_k)
+    return preview_evaluation_candidates(
+        session=session,
+        principal=principal,
+        settings=settings,
+        item_id=item_id,
+        payload=payload,
+    )
 
 
 @router.post("/evaluation/datasets/{dataset_id}/items/{item_id}/spans", response_model=EvaluationItemSummary)

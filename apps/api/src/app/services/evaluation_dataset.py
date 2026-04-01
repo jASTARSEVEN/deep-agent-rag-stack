@@ -35,6 +35,7 @@ from app.schemas.evaluation import (
     EvaluationDocumentSearchHit,
     EvaluationItemSpanResponse,
     EvaluationItemSummary,
+    EvaluationPreviewDebugRequest,
     EvaluationRunReportResponse,
     EvaluationRunSummary,
     EvaluationStageCandidate,
@@ -315,7 +316,7 @@ def preview_evaluation_candidates(
     principal: CurrentPrincipal,
     settings: AppSettings,
     item_id: str,
-    top_k: int = 20,
+    payload: EvaluationPreviewDebugRequest,
 ) -> EvaluationCandidatePreviewResponse:
     """讀取單題的 recall/rerank/assembled candidate preview。
 
@@ -324,7 +325,7 @@ def preview_evaluation_candidates(
     - `principal`：目前已驗證使用者。
     - `settings`：應用程式設定。
     - `item_id`：目標題目。
-    - `top_k`：預覽上限。
+    - `payload`：preview 臨時調參 payload。
 
     回傳：
     - `EvaluationCandidatePreviewResponse`：三階段 candidate preview。
@@ -334,11 +335,12 @@ def preview_evaluation_candidates(
     spans = _load_spans_by_item_id(session=session, item_ids=[item.id]).get(item.id, [])
     stage_result = evaluate_item_stage_outputs(
         session=session,
-        settings=settings,
+        settings=_apply_preview_debug_overrides(settings=settings, payload=payload),
         area_id=dataset.area_id,
         item=item,
         spans=spans,
-        top_k=top_k,
+        top_k=payload.top_k,
+        apply_rerank=payload.apply_rerank,
     )
     return EvaluationCandidatePreviewResponse(
         dataset=build_dataset_summary(session=session, dataset=dataset),
@@ -363,6 +365,7 @@ def evaluate_item_stage_outputs(
     item: RetrievalEvalItem,
     spans: list[RetrievalEvalItemSpan],
     top_k: int,
+    apply_rerank: bool = True,
 ) -> ItemStageEvaluationResult:
     """建立單題共用的 recall/rerank/assembled stage 結果。
 
@@ -386,7 +389,7 @@ def evaluate_item_stage_outputs(
         query=item.query_text,
         settings=settings,
     )
-    rerank_matches = _apply_rerank(matches=recall_matches, query=item.query_text, settings=settings)
+    rerank_matches = _apply_rerank(matches=recall_matches, query=item.query_text, settings=settings) if apply_rerank else recall_matches
     retrieval_result = RetrievalResult(
         candidates=[_build_retrieval_candidate(match) for match in rerank_matches],
         trace=_build_empty_trace(query=item.query_text, settings=settings, total_candidates=len(rerank_matches)),
@@ -417,6 +420,7 @@ def evaluate_item_stage_outputs(
             gold_spans=gold_spans,
             document_names=document_names,
             top_k=top_k,
+            apply_rerank=apply_rerank,
         ),
         assembled_stage=_build_assembled_stage(
             session=session,
@@ -426,6 +430,21 @@ def evaluate_item_stage_outputs(
             top_k=top_k,
         ),
     )
+
+
+def _apply_preview_debug_overrides(*, settings: AppSettings, payload: EvaluationPreviewDebugRequest) -> AppSettings:
+    """將 preview 臨時調參套用到單題 evaluation。"""
+
+    updates: dict[str, int] = {}
+    if payload.retrieval_vector_top_k is not None:
+        updates["retrieval_vector_top_k"] = payload.retrieval_vector_top_k
+    if payload.retrieval_fts_top_k is not None:
+        updates["retrieval_fts_top_k"] = payload.retrieval_fts_top_k
+    if payload.retrieval_max_candidates is not None:
+        updates["retrieval_max_candidates"] = payload.retrieval_max_candidates
+    if payload.rerank_top_n is not None:
+        updates["rerank_top_n"] = payload.rerank_top_n
+    return settings.model_copy(update=updates) if updates else settings
 
 
 def create_evaluation_run(
@@ -767,6 +786,17 @@ def _build_recall_stage(
 
     items: list[EvaluationStageCandidate] = []
     relevances: list[int | None] = []
+    full_relevances = [
+        match_gold_relevance(
+            gold_spans,
+            CandidateWindow(
+                document_id=match.chunk.document_id,
+                start_offset=match.chunk.start_offset,
+                end_offset=match.chunk.end_offset,
+            ),
+        )
+        for match in matches
+    ]
     for rank, match in enumerate(matches[:top_k], start=1):
         relevance = match_gold_relevance(
             gold_spans,
@@ -789,12 +819,17 @@ def _build_recall_stage(
                 excerpt=match.chunk.content[:240],
                 source="hybrid",
                 rank=rank,
+                vector_rank=match.vector_rank,
+                fts_rank=match.fts_rank,
+                rrf_rank=match.rrf_rank,
+                rerank_rank=None,
                 matched_relevance=relevance,
             )
         )
     return EvaluationCandidateStageResponse(
         stage="recall",
         first_hit_rank=first_hit_rank(relevances),
+        full_hit_rank=first_hit_rank(full_relevances),
         rerank_applied=None,
         fallback_reason=None,
         items=items,
@@ -807,12 +842,13 @@ def _build_rerank_stage(
     gold_spans: list[GoldSpan],
     document_names: dict[str, str],
     top_k: int,
+    apply_rerank: bool,
 ) -> EvaluationCandidateStageResponse:
     """建立 rerank stage response。"""
 
     items: list[EvaluationStageCandidate] = []
     relevances: list[int | None] = []
-    rerank_applied = any(candidate.rerank_applied for candidate in candidates)
+    rerank_applied = any(candidate.rerank_applied for candidate in candidates) if apply_rerank else None
     fallback_reason = next(
         (candidate.rerank_fallback_reason for candidate in candidates if candidate.rerank_fallback_reason),
         None,
@@ -824,6 +860,23 @@ def _build_rerank_stage(
         if group_key not in grouped_candidates:
             order.append(group_key)
         grouped_candidates[group_key].append(candidate)
+
+    full_relevances: list[int | None] = []
+    for group_key in order:
+        group = grouped_candidates[group_key]
+        full_relevances.append(
+            match_gold_relevance_for_windows(
+                gold_spans,
+                [
+                    CandidateWindow(
+                        document_id=str(candidate.document_id),
+                        start_offset=candidate.start_offset,
+                        end_offset=candidate.end_offset,
+                    )
+                    for candidate in group
+                ],
+            )
+        )
 
     for rank, group_key in enumerate(order[:top_k], start=1):
         group = grouped_candidates[group_key]
@@ -851,15 +904,23 @@ def _build_rerank_stage(
                 excerpt="\n\n".join(candidate.content for candidate in group)[:240],
                 source=group[0].source,
                 rank=rank,
+                vector_rank=min((candidate.vector_rank for candidate in group if candidate.vector_rank is not None), default=None),
+                fts_rank=min((candidate.fts_rank for candidate in group if candidate.fts_rank is not None), default=None),
+                rrf_rank=min((candidate.rrf_rank for candidate in group if candidate.rrf_rank is not None), default=None),
+                rerank_rank=min(
+                    (candidate.rerank_rank for candidate in group if candidate.rerank_rank is not None),
+                    default=(rank if apply_rerank else None),
+                ),
                 matched_relevance=relevance,
             )
         )
     return EvaluationCandidateStageResponse(
         stage="rerank",
-        first_hit_rank=first_hit_rank(relevances),
+        first_hit_rank=first_hit_rank(relevances) if apply_rerank else None,
+        full_hit_rank=first_hit_rank(full_relevances) if apply_rerank else None,
         rerank_applied=rerank_applied,
-        fallback_reason=fallback_reason,
-        items=items,
+        fallback_reason=fallback_reason if apply_rerank else None,
+        items=items if apply_rerank else [],
     )
 
 
@@ -875,9 +936,30 @@ def _build_assembled_stage(
 
     items: list[EvaluationStageCandidate] = []
     relevances: list[int | None] = []
-    chunk_ids = [str(chunk_id) for context in contexts[:top_k] for chunk_id in context.chunk_ids]
+    chunk_ids = [str(chunk_id) for context in contexts for chunk_id in context.chunk_ids]
     chunks = session.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(chunk_ids))).all() if chunk_ids else []
     chunk_by_id = {str(chunk.id): chunk for chunk in chunks}
+    full_relevances: list[int | None] = []
+    for context in contexts:
+        windows = [
+            CandidateWindow(
+                document_id=str(chunk.document_id),
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+            )
+            for chunk_id in context.chunk_ids
+            if (chunk := chunk_by_id.get(str(chunk_id))) is not None
+        ]
+        if not windows:
+            windows = [
+                CandidateWindow(
+                    document_id=str(context.document_id),
+                    start_offset=context.start_offset,
+                    end_offset=context.end_offset,
+                )
+            ]
+        full_relevances.append(match_gold_relevance_for_windows(gold_spans, windows))
+
     for rank, context in enumerate(contexts[:top_k], start=1):
         windows = [
             CandidateWindow(
@@ -910,12 +992,17 @@ def _build_assembled_stage(
                 excerpt=context.assembled_text[:240],
                 source=context.source,
                 rank=rank,
+                vector_rank=None,
+                fts_rank=None,
+                rrf_rank=None,
+                rerank_rank=rank,
                 matched_relevance=relevance,
             )
         )
     return EvaluationCandidateStageResponse(
         stage="assembled",
         first_hit_rank=first_hit_rank(relevances),
+        full_hit_rank=first_hit_rank(full_relevances),
         rerank_applied=None,
         fallback_reason=None,
         items=items,

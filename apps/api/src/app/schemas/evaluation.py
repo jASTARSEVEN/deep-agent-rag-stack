@@ -197,6 +197,10 @@ class EvaluationStageCandidate(BaseModel):
     excerpt: str
     source: str
     rank: int
+    vector_rank: int | None = None
+    fts_rank: int | None = None
+    rrf_rank: int | None = None
+    rerank_rank: int | None = None
     matched_relevance: int | None
 
 
@@ -205,6 +209,7 @@ class EvaluationCandidateStageResponse(BaseModel):
 
     stage: str
     first_hit_rank: int | None
+    full_hit_rank: int | None = None
     # 是否已成功套用 rerank provider；非 rerank stage 時固定為空值。
     rerank_applied: bool | None = None
     # rerank fail-open 的原因；非 rerank stage 或未 fallback 時固定為空值。
@@ -221,6 +226,17 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     rerank: EvaluationCandidateStageResponse
     assembled: EvaluationCandidateStageResponse
     document_search_hits: list[EvaluationDocumentSearchHit]
+
+
+class EvaluationPreviewDebugRequest(BaseModel):
+    """單題 preview 的臨時調參請求。"""
+
+    top_k: int = Field(default=20, ge=1, le=300)
+    retrieval_vector_top_k: int | None = Field(default=None, ge=1, le=300)
+    retrieval_fts_top_k: int | None = Field(default=None, ge=1, le=300)
+    retrieval_max_candidates: int | None = Field(default=None, ge=1, le=300)
+    rerank_top_n: int | None = Field(default=None, ge=1, le=300)
+    apply_rerank: bool = True
 
 
 class EvaluationStageMetricSummary(BaseModel):

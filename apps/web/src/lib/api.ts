@@ -19,6 +19,7 @@ import type {
   EvaluationDatasetSummary,
   EvaluationItemSummary,
   EvaluationProfile,
+  EvaluationPreviewDebugPayload,
   EvaluationRunReportPayload,
 } from "./types";
 
@@ -376,9 +377,11 @@ export async function deleteEvaluationItem(datasetId: string, itemId: string): P
 export async function fetchEvaluationCandidatePreview(
   datasetId: string,
   itemId: string,
+  payload: EvaluationPreviewDebugPayload = {},
 ): Promise<EvaluationCandidatePreviewPayload> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/candidate-preview`, {
     method: "POST",
+    body: JSON.stringify(payload),
   });
   return (await response.json()) as EvaluationCandidatePreviewPayload;
 }

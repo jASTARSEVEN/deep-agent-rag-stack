@@ -113,6 +113,7 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     preview_response = client.post(
         f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
         headers={"Authorization": ADMIN_TOKEN},
+        json={},
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
@@ -216,6 +217,77 @@ def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_sessi
     assert run_payload["run"]["config_snapshot"]["rerank"]["provider"] == "deterministic"
     assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] <= app_settings.rerank_top_n
     assert run_payload["run"]["config_snapshot"]["assembler"]["max_children_per_parent"] <= app_settings.assembler_max_children_per_parent
+
+
+def test_evaluation_preview_debug_exposes_recall_ranks_and_runs_rerank_on_demand(client, db_session, app_settings) -> None:
+    """preview debug 應先暴露 vector/fts/rrf rank，並可再手動執行 rerank。"""
+
+    area = Area(id=_uuid(), name="Evaluation Debug Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="debug.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/debug.md",
+        display_text="Alpha debug fact.",
+        normalized_text="Alpha debug fact.",
+        status=DocumentStatus.ready,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Debug",
+        content="Alpha debug fact.",
+        content_preview="Alpha debug fact.",
+        char_count=len("Alpha debug fact."),
+        start_offset=0,
+        end_offset=len("Alpha debug fact."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Debug Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "Alpha debug", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+
+    recall_preview = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"apply_rerank": False, "retrieval_vector_top_k": 10, "retrieval_fts_top_k": 10, "retrieval_max_candidates": 10},
+    )
+    assert recall_preview.status_code == 200
+    recall_payload = recall_preview.json()
+    assert recall_payload["recall"]["items"][0]["vector_rank"] == 1
+    assert recall_payload["recall"]["items"][0]["rrf_rank"] == 1
+    assert recall_payload["rerank"]["items"] == []
+    assert recall_payload["rerank"]["first_hit_rank"] is None
+
+    rerank_preview = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"apply_rerank": True, "retrieval_vector_top_k": 10, "retrieval_fts_top_k": 10, "retrieval_max_candidates": 10, "rerank_top_n": 10},
+    )
+    assert rerank_preview.status_code == 200
+    rerank_payload = rerank_preview.json()
+    assert rerank_payload["rerank"]["items"]
+    assert rerank_payload["rerank"]["items"][0]["rerank_rank"] == 1
 
 
 def test_evaluation_mark_miss_replaces_existing_spans(client, db_session) -> None:
@@ -358,6 +430,7 @@ def test_evaluation_preview_and_run_map_rerank_and_assembled_by_runtime_windows(
     preview_response = client.post(
         f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
         headers={"Authorization": ADMIN_TOKEN},
+        json={},
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
@@ -449,6 +522,7 @@ def test_evaluation_preview_and_run_expose_rerank_fallback_reason(client, db_ses
     preview_response = client.post(
         f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
         headers={"Authorization": ADMIN_TOKEN},
+        json={},
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()

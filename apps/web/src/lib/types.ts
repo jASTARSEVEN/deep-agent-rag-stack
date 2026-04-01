@@ -433,6 +433,10 @@ export interface EvaluationStageCandidate {
   excerpt: string;
   source: string;
   rank: number;
+  vector_rank: number | null;
+  fts_rank: number | null;
+  rrf_rank: number | null;
+  rerank_rank: number | null;
   matched_relevance: number | null;
 }
 
@@ -440,6 +444,7 @@ export interface EvaluationStageCandidate {
 export interface EvaluationCandidateStage {
   stage: "recall" | "rerank" | "assembled";
   first_hit_rank: number | null;
+  full_hit_rank: number | null;
   rerank_applied: boolean | null;
   fallback_reason: string | null;
   items: EvaluationStageCandidate[];
@@ -464,6 +469,15 @@ export interface EvaluationCandidatePreviewPayload {
   rerank: EvaluationCandidateStage;
   assembled: EvaluationCandidateStage;
   document_search_hits: EvaluationDocumentSearchHit[];
+}
+
+export interface EvaluationPreviewDebugPayload {
+  top_k?: number;
+  retrieval_vector_top_k?: number;
+  retrieval_fts_top_k?: number;
+  retrieval_max_candidates?: number;
+  rerank_top_n?: number;
+  apply_rerank?: boolean;
 }
 
 /** 單階段 metrics。 */
