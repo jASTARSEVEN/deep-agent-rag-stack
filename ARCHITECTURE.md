@@ -217,6 +217,8 @@
 31. evaluation dataset 的 gold truth 長期來源固定為 source spans，不直接綁定 chunk id；run 前必須先把 span 映射到當前版本的 child chunk、parent 與 assembled context
 32. evaluation candidate preview 與 benchmark run 一律沿用正式 retrieval pipeline，因此 non-ready 文件不得出現在候選、document search 或 assembled evidence
 33. evaluation metrics 正式輸出 `nDCG@k`、`Recall@k`、`MRR@k`、`Precision@k` 與 `Document Coverage@k`，並可按 `zh-TW / en / mixed / recall / rerank / assembled` 切分
+34. rerank runtime failure 仍維持 fail-open fallback 回退到 RRF 順序，但必須記錄 warning log，且 evaluation preview / benchmark per-query detail 必須暴露 `fallback_reason`，避免 reviewer 將 fallback 誤判為真實 rerank 排序
+35. Cohere rerank 僅允許對 `HTTP 429 Too Many Requests` 做有限次數的 retry/backoff，且必須先等待；等待秒數需加入 jitter，避免 benchmark 批次中的多題在同一時間重撞；非 429 的 HTTP/network 錯誤不得無差別重試，以免拉長失敗路徑並掩蓋真正異常
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

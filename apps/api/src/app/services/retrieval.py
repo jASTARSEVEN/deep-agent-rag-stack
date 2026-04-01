@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_rerank_document_text, merge_chunk_contents
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -40,6 +43,7 @@ class RetrievalCandidate:
     rerank_rank: int | None
     rerank_score: float | None
     rerank_applied: bool
+    rerank_fallback_reason: str | None
 
 
 @dataclass(slots=True)
@@ -55,6 +59,7 @@ class RetrievalTraceEntry:
     rerank_rank: int | None
     rerank_score: float | None
     rerank_applied: bool
+    rerank_fallback_reason: str | None
 
 
 @dataclass(slots=True)
@@ -89,6 +94,7 @@ class RankedChunkMatch:
     rerank_rank: int | None = None
     rerank_score: float | None = None
     rerank_applied: bool = False
+    rerank_fallback_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -179,6 +185,7 @@ def retrieve_area_candidates(
                     rerank_rank=candidate.rerank_rank,
                     rerank_score=candidate.rerank_score,
                     rerank_applied=candidate.rerank_applied,
+                    rerank_fallback_reason=candidate.rerank_fallback_reason,
                 )
                 for candidate in candidates
             ],
@@ -339,7 +346,7 @@ def _apply_ranking_policy(
     query: str,
     settings: AppSettings,
 ) -> list[RankedChunkMatch]:
-    """未來 business rules 的預留擴充點。
+    """套用最小 ranking policy，降低目錄噪音並保留商品名命中優勢。
 
     參數：
     - `matches`：已完成 Python RRF 的候選。
@@ -347,12 +354,87 @@ def _apply_ranking_policy(
     - `settings`：API 執行期設定。
 
     回傳：
-    - `list[RankedChunkMatch]`：目前維持原排序；後續可在此加入 ranking rules。
+    - `list[RankedChunkMatch]`：已套用最小 ranking rules 的候選排序。
     """
-
-    del query
     del settings
-    return matches
+    query_tokens = _extract_query_tokens(query)
+    scored_matches = [
+        (
+            _ranking_policy_score(
+                match=match,
+                query=query,
+                query_tokens=query_tokens,
+            ),
+            index,
+            match,
+        )
+        for index, match in enumerate(matches)
+    ]
+    scored_matches.sort(
+        key=lambda item: (
+            -item[0],
+            item[2].rrf_rank or 1_000_000,
+            _best_rank(item[2]),
+            item[1],
+        )
+    )
+    return [item[2] for item in scored_matches]
+
+
+def _extract_query_tokens(query: str) -> list[str]:
+    """抽出 ranking policy 使用的 query tokens。"""
+
+    stripped_query = query.strip()
+    if not stripped_query:
+        return []
+    whitespace_tokens = [token.strip().lower() for token in stripped_query.split() if token.strip()]
+    if whitespace_tokens:
+        return whitespace_tokens
+    fallback_tokens = [token.lower() for token in stripped_query.replace("？", " ").replace("?", " ").replace("，", " ").split() if token]
+    if fallback_tokens:
+        return fallback_tokens
+    return [stripped_query.lower()]
+
+
+def _ranking_policy_score(
+    *,
+    match: RankedChunkMatch,
+    query: str,
+    query_tokens: list[str],
+) -> float:
+    """計算最小 ranking policy 分數。"""
+
+    score = match.rrf_score
+    heading = (match.chunk.heading or "").strip().lower()
+    content = (match.chunk.content or "").strip().lower()
+    normalized_query = query.strip().lower()
+
+    if normalized_query and normalized_query in content:
+        score += 0.08
+    if normalized_query and normalized_query in heading:
+        score += 0.12
+
+    if query_tokens:
+        heading_token_hits = sum(1 for token in query_tokens if token and token in heading)
+        content_token_hits = sum(1 for token in query_tokens if token and token in content)
+        score += min(heading_token_hits, 4) * 0.025
+        score += min(content_token_hits, 6) * 0.008
+
+    if _is_table_of_contents_chunk(match):
+        score -= 0.12
+        if normalized_query and normalized_query in heading:
+            score += 0.03
+
+    return score
+
+
+def _is_table_of_contents_chunk(match: RankedChunkMatch) -> bool:
+    """判斷候選是否屬於帶有 leader dots 的目錄類噪音。"""
+
+    content = (match.chunk.content or "").strip().lower()
+    if "................................................................" in content:
+        return True
+    return False
 
 
 def _compute_rrf_score(*, match: RankedChunkMatch, rrf_k: int) -> float:
@@ -419,6 +501,22 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
         rerank_provider = build_rerank_provider(settings)
         rerank_scores = rerank_provider.rerank(query=query, documents=rerank_inputs, top_n=rerank_limit)
     except Exception:
+        LOGGER.warning(
+            "Retrieval rerank provider failed; falling back to RRF order.",
+            extra={
+                "query": query,
+                "rerank_provider": settings.rerank_provider,
+                "rerank_model": settings.rerank_model,
+                "candidate_count": len(rerank_inputs),
+            },
+            exc_info=True,
+        )
+        for group in rerank_groups[:rerank_limit]:
+            for match in group.matches:
+                match.rerank_applied = False
+                match.rerank_rank = None
+                match.rerank_score = None
+                match.rerank_fallback_reason = "provider_error"
         return matches
 
     rerank_score_by_group_id = {item.candidate_id: item for item in rerank_scores}
@@ -430,9 +528,11 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
                 match.rerank_applied = False
                 match.rerank_score = None
                 match.rerank_rank = None
+                match.rerank_fallback_reason = "missing_score"
                 continue
             match.rerank_applied = True
             match.rerank_score = score.score
+            match.rerank_fallback_reason = None
 
     reranked_top_groups = sorted(
         top_groups,
@@ -539,6 +639,7 @@ def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
         rerank_rank=match.rerank_rank,
         rerank_score=match.rerank_score,
         rerank_applied=match.rerank_applied,
+        rerank_fallback_reason=match.rerank_fallback_reason,
     )
 
 

@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
 from app.db.models import (
-    DocumentChunk,
     EvaluationRunStatus,
     RetrievalEvalDataset,
     RetrievalEvalItem,
@@ -29,7 +28,7 @@ from app.schemas.evaluation import (
     EvaluationSummaryByDimension,
 )
 from app.services.access import require_minimum_area_role
-from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
+from app.services.evaluation_mapping import first_hit_rank
 from app.services.evaluation_metrics import (
     document_coverage_at_k,
     mean_reciprocal_rank_at_k,
@@ -37,16 +36,7 @@ from app.services.evaluation_metrics import (
     precision_at_k,
     recall_at_k,
 )
-from app.services.retrieval import (
-    RetrievalResult,
-    _apply_python_rrf,
-    _apply_ranking_policy,
-    _apply_rerank,
-    _build_retrieval_candidate,
-    _recall_ranked_candidates,
-)
-from app.services.retrieval_assembler import assemble_retrieval_result
-from app.services.evaluation_dataset import build_dataset_summary, build_item_summary
+from app.services.evaluation_dataset import build_dataset_summary, evaluate_item_stage_outputs
 
 
 def run_evaluation_dataset(
@@ -252,79 +242,35 @@ def _evaluate_single_item(
     - `dict[str, object]`：可序列化的 per-query 明細。
     """
 
-    recall_matches = _apply_ranking_policy(
-        matches=_apply_python_rrf(
-            matches=_recall_ranked_candidates(session=session, settings=settings, area_id=area_id, query=item.query_text),
-            settings=settings,
-        ),
-        query=item.query_text,
+    stage_result = evaluate_item_stage_outputs(
+        session=session,
         settings=settings,
+        area_id=area_id,
+        item=item,
+        spans=spans,
+        top_k=top_k,
     )
-    rerank_matches = _apply_rerank(matches=recall_matches, query=item.query_text, settings=settings)
-    rerank_result = RetrievalResult(
-        candidates=[_build_retrieval_candidate(match) for match in rerank_matches],
-        trace={
-            "query": item.query_text,
-            "vector_top_k": settings.retrieval_vector_top_k,
-            "fts_top_k": settings.retrieval_fts_top_k,
-            "max_candidates": settings.retrieval_max_candidates,
-            "rerank_top_n": min(settings.rerank_top_n, len(rerank_matches)),
-            "candidates": [],
-        },
-    )
-    assembled_result = assemble_retrieval_result(session=session, settings=settings, retrieval_result=rerank_result)
-    gold_spans = [
-        GoldSpan(
-            document_id=span.document_id,
-            start_offset=span.start_offset,
-            end_offset=span.end_offset,
-            relevance_grade=span.relevance_grade,
-            is_retrieval_miss=span.is_retrieval_miss,
-        )
-        for span in spans
-    ]
-    recall_relevances = [
-        match_gold_relevance(
-            gold_spans,
-            CandidateWindow(
-                document_id=match.chunk.document_id,
-                start_offset=match.chunk.start_offset,
-                end_offset=match.chunk.end_offset,
-            ),
-        )
-        for match in recall_matches[:top_k]
-    ]
-    rerank_relevances = [
-        item["matched_relevance"] for item in _build_rerank_runtime_items(candidates=rerank_result.candidates, gold_spans=gold_spans)[:top_k]
-    ]
-    assembled_relevances = [
-        item["matched_relevance"]
-        for item in _build_assembled_runtime_items(
-            session=session,
-            contexts=assembled_result.assembled_contexts,
-            gold_spans=gold_spans,
-        )[:top_k]
-    ]
-    gold_document_ids = {span.document_id for span in gold_spans if span.document_id}
+    gold_spans = stage_result.gold_spans
+    recall_relevances = [candidate.matched_relevance for candidate in stage_result.recall_stage.items[:top_k]]
+    rerank_relevances = [candidate.matched_relevance for candidate in stage_result.rerank_stage.items[:top_k]]
+    assembled_relevances = [candidate.matched_relevance for candidate in stage_result.assembled_stage.items[:top_k]]
+    gold_document_ids = {str(span.document_id) for span in gold_spans if span.document_id is not None}
     metrics = {
         "recall": _build_stage_metrics(
             relevances=recall_relevances,
-            document_ids=[match.chunk.document_id for match in recall_matches[:top_k]],
+            document_ids=[str(candidate.document_id) for candidate in stage_result.recall_stage.items[:top_k]],
             gold_document_ids=gold_document_ids,
             top_k=top_k,
         ),
         "rerank": _build_stage_metrics(
             relevances=rerank_relevances,
-            document_ids=[item["document_id"] for item in _build_rerank_runtime_items(candidates=rerank_result.candidates, gold_spans=gold_spans)[:top_k]],
+            document_ids=[str(candidate.document_id) for candidate in stage_result.rerank_stage.items[:top_k]],
             gold_document_ids=gold_document_ids,
             top_k=top_k,
         ),
         "assembled": _build_stage_metrics(
             relevances=assembled_relevances,
-            document_ids=[
-                item["document_id"]
-                for item in _build_assembled_runtime_items(session=session, contexts=assembled_result.assembled_contexts, gold_spans=gold_spans)[:top_k]
-            ],
+            document_ids=[str(candidate.document_id) for candidate in stage_result.assembled_stage.items[:top_k]],
             gold_document_ids=gold_document_ids,
             top_k=top_k,
         ),
@@ -336,7 +282,11 @@ def _evaluate_single_item(
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
-        "rerank": _build_stage_detail(rerank_relevances).model_dump(mode="json"),
+        "rerank": _build_stage_detail(
+            rerank_relevances,
+            rerank_applied=stage_result.rerank_stage.rerank_applied,
+            fallback_reason=stage_result.rerank_stage.fallback_reason,
+        ).model_dump(mode="json"),
         "assembled": _build_stage_detail(assembled_relevances).model_dump(mode="json"),
         "baseline_delta": {
             "recall_first_hit_rank_delta": None,
@@ -345,84 +295,6 @@ def _evaluate_single_item(
         },
         "_metrics": metrics,
     }
-
-
-def _build_rerank_runtime_items(
-    *,
-    candidates,
-    gold_spans: list[GoldSpan],
-) -> list[dict[str, object]]:
-    """將 rerank child candidates 依 parent 群組成 stage 評分單位。"""
-
-    grouped: dict[tuple[str, str | None], list[object]] = defaultdict(list)
-    order: list[tuple[str, str | None]] = []
-    for candidate in candidates:
-        group_key = (str(candidate.document_id), str(candidate.parent_chunk_id) if candidate.parent_chunk_id is not None else None)
-        if group_key not in grouped:
-            order.append(group_key)
-        grouped[group_key].append(candidate)
-
-    runtime_items: list[dict[str, object]] = []
-    for group_key in order:
-        group_candidates = grouped[group_key]
-        windows = [
-            CandidateWindow(
-                document_id=str(candidate.document_id),
-                start_offset=candidate.start_offset,
-                end_offset=candidate.end_offset,
-            )
-            for candidate in group_candidates
-        ]
-        runtime_items.append(
-            {
-                "document_id": str(group_candidates[0].document_id),
-                "parent_chunk_id": str(group_candidates[0].parent_chunk_id) if group_candidates[0].parent_chunk_id is not None else None,
-                "matched_relevance": match_gold_relevance_for_windows(gold_spans, windows),
-            }
-        )
-    return runtime_items
-
-
-def _build_assembled_runtime_items(
-    *,
-    session: Session,
-    contexts,
-    gold_spans: list[GoldSpan],
-) -> list[dict[str, object]]:
-    """將 assembled contexts 依實際納入 child chunk 視窗建立 stage 評分單位。"""
-
-    all_chunk_ids = [str(chunk_id) for context in contexts for chunk_id in context.chunk_ids]
-    chunk_rows = session.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(all_chunk_ids))).all() if all_chunk_ids else []
-    chunk_by_id = {str(chunk.id): chunk for chunk in chunk_rows}
-
-    runtime_items: list[dict[str, object]] = []
-    for context in contexts:
-        windows = [
-            CandidateWindow(
-                document_id=str(chunk.document_id),
-                start_offset=chunk.start_offset,
-                end_offset=chunk.end_offset,
-            )
-            for chunk_id in context.chunk_ids
-            if (chunk := chunk_by_id.get(str(chunk_id))) is not None
-        ]
-        if not windows:
-            windows = [
-                CandidateWindow(
-                    document_id=str(context.document_id),
-                    start_offset=context.start_offset,
-                    end_offset=context.end_offset,
-                )
-            ]
-        runtime_items.append(
-            {
-                "document_id": str(context.document_id),
-                "parent_chunk_id": str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
-                "matched_relevance": match_gold_relevance_for_windows(gold_spans, windows),
-            }
-        )
-    return runtime_items
-
 
 def build_item_summary_span(span: RetrievalEvalItemSpan) -> dict[str, object]:
     """將 ORM span 轉為可序列化輸出。
@@ -446,11 +318,18 @@ def build_item_summary_span(span: RetrievalEvalItemSpan) -> dict[str, object]:
     }
 
 
-def _build_stage_detail(relevances: list[int | None]) -> EvaluationPerQueryStageDetail:
+def _build_stage_detail(
+    relevances: list[int | None],
+    *,
+    rerank_applied: bool | None = None,
+    fallback_reason: str | None = None,
+) -> EvaluationPerQueryStageDetail:
     """建立單題單階段 detail。
 
     參數：
     - `relevances`：依排名排序的 relevance。
+    - `rerank_applied`：是否已成功套用 rerank provider。
+    - `fallback_reason`：若 rerank fallback，記錄原因。
 
     回傳：
     - `EvaluationPerQueryStageDetail`：單階段 detail。
@@ -462,6 +341,8 @@ def _build_stage_detail(relevances: list[int | None]) -> EvaluationPerQueryStage
         first_hit_rank=first_rank,
         matched_core_evidence=matched_relevance == 3,
         matched_relevance=matched_relevance,
+        rerank_applied=rerank_applied,
+        fallback_reason=fallback_reason,
     )
 
 

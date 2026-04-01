@@ -4,12 +4,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import random
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.core.settings import AppSettings
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -83,12 +88,21 @@ class CohereRerankProvider(RerankProvider):
 
     _endpoint = "https://api.cohere.com/v2/rerank"
 
-    def __init__(self, *, api_key: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        model: str,
+        retry_on_429_attempts: int = 0,
+        retry_on_429_backoff_seconds: float = 0.0,
+    ) -> None:
         """初始化 Cohere rerank provider。
 
         參數：
         - `api_key`：Cohere API key。
         - `model`：要使用的 rerank model 名稱。
+        - `retry_on_429_attempts`：遇到 HTTP 429 時最多額外重試幾次。
+        - `retry_on_429_backoff_seconds`：HTTP 429 重試的基礎等待秒數。
 
         回傳：
         - `None`：此建構子只負責保存設定。
@@ -96,6 +110,8 @@ class CohereRerankProvider(RerankProvider):
 
         self._api_key = api_key
         self._model = model
+        self._retry_on_429_attempts = max(0, retry_on_429_attempts)
+        self._retry_on_429_backoff_seconds = max(0.0, retry_on_429_backoff_seconds)
 
     def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
         """呼叫 Cohere HTTP API 產生 rerank 結果。
@@ -131,11 +147,11 @@ class CohereRerankProvider(RerankProvider):
             method="POST",
         )
 
-        try:
-            with urlopen(request, timeout=10) as response:
-                response_payload = json.loads(response.read().decode("utf-8"))
-        except (HTTPError, URLError, TimeoutError) as exc:
-            raise RuntimeError("Cohere rerank API 呼叫失敗。") from exc
+        response_payload = self._request_with_retry(
+            request=request,
+            query=query,
+            candidate_count=len(documents),
+        )
 
         raw_results = response_payload.get("results", [])
         rerank_scores: list[RerankScore] = []
@@ -148,6 +164,57 @@ class CohereRerankProvider(RerankProvider):
                 continue
             rerank_scores.append(RerankScore(candidate_id=documents[index].candidate_id, score=float(relevance_score)))
         return rerank_scores
+
+    def _request_with_retry(
+        self,
+        *,
+        request: Request,
+        query: str,
+        candidate_count: int,
+    ) -> dict[str, object]:
+        """在必要時僅針對 HTTP 429 執行重試/backoff。
+
+        參數：
+        - `request`：已建好的 Cohere HTTP request。
+        - `query`：目前 rerank query，供 log/trace 使用。
+        - `candidate_count`：本次送進 rerank 的文件數量。
+
+        回傳：
+        - `dict[str, object]`：Cohere JSON response payload。
+
+        風險：
+        - 此方法只應在 `429 Too Many Requests` 時等待並重試；其他 HTTP/network 錯誤必須立即失敗，避免掩蓋非暫時性問題。
+        """
+
+        attempt = 0
+        max_attempts = self._retry_on_429_attempts + 1
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                with urlopen(request, timeout=10) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except HTTPError as exc:
+                if exc.code != 429 or attempt >= max_attempts:
+                    raise RuntimeError("Cohere rerank API 呼叫失敗。") from exc
+                wait_seconds = _resolve_retry_wait_seconds(
+                    http_error=exc,
+                    attempt=attempt,
+                    base_backoff_seconds=self._retry_on_429_backoff_seconds,
+                )
+                LOGGER.warning(
+                    "Cohere rerank hit HTTP 429; retrying after backoff.",
+                    extra={
+                        "query": query,
+                        "candidate_count": candidate_count,
+                        "attempt": attempt,
+                        "max_attempts": max_attempts,
+                        "wait_seconds": wait_seconds,
+                    },
+                )
+                time.sleep(wait_seconds)
+            except (URLError, TimeoutError) as exc:
+                raise RuntimeError("Cohere rerank API 呼叫失敗。") from exc
+        raise RuntimeError("Cohere rerank API 呼叫失敗。")
 
 
 def build_rerank_provider(settings: AppSettings) -> RerankProvider:
@@ -166,8 +233,56 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
     if provider == "cohere":
         if not settings.cohere_api_key:
             raise ValueError("使用 Cohere rerank 前必須提供 COHERE_API_KEY。")
-        return CohereRerankProvider(api_key=settings.cohere_api_key, model=settings.rerank_model)
+        return CohereRerankProvider(
+            api_key=settings.cohere_api_key,
+            model=settings.rerank_model,
+            retry_on_429_attempts=settings.rerank_retry_on_429_attempts,
+            retry_on_429_backoff_seconds=settings.rerank_retry_on_429_backoff_seconds,
+        )
     raise ValueError(f"不支援的 rerank provider：{settings.rerank_provider}")
+
+
+def _resolve_retry_wait_seconds(*, http_error: HTTPError, attempt: int, base_backoff_seconds: float) -> float:
+    """決定 HTTP 429 重試前要等待多久。
+
+    參數：
+    - `http_error`：Cohere 回傳的 HTTP 429 錯誤。
+    - `attempt`：目前是第幾次嘗試，從 1 開始。
+    - `base_backoff_seconds`：沒有 `Retry-After` header 時的基礎等待秒數。
+
+    回傳：
+    - `float`：下一次重試前要等待的秒數。
+    """
+
+    retry_after_header = http_error.headers.get("Retry-After") if http_error.headers else None
+    base_wait_seconds: float | None = None
+    if retry_after_header:
+        try:
+            retry_after_seconds = float(retry_after_header)
+        except ValueError:
+            retry_after_seconds = None
+        else:
+            if retry_after_seconds > 0:
+                base_wait_seconds = retry_after_seconds
+    if base_wait_seconds is None:
+        base_wait_seconds = max(base_backoff_seconds, 0.0) * attempt
+    return _apply_retry_jitter(base_wait_seconds=base_wait_seconds)
+
+
+def _apply_retry_jitter(*, base_wait_seconds: float) -> float:
+    """為 retry/backoff 等待秒數加入隨機抖動。
+
+    參數：
+    - `base_wait_seconds`：尚未加入 jitter 的基礎等待秒數。
+
+    回傳：
+    - `float`：加入 jitter 後實際要等待的秒數。
+    """
+
+    if base_wait_seconds <= 0:
+        return 0.0
+    jitter_multiplier = random.uniform(0.75, 1.25)
+    return max(base_wait_seconds * jitter_multiplier, 0.1)
 
 
 def _build_stable_fraction(*, seed: str) -> float:

@@ -130,6 +130,9 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_payload["run"]["status"] == "completed"
     assert "recall" in run_payload["summary_metrics"]
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
+    assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]
+    assert run_payload["per_query"][0]["rerank"]["first_hit_rank"] == preview_payload["rerank"]["first_hit_rank"]
+    assert run_payload["per_query"][0]["assembled"]["first_hit_rank"] == preview_payload["assembled"]["first_hit_rank"]
     assert run_payload["dataset"]["baseline_run_id"] == run_payload["run"]["id"]
     artifact = db_session.scalar(
         select(RetrievalEvalRunArtifact).where(RetrievalEvalRunArtifact.run_id == run_payload["run"]["id"])
@@ -292,8 +295,99 @@ def test_evaluation_preview_and_run_map_rerank_and_assembled_by_runtime_windows(
     )
     assert run_response.status_code == 201
     run_payload = run_response.json()
+    assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]
     assert run_payload["per_query"][0]["rerank"]["first_hit_rank"] == 1
     assert run_payload["per_query"][0]["assembled"]["first_hit_rank"] == 1
+    assert run_payload["per_query"][0]["rerank"]["first_hit_rank"] == preview_payload["rerank"]["first_hit_rank"]
+    assert run_payload["per_query"][0]["assembled"]["first_hit_rank"] == preview_payload["assembled"]["first_hit_rank"]
+
+
+def test_evaluation_preview_and_run_expose_rerank_fallback_reason(client, db_session, app_settings, monkeypatch) -> None:
+    """rerank fail-open 時，preview 與 run report 都應暴露 fallback 原因。"""
+
+    area = Area(id=_uuid(), name="Evaluation Fallback Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="fallback.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/fallback.md",
+        display_text="Alpha fallback fact.",
+        normalized_text="Alpha fallback fact.",
+        status=DocumentStatus.ready,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Fallback",
+        content="Alpha fallback fact.",
+        content_preview="Alpha fallback fact.",
+        char_count=len("Alpha fallback fact."),
+        start_offset=0,
+        end_offset=len("Alpha fallback fact."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, child])
+    db_session.commit()
+
+    class FailingRerankProvider:
+        """固定拋錯的 rerank provider 測試替身。"""
+
+        def rerank(self, *, query: str, documents: list, top_n: int):
+            """模擬 provider runtime failure。"""
+
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: FailingRerankProvider())
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Fallback Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "Alpha fallback", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha fallback fact."),
+            "relevance_grade": 3,
+        },
+    )
+
+    preview_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["rerank"]["rerank_applied"] is False
+    assert preview_payload["rerank"]["fallback_reason"] == "provider_error"
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5},
+    )
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["per_query"][0]["rerank"]["rerank_applied"] is False
+    assert run_payload["per_query"][0]["rerank"]["fallback_reason"] == "provider_error"
 
 
 def test_evaluation_adding_same_span_twice_updates_existing_record(client, db_session, app_settings) -> None:

@@ -38,6 +38,18 @@ def test_document_coverage_at_k_counts_distinct_gold_documents() -> None:
     ) == 2 / 3
 
 
+def test_document_coverage_at_k_accepts_uuid_and_string_document_ids() -> None:
+    """Document Coverage@k 應接受 UUID 與字串混用的文件識別碼。"""
+
+    document_id = uuid4()
+
+    assert document_coverage_at_k(
+        [str(document_id), "doc-b"],
+        gold_document_ids={document_id},
+        k=2,
+    ) == 1.0
+
+
 def test_match_gold_relevance_accepts_uuid_and_string_document_ids() -> None:
     """gold span 與 candidate 的 document_id 型別不同時仍應正確命中。"""
 

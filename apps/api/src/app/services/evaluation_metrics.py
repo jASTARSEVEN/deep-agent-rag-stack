@@ -104,7 +104,9 @@ def document_coverage_at_k(document_ids: list[str], *, gold_document_ids: set[st
     - `float`：Document Coverage@k 分數。
     """
 
-    if not gold_document_ids:
+    normalized_gold_document_ids = {str(document_id) for document_id in gold_document_ids if document_id is not None}
+    if not normalized_gold_document_ids:
         return 0.0
-    covered = gold_document_ids.intersection(document_ids[:k])
-    return len(covered) / len(gold_document_ids)
+    normalized_document_ids = [str(document_id) for document_id in document_ids[:k]]
+    covered = normalized_gold_document_ids.intersection(normalized_document_ids)
+    return len(covered) / len(normalized_gold_document_ids)

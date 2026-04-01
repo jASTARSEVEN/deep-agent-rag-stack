@@ -218,6 +218,9 @@
 - 已落實權限邊界：`admin` 與 `maintainer` 可操作，`reader` 與無權限者維持 deny-by-default / same-404
 - 已落實 ready-only 邊界：non-ready 文件不得進入 evaluation candidate preview、document search 或 benchmark run
 - 已新增 evaluation 專屬 API/worker/Web 測試矩陣，涵蓋 metrics、runner、artifact、same-404、權限與本機 E2E reviewer flow
+- 已為 retrieval evaluation 補上 rerank fail-open observability：provider runtime failure 會記 warning log，並在 preview / benchmark per-query detail 顯示 `fallback_reason`
+- 已為 Cohere rerank 補上僅針對 `HTTP 429 Too Many Requests` 的 retry/backoff；其他 HTTP/network 錯誤仍直接 fail-open，不會無差別重試
+- HTTP 429 retry/backoff 現在會加入 jitter，避免 benchmark 批次中的多題在相同等待秒數後同時重撞 Cohere rate limit
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口

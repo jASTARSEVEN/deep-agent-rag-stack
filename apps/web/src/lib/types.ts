@@ -440,6 +440,8 @@ export interface EvaluationStageCandidate {
 export interface EvaluationCandidateStage {
   stage: "recall" | "rerank" | "assembled";
   first_hit_rank: number | null;
+  rerank_applied: boolean | null;
+  fallback_reason: string | null;
   items: EvaluationStageCandidate[];
 }
 
@@ -485,6 +487,8 @@ export interface EvaluationPerQueryStageDetail {
   first_hit_rank: number | null;
   matched_core_evidence: boolean;
   matched_relevance: number | null;
+  rerank_applied: boolean | null;
+  fallback_reason: string | null;
 }
 
 /** 單題 detail。 */

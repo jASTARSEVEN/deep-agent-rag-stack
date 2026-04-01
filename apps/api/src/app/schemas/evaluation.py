@@ -194,6 +194,10 @@ class EvaluationCandidateStageResponse(BaseModel):
 
     stage: str
     first_hit_rank: int | None
+    # 是否已成功套用 rerank provider；非 rerank stage 時固定為空值。
+    rerank_applied: bool | None = None
+    # rerank fail-open 的原因；非 rerank stage 或未 fallback 時固定為空值。
+    fallback_reason: str | None = None
     items: list[EvaluationStageCandidate]
 
 
@@ -232,6 +236,10 @@ class EvaluationPerQueryStageDetail(BaseModel):
     first_hit_rank: int | None
     matched_core_evidence: bool
     matched_relevance: int | None
+    # 是否已成功套用 rerank provider；非 rerank stage 時固定為空值。
+    rerank_applied: bool | None = None
+    # rerank fail-open 的原因；非 rerank stage 或未 fallback 時固定為空值。
+    fallback_reason: str | None = None
 
 
 class EvaluationPerQueryDetail(BaseModel):

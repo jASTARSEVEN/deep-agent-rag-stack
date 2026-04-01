@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 
 from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
@@ -49,6 +50,17 @@ from app.services.retrieval import (
     _recall_ranked_candidates,
 )
 from app.services.retrieval_assembler import assemble_retrieval_result
+
+
+@dataclass(slots=True)
+class ItemStageEvaluationResult:
+    """單題 retrieval evaluation 的共用 stage 計算結果。"""
+
+    item: RetrievalEvalItem
+    gold_spans: list[GoldSpan]
+    recall_stage: EvaluationCandidateStageResponse
+    rerank_stage: EvaluationCandidateStageResponse
+    assembled_stage: EvaluationCandidateStageResponse
 
 
 def list_area_evaluation_datasets(
@@ -320,9 +332,55 @@ def preview_evaluation_candidates(
 
     item, dataset = _get_authorized_item(session=session, principal=principal, item_id=item_id)
     spans = _load_spans_by_item_id(session=session, item_ids=[item.id]).get(item.id, [])
+    stage_result = evaluate_item_stage_outputs(
+        session=session,
+        settings=settings,
+        area_id=dataset.area_id,
+        item=item,
+        spans=spans,
+        top_k=top_k,
+    )
+    return EvaluationCandidatePreviewResponse(
+        dataset=build_dataset_summary(session=session, dataset=dataset),
+        item=build_item_summary(item=item, spans=spans),
+        recall=stage_result.recall_stage,
+        rerank=stage_result.rerank_stage,
+        assembled=stage_result.assembled_stage,
+        document_search_hits=_search_document_hits(
+            session=session,
+            principal=principal,
+            area_id=dataset.area_id,
+            query=item.query_text,
+        ),
+    )
+
+
+def evaluate_item_stage_outputs(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    item: RetrievalEvalItem,
+    spans: list[RetrievalEvalItemSpan],
+    top_k: int,
+) -> ItemStageEvaluationResult:
+    """建立單題共用的 recall/rerank/assembled stage 結果。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area。
+    - `item`：目前題目。
+    - `spans`：該題 gold spans。
+    - `top_k`：stage 回傳上限。
+
+    回傳：
+    - `ItemStageEvaluationResult`：可供 preview 與 benchmark 共用的 stage 結果。
+    """
+
     recall_matches = _apply_ranking_policy(
         matches=_apply_python_rrf(
-            matches=_recall_ranked_candidates(session=session, settings=settings, area_id=dataset.area_id, query=item.query_text),
+            matches=_recall_ranked_candidates(session=session, settings=settings, area_id=area_id, query=item.query_text),
             settings=settings,
         ),
         query=item.query_text,
@@ -344,37 +402,28 @@ def preview_evaluation_candidates(
         )
         for span in spans
     ]
-    document_names = _load_document_names(session=session, area_id=dataset.area_id)
-    recall_stage = _build_recall_stage(
-        matches=recall_matches,
+    document_names = _load_document_names(session=session, area_id=area_id)
+    return ItemStageEvaluationResult(
+        item=item,
         gold_spans=gold_spans,
-        document_names=document_names,
-        top_k=top_k,
-    )
-    rerank_stage = _build_rerank_stage(
-        candidates=retrieval_result.candidates,
-        gold_spans=gold_spans,
-        document_names=document_names,
-        top_k=top_k,
-    )
-    assembled_stage = _build_assembled_stage(
-        session=session,
-        contexts=assembled_result.assembled_contexts,
-        gold_spans=gold_spans,
-        document_names=document_names,
-        top_k=top_k,
-    )
-    return EvaluationCandidatePreviewResponse(
-        dataset=build_dataset_summary(session=session, dataset=dataset),
-        item=build_item_summary(item=item, spans=spans),
-        recall=recall_stage,
-        rerank=rerank_stage,
-        assembled=assembled_stage,
-        document_search_hits=_search_document_hits(
+        recall_stage=_build_recall_stage(
+            matches=recall_matches,
+            gold_spans=gold_spans,
+            document_names=document_names,
+            top_k=top_k,
+        ),
+        rerank_stage=_build_rerank_stage(
+            candidates=retrieval_result.candidates,
+            gold_spans=gold_spans,
+            document_names=document_names,
+            top_k=top_k,
+        ),
+        assembled_stage=_build_assembled_stage(
             session=session,
-            principal=principal,
-            area_id=dataset.area_id,
-            query=item.query_text,
+            contexts=assembled_result.assembled_contexts,
+            gold_spans=gold_spans,
+            document_names=document_names,
+            top_k=top_k,
         ),
     )
 
@@ -728,7 +777,13 @@ def _build_recall_stage(
                 matched_relevance=relevance,
             )
         )
-    return EvaluationCandidateStageResponse(stage="recall", first_hit_rank=first_hit_rank(relevances), items=items)
+    return EvaluationCandidateStageResponse(
+        stage="recall",
+        first_hit_rank=first_hit_rank(relevances),
+        rerank_applied=None,
+        fallback_reason=None,
+        items=items,
+    )
 
 
 def _build_rerank_stage(
@@ -742,6 +797,11 @@ def _build_rerank_stage(
 
     items: list[EvaluationStageCandidate] = []
     relevances: list[int | None] = []
+    rerank_applied = any(candidate.rerank_applied for candidate in candidates)
+    fallback_reason = next(
+        (candidate.rerank_fallback_reason for candidate in candidates if candidate.rerank_fallback_reason),
+        None,
+    )
     grouped_candidates: dict[tuple[str, str | None], list[object]] = defaultdict(list)
     order: list[tuple[str, str | None]] = []
     for candidate in candidates:
@@ -779,7 +839,13 @@ def _build_rerank_stage(
                 matched_relevance=relevance,
             )
         )
-    return EvaluationCandidateStageResponse(stage="rerank", first_hit_rank=first_hit_rank(relevances), items=items)
+    return EvaluationCandidateStageResponse(
+        stage="rerank",
+        first_hit_rank=first_hit_rank(relevances),
+        rerank_applied=rerank_applied,
+        fallback_reason=fallback_reason,
+        items=items,
+    )
 
 
 def _build_assembled_stage(
@@ -832,7 +898,13 @@ def _build_assembled_stage(
                 matched_relevance=relevance,
             )
         )
-    return EvaluationCandidateStageResponse(stage="assembled", first_hit_rank=first_hit_rank(relevances), items=items)
+    return EvaluationCandidateStageResponse(
+        stage="assembled",
+        first_hit_rank=first_hit_rank(relevances),
+        rerank_applied=None,
+        fallback_reason=None,
+        items=items,
+    )
 
 
 def _search_document_hits(

@@ -1,8 +1,11 @@
 """Internal retrieval service 與 rerank provider 測試。"""
 
+from email.message import Message
 from uuid import uuid4
+from urllib.error import HTTPError
 
 from fastapi import HTTPException
+import pytest
 from sqlalchemy import Integer, String, select
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -44,6 +47,109 @@ def test_build_rerank_provider_supports_deterministic_and_cohere(app_settings) -
 
     assert isinstance(deterministic_provider, DeterministicRerankProvider)
     assert isinstance(cohere_provider, CohereRerankProvider)
+
+
+def test_cohere_rerank_retries_only_on_http_429(monkeypatch) -> None:
+    """Cohere rerank 只應在 HTTP 429 時等待並重試。"""
+
+    call_count = {"value": 0}
+    sleep_calls: list[float] = []
+    headers = Message()
+    headers["Retry-After"] = "1.5"
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001
+        """前兩次回 429，第三次成功。"""
+
+        del request, timeout
+        call_count["value"] += 1
+        if call_count["value"] < 3:
+            raise HTTPError(
+                url="https://api.cohere.com/v2/rerank",
+                code=429,
+                msg="Too Many Requests",
+                hdrs=headers,
+                fp=None,
+            )
+
+        class _Response:
+            """最小可用的 HTTP response 測試替身。"""
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                del exc_type, exc, tb
+                return False
+
+            def read(self) -> bytes:
+                return b'{\"results\": [{\"index\": 0, \"relevance_score\": 0.9}]}'
+
+        return _Response()
+
+    monkeypatch.setattr("app.services.reranking.urlopen", fake_urlopen)
+    monkeypatch.setattr("app.services.reranking.time.sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr("app.services.reranking.random.uniform", lambda left, right: 1.1)
+
+    provider = CohereRerankProvider(
+        api_key="test-key",
+        model="rerank-v3.5",
+        retry_on_429_attempts=2,
+        retry_on_429_backoff_seconds=2.0,
+    )
+    result = provider.rerank(
+        query="alpha",
+        documents=[RerankInputDocument(candidate_id="doc-1", text="alpha")],
+        top_n=1,
+    )
+
+    assert [item.candidate_id for item in result] == ["doc-1"]
+    assert call_count["value"] == 3
+    assert sleep_calls == [pytest.approx(1.65), pytest.approx(1.65)]
+
+
+def test_cohere_rerank_does_not_retry_non_429_http_error(monkeypatch) -> None:
+    """Cohere rerank 不得對非 429 HTTP 錯誤重試。"""
+
+    call_count = {"value": 0}
+    sleep_calls: list[float] = []
+
+    def fake_urlopen(request, timeout):  # noqa: ANN001
+        """固定回 500，模擬非可重試錯誤。"""
+
+        del request, timeout
+        call_count["value"] += 1
+        raise HTTPError(
+            url="https://api.cohere.com/v2/rerank",
+            code=500,
+            msg="Internal Server Error",
+            hdrs=Message(),
+            fp=None,
+        )
+
+    monkeypatch.setattr("app.services.reranking.urlopen", fake_urlopen)
+    monkeypatch.setattr("app.services.reranking.time.sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr("app.services.reranking.random.uniform", lambda left, right: 1.1)
+
+    provider = CohereRerankProvider(
+        api_key="test-key",
+        model="rerank-v3.5",
+        retry_on_429_attempts=3,
+        retry_on_429_backoff_seconds=2.0,
+    )
+
+    try:
+        provider.rerank(
+            query="alpha",
+            documents=[RerankInputDocument(candidate_id="doc-1", text="alpha")],
+            top_n=1,
+        )
+    except RuntimeError as exc:
+        assert "Cohere rerank API 呼叫失敗" in str(exc)
+    else:  # pragma: no cover - 失敗時才會進來。
+        raise AssertionError("預期 Cohere 非 429 錯誤應直接失敗。")
+
+    assert call_count["value"] == 1
+    assert sleep_calls == []
 
 
 def test_build_rerank_provider_rejects_unsupported_provider(app_settings) -> None:
@@ -267,11 +373,67 @@ def test_retrieve_area_candidates_reranks_only_top_n_and_keeps_rest_in_rrf_order
     assert result.candidates[1].rerank_rank == 2
     assert result.candidates[2].rerank_rank is None
     assert result.candidates[2].rerank_applied is False
-    assert result.trace.rerank_top_n == 2
+
+
+def test_apply_ranking_policy_downranks_table_of_contents_noise(db_session, app_settings) -> None:
+    """ranking policy 應降低目錄噪音，避免商品 query 被目錄優先吃掉。"""
+
+    document = Document(
+        id=_uuid(),
+        area_id=_uuid(),
+        file_name="product-handbook.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="tests/product-handbook.md",
+        status=DocumentStatus.ready,
+    )
+    toc_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=0,
+        heading="目錄",
+        content="十六、 保利美美元利率變動型終身壽險(NUIW6502)..................................................................123",
+        content_preview="十六、 保利美美元利率變動型終身壽險(NUIW6502)..................................................................123",
+        char_count=88,
+        start_offset=100,
+        end_offset=136,
+    )
+    body_chunk = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.table,
+        position=1,
+        section_index=1,
+        child_index=0,
+        heading="保利美美元利率變動型終身壽險",
+        content="本險累計最高投保金額：美元 65 萬元。",
+        content_preview="本險累計最高投保金額：美元 65 萬元。",
+        char_count=21,
+        start_offset=1000,
+        end_offset=1021,
+    )
+
+    ranked = _apply_ranking_policy(
+        matches=[
+            RankedChunkMatch(chunk=toc_chunk, vector_rank=1, fts_rank=1, rrf_rank=1, rrf_score=0.032),
+            RankedChunkMatch(chunk=body_chunk, vector_rank=2, fts_rank=2, rrf_rank=2, rrf_score=0.031),
+        ],
+        query="保利美美元利率變動型終身壽險其累計最高投保金額為何",
+        settings=app_settings,
+    )
+
+    assert ranked[0].chunk.id == body_chunk.id
 
 
 def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
-    db_session, app_settings, monkeypatch
+    db_session, app_settings, monkeypatch, caplog
 ) -> None:
     """rerank runtime 失敗時，retrieval 應回退到 RRF 結果。"""
 
@@ -338,7 +500,10 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
     assert [candidate.chunk_id for candidate in result.candidates] == [fallback_chunk.id]
     assert result.candidates[0].rerank_applied is False
     assert result.candidates[0].rerank_rank is None
+    assert result.candidates[0].rerank_fallback_reason == "provider_error"
     assert result.trace.candidates[0].rerank_applied is False
+    assert result.trace.candidates[0].rerank_fallback_reason == "provider_error"
+    assert "Retrieval rerank provider failed; falling back to RRF order." in caplog.text
 
 
 def test_retrieve_area_candidates_returns_same_404_for_missing_and_unauthorized(db_session, app_settings) -> None:
@@ -633,8 +798,8 @@ def test_apply_python_rrf_merges_vector_and_fts_ranks_stably(app_settings) -> No
     assert merged[0].rrf_score > merged[1].rrf_score > merged[2].rrf_score
 
 
-def test_apply_ranking_policy_is_currently_pass_through(app_settings) -> None:
-    """ranking policy hook 在本輪應維持 pass-through。"""
+def test_apply_ranking_policy_keeps_single_match_identity(app_settings) -> None:
+    """ranking policy 在單一候選時應維持原候選內容。"""
 
     matches = [
         RankedChunkMatch(
@@ -662,5 +827,5 @@ def test_apply_ranking_policy_is_currently_pass_through(app_settings) -> None:
 
     ranked = _apply_ranking_policy(matches=matches, query="policy", settings=app_settings)
 
-    assert ranked is matches
-
+    assert len(ranked) == 1
+    assert ranked[0] is matches[0]

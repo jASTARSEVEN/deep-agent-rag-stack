@@ -461,7 +461,7 @@ export function EvaluationDrawer({
     try {
       const report = await runEvaluationDataset(selectedDatasetId, { top_k: 10 });
       setRunReport(report);
-      setNotice("已完成 benchmark run。");
+      setNotice(`已完成 benchmark run，run id：${report.run.id}`);
       await loadDatasetDetail(selectedDatasetId, selectedItemId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "執行 benchmark run 失敗。");
@@ -671,6 +671,11 @@ export function EvaluationDrawer({
                               <span className="text-xs text-stone-500">{expandedStages[stageKey] ? "收合" : "展開"}</span>
                             </div>
                           </button>
+                          {stage.stage === "rerank" && stage.fallback_reason ? (
+                            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                              {buildRerankFallbackLabel(stage.fallback_reason)}
+                            </div>
+                          ) : null}
                           {expandedStages[stageKey] ? (
                             <div className="mt-3 space-y-2">
                               {stage.items.map((candidate) => (
@@ -950,11 +955,21 @@ export function EvaluationDrawer({
                   <div className="mt-6 space-y-4" data-testid="evaluation-run-report">
                     <div className="rounded-xl border border-stone-200 bg-white p-4">
                       <div className="flex items-start justify-between gap-4">
-                        <div className="text-sm font-bold text-stone-900">Summary Metrics</div>
+                        <div>
+                          <div className="text-sm font-bold text-stone-900">Summary Metrics</div>
+                          <div className="mt-2 space-y-1 text-[11px] text-stone-500">
+                            <div data-testid="evaluation-run-id">Run ID: {runReport.run.id}</div>
+                            <div>Run Status: {runReport.run.status}</div>
+                          </div>
+                        </div>
                         <div className="text-right text-[11px] text-stone-500">
-                          <div>最近結果</div>
+                          <div>建立時間</div>
+                          <div>{new Date(runReport.run.created_at).toLocaleString("zh-TW")}</div>
+                          <div className="mt-2">完成時間</div>
                           <div>
-                            {new Date(runReport.run.completed_at ?? runReport.run.created_at).toLocaleString("zh-TW")}
+                            {runReport.run.completed_at
+                              ? new Date(runReport.run.completed_at).toLocaleString("zh-TW")
+                              : "尚未完成"}
                           </div>
                         </div>
                       </div>
@@ -986,6 +1001,11 @@ export function EvaluationDrawer({
                               <div>Rerank first hit: {item.rerank.first_hit_rank ?? "miss"}</div>
                               <div>Assembled first hit: {item.assembled.first_hit_rank ?? "miss"}</div>
                             </div>
+                            {item.rerank.fallback_reason ? (
+                              <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                {buildRerankFallbackLabel(item.rerank.fallback_reason)}
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
@@ -1069,6 +1089,19 @@ function _rangesOverlap({
 }): boolean {
   /** 判斷兩段 offset 區間是否實際重疊。 */
   return leftStart < rightEnd && rightStart < leftEnd;
+}
+
+function buildRerankFallbackLabel(
+  fallbackReason: string | null | undefined,
+): string {
+  /** 將 rerank fallback 原因轉為可讀文案。 */
+  if (fallbackReason === "provider_error") {
+    return "rerank provider 失敗，已回退到 recall 順序";
+  }
+  if (fallbackReason === "missing_score") {
+    return "rerank provider 未回傳完整分數，已局部回退";
+  }
+  return "rerank 已回退到 recall 順序";
 }
 
 function _calculateContainerOffset(container: HTMLElement, targetNode: Node, targetOffset: number): number {
