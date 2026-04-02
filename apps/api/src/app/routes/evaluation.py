@@ -25,6 +25,7 @@ from app.services.evaluation_dataset import (
     create_area_evaluation_dataset,
     create_evaluation_item,
     create_evaluation_run,
+    delete_evaluation_dataset,
     delete_evaluation_item,
     get_evaluation_dataset_detail,
     get_evaluation_run_report,
@@ -97,6 +98,26 @@ def read_evaluation_dataset_route(
     """
 
     return get_evaluation_dataset_detail(session=session, principal=principal, dataset_id=dataset_id)
+
+
+@router.delete("/evaluation/datasets/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_evaluation_dataset_route(
+    dataset_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    session: Session = Depends(get_database_session),
+) -> None:
+    """刪除單一 evaluation dataset。
+
+    參數：
+    - `dataset_id`：目標 dataset。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前資料庫 session。
+
+    回傳：
+    - `None`：刪除成功時不回傳內容。
+    """
+
+    delete_evaluation_dataset(session=session, principal=principal, dataset_id=dataset_id)
 
 
 @router.post("/evaluation/datasets/{dataset_id}/items", response_model=EvaluationItemSummary, status_code=status.HTTP_201_CREATED)

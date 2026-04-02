@@ -5,6 +5,7 @@ import {
   createEvaluationDataset,
   createEvaluationItem,
   createEvaluationSpan,
+  deleteEvaluationDataset,
   deleteEvaluationItem,
   fetchEvaluationRun,
   fetchDocumentPreview,
@@ -398,6 +399,36 @@ export function EvaluationDrawer({
     }
   }
 
+  async function handleDeleteDataset(datasetId: string): Promise<void> {
+    if (!window.confirm("確定要刪除此 dataset 嗎？所有題目與 run 也會一併刪除。")) {
+      return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await deleteEvaluationDataset(datasetId);
+      setNotice("已刪除 dataset。");
+      if (selectedDatasetId === datasetId) {
+        setSelectedDatasetId(null);
+        setSelectedItemId(null);
+        setDatasetDetail(null);
+        setCandidatePreview(null);
+        setRunReport(null);
+        setPreviewDocument(null);
+        setPreviewDocumentId(null);
+        setSelectedText("");
+        setStartOffset(0);
+        setEndOffset(0);
+      }
+      await loadDatasets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "刪除 dataset 失敗。");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function openDocumentPreview(documentId: string, nextStart: number, nextEnd: number): Promise<void> {
     setIsLoading(true);
     setError(null);
@@ -611,15 +642,30 @@ export function EvaluationDrawer({
 
                 <div className="mt-6 space-y-2" data-testid="evaluation-datasets-list">
                   {datasets.map((dataset) => (
-                    <button
+                    <div
                       key={dataset.id}
-                      type="button"
-                      className={`w-full rounded-xl border px-3 py-3 text-left ${selectedDatasetId === dataset.id ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-white"}`}
-                      onClick={() => void loadDatasetDetail(dataset.id)}
+                      className={`rounded-xl border px-3 py-3 ${selectedDatasetId === dataset.id ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-white"}`}
                     >
-                      <div className="text-sm font-semibold text-stone-900">{dataset.name}</div>
-                      <div className="mt-1 text-xs text-stone-500">{dataset.item_count} items</div>
-                    </button>
+                      <div className="flex items-start justify-between gap-3">
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => void loadDatasetDetail(dataset.id)}
+                        >
+                          <div className="text-sm font-semibold text-stone-900">{dataset.name}</div>
+                          <div className="mt-1 text-xs text-stone-500">{dataset.item_count} items</div>
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-700 disabled:opacity-50"
+                          data-testid={`evaluation-delete-dataset-${dataset.id}`}
+                          disabled={isSubmitting}
+                          onClick={() => void handleDeleteDataset(dataset.id)}
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
 

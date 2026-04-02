@@ -105,6 +105,14 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-run-benchmark").click();
   await expect(page.getByTestId("evaluation-run-report")).toContainText("Summary Metrics");
   await expect(page.getByTestId("evaluation-per-query-list")).toContainText("zh-TW facts");
+
+  await page.getByTestId("evaluation-dataset-name").fill("Disposable Dataset");
+  await page.getByTestId("evaluation-create-dataset").click();
+  await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Disposable Dataset");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByTestId(/^evaluation-delete-dataset-/).filter({ hasText: "刪除" }).last().click();
+  await expect(page.getByText("已刪除 dataset。")).toBeVisible();
+  await expect(page.getByTestId("evaluation-datasets-list")).not.toContainText("Disposable Dataset");
 });
 
 

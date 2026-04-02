@@ -149,6 +149,28 @@ def get_evaluation_dataset_detail(
     )
 
 
+def delete_evaluation_dataset(
+    *,
+    session: Session,
+    principal: CurrentPrincipal,
+    dataset_id: str,
+) -> None:
+    """刪除單一 evaluation dataset。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `dataset_id`：目標 dataset。
+
+    回傳：
+    - `None`：刪除成功時不回傳內容。
+    """
+
+    dataset = _get_authorized_dataset(session=session, principal=principal, dataset_id=dataset_id)
+    session.delete(dataset)
+    session.commit()
+
+
 def create_evaluation_item(
     *,
     session: Session,

@@ -662,3 +662,42 @@ def test_evaluation_item_can_be_deleted(client, db_session) -> None:
     )
     assert detail_response.status_code == 200
     assert detail_response.json()["items"] == []
+
+
+def test_evaluation_dataset_can_be_deleted(client, db_session) -> None:
+    """evaluation dataset 應可被刪除，且 detail route 需回 same-404。"""
+
+    area = Area(id=_uuid(), name="Delete Dataset Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Delete Dataset"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "delete dataset", "language": "en", "query_type": "fact_lookup"},
+    )
+
+    delete_response = client.delete(
+        f"/evaluation/datasets/{dataset_id}",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert delete_response.status_code == 204
+
+    list_response = client.get(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["items"] == []
+
+    detail_response = client.get(
+        f"/evaluation/datasets/{dataset_id}",
+        headers={"Authorization": ADMIN_TOKEN},
+    )
+    assert detail_response.status_code == 404

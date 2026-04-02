@@ -332,6 +332,22 @@ export async function fetchEvaluationDatasetDetail(datasetId: string): Promise<E
 
 
 /**
+ * 刪除單一 evaluation dataset。
+ *
+ * @param datasetId 要刪除的 dataset 識別碼。
+ * @returns 無；刪除成功時只回傳 204。
+ */
+export async function deleteEvaluationDataset(datasetId: string): Promise<void> {
+  const response = await fetchProtected(`/evaluation/datasets/${datasetId}`, {
+    method: "DELETE",
+  });
+  if (response.status !== 204) {
+    throw new Error(`未預期的 API 回應狀態：${response.status}`);
+  }
+}
+
+
+/**
  * 建立 evaluation item。
  *
  * @param datasetId 目標 dataset 識別碼。
