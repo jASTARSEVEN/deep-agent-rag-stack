@@ -1,0 +1,284 @@
+"""外部 benchmark curation pipeline 測試。"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from uuid import uuid4
+
+from app.db.models import Area, Document, DocumentStatus
+from app.scripts.import_benchmark_snapshot import import_snapshot
+from app.scripts.prepare_external_benchmark import (
+    ALIGNMENT_CANDIDATES_FILE,
+    ALIGNMENT_REVIEW_QUEUE_FILE,
+    FILTER_REPORT_FILE,
+    PREPARED_DOCUMENTS_FILE,
+    PREPARED_ITEMS_FILE,
+    REVIEW_OVERRIDES_FILE,
+    build_report,
+    build_snapshot,
+    filter_items,
+    prepare_source,
+    align_spans,
+)
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。
+
+    參數：
+    - 無。
+
+    回傳：
+    - `str`：新的 UUID 字串。
+    """
+
+    return str(uuid4())
+
+
+def test_prepare_qasper_source_and_filter(tmp_path: Path) -> None:
+    """QASPER prepare/filter 應只保留 extractive fact lookup 題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "qasper-workspace"
+    input_path = tmp_path / "qasper.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "paper-1": {
+                    "paper_id": "paper-1",
+                    "title": "Paper One",
+                    "abstract": "A short abstract.",
+                    "full_text": [
+                        {"section_name": "Introduction", "paragraphs": ["Alpha evidence sentence."]},
+                    ],
+                    "qas": [
+                        {
+                            "question": "What sentence is important?",
+                            "answers": [
+                                {
+                                    "answer": {
+                                        "extractive_spans": ["Alpha evidence sentence."],
+                                        "free_form_answer": "Alpha evidence sentence.",
+                                        "unanswerable": False,
+                                    }
+                                }
+                            ],
+                        },
+                        {
+                            "question": "Is the result good?",
+                            "answers": [
+                                {
+                                    "answer": {
+                                        "yes_no": True,
+                                        "free_form_answer": "yes",
+                                        "unanswerable": False,
+                                    }
+                                }
+                            ],
+                        },
+                    ],
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="qasper",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 2
+
+    filter_summary = filter_items(workspace_dir=workspace_dir)
+    assert filter_summary["kept_item_count"] == 1
+    filtered_rows = [
+        json.loads(line)
+        for line in (workspace_dir / "filtered_items.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert filtered_rows[0]["query_text"] == "What sentence is important?"
+
+
+def test_align_build_snapshot_and_import_round_trip(app, db_session, app_settings, tmp_path: Path, monkeypatch) -> None:
+    """alignment/build-snapshot 應可產出現有 import snapshot 可接受的 package。
+
+    參數：
+    - `app`：測試用 FastAPI app。
+    - `db_session`：測試資料庫 session。
+    - `app_settings`：測試設定。
+    - `tmp_path`：pytest 暫存目錄。
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 pipeline 正常。
+    """
+
+    area = Area(id=_uuid(), name="Benchmark Area")
+    import_area = Area(id=_uuid(), name="Import Area")
+    db_session.add_all([area, import_area])
+
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="paper-1.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="benchmark/paper-1.md",
+        display_text="Alpha unique evidence sentence.\n\nAlpha review sentence.\n\nAlpha review sentence.\n\nUnique fuzzy evidence text.",
+        normalized_text="Alpha unique evidence sentence.\n\nAlpha review sentence.\n\nAlpha review sentence.\n\nUnique fuzzy evidence text.",
+        status=DocumentStatus.ready,
+    )
+    import_document = Document(
+        id=_uuid(),
+        area_id=import_area.id,
+        file_name="paper-1.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="benchmark/import-paper-1.md",
+        display_text=document.display_text,
+        normalized_text=document.normalized_text,
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([document, import_document])
+    db_session.commit()
+
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    source_dir = workspace_dir / "source_documents"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_file = source_dir / "paper-1.md"
+    source_file.write_text(document.display_text or "", encoding="utf-8")
+
+    (workspace_dir / PREPARED_DOCUMENTS_FILE).write_text(
+        json.dumps(
+            {
+                "dataset": "qasper",
+                "source_document_id": "paper-1",
+                "file_name": "paper-1.md",
+                "title": "Paper One",
+                "source_path": str(source_file),
+                "content_type": "text/markdown",
+                "created_at": "2026-04-02T00:00:00+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    prepared_rows = [
+        {
+            "item_id": "item-exact",
+            "dataset": "qasper",
+            "source_document_id": "paper-1",
+            "file_name": "paper-1.md",
+            "query_text": "What is the alpha evidence?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Alpha unique evidence sentence.",
+            "evidence_texts": ["Alpha unique evidence sentence."],
+            "answer_type": "extractive",
+            "source_question_index": 0,
+            "source_metadata": {"paper_id": "paper-1"},
+            "created_at": "2026-04-02T00:00:00+00:00",
+        },
+        {
+            "item_id": "item-fuzzy",
+            "dataset": "qasper",
+            "source_document_id": "paper-1",
+            "file_name": "paper-1.md",
+            "query_text": "What is the unique fuzzy evidence?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Unique fuzzy evidence text.",
+            "evidence_texts": ["Unique fuzzy evidence tex"],
+            "answer_type": "extractive",
+            "source_question_index": 1,
+            "source_metadata": {"paper_id": "paper-1"},
+            "created_at": "2026-04-02T00:00:00+00:00",
+        },
+        {
+            "item_id": "item-review",
+            "dataset": "qasper",
+            "source_document_id": "paper-1",
+            "file_name": "paper-1.md",
+            "query_text": "Which alpha mention is near the duplicate context?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Alpha review sentence.",
+            "evidence_texts": ["Alpha review sentence."],
+            "answer_type": "extractive",
+            "source_question_index": 2,
+            "source_metadata": {"paper_id": "paper-1"},
+            "created_at": "2026-04-02T00:00:00+00:00",
+        },
+    ]
+    (workspace_dir / PREPARED_ITEMS_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    filter_summary = filter_items(workspace_dir=workspace_dir)
+    assert filter_summary["kept_item_count"] == 3
+
+    monkeypatch.setattr("app.scripts.prepare_external_benchmark.get_settings", lambda: app_settings)
+    monkeypatch.setattr("app.scripts.import_benchmark_snapshot.get_settings", lambda: app_settings)
+    align_summary = align_spans(workspace_dir=workspace_dir, area_id=area.id)
+    assert align_summary["status_counts"]["auto_matched"] == 2
+    assert align_summary["status_counts"]["needs_review"] == 1
+
+    review_overrides = [
+        {
+            "item_id": "item-review",
+            "decision": "approved",
+            "spans": [
+                {
+                    "start_offset": len("Alpha unique evidence sentence.\n\n"),
+                    "end_offset": len("Alpha unique evidence sentence.\n\n") + len("Alpha review sentence."),
+                }
+            ],
+        }
+    ]
+    (workspace_dir / REVIEW_OVERRIDES_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in review_overrides) + "\n",
+        encoding="utf-8",
+    )
+
+    snapshot_dir = tmp_path / "snapshot"
+    snapshot_summary = build_snapshot(
+        workspace_dir=workspace_dir,
+        output_dir=snapshot_dir,
+        benchmark_name="qasper-curated-v1",
+        include_review_items=False,
+    )
+    assert snapshot_summary["question_count"] == 3
+    assert snapshot_summary["question_with_gold_span_count"] == 3
+    assert (snapshot_dir / "manifest.json").exists()
+    assert (snapshot_dir / ALIGNMENT_CANDIDATES_FILE).exists()
+    assert (snapshot_dir / ALIGNMENT_REVIEW_QUEUE_FILE).exists()
+    assert (snapshot_dir / FILTER_REPORT_FILE).exists()
+
+    import_summary = import_snapshot(
+        snapshot_dir=snapshot_dir,
+        area_id=import_area.id,
+        dataset_name_override="qasper-curated-import",
+        actor_sub="user-admin",
+        replace=True,
+    )
+    assert import_summary["question_count"] == 3
+    assert import_summary["span_count"] == 3
+
+    report = build_report(workspace_dir=workspace_dir)
+    assert report["approved_override_count"] == 1
+    assert report["status_counts"]["needs_review"] == 1

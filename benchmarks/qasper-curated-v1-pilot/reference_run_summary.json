@@ -1,0 +1,56 @@
+{
+  "run": {
+    "id": "6f1150df-1343-4905-a417-7334ea87c9d6",
+    "dataset_id": "db6d581c-2feb-5914-afb8-b4f1fa2092e2",
+    "status": "completed",
+    "evaluation_profile": "production_like_v1",
+    "created_by_sub": "b907d381-84a3-4562-a367-3d4ab87f5190",
+    "total_items": 27,
+    "created_at": "2026-04-02T12:02:12.246396Z",
+    "completed_at": "2026-04-02T12:05:54.763013Z"
+  },
+  "config_snapshot": {
+    "retrieval": {
+      "vector_top_k": 8,
+      "fts_top_k": 8,
+      "max_candidates": 12,
+      "rrf_k": 60,
+      "hnsw_ef_search": 100
+    },
+    "rerank": {
+      "provider": "cohere",
+      "model": "rerank-v3.5",
+      "top_n": 6,
+      "max_chars_per_doc": 2000
+    },
+    "assembler": {
+      "max_contexts": 6,
+      "max_chars_per_context": 2500,
+      "max_children_per_parent": 3
+    },
+    "top_k": 10
+  },
+  "summary_metrics": {
+    "recall": {
+      "nDCG_at_k": 0.2919739470995065,
+      "recall_at_k": 0.5555555555555556,
+      "mrr_at_k": 0.20617283950617282,
+      "precision_at_k": 0.06296296296296297,
+      "document_coverage_at_k": 0.9629629629629629
+    },
+    "rerank": {
+      "nDCG_at_k": 0.45904101991641055,
+      "recall_at_k": 0.5555555555555556,
+      "mrr_at_k": 0.4228395061728395,
+      "precision_at_k": 0.05925925925925926,
+      "document_coverage_at_k": 0.9629629629629629
+    },
+    "assembled": {
+      "nDCG_at_k": 0.44886611004739446,
+      "recall_at_k": 0.5555555555555556,
+      "mrr_at_k": 0.4104938271604939,
+      "precision_at_k": 0.05925925925925926,
+      "document_coverage_at_k": 0.9629629629629629
+    }
+  }
+}

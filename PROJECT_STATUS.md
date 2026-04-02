@@ -215,6 +215,7 @@
 - 已新增 area-scoped evaluation APIs，涵蓋 dataset/item/span 建立、candidate preview、`retrieval_miss`、benchmark run 與 run report 查詢
 - 已新增 `python -m app.scripts.run_retrieval_eval` CLI，支援 `prepare-candidates`、`run` 與 `report`
 - 已新增 benchmark snapshot tooling，涵蓋 `import_benchmark_snapshot`、`export_benchmark_snapshot`、`compare_benchmark_runs` 與 `scripts/reproduce_benchmark.sh`
+- 已新增 `prepare_external_benchmark` CLI，可將 `QASPER` / `UDA` 類資料集以 `prepare-source -> filter-items -> align-spans -> build-snapshot -> report` 流程收斂為現有 retrieval benchmark snapshot，並以 `display_text` offsets 作為正式 gold span 來源
 - 已新增 `EvaluationDrawer`，支援 dataset 建立、`fact_lookup` 題目、候選複核、文件內搜尋、span 標註、`retrieval_miss` 與 benchmark report 檢視
 - 已落實權限邊界：`admin` 與 `maintainer` 可操作，`reader` 與無權限者維持 deny-by-default / same-404
 - 已落實 ready-only 邊界：non-ready 文件不得進入 evaluation candidate preview、document search 或 benchmark run
@@ -222,6 +223,7 @@
 - 已為 retrieval evaluation 補上 rerank fail-open observability：provider runtime failure 會記 warning log，並在 preview / benchmark per-query detail 顯示 `fallback_reason`
 - 已為 Cohere rerank 補上僅針對 `HTTP 429 Too Many Requests` 的 retry/backoff；其他 HTTP/network 錯誤仍直接 fail-open，不會無差別重試
 - HTTP 429 retry/backoff 現在會加入 jitter，避免 benchmark 批次中的多題在相同等待秒數後同時重撞 Cohere rate limit
+- 已新增外部 benchmark curation 測試，驗證 `QASPER` prepare/filter 與 `align/build/import` round-trip 不會破壞既有 snapshot contract
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口

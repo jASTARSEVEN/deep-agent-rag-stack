@@ -14,6 +14,7 @@ This module contains the project's FastAPI service. It currently provides:
 - Document upload / list / detail APIs
 - Ingest job detail APIs
 - LangGraph Server built-in thread/run chat runtime
+- An external benchmark curation CLI that converts `QASPER` / `UDA`-style datasets into the existing retrieval evaluation snapshot format
 - SQLAlchemy ORM models and metadata
 
 ## How to Start
@@ -93,6 +94,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
 - `src/app/services`: authorization, storage, task dispatch, internal retrieval, and assembler services
+- `src/app/scripts`: benchmark import/export/run utilities and the external benchmark curation CLI
 - `langgraph.json`: LangGraph Server loader config for the built-in thread/run runtime
 - `tests`: authorization and API tests
 
@@ -131,6 +133,7 @@ This module contains the project's FastAPI service. It currently provides:
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
+- To fold `QASPER` / `UDA`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.
 - Chat now runs through LangGraph Server built-in thread/run endpoints with custom auth; the retrieval pipeline remains SQL-gated and ready-only before the answer layer.

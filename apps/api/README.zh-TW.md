@@ -14,6 +14,7 @@
 - documents upload / list / detail API
 - ingest jobs detail API
 - LangGraph Server built-in thread/run chat runtime
+- 外部 benchmark curation CLI，可將 `QASPER` / `UDA` 類資料轉成現有 retrieval evaluation snapshot
 - SQLAlchemy ORM 模型與 metadata
 
 ## 啟動方式
@@ -93,6 +94,7 @@
 - `src/app/db`：SQLAlchemy models、session 與 metadata
 - `src/app/routes`: HTTP routes
 - `src/app/services`：授權、storage、task dispatch、internal retrieval 與 assembler service
+- `src/app/scripts`：benchmark import/export/run 與外部 benchmark curation CLI
 - `langgraph.json`：LangGraph Server 內建 thread/run runtime 的 loader 設定
 - `tests`：授權與 API 測試
 
@@ -131,6 +133,7 @@
 - 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、vector recall、PGroonga FTS recall、Python 層 `RRF`、minimal rerank 與 table-aware retrieval assembler，但尚未公開為 HTTP API。
 - assembler 會將 rerank 後的 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata，並以 budget guardrails 控制成本。
 - rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
+- 若要把 `QASPER` / `UDA` 類資料集收斂到現有 benchmark，可使用 `python -m app.scripts.prepare_external_benchmark` 依序執行 `prepare-source`、`filter-items`、`align-spans`、`build-snapshot` 與 `report`。
 - 本模組目前只啟用 LlamaParse 的標準 Markdown 轉換路徑，未來才會再評估 agentic mode。
 - 未支援格式仍維持受控 `failed`。
 - chat 現已透過 LangGraph Server built-in thread/run endpoints 與 custom auth 提供；retrieval pipeline 仍維持 SQL gate 與 ready-only 邊界後才進入 answer layer。

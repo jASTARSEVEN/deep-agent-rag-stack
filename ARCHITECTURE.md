@@ -119,6 +119,13 @@
 5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；runner 必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
 6. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示。
 
+### 外部 benchmark curation 流程
+1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式。
+2. `filter-items` 只保留可映射為 `fact_lookup` 的 curated v1 題目，並輸出 `filter_report.json` 供審查排除原因。
+3. `align-spans` 必須讀取目標 area 內 `ready` 文件的 `display_text`，以 `display_text-first` 對齊 evidence；gold truth 不信任外部資料集原始 offsets。
+4. 對齊結果分成 `auto_matched`、`needs_review` 與 `rejected`，並輸出 `alignment_candidates.jsonl` 與 `alignment_review_queue.jsonl`；人工複核仍重用既有 `EvaluationDrawer + documents preview`。
+5. `build-snapshot` 只會將 `auto_matched` 與 reviewer 明確核准的 spans 轉成正式 snapshot；未具穩定 gold span 的題目不得包裝成正式 benchmark 分數來源。
+
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
 2. 進入受保護頁面或按下登入按鈕後，Web 導向 Keycloak
