@@ -31,14 +31,15 @@ services:
     command: postgres -c listen_addresses='*' -c shared_preload_libraries=pg_stat_statements,pg_net,pg_graphql,pg_cron -c cron.database_name=postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-deep_agent_rag}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "${POSTGRES_PORT:-15432}:5432"
     volumes:
       - supabase-db-data:/var/lib/postgresql/data
+      - ./docker/supabase/init-scripts/01-project-extensions.sql:/docker-entrypoint-initdb.d/init-scripts/01-project-extensions.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-deep_agent_rag}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-deep_agent_rag}"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -99,7 +100,7 @@ services:
       API_HOST: ${API_HOST:-0.0.0.0}
       API_PORT: 8000
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
       MINIO_ENDPOINT: http://minio:9000
@@ -131,7 +132,7 @@ services:
       API_HOST: ${API_HOST:-0.0.0.0}
       API_PORT: 8000
       API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
       MINIO_ENDPOINT: http://minio:9000
@@ -207,7 +208,7 @@ services:
       WORKER_SERVICE_NAME: ${WORKER_SERVICE_NAME:-deep-agent-worker}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
       NVIDIA_DRIVER_CAPABILITIES: ${NVIDIA_DRIVER_CAPABILITIES:-compute,utility}
-      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@supabase-db:5432/${POSTGRES_DB:-deep_agent_rag}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       CELERY_WORKER_POOL: ${CELERY_WORKER_POOL:-solo}

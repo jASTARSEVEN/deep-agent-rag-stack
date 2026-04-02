@@ -8,7 +8,6 @@ from collections import OrderedDict
 from dataclasses import dataclass
 
 from sqlalchemy import Integer, String, bindparam, select, text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
@@ -115,7 +114,7 @@ def _build_match_chunks_rpc_statement():
     - 無
 
     回傳：
-    - `TextClause`：已綁定 vector/text/uuid/int 型別的 SQL statement。
+    - `TextClause`：已綁定 vector/text/varchar/int 型別的 SQL statement。
     """
 
     if Vector is None:  # pragma: no cover - PostgreSQL 正式路徑應固定安裝 pgvector。
@@ -126,7 +125,7 @@ def _build_match_chunks_rpc_statement():
     ).bindparams(
         bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
         bindparam("query_text", type_=String()),
-        bindparam("area_id", type_=UUID(as_uuid=False)),
+        bindparam("area_id", type_=String()),
         bindparam("vector_top_k", type_=Integer()),
         bindparam("fts_top_k", type_=Integer()),
     )

@@ -31,16 +31,16 @@ def upgrade() -> None:
         CREATE OR REPLACE FUNCTION match_chunks(
             query_embedding vector(1536),
             query_text TEXT,
-            match_area_id UUID,
+            match_area_id VARCHAR(36),
             vector_top_k INT DEFAULT 12,
             fts_top_k INT DEFAULT 12
         )
         RETURNS TABLE (
-            id UUID,
-            document_id UUID,
+            id VARCHAR(36),
+            document_id VARCHAR(36),
             content TEXT,
             content_preview VARCHAR(255),
-            structure_kind chunk_structure_kind_enum,
+            structure_kind TEXT,
             heading VARCHAR(255),
             vector_rank INT,
             fts_rank INT,
@@ -124,16 +124,16 @@ def downgrade() -> None:
         CREATE OR REPLACE FUNCTION match_chunks(
             query_embedding vector(1536),
             query_text TEXT,
-            match_area_id UUID,
+            match_area_id VARCHAR(36),
             match_count INT DEFAULT 12,
             rrf_k INT DEFAULT 60
         )
         RETURNS TABLE (
-            id UUID,
-            document_id UUID,
+            id VARCHAR(36),
+            document_id VARCHAR(36),
             content TEXT,
             content_preview VARCHAR(255),
-            structure_kind chunk_structure_kind_enum,
+            structure_kind TEXT,
             heading VARCHAR(255),
             vector_rank INT,
             fts_rank INT,

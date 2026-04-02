@@ -22,8 +22,8 @@ def upgrade() -> None:
 
     op.create_table(
         "document_chunk_regions",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("chunk_id", sa.Uuid(as_uuid=False), nullable=False),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("chunk_id", sa.String(length=36), nullable=False),
         sa.Column("page_number", sa.Integer(), nullable=False),
         sa.Column("region_order", sa.Integer(), nullable=False),
         sa.Column("bbox_left", sa.Float(), nullable=False),

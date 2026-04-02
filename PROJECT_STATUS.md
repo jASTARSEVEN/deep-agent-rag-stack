@@ -214,6 +214,7 @@
 - 已新增 evaluation services：dataset、mapping、metrics、runner；run 會直接重用既有 `retrieve_area_candidates()` 與 `assemble_retrieval_result()`
 - 已新增 area-scoped evaluation APIs，涵蓋 dataset/item/span 建立、candidate preview、`retrieval_miss`、benchmark run 與 run report 查詢
 - 已新增 `python -m app.scripts.run_retrieval_eval` CLI，支援 `prepare-candidates`、`run` 與 `report`
+- 已新增 benchmark snapshot tooling，涵蓋 `import_benchmark_snapshot`、`export_benchmark_snapshot`、`compare_benchmark_runs` 與 `scripts/reproduce_benchmark.sh`
 - 已新增 `EvaluationDrawer`，支援 dataset 建立、`fact_lookup` 題目、候選複核、文件內搜尋、span 標註、`retrieval_miss` 與 benchmark report 檢視
 - 已落實權限邊界：`admin` 與 `maintainer` 可操作，`reader` 與無權限者維持 deny-by-default / same-404
 - 已落實 ready-only 邊界：non-ready 文件不得進入 evaluation candidate preview、document search 或 benchmark run

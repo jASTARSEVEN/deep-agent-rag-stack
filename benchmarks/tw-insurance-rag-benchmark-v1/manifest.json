@@ -1,0 +1,127 @@
+{
+  "benchmark_name": "tw-insurance-rag-benchmark-v1",
+  "snapshot_exported_at": "2026-04-02T00:00:00+08:00",
+  "repository": {
+    "git_commit": "57b133368a2083623aa34213378c920907087d68",
+    "alembic_version": "20260401_0013"
+  },
+  "dataset": {
+    "dataset_id": "bb10c343-7d7c-4ae3-b78b-a513759867f2",
+    "dataset_name": "tw-insurance-rag-benchmark-v1",
+    "area_id": "d62d8a2d-22f4-416f-958f-2a15ebdad426",
+    "area_name": "我的第一個知識區域",
+    "query_type": "fact_lookup",
+    "language_distribution": {
+      "zh-TW": 30
+    },
+    "counts": {
+      "documents": 4,
+      "questions": 30,
+      "gold_spans": 30,
+      "retrieval_miss_spans": 0
+    }
+  },
+  "source_documents": [
+    {
+      "file_name": "個人保險保單服務暨契約變更手冊(114年9月版).pdf",
+      "local_source_path": "/Users/pin/Desktop/workspace/rag-chat-backend/raw_docs/個人保險保單服務暨契約變更手冊(114年9月版).pdf",
+      "file_size": 1469513,
+      "sha256": "ecb0e4747b1ebc492d78a30d35a1e8969fdd454f8ee5bcb83115f9e77ef70e51"
+    },
+    {
+      "file_name": "理賠審核原則.xlsx",
+      "local_source_path": "/Users/pin/Desktop/workspace/rag-chat-backend/raw_docs/理賠審核原則.xlsx",
+      "file_size": 2923166,
+      "sha256": "0e310120bfe0eab493ef5a037a57e84b51c8f5e9d25487194b713fd2063abe47"
+    },
+    {
+      "file_name": "新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf",
+      "local_source_path": "/Users/pin/Desktop/workspace/rag-chat-backend/raw_docs/新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf",
+      "file_size": 1475884,
+      "sha256": "c48b297bfa3373fca8f5544f585b4774add9f051eb8cb337a08d6cabbefe0e13"
+    },
+    {
+      "file_name": "新契約個人保險投保規則手冊-商品篇(114年9月版).pdf",
+      "local_source_path": "/Users/pin/Desktop/workspace/rag-chat-backend/raw_docs/新契約個人保險投保規則手冊-商品篇(114年9月版).pdf",
+      "file_size": 2902336,
+      "sha256": "8d0756801150799bf24fc1141ea98d3d873c5109bb8806588f16282198a50369"
+    }
+  ],
+  "reference_run": {
+    "run_id": "e2b12fa7-894f-4b94-8069-3ad4c11e44d8",
+    "evaluation_profile": "production_like_v1",
+    "status": "completed",
+    "created_at": "2026-04-01T12:43:01.048619+00:00",
+    "completed_at": "2026-04-01T12:47:03.349267+00:00",
+    "total_items": 30,
+    "config_snapshot": {
+      "assembler": {
+        "max_chars_per_context": 2500,
+        "max_children_per_parent": 7,
+        "max_contexts": 6
+      },
+      "rerank": {
+        "max_chars_per_doc": 2000,
+        "model": "rerank-v3.5",
+        "provider": "cohere",
+        "top_n": 30
+      },
+      "retrieval": {
+        "fts_top_k": 30,
+        "hnsw_ef_search": 100,
+        "max_candidates": 30,
+        "rrf_k": 60,
+        "vector_top_k": 30
+      },
+      "top_k": 10
+    },
+    "summary_metrics": {
+      "recall": {
+        "nDCG_at_k": 0.6016602177463345,
+        "recall_at_k": 0.8666666666666667,
+        "mrr_at_k": 0.5259656084656085,
+        "precision_at_k": 0.16,
+        "document_coverage_at_k": 1.0
+      },
+      "rerank": {
+        "nDCG_at_k": 0.8130929753571458,
+        "recall_at_k": 0.8666666666666667,
+        "mrr_at_k": 0.7944444444444444,
+        "precision_at_k": 0.08666666666666667,
+        "document_coverage_at_k": 1.0
+      },
+      "assembled": {
+        "nDCG_at_k": 0.8130929753571458,
+        "recall_at_k": 0.8666666666666667,
+        "mrr_at_k": 0.7944444444444444,
+        "precision_at_k": 0.08666666666666667,
+        "document_coverage_at_k": 1.0
+      }
+    },
+    "matched_core_evidence_counts": {
+      "recall": 26,
+      "rerank": 26,
+      "assembled": 26
+    }
+  },
+  "package_files": [
+    "source_documents/",
+    "parser_artifacts/",
+    "parser_artifacts_manifest.jsonl",
+    "documents.jsonl",
+    "document_display_text.jsonl",
+    "document_chunks.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "per_query.jsonl",
+    "runs.jsonl",
+    "reference_run_report.json",
+    "dataset_card.md",
+    "reproduce.md",
+    "manifest.json"
+  ],
+  "notes": [
+    "目前 package 已直接包含原始文件本體、parser artifacts 與資料庫 snapshot，可用於 parser、chunk 與 offset 級別的審查。",
+    "若要追求更高精度重現，可再補上 parser artifact 與文件上傳時間點對應的 storage manifest。"
+  ]
+}

@@ -73,6 +73,72 @@
 - `LangGraph Server` 內建 `thread/run` runtime、custom auth principal 注入與 Web streaming
 - 已實作一頁式戰情室 (Dashboard)，整合左側區域導覽、中央即時對話、右側文件管理抽屜與彈窗式權限設定，提供流暢的 RAG 操作體驗
 
+## Evaluation Benchmark
+
+本專案的 retrieval 指標不是只來自單次 demo，而是綁定在一組具版本的文件型 benchmark 上。以下 benchmark 說明已對齊目前實際載入資料庫、並由 evaluation runner 使用的 dataset，而不只是原始 Excel 題庫草稿。
+
+Benchmark 身分：
+
+- 名稱：`tw-insurance-rag-benchmark-v1`
+- 目前資料庫中的 dataset：`tw-insurance-rag-benchmark-v1`（`bb10c343-7d7c-4ae3-b78b-a513759867f2`）
+- 目前所屬 area：`我的第一個知識區域`
+- 評估設定：`production_like_v1`
+- Run ID：`e2b12fa7-894f-4b94-8069-3ad4c11e44d8`
+- 評估日期：`2026-04-01`
+- 驗證範圍：`recall`、`rerank`、`assembled` 三個階段的 retrieval correctness
+
+Benchmark 文件來源：
+
+- `個人保險保單服務暨契約變更手冊(114年9月版).pdf`
+- `理賠審核原則.xlsx`
+- `新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf`
+- `新契約個人保險投保規則手冊-商品篇(114年9月版).pdf`
+
+目前以資料庫為準的 dataset 結構：
+
+- `30` 題 evaluation items
+- `30` 筆 gold spans
+- `4` 份 `ready` 文件
+- `0` 筆 retrieval miss
+- 語言分布：`30 題 zh-TW`
+- 題型分布：`30 題 fact_lookup`
+
+目前 dataset 的文件題數分布：
+
+- `理賠審核原則.xlsx`：`10` 題
+- `個人保險保單服務暨契約變更手冊(114年9月版).pdf`：`8` 題
+- `新契約個人保險投保規則手冊-商品篇(114年9月版).pdf`：`6` 題
+- `新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf`：`6` 題
+
+目前 summary metrics：
+
+| 階段 | nDCG@k | Recall@k | MRR@k | Precision@k | Doc Coverage@k |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| recall | 0.602 | 0.867 | 0.526 | 0.160 | 1.000 |
+| rerank | 0.813 | 0.867 | 0.794 | 0.087 | 1.000 |
+| assembled | 0.813 | 0.867 | 0.794 | 0.087 | 1.000 |
+
+Config snapshot：
+
+- Retrieval：`vector_top_k=30`、`fts_top_k=30`、`max_candidates=30`、`rrf_k=60`、`hnsw_ef_search=100`
+- Rerank：`provider=cohere`、`model=rerank-v3.5`、`top_n=30`、`max_chars_per_doc=2000`
+- Assembler：`max_contexts=6`、`max_chars_per_context=2500`、`max_children_per_parent=7`
+- 此次報告使用的 `top-k=10`
+
+解讀原則：
+
+- 這組 benchmark 屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
+- 目前 benchmark 已直接落到 `Parent_Chunk_ID` 與 `Child_Chunk_ID`，因此它不只可驗證 answer text，也可驗證 chunk assembly 與 citation grounding。
+- 若要對外主張更具可比性的結果，建議搭配至少一組公開 benchmark，例如 `QASPER` 或 `UDA-Benchmark` 一起報告。
+
+建議的公開釋出格式：
+
+1. 先匯出資料庫中的 evaluation dataset，並轉成穩定的 machine-readable 格式，例如 `documents.jsonl`、`questions.jsonl`、`gold_spans.jsonl`。
+2. 將四份原始文件與這份 dataset snapshot 一起整理成 benchmark package。
+3. 補一份 dataset card，說明文件範圍、題目撰寫規則、evidence 標註原則與 metric 定義。
+4. 發佈到 `Hugging Face Datasets` 或獨立 GitHub repository，並以 `v1.0.0` 這類 tag 管理版本。
+5. README 中的 metrics 必須綁定 dataset 版本、snapshot 匯出日期與 run ID，讓外部讀者可以重跑同一組 benchmark。
+
 ## 目前尚未完成
 
 - 真實 `Keycloak + LangGraph + Deep Agents` compose smoke 的更完整覆蓋

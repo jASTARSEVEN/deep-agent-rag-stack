@@ -7,7 +7,6 @@ from urllib.error import HTTPError
 from fastapi import HTTPException
 import pytest
 from sqlalchemy import Integer, String, select
-from sqlalchemy.dialects.postgresql import UUID
 
 from app.auth.verifier import CurrentPrincipal
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
@@ -189,7 +188,7 @@ def test_build_match_chunks_rpc_statement_uses_postgres_bind_types() -> None:
     assert isinstance(query_embedding_type, Vector)
     assert getattr(query_embedding_type, "dim", None) == DEFAULT_EMBEDDING_DIMENSIONS
     assert isinstance(bind_params["query_text"].type, String)
-    assert isinstance(bind_params["area_id"].type, UUID)
+    assert isinstance(bind_params["area_id"].type, String)
     assert isinstance(bind_params["vector_top_k"].type, Integer)
     assert isinstance(bind_params["fts_top_k"].type, Integer)
 

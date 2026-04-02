@@ -259,9 +259,13 @@ class DocumentChunkRegion(Base):
     )
 
     # region 唯一識別碼。
-    id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=generate_uuid)
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
     # 所屬 child chunk。
-    chunk_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False)
+    chunk_id: Mapped[str] = mapped_column(
+        String(UUID_LENGTH),
+        ForeignKey("document_chunks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     # 所屬頁碼，從 1 開始。
     page_number: Mapped[int] = mapped_column(Integer(), nullable=False)
     # 在同一 chunk 內的穩定順序。

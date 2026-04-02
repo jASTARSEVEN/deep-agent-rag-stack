@@ -22,12 +22,12 @@ def upgrade() -> None:
 
     op.create_table(
         "retrieval_eval_datasets",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("area_id", sa.Uuid(as_uuid=False), nullable=False),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("area_id", sa.String(length=36), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("query_type", sa.Enum("fact_lookup", name="evaluationquerytype", native_enum=False), nullable=False),
         sa.Column("created_by_sub", sa.String(length=255), nullable=False),
-        sa.Column("baseline_run_id", sa.Uuid(as_uuid=False), nullable=True),
+        sa.Column("baseline_run_id", sa.String(length=36), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(["area_id"], ["areas.id"], ondelete="CASCADE"),
@@ -35,8 +35,8 @@ def upgrade() -> None:
     )
     op.create_table(
         "retrieval_eval_items",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("dataset_id", sa.Uuid(as_uuid=False), nullable=False),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("dataset_id", sa.String(length=36), nullable=False),
         sa.Column("query_type", sa.Enum("fact_lookup", name="evaluationquerytype", native_enum=False), nullable=False),
         sa.Column("query_text", sa.Text(), nullable=False),
         sa.Column("language", sa.Enum("zh-TW", "en", "mixed", name="evaluationlanguage", native_enum=False), nullable=False),
@@ -48,10 +48,10 @@ def upgrade() -> None:
     )
     op.create_table(
         "retrieval_eval_runs",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("dataset_id", sa.Uuid(as_uuid=False), nullable=False),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("dataset_id", sa.String(length=36), nullable=False),
         sa.Column("status", sa.Enum("running", "completed", "failed", name="evaluationrunstatus", native_enum=False), nullable=False),
-        sa.Column("baseline_run_id", sa.Uuid(as_uuid=False), nullable=True),
+        sa.Column("baseline_run_id", sa.String(length=36), nullable=True),
         sa.Column("created_by_sub", sa.String(length=255), nullable=False),
         sa.Column("total_items", sa.Integer(), nullable=False),
         sa.Column("error_message", sa.Text(), nullable=True),
@@ -62,9 +62,9 @@ def upgrade() -> None:
     )
     op.create_table(
         "retrieval_eval_item_spans",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("item_id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("document_id", sa.Uuid(as_uuid=False), nullable=True),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("item_id", sa.String(length=36), nullable=False),
+        sa.Column("document_id", sa.String(length=36), nullable=True),
         sa.Column("start_offset", sa.Integer(), nullable=False),
         sa.Column("end_offset", sa.Integer(), nullable=False),
         sa.Column("relevance_grade", sa.Integer(), nullable=True),
@@ -86,8 +86,8 @@ def upgrade() -> None:
     )
     op.create_table(
         "retrieval_eval_run_artifacts",
-        sa.Column("id", sa.Uuid(as_uuid=False), nullable=False),
-        sa.Column("run_id", sa.Uuid(as_uuid=False), nullable=False),
+        sa.Column("id", sa.String(length=36), nullable=False),
+        sa.Column("run_id", sa.String(length=36), nullable=False),
         sa.Column("report_json", sa.Text(), nullable=False),
         sa.Column("baseline_compare_json", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

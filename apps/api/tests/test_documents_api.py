@@ -10,6 +10,7 @@ from app.db.models import (
     ChunkType,
     Document,
     DocumentChunk,
+    DocumentChunkRegion,
     DocumentStatus,
     IngestJob,
     IngestJobStatus,
@@ -354,6 +355,70 @@ def test_document_preview_returns_display_text_and_child_chunk_map(client, db_se
     assert payload["chunks"][0]["parent_chunk_id"] == parent.id
     assert payload["chunks"][0]["start_offset"] == 8
     assert payload["chunks"][1]["heading"] == "Next"
+
+
+def test_document_preview_returns_chunk_regions_without_uuid_cast_errors(client, db_session) -> None:
+    """全文 preview 在存在 chunk regions 時不應因字串/UUID 型別不一致而失敗。"""
+
+    area = Area(id=_uuid(), name="Preview Region Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="preview-regions.pdf",
+        content_type="application/pdf",
+        file_size=18,
+        storage_key="preview-regions",
+        display_text="Alpha body\nBeta body",
+        normalized_text="Alpha body\nBeta body",
+        status=DocumentStatus.ready,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Intro",
+        content="Alpha body",
+        content_preview="Alpha body",
+        char_count=10,
+        start_offset=0,
+        end_offset=10,
+    )
+    region = DocumentChunkRegion(
+        id=_uuid(),
+        chunk_id=child.id,
+        page_number=1,
+        region_order=0,
+        bbox_left=10.0,
+        bbox_bottom=20.0,
+        bbox_right=30.0,
+        bbox_top=40.0,
+    )
+    db_session.add_all([area, document, child, region])
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    db_session.commit()
+
+    response = client.get(f"/documents/{document.id}/preview", headers={"Authorization": READER_TOKEN})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chunks"][0]["chunk_id"] == child.id
+    assert payload["chunks"][0]["page_start"] == 1
+    assert payload["chunks"][0]["page_end"] == 1
+    assert payload["chunks"][0]["regions"] == [
+        {
+            "page_number": 1,
+            "region_order": 0,
+            "bbox_left": 10.0,
+            "bbox_bottom": 20.0,
+            "bbox_right": 30.0,
+            "bbox_top": 40.0,
+        }
+    ]
 
 
 def test_document_preview_returns_same_404_for_unauthorized_missing_and_not_ready(client, db_session) -> None:

@@ -97,7 +97,6 @@ export function EvaluationDrawer({
   const [previewVectorTopK, setPreviewVectorTopK] = useState(30);
   const [previewFtsTopK, setPreviewFtsTopK] = useState(30);
   const [previewMaxCandidates, setPreviewMaxCandidates] = useState(30);
-  const [previewRerankTopN, setPreviewRerankTopN] = useState(30);
   const [previewTopK, setPreviewTopK] = useState(20);
   const [startOffset, setStartOffset] = useState(0);
   const [endOffset, setEndOffset] = useState(0);
@@ -147,7 +146,6 @@ export function EvaluationDrawer({
       setPreviewVectorTopK(30);
       setPreviewFtsTopK(30);
       setPreviewMaxCandidates(30);
-      setPreviewRerankTopN(30);
       setPreviewTopK(20);
       setIsDocumentPreviewExpanded(true);
       setPreviewSearchQuery("");
@@ -215,7 +213,6 @@ export function EvaluationDrawer({
       retrieval_vector_top_k: previewVectorTopK,
       retrieval_fts_top_k: previewFtsTopK,
       retrieval_max_candidates: previewMaxCandidates,
-      rerank_top_n: previewRerankTopN,
       apply_rerank: applyRerank,
     };
   }
@@ -790,7 +787,7 @@ export function EvaluationDrawer({
                     <div className="rounded-xl border border-stone-200 bg-white p-4" data-testid="evaluation-document-search-hits">
                       <h4 className="text-sm font-bold text-stone-900">調參 / Debug</h4>
                       <div className="mt-1 text-xs text-stone-500">使用下列參數覆跑 preview，觀察 Recall、RRF 與 Rerank 名次變化。</div>
-                      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+                      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
                         <label className="text-[11px] text-stone-500">
                           <div className="mb-1 flex items-center">
                             preview_top_k
@@ -837,18 +834,6 @@ export function EvaluationDrawer({
                             type="number"
                             value={previewMaxCandidates}
                             onChange={(event) => setPreviewMaxCandidates(Number(event.target.value))}
-                          />
-                        </label>
-                        <label className="text-[11px] text-stone-500">
-                          <div className="mb-1 flex items-center">
-                            rerank_top_n
-                            <ParameterHint description="在已保留的候選中，最多取前多少筆送入 rerank 模型重排。" />
-                          </div>
-                          <input
-                            className="w-full rounded-xl border border-stone-200 px-3 py-2 text-xs text-stone-900"
-                            type="number"
-                            value={previewRerankTopN}
-                            onChange={(event) => setPreviewRerankTopN(Number(event.target.value))}
                           />
                         </label>
                       </div>
