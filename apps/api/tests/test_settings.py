@@ -22,6 +22,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
+        EASYPINEX_HOST_RERANK_BASE_URL="",
+        EASYPINEX_HOST_RERANK_API_KEY="",
         RERANK_TOP_N="",
         RERANK_MAX_CHARS_PER_DOC="",
         ASSEMBLER_MAX_CONTEXTS="",
@@ -42,6 +44,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.retrieval_evidence_synopsis_variant == "qasper_v3"
     assert settings.rerank_provider == "bge"
     assert settings.rerank_model == "BAAI/bge-reranker-v2-m3"
+    assert settings.easypinex_host_rerank_base_url is None
+    assert settings.easypinex_host_rerank_api_key is None
     assert settings.rerank_top_n == 30
     assert settings.rerank_max_chars_per_doc == 2000
     assert settings.assembler_max_contexts == 10

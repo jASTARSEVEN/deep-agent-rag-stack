@@ -16,6 +16,7 @@
 - BAAI BGE-Rerank-v2-m3
 - Qwen3-Reranker-0.6B (optional)
 - Cohere Rerank v4 (optional)
+- Easypinex-host `/v1/rerank` hosted provider (optional)
 - Docker Compose
 
 ## 目前狀態
@@ -41,7 +42,7 @@
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
-- 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
+- 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / `easypinex-host` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
 - 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，其中 production 預設已切到 BGE
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
 - assembler 已升級為 precision-first materializer：小 parent 直接回完整 parent，大 parent 以命中 child 為中心做 budget-aware expansion；table hit 會優先補齊完整表格與前後說明文字
@@ -181,7 +182,7 @@
 - API 與 worker 測試已補 embeddings、retrieval same-404 與 hybrid recall (PGroonga) 驗證
 
 ### Phase 4.2 — 已完成的 minimal rerank slice
-- 已在 API 端加入 rerank provider abstraction，現支援 `deterministic`、`bge`、`qwen` 與 `cohere`
+- 已在 API 端加入 rerank provider abstraction，現支援 `deterministic`、`bge`、`qwen`、`cohere` 與 `easypinex-host`
 - 已將 production 預設 rerank provider 改為 `bge`，預設 model 為 `BAAI/bge-reranker-v2-m3`；`Qwen/Qwen3-Reranker-0.6B` 則作為可選本機 provider
 - 已在 internal retrieval service 將流程擴充為 SQL gate -> vector recall / FTS recall -> `RRF` -> rerank
 - 已為 retrieval candidates 補上 `rrf_rank`、`rerank_rank`、`rerank_score` 與 `rerank_applied`

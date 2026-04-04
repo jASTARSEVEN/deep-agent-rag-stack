@@ -56,6 +56,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `RERANK_PROVIDER`
 - `RERANK_MODEL`
 - `COHERE_API_KEY`
+- `EASYPINEX_HOST_RERANK_BASE_URL`
+- `EASYPINEX_HOST_RERANK_API_KEY`
 - `RERANK_TOP_N`
 - `RERANK_MAX_CHARS_PER_DOC`
 - `ASSEMBLER_MAX_CONTEXTS`
@@ -106,7 +108,7 @@ This module contains the project's FastAPI service. It currently provides:
 
 ## Rerank Provider Support Modes
 
-The internal retrieval service now supports four rerank providers behind the same `RerankProvider` contract:
+The internal retrieval service now supports five rerank providers behind the same `RerankProvider` contract:
 
 - `bge`
   - default production provider
@@ -119,6 +121,9 @@ The internal retrieval service now supports four rerank providers behind the sam
 - `cohere`
   - optional hosted provider
   - requires `COHERE_API_KEY`
+- `easypinex-host`
+  - optional hosted provider for the Easypinex-host `/v1/rerank` service
+  - requires `EASYPINEX_HOST_RERANK_BASE_URL` and `EASYPINEX_HOST_RERANK_API_KEY`
 - `deterministic`
   - offline test / fallback-friendly provider for local regression tests
 
@@ -178,6 +183,7 @@ Notes:
 - The default compose/runtime rerank path is `RERANK_PROVIDER=bge` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
 - `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
 - `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
+- `RERANK_PROVIDER=easypinex-host` is available for Easypinex-host rerank services that expose `POST /v1/rerank`; configure `EASYPINEX_HOST_RERANK_BASE_URL` and `EASYPINEX_HOST_RERANK_API_KEY`.
 - To fold `QASPER` / `UDA`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.

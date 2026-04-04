@@ -1,4 +1,4 @@
-"""API 使用的 rerank provider abstraction 與 BGE / Cohere / deterministic 實作。"""
+"""API 使用的 rerank provider abstraction 與 BGE / Qwen / Cohere / easypinex-host / deterministic 實作。"""
 
 from __future__ import annotations
 
@@ -308,6 +308,83 @@ class CohereRerankProvider(RerankProvider):
         raise RuntimeError("Cohere rerank API 呼叫失敗。")
 
 
+class EasypinexHostRerankProvider(RerankProvider):
+    """使用 easypinex-host `/v1/rerank` HTTP API 的 provider。"""
+
+    def __init__(self, *, base_url: str, api_key: str, model: str) -> None:
+        """初始化 easypinex-host rerank provider。
+
+        參數：
+        - `base_url`：easypinex-host service 的 base URL，例如 `http://host:8000`。
+        - `api_key`：easypinex-host service 使用的 Bearer API key。
+        - `model`：要使用的 rerank model 名稱。
+
+        回傳：
+        - `None`：此建構子只負責保存設定。
+        """
+
+        normalized_base_url = base_url.rstrip("/")
+        self._endpoint = f"{normalized_base_url}/v1/rerank"
+        self._api_key = api_key
+        self._model = model
+
+    def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
+        """呼叫 easypinex-host HTTP API 產生 rerank 結果。
+
+        參數：
+        - `query`：使用者查詢文字。
+        - `documents`：要送進 rerank 的候選文件。
+        - `top_n`：最多回傳前幾名結果。
+
+        回傳：
+        - `list[RerankScore]`：依 easypinex-host relevance score 排序後的結果。
+
+        風險：
+        - 此方法會呼叫外部 API，timeout、5xx 或網路中斷需由上層以 fail-open fallback 處理。
+        """
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "query": query,
+                "documents": [document.text for document in documents],
+                "top_n": top_n,
+                "return_documents": False,
+                "normalize": True,
+            }
+        ).encode("utf-8")
+        request = Request(
+            self._endpoint,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(request, timeout=10) as response:
+                response_payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            raise RuntimeError("Easypinex-host rerank API 呼叫失敗。") from exc
+        except (URLError, TimeoutError) as exc:
+            raise RuntimeError("Easypinex-host rerank API 呼叫失敗。") from exc
+
+        raw_results = response_payload.get("results", [])
+        rerank_scores: list[RerankScore] = []
+        for item in raw_results:
+            index = item.get("index")
+            score = item.get("score")
+            if not isinstance(index, int) or not isinstance(score, (int, float)):
+                continue
+            if index < 0 or index >= len(documents):
+                continue
+            rerank_scores.append(RerankScore(candidate_id=documents[index].candidate_id, score=float(score)))
+        return rerank_scores
+
+
 def build_rerank_provider(settings: AppSettings) -> RerankProvider:
     """依照設定建立 rerank provider。
 
@@ -337,6 +414,18 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
             model=settings.rerank_model,
             retry_on_429_attempts=settings.rerank_retry_on_429_attempts,
             retry_on_429_backoff_seconds=settings.rerank_retry_on_429_backoff_seconds,
+        )
+    if provider == "easypinex-host":
+        if not settings.easypinex_host_rerank_base_url:
+            raise ValueError("使用 easypinex-host rerank 前必須提供 EASYPINEX_HOST_RERANK_BASE_URL。")
+        if not settings.easypinex_host_rerank_api_key:
+            raise ValueError("使用 easypinex-host rerank 前必須提供 EASYPINEX_HOST_RERANK_API_KEY。")
+        if not settings.rerank_model.strip():
+            raise ValueError("使用 easypinex-host rerank 前必須提供 RERANK_MODEL。")
+        return EasypinexHostRerankProvider(
+            base_url=settings.easypinex_host_rerank_base_url,
+            api_key=settings.easypinex_host_rerank_api_key,
+            model=settings.rerank_model,
         )
     raise ValueError(f"不支援的 rerank provider：{settings.rerank_provider}")
 
