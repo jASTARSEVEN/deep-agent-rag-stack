@@ -38,6 +38,7 @@ from app.services.evaluation_metrics import (
     recall_at_k,
 )
 from app.services.evaluation_dataset import build_dataset_summary, evaluate_item_stage_outputs
+from app.services.evaluation_profiles import resolve_evaluation_settings
 
 
 def run_evaluation_dataset(
@@ -73,7 +74,7 @@ def run_evaluation_dataset(
         minimum_role=build_required_role(),
     )
 
-    effective_settings = _resolve_evaluation_settings(settings=settings, evaluation_profile=evaluation_profile)
+    effective_settings = resolve_evaluation_settings(settings=settings, evaluation_profile=evaluation_profile)
     config_snapshot = _build_evaluation_config_snapshot(settings=effective_settings, top_k=top_k)
 
     run = RetrievalEvalRun(
@@ -155,26 +156,6 @@ def build_run_summary(run: RetrievalEvalRun) -> EvaluationRunSummary:
         "completed_at": run.completed_at,
     }
     return EvaluationRunSummary.model_validate(payload)
-
-
-def _resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
-    """依 benchmark profile 產生本次 run 的固定設定。"""
-
-    if evaluation_profile == "production_like_v1":
-        return settings
-    if evaluation_profile == "deterministic_gate_v1":
-        return settings.model_copy(
-            update={
-                "rerank_provider": "deterministic",
-                "rerank_top_n": min(settings.rerank_top_n, 4),
-                "retrieval_vector_top_k": min(settings.retrieval_vector_top_k, 6),
-                "retrieval_fts_top_k": min(settings.retrieval_fts_top_k, 6),
-                "retrieval_max_candidates": min(settings.retrieval_max_candidates, 8),
-                "assembler_max_contexts": min(settings.assembler_max_contexts, 4),
-                "assembler_max_children_per_parent": min(settings.assembler_max_children_per_parent, 2),
-            }
-        )
-    raise ValueError(f"不支援的 evaluation profile：{evaluation_profile}")
 
 
 def _build_evaluation_config_snapshot(*, settings: AppSettings, top_k: int) -> dict[str, object]:

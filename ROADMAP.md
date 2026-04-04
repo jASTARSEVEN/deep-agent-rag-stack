@@ -308,12 +308,15 @@
   - `assembled`：`nDCG@k 0.824`、`Recall@k 0.862`、`MRR@k 0.810`
 - `Doc Coverage@k = 1.000` 代表正確文件基本都有進入候選集合；目前主要缺口已不在文件級 coverage，而在最後 evidence materialization。
 - `assembled` 指標仍略低於 `rerank`，表示少數題目雖已在 rerank 前段命中，但進入最終 context 時仍有 evidence 流失。
+- 對外 benchmark（例如 QASPER）的持續優化，應優先透過受控 OMX 五-agent loop 與 benchmark/profile-gated profile 進行，不可直接改 production defaults。
+- 受控 OMX loop 若單輪 `rollback`，應優先在既定替代 lane 內自動重想策略，而不是直接終止整個 benchmark-driven iteration。
 
 後續改善重點：
 - 以 `rerank hit / assembled miss` 題目為主，檢查 assembler 的 `max_contexts`、`max_chars_per_context`、`max_children_per_parent` 與 materialization 策略，避免 evidence 在最後一層被裁掉。
 - 針對 table-heavy 題目持續補強 row-aware retrieval / row-header-aware rerank text，優先處理「章節有命中、表格列沒命中」的案例。
 - benchmark 主流程預設只顯示最新 completed run，但資料庫仍保留歷史 run 以供回歸比較與異常追查。
 - 若要做穩定 regression gate，應補一條 deterministic evaluation profile，避免真實 provider rate limit 與暫時性外部失敗污染品質判讀。
+- 依 `docs/qasper-retrieval-miss-analysis.md` 的目前分析，下一個最值得投入的方向應是 `evidence-centric child refinement`，而不是繼續放大 recall pool 或 assembled budget。
 
 ## Phase 8.1 — Query-Aware Retrieval Profiles
 

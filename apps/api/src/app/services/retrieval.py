@@ -17,7 +17,7 @@ from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
 from app.services.reranking import RerankInputDocument, build_rerank_provider
-from app.services.retrieval_text import build_rerank_document_text, merge_chunk_contents
+from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
 
 LOGGER = logging.getLogger(__name__)
 
@@ -491,6 +491,11 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
                 heading=group.heading,
                 content=group.content,
                 max_chars=settings.rerank_max_chars_per_doc,
+                evidence_synopsis=(
+                    build_evidence_synopsis(heading=group.heading, content=group.content)
+                    if settings.retrieval_evidence_synopsis_enabled
+                    else None
+                ),
             ),
         )
         for group in rerank_groups[:rerank_limit]

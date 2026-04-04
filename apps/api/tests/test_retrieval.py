@@ -17,7 +17,7 @@ from app.services.reranking import (
     RerankInputDocument,
     build_rerank_provider,
 )
-from app.services.retrieval_text import build_rerank_document_text
+from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text
 from app.services.retrieval import (
     _build_match_chunks_rpc_statement,
     _apply_python_rrf,
@@ -553,7 +553,46 @@ def test_build_rerank_document_text_adds_prefixes_and_truncates_to_cost_guardrai
         build_rerank_document_text(heading=" Intro ", content="  abcdef  ", max_chars=128)
         == "Header: Intro\nContent:\nabcdef"
     )
+    assert (
+        build_rerank_document_text(
+            heading="Intro",
+            content="abcdef",
+            evidence_synopsis="- quantitative evidence",
+            max_chars=128,
+        )
+        == "Header: Intro\nEvidence synopsis:\n- quantitative evidence\nContent:\nabcdef"
+    )
     assert build_rerank_document_text(heading="Intro", content="abcdef", max_chars=10) == "Header: In"
+
+
+def test_build_evidence_synopsis_emits_fact_oriented_hints() -> None:
+    """evidence synopsis 應能為 fact-heavy 片段產生較像答案的提示。"""
+
+    dataset_synopsis = build_evidence_synopsis(
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+    )
+    metric_synopsis = build_evidence_synopsis(
+        heading="Experimental Setup",
+        content="For each model, we examined word-level perplexity, R@3 in next-word prediction, latency (ms/q), and energy usage (mJ/q).",
+    )
+
+    assert "quantitative evidence" in dataset_synopsis
+    assert "dataset alias" not in dataset_synopsis
+    assert "evaluation metrics" in metric_synopsis
+
+
+def test_build_evidence_synopsis_supports_traditional_chinese_with_localized_output() -> None:
+    """evidence synopsis 應能支援繁體中文並輸出本地化提示。"""
+
+    zh_synopsis = build_evidence_synopsis(
+        heading="資料集與評估指標",
+        content="此資料集包含 17,833 句、826,987 字元與 2,714 組問答對，並比較召回率、精確率與延遲。",
+    )
+
+    assert "此段落包含數量" in zh_synopsis
+    assert "此段落列出評估指標" in zh_synopsis
+    assert "This passage" not in zh_synopsis
 
 
 def test_retrieve_area_candidates_uses_parent_level_rerank_documents(db_session, app_settings, monkeypatch) -> None:
@@ -701,6 +740,191 @@ def test_retrieve_area_candidates_uses_parent_level_rerank_documents(db_session,
     assert result.candidates[1].chunk_id == child_two.id
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[1].rerank_rank == 1
+
+
+def test_retrieve_area_candidates_includes_evidence_synopsis_in_rerank_documents(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """evidence synopsis lane 啟用時，rerank 文件應包含 fact-oriented synopsis。"""
+
+    settings = app_settings.model_copy(update={"retrieval_evidence_synopsis_enabled": True})
+    area = Area(id=_uuid(), name="Retrieval Evidence Synopsis")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="evidence-synopsis.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-evidence-synopsis/evidence-synopsis.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        content_preview="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        char_count=81,
+        start_offset=0,
+        end_offset=81,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        content_preview="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        char_count=81,
+        start_offset=0,
+        end_offset=81,
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    db_session.add_all([parent, child])
+    db_session.commit()
+
+    captured_documents: list[RerankInputDocument] = []
+
+    class CapturingRerankProvider:
+        """記錄 rerank 文件輸入的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存輸入並回傳固定分數。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del query, top_n
+            captured_documents.extend(documents)
+            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="How big is QA-CTS task dataset?",
+    )
+
+    assert len(captured_documents) == 1
+    assert "Evidence synopsis:" in captured_documents[0].text
+    assert "quantitative evidence" in captured_documents[0].text
+
+
+def test_retrieve_area_candidates_includes_traditional_chinese_evidence_synopsis_in_rerank_documents(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """繁中 fact-heavy 片段在 evidence synopsis lane 應輸出繁中提示。"""
+
+    settings = app_settings.model_copy(update={"retrieval_evidence_synopsis_enabled": True})
+    area = Area(id=_uuid(), name="Retrieval Zh-TW Evidence Synopsis")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="evidence-synopsis-zh-tw.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-evidence-synopsis-zh-tw/evidence-synopsis-zh-tw.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="資料集與評估指標",
+        content="此資料集包含 17,833 句、826,987 字元與 2,714 組問答對，並比較召回率、精確率與延遲。",
+        content_preview="此資料集包含 17,833 句、826,987 字元與 2,714 組問答對。",
+        char_count=50,
+        start_offset=0,
+        end_offset=50,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="資料集與評估指標",
+        content="此資料集包含 17,833 句、826,987 字元與 2,714 組問答對，並比較召回率、精確率與延遲。",
+        content_preview="此資料集包含 17,833 句、826,987 字元與 2,714 組問答對。",
+        char_count=50,
+        start_offset=0,
+        end_offset=50,
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    db_session.add_all([parent, child])
+    db_session.commit()
+
+    captured_documents: list[RerankInputDocument] = []
+
+    class CapturingRerankProvider:
+        """記錄繁中 rerank 文件輸入的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存輸入並回傳固定分數。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del query, top_n
+            captured_documents.extend(documents)
+            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="這個資料集規模多大？",
+    )
+
+    assert len(captured_documents) == 1
+    assert "Evidence synopsis:" in captured_documents[0].text
+    assert "此段落包含數量" in captured_documents[0].text
+    assert "此段落列出評估指標" in captured_documents[0].text
 
 
 def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:

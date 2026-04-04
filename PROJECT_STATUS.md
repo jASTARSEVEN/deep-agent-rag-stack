@@ -50,6 +50,15 @@
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
+- 專案已新增受控 OMX QASPER optimization loop CLI，可固定輸出 `effect-check -> effect-opt -> advice-agent -> guard-agent -> implement-agent` artifact，並在 `Recall@10 < 80%` 或 rollback 後依既定替代 lane 自動進入下一輪
+- 受控 OMX QASPER loop 已改為先跑 deterministic gate；只有 gate 確認 `Recall@10 > 80%` 後才會進入 live rerank
+- 受控 OMX benchmark loop 的正式決策基準已升級為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`；effect-check、deterministic gate 與 implement decision 皆改為同時考慮兩者
+- 已新增並更新 `docs/qasper-retrieval-miss-analysis.md`，整理 refinement 前後的 QASPER miss case、已試策略對照與目前最高 ROI 改善建議
+- 專案目前保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代使用，且不影響 production runtime defaults
+- 專案已新增 benchmark/profile-gated 的 `qasper_guarded_evidence_synopsis_v1 / v2`，以 evidence synopsis 改善 rerank/assembly 對 fact-heavy windows 的表達能力，且不影響 production runtime defaults
+- `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
+- 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
+- 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件
 - 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
 - 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮
 - 已完成真實 Keycloak -> JWT -> API -> access-check 的本機端到端驗證
@@ -224,6 +233,7 @@
 - 已為 Cohere rerank 補上僅針對 `HTTP 429 Too Many Requests` 的 retry/backoff；其他 HTTP/network 錯誤仍直接 fail-open，不會無差別重試
 - HTTP 429 retry/backoff 現在會加入 jitter，避免 benchmark 批次中的多題在相同等待秒數後同時重撞 Cohere rate limit
 - 已新增外部 benchmark curation 測試，驗證 `QASPER` prepare/filter 與 `align/build/import` round-trip 不會破壞既有 snapshot contract
+- 已新增 `python -m app.scripts.run_qasper_omx_loop`，可對 QASPER pilot 與自家 benchmark 自動執行受控 OMX 五-agent 循環、輸出 compare artifacts，並以既定 guardrails 決定 `continue / stop / rollback`
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
@@ -249,6 +259,7 @@
 ### Current Focus
 - 規劃 `Phase 8.1 — Query-Aware Retrieval Profiles`，將 `fact_lookup / document_summary / cross_document_compare` 收斂為顯式 profile
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
+- 以受控 OMX QASPER loop 持續驗證 `evidence synopsis` 是否能再突破 `Recall@10 >= 0.8`
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
 

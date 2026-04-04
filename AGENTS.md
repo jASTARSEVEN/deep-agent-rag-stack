@@ -162,9 +162,70 @@
 3. qa-security-agent 驗證正確性與安全性
 4. planner 或主責 agent 總結修改內容與剩餘缺口
 
+## OMX 五-Agent 循環
+
+當使用 `oh-my-codex (OMX)` 執行「檢索效果優化」或「benchmark 驅動優化」任務時，預設採用以下五-agent 循環，而不是直接讓單一 agent 自行連續調參：
+
+循環順序：
+1. `effect-check`
+2. `effect-opt`
+3. `advice-agent`
+4. `guard-agent`
+5. `implement-agent`
+6. 回到 `effect-check`
+
+### OMX 角色責任
+- `effect-check`：負責建立 baseline、執行 benchmark、比較 candidate run 與 baseline run，並明確輸出 `pass / fail / inconclusive`。不得直接改程式碼。
+- `effect-opt`：負責提出最小、可審查、可回滾的優化提案，並明確說明本輪唯一主假設。不得在未批准前直接改程式碼。
+- `advice-agent`：在取得 benchmark artifact、effect-check 結果與 effect-opt 提案後，從 reviewer 角度指出支持點、反對點、低 ROI 項與 guardrail。
+- `guard-agent`：負責 `go / no-go / rollback` 決策，並檢查是否過度優化、是否逼近產品邊界、是否成本失控。只有 `guard-agent` 可以批准 `implement-agent` 進入實作。
+- `implement-agent`：僅在 `guard-agent=go` 且前四者共識足夠時，依批准範圍進行最小實作、補測試、回報變更與風險。未經批准不得開始改程式碼。
+
+### OMX 執行規則
+- 每一輪只允許一個主假設群，例如：
+  - recall pool 深度
+  - query normalization / lexical recall
+  - chunk granularity
+  - rerank policy
+  - assembler budget
+- 不得在同一輪同時混入多個高耦合主假設，避免無法解釋成效來源。
+- `implement-agent` 接收任務前，前四個 agent 必須至少提供：
+  1. 本輪唯一主假設
+  2. `guard-agent` 放行範圍
+  3. `effect-check` 的 pass/fail 指標
+  4. `effect-opt` 的最小實作提案
+  5. `advice-agent` 的 guardrail
+- 若上述五項不完整，視為不得進入實作。
+
+### OMX 停止與回退條件
+- `continue`：
+  - `assembled Recall@k` 至少有明確提升
+  - `assembled nDCG@k` 或 `MRR@k` 至少一項同步提升
+  - `Document Coverage@k` 無明顯退化
+  - 成本與延遲未失控
+- `stop`：
+  - 連續兩輪提升幅度極小
+  - 改善只出現在外部 benchmark，對正式自家 benchmark 無證據
+  - 下一輪需要靠大幅加成本換小幅加分
+- `rollback`：
+  - 破壞 deny-by-default、same-404、ready-only 或 SQL gate
+  - 明顯惡化 `nDCG@k`、`MRR@k`、`Precision@k`
+  - 將 benchmark-only 邏輯污染 production path
+
+### OMX 與產品邊界的關係
+- 不得為了 benchmark 分數引入 `pg_trgm`。
+- 不得旁路正式 retrieval pipeline：`SQL gate -> vector recall -> FTS recall -> RRF -> rerank -> assembler`。
+- 不得修改 benchmark gold spans 或 alignment 結果來「修正」分數，除非該輪任務明確是 dataset governance。
+- QASPER 等外部 benchmark 只用於壓力測試與對照，不得成為唯一優化目標；正式判斷仍需參考自家 benchmark 與產品邊界。
+
 ## 避免事項
 - 不要以記憶體過濾取代 SQL gate 作為主要保護模型。
 - 不要透過 API 形狀或錯誤細節暴露未授權資源是否存在。
 - 不要讓非 ready 文件進入檢索。
 - 不要讓 web UI 緊耦合於不穩定的後端內部實作。
 - 未經明確需求，不要在現有技術棧之外加新基礎設施。
+
+## 使用範例
+omx --madmax --high
+
+$autopilot "請為這個 repo 規劃一個受控的 OMX 五-agent 循環，用來自動優化 QASPER 評測。角色固定為 effect-check、effect-opt、advice-agent、guard-agent、implement-agent。不可修改 benchmark gold spans 或 alignment artifacts。guard-agent 必須在 implement-agent 開始前做 go/stop/rollback 判定。成功標準是 assembled Recall@10 提升，且 assembled nDCG@10、MRR@10 不可退化，也不能讓既有自家 benchmark 表現變差。當計劃出來後，自動開始進入實施環節，實施完成後重新進行分數評定，若結果不如理想(Recall < 80)，循環整個過程進行評估/調整。"

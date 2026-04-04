@@ -116,8 +116,9 @@
 2. reviewer 透過 `POST /areas/{area_id}/evaluation/datasets` 建立 area-scoped dataset；目前 query type 固定為 `fact_lookup`，language 固定支援 `zh-TW | en | mixed`。
 3. reviewer 透過 `POST /evaluation/datasets/{dataset_id}/items` 建立題目後，前端呼叫 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview` 取得 `recall / rerank / assembled` 三階段候選與文件內搜尋結果。
 4. reviewer 一律透過既有 `GET /documents/{document_id}/preview` 的 `display_text + offsets` contract 檢視全文，再以 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/spans` 標註 `document_id + start_offset + end_offset + relevance_grade`，或以 `mark-miss` 標記 `retrieval_miss`。
-5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；runner 必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
-6. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示。
+5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs`、`python -m app.scripts.run_retrieval_eval` 或受控的 `python -m app.scripts.run_qasper_omx_loop` 觸發；所有 runner 都必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
+6. `run_qasper_omx_loop` 目前僅保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2` 受控 lane，並固定輸出 `effect-check -> effect-opt -> advice-agent -> guard-agent -> deterministic-gate -> implement-agent` artifact；loop 的正式 benchmark 決策基準已改為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`。只有 deterministic gate 的 weighted `Recall@10 > 0.8` 時才可進入 live rerank。若本輪判定 `rollback` 且仍有替代 lane，必須再產出一份 rollback-rethink artifact，切換單一主假設後自動進入下一輪。
+7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示。
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式。
@@ -201,7 +202,7 @@
 8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字
+11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；若啟用 benchmark/profile-gated `Evidence synopsis:`，其補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion
 14. `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 限制的是同一 parent 內可採信的命中 child 數；被此 guardrail 淘汰的 hit 不得在後續 expansion 階段再補回 context

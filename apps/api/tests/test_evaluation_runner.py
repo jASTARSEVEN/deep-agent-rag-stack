@@ -219,6 +219,81 @@ def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_sessi
     assert run_payload["run"]["config_snapshot"]["assembler"]["max_children_per_parent"] <= app_settings.assembler_max_children_per_parent
 
 
+def test_evaluation_run_supports_qasper_evidence_synopsis_profile_snapshot(client, db_session, app_settings) -> None:
+    """QASPER evidence synopsis profile 應只開啟目前保留的受控 synopsis lane。"""
+
+    area = Area(id=_uuid(), name="QASPER Recall Depth Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="qasper-depth.md",
+        content_type="text/markdown",
+        file_size=64,
+        storage_key="evaluation/qasper-depth.md",
+        display_text="Alpha qasper depth fact.",
+        normalized_text="Alpha qasper depth fact.",
+        status=DocumentStatus.ready,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="QASPER",
+        content="Alpha qasper depth fact.",
+        content_preview="Alpha qasper depth fact.",
+        char_count=len("Alpha qasper depth fact."),
+        start_offset=0,
+        end_offset=len("Alpha qasper depth fact."),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "QASPER Evidence Synopsis Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "qasper synopsis", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len("Alpha qasper depth fact."),
+            "relevance_grade": 3,
+        },
+    )
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5, "evaluation_profile": "qasper_guarded_evidence_synopsis_v1"},
+    )
+
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["run"]["evaluation_profile"] == "qasper_guarded_evidence_synopsis_v1"
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["vector_top_k"] == app_settings.retrieval_vector_top_k
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["fts_top_k"] == app_settings.retrieval_fts_top_k
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["max_candidates"] == app_settings.retrieval_max_candidates
+    assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] >= app_settings.rerank_top_n
+    assert run_payload["run"]["config_snapshot"]["assembler"]["max_contexts"] >= app_settings.assembler_max_contexts
+    assert run_payload["run"]["config_snapshot"]["assembler"]["max_children_per_parent"] >= app_settings.assembler_max_children_per_parent
+
+
 def test_evaluation_preview_debug_exposes_recall_ranks_and_runs_rerank_on_demand(client, db_session, app_settings) -> None:
     """preview debug 應先暴露 vector/fts/rrf rank，並可再手動執行 rerank。"""
 

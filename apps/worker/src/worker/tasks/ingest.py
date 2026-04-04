@@ -472,6 +472,7 @@ def _build_chunking_config(settings) -> ChunkingConfig:
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
         table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
         table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
+        fact_heavy_refinement_enabled=settings.chunk_fact_heavy_refinement_enabled,
     )
 
 

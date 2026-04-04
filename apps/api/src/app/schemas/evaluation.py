@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import EvaluationLanguage, EvaluationQueryType, EvaluationRunStatus
+from app.services.evaluation_profiles import SUPPORTED_EVALUATION_PROFILES
 
 
 class CreateEvaluationDatasetRequest(BaseModel):
@@ -113,9 +114,10 @@ class RunEvaluationDatasetRequest(BaseModel):
     def validate_evaluation_profile(cls, value: str) -> str:
         """限制 evaluation profile 僅接受已知 profile。"""
 
-        allowed_profiles = {"production_like_v1", "deterministic_gate_v1"}
+        allowed_profiles = set(SUPPORTED_EVALUATION_PROFILES)
         if value not in allowed_profiles:
-            raise ValueError("evaluation_profile 只支援 production_like_v1 或 deterministic_gate_v1。")
+            allowed_profiles_text = "、".join(SUPPORTED_EVALUATION_PROFILES)
+            raise ValueError(f"evaluation_profile 只支援：{allowed_profiles_text}。")
         return value
 
 

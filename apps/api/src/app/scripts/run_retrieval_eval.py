@@ -14,6 +14,7 @@ from app.services.evaluation_dataset import (
     create_evaluation_run,
     get_evaluation_run_report,
 )
+from app.services.evaluation_profiles import SUPPORTED_EVALUATION_PROFILES
 from app.schemas.evaluation import CreateEvaluationItemRequest
 from app.db.models import EvaluationLanguage
 
@@ -41,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("--dataset-id", required=True)
     run_parser.add_argument("--top-k", type=int, default=10)
-    run_parser.add_argument("--evaluation-profile", choices=["production_like_v1", "deterministic_gate_v1"], default="production_like_v1")
+    run_parser.add_argument("--evaluation-profile", choices=SUPPORTED_EVALUATION_PROFILES, default="production_like_v1")
     run_parser.add_argument("--actor-sub", default="cli-evaluator")
 
     report_parser = subparsers.add_parser("report")

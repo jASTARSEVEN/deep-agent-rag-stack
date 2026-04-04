@@ -127,6 +127,7 @@ def build_chunking_config(settings: WorkerSettings) -> ChunkingConfig:
         txt_parent_group_size=settings.chunk_txt_parent_group_size,
         table_preserve_max_chars=settings.chunk_table_preserve_max_chars,
         table_max_rows_per_child=settings.chunk_table_max_rows_per_child,
+        fact_heavy_refinement_enabled=settings.chunk_fact_heavy_refinement_enabled,
     )
 
 
@@ -1278,6 +1279,44 @@ def test_build_chunk_tree_materializes_display_text_with_heading_prefix() -> Non
     assert parent.start_offset == 0
     assert parent.content in result.display_text
     assert result.child_chunks[0].start_offset == len("## Intro\n\n")
+
+
+def test_build_chunk_tree_refines_fact_heavy_dataset_section_into_sentence_windows() -> None:
+    """fact-heavy dataset section 在開關啟用時應切成較細 child。"""
+
+    parsed_document = ParsedDocument(
+        normalized_text=(
+            "Our dataset is annotated based on pathology reports. "
+            "It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs. "
+            "All question-answer pairs are annotated and reviewed by four clinicians. "
+            "There are three types of questions: tumor size, proximal resection margin and distal resection margin."
+        ),
+        source_format="markdown",
+        blocks=[
+            ParsedBlock(
+                block_kind="text",
+                heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+                content=(
+                    "Our dataset is annotated based on pathology reports. "
+                    "It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs. "
+                    "All question-answer pairs are annotated and reviewed by four clinicians. "
+                    "There are three types of questions: tumor size, proximal resection margin and distal resection margin."
+                ),
+                start_offset=0,
+                end_offset=300,
+            )
+        ],
+        artifacts=[],
+    )
+
+    settings = build_settings(Path("/tmp"))
+    settings.chunk_fact_heavy_refinement_enabled = True
+    settings.chunk_target_child_size = 800
+    result = build_chunk_tree(parsed_document=parsed_document, config=build_chunking_config(settings))
+
+    assert len(result.child_chunks) >= 3
+    assert any("17,833 sentences" in chunk.content for chunk in result.child_chunks)
+    assert any("three types of questions" in chunk.content for chunk in result.child_chunks)
 
 
 def test_build_chunk_tree_keeps_child_offset_after_derived_heading_prefix() -> None:

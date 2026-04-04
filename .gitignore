@@ -69,3 +69,6 @@ apps/web/test-results/
 
 # Model Cache
 .marker-cache/**
+
+# OMX
+.omx/**

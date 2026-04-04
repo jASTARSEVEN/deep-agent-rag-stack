@@ -29,6 +29,8 @@ class ChunkingConfig:
     table_preserve_max_chars: int
     # 超大表格分段時每個 child 最多資料列數。
     table_max_rows_per_child: int
+    # 是否啟用 fact-heavy section 的 evidence-centric child refinement。
+    fact_heavy_refinement_enabled: bool
 
 
 @dataclass(slots=True)
@@ -957,7 +959,11 @@ def _build_text_child_chunks(
         strip_whitespace=False,
     )
 
-    for relative_start, chunk_content in _split_text_content(section.content, splitter=splitter):
+    split_contents = _split_fact_heavy_text_content(section=section, config=config)
+    if not split_contents:
+        split_contents = _split_text_content(section.content, splitter=splitter)
+
+    for relative_start, chunk_content in split_contents:
         display_start = display_content_start + relative_start
         display_end = display_start + len(chunk_content)
         children.append(
@@ -1009,6 +1015,60 @@ def _split_text_content(content: str, *, splitter: RecursiveCharacterTextSplitte
             continue
         children.append((start_index + leading_trim, chunk_content))
     return children
+
+
+FACT_HEAVY_HEADING_PATTERN = re.compile(
+    r"(dataset|experimental setup|evaluation metrics|metrics|setup)",
+    re.IGNORECASE,
+)
+
+
+def _split_fact_heavy_text_content(*, section: SectionDraft, config: ChunkingConfig) -> list[tuple[int, str]]:
+    """在 fact-heavy section 上做較細的 evidence-centric child refinement。
+
+    參數：
+    - `section`：待切分的文字 section。
+    - `config`：chunking 參數設定。
+
+    回傳：
+    - `list[tuple[int, str]]`：若命中 refinement 條件則回傳較細 child；否則回傳空列表。
+    """
+
+    if not config.fact_heavy_refinement_enabled:
+        return []
+
+    heading = (section.heading or "").strip()
+    if not heading or not FACT_HEAVY_HEADING_PATTERN.search(heading):
+        return []
+
+    if len(section.content) < 240:
+        return []
+
+    sentence_chunks = _split_into_sentence_windows(section.content)
+    refined_chunks = [(start, chunk) for start, chunk in sentence_chunks if chunk.strip()]
+    return refined_chunks if len(refined_chunks) > 1 else []
+
+
+def _split_into_sentence_windows(content: str) -> list[tuple[int, str]]:
+    """依句界與空行將文字切成較小的 evidence windows。
+
+    參數：
+    - `content`：原始 section 內容。
+
+    回傳：
+    - `list[tuple[int, str]]`：每段 window 的相對起始 offset 與內容。
+    """
+
+    windows: list[tuple[int, str]] = []
+    pattern = re.compile(r".*?(?:[。！？.!?](?:\s+|$)|\n\n|$)", re.DOTALL)
+    for match in pattern.finditer(content):
+        chunk = match.group(0)
+        if not chunk or not chunk.strip():
+            continue
+        normalized = chunk.strip()
+        start_offset = match.start() + (len(chunk) - len(chunk.lstrip()))
+        windows.append((start_offset, normalized))
+    return windows
 
 
 def _build_table_child_chunks(

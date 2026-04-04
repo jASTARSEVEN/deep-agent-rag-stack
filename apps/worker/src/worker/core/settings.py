@@ -27,6 +27,7 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_TXT_PARENT_GROUP_SIZE",
     "CHUNK_TABLE_PRESERVE_MAX_CHARS",
     "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
+    "CHUNK_FACT_HEAVY_REFINEMENT_ENABLED",
     "EMBEDDING_MAX_BATCH_TEXTS",
     "EMBEDDING_RETRY_MAX_ATTEMPTS",
     "EMBEDDING_RETRY_BASE_DELAY_SECONDS",
@@ -89,6 +90,7 @@ class WorkerSettings(BaseSettings):
     chunk_txt_parent_group_size: Annotated[int, Field(alias="CHUNK_TXT_PARENT_GROUP_SIZE")] = 4
     chunk_table_preserve_max_chars: Annotated[int, Field(alias="CHUNK_TABLE_PRESERVE_MAX_CHARS")] = 4000
     chunk_table_max_rows_per_child: Annotated[int, Field(alias="CHUNK_TABLE_MAX_ROWS_PER_CHILD")] = 20
+    chunk_fact_heavy_refinement_enabled: Annotated[bool, Field(alias="CHUNK_FACT_HEAVY_REFINEMENT_ENABLED")] = False
     pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "opendataloader"
     opendataloader_use_struct_tree: Annotated[bool, Field(alias="OPENDATALOADER_USE_STRUCT_TREE")] = True
     opendataloader_quiet: Annotated[bool, Field(alias="OPENDATALOADER_QUIET")] = True
