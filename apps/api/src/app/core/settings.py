@@ -117,23 +117,23 @@ class AppSettings(BaseSettings):
     embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
     embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
     openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
-    retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 8
-    retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 8
-    retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 12
-    retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = False
-    retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "generic_v1"
+    retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 30
+    retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 30
+    retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 30
+    retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = True
+    retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "qasper_v3"
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
     rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "bge"
     rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "BAAI/bge-reranker-v2-m3"
     cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
-    rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 6
+    rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 30
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
     rerank_retry_on_429_attempts: Annotated[int, Field(alias="RERANK_RETRY_ON_429_ATTEMPTS")] = 4
     rerank_retry_on_429_backoff_seconds: Annotated[float, Field(alias="RERANK_RETRY_ON_429_BACKOFF_SECONDS")] = 16.0
-    assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 6
-    assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 2500
-    assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 3
+    assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 10
+    assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 3600
+    assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 7
     chat_provider: Annotated[str, Field(alias="CHAT_PROVIDER")] = "deterministic"
     chat_model: Annotated[str, Field(alias="CHAT_MODEL")] = "gpt-4.1-mini"
     chat_max_output_tokens: Annotated[int, Field(alias="CHAT_MAX_OUTPUT_TOKENS")] = 700

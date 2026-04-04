@@ -71,69 +71,43 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-This repository reports retrieval metrics against a versioned, document-grounded benchmark instead of presenting isolated demo examples. The current benchmark description below is aligned to the dataset that is actually loaded in the project database and used by the evaluation runner, rather than only to the original workbook draft.
+This repository now treats `qasper_guarded_evidence_synopsis_v3_bge` as the mainline retrieval default. In runtime terms, that means the default stack uses:
 
-Benchmark identity:
+- `RERANK_PROVIDER=bge`
+- `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_VECTOR_TOP_K=30`
+- `RETRIEVAL_FTS_TOP_K=30`
+- `RETRIEVAL_MAX_CANDIDATES=30`
+- `RERANK_TOP_N=30`
+- `ASSEMBLER_MAX_CONTEXTS=10`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
+- `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
-- Name: `tw-insurance-rag-benchmark-v1`
-- Current database dataset: `tw-insurance-rag-benchmark-v1` (`bb10c343-7d7c-4ae3-b78b-a513759867f2`)
-- Current area: `我的第一個知識區域`
-- Evaluation profile: `production_like_v1`
-- Run ID: `e2b12fa7-894f-4b94-8069-3ad4c11e44d8`
-- Run date: `2026-04-01`
-- Scope: retrieval correctness across `recall`, `rerank`, and `assembled` stages
+Latest mainline benchmark snapshot:
 
-Benchmark source documents:
+- Date: `2026-04-04`
+- Mainline profile label: `qasper_guarded_evidence_synopsis_v3_bge`
+- Artifact: `.omx/tmp/bge-core-profiles-latest.json`
+- Datasets:
+  - `QASPER` (`qasper-curated-v1-pilot`)
+  - `tw-insurance-rag-benchmark-v1`
+  - weighted objective (`self=0.6`, `QASPER=0.4`)
 
-- `個人保險保單服務暨契約變更手冊(114年9月版).pdf`
-- `理賠審核原則.xlsx`
-- `新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf`
-- `新契約個人保險投保規則手冊-商品篇(114年9月版).pdf`
+Mainline assembled metrics:
 
-Current database-backed dataset shape:
+| Dataset | Recall@10 | nDCG@10 | MRR@10 |
+| --- | ---: | ---: | ---: |
+| `QASPER` | `0.8889` | `0.5661` | `0.4609` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
+| `weighted (self=0.6, qasper=0.4)` | `0.8756` | `0.6634` | `0.5939` |
 
-- `30` evaluation items
-- `30` gold spans
-- `4` ready documents
-- `0` retrieval-miss spans
-- Language distribution: `30 zh-TW`
-- Query type distribution: `30 fact_lookup`
+Notes:
 
-Document distribution in the current dataset:
-
-- `理賠審核原則.xlsx`: `10` items
-- `個人保險保單服務暨契約變更手冊(114年9月版).pdf`: `8` items
-- `新契約個人保險投保規則手冊-商品篇(114年9月版).pdf`: `6` items
-- `新契約個人保險投保規則手冊-核保及行政篇(114年9月版).pdf`: `6` items
-
-Current summary metrics:
-
-| Stage | nDCG@k | Recall@k | MRR@k | Precision@k | Doc Coverage@k |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.602 | 0.867 | 0.526 | 0.160 | 1.000 |
-| rerank | 0.813 | 0.867 | 0.794 | 0.087 | 1.000 |
-| assembled | 0.813 | 0.867 | 0.794 | 0.087 | 1.000 |
-
-Config snapshot:
-
-- Retrieval: `vector_top_k=30`, `fts_top_k=30`, `max_candidates=30`, `rrf_k=60`, `hnsw_ef_search=100`
-- Rerank: `provider=cohere`, `model=rerank-v3.5`, `top_n=30`, `max_chars_per_doc=2000`
-- Assembler: `max_contexts=6`, `max_chars_per_context=2500`, `max_children_per_parent=7`
-- Reported top-k: `10`
-
-Interpretation notes:
-
-- This benchmark is a project benchmark, not a generic public leaderboard claim.
-- The current benchmark already points to `Parent_Chunk_ID` and `Child_Chunk_ID`, which makes it suitable for validating chunk assembly and citation grounding, not only answer text overlap.
-- For external comparison, this benchmark should be reported together with at least one public benchmark such as `QASPER` or `UDA-Benchmark`.
-
-Recommended public release format:
-
-1. Export the database evaluation dataset into stable machine-readable files such as `documents.jsonl`, `questions.jsonl`, and `gold_spans.jsonl`.
-2. Publish the four source documents together with that exported dataset snapshot as a small benchmark package.
-3. Add a dataset card that explains document scope, question-writing rules, evidence policy, and metric definitions.
-4. Publish the package on `Hugging Face Datasets` or a dedicated GitHub repository with version tags such as `v1.0.0`.
-5. Keep the README metrics tied to a dataset version, a dataset snapshot export date, and a run ID so others can rerun the same benchmark.
+- The README intentionally shows only the mainline `v3` result.
+- Strategy-by-strategy comparisons are tracked directly in [`docs/qasper-retrieval-miss-analysis.md`](docs/qasper-retrieval-miss-analysis.md) (Traditional Chinese).
+- These numbers are project benchmark results, not a generic public leaderboard claim.
 
 ## Not Yet Implemented
 

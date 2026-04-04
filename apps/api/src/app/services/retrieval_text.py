@@ -20,7 +20,7 @@ EVIDENCE_CATEGORY_METRIC_COMPARISON = "metric_comparison"
 EVIDENCE_CATEGORY_SOURCE_MATERIAL = "source_material"
 # `generic_v1` 表示目前正式的通用型 synopsis 變體。
 EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1 = "generic_v1"
-# `qasper_v3` 表示依 miss analysis 補強 alias/task/metric framing 的 benchmark-gated 變體。
+# `qasper_v3` 表示依 miss analysis 補強 alias/task/metric framing，且目前已作為主線預設的變體。
 EVIDENCE_SYNOPSIS_VARIANT_QASPER_V3 = "qasper_v3"
 
 # evidence synopsis 輸出的固定 category 順序。
@@ -194,7 +194,7 @@ def build_rerank_document_text(
     - `heading`：此文件片段的標題；允許為空值。
     - `content`：已組裝完成的正文內容。
     - `max_chars`：允許送入 rerank 的最大字元數。
-    - `evidence_synopsis`：benchmark/profile-gated 的補充摘要文字；允許為空值。
+    - `evidence_synopsis`：送進 rerank 的補充摘要文字；允許為空值。
 
     回傳：
     - `str`：帶有 `Header:` / `Content:` 前綴且受成本 guardrail 限制的文字。
@@ -218,13 +218,13 @@ def build_evidence_synopsis(
     content: str,
     variant: str = EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
 ) -> str:
-    """為 benchmark/profile-gated rerank 產生語言感知的 fact-oriented 補充摘要。
+    """為 rerank 產生語言感知的 fact-oriented 補充摘要。
 
     架構說明：
     - evidence 類別判斷採語言無關流程。
     - 各語言的 lexical signal 與輸出文案由 language profile registry 提供。
     - 目前正式支援 `en` 與 `zh-TW`；未來新增語言時，原則上只需新增 profile。
-    - `variant` 僅用於 benchmark/profile-gated 的 phrasing 擴充，不得污染 production defaults。
+    - `variant` 用於切換主線或 benchmark 專用的 phrasing 擴充；新增變體時應保持可配置與可測試。
 
     參數：
     - `heading`：候選片段標題；允許為空值。
@@ -319,7 +319,7 @@ def _build_variant_specific_synopsis_lines(
     categories: tuple[str, ...],
     variant: str,
 ) -> list[str]:
-    """依指定 variant 產生額外的 benchmark-gated synopsis lines。
+    """依指定 variant 產生額外的 synopsis lines。
 
     參數：
     - `normalized_heading`：已標準化且 casefold 後的標題。

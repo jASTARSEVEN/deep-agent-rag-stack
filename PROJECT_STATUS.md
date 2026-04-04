@@ -58,8 +58,9 @@
 - 受控 OMX benchmark loop 的正式決策基準已升級為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`；effect-check、deterministic gate 與 implement decision 皆改為同時考慮兩者
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/qasper-retrieval-miss-analysis.md`，整理 refinement 前後的 QASPER miss case、已試策略對照與目前最高 ROI 改善建議
-- 專案目前保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代使用，且不影響 production runtime defaults
-- 專案已新增 benchmark/profile-gated 的 `qasper_guarded_evidence_synopsis_v3 / v3_gate`，以 alias bridge / task framing bridge / metric-aspect bridge 補強 QASPER 剩餘 semantic-gap miss；其中 QASPER deterministic gate 已提升至 `Recall@10=0.8519`，但 self benchmark 仍未改善，weighted gate 目前仍未通過
+- 專案已將主線 retrieval default 對齊 `qasper_guarded_evidence_synopsis_v3_bge`：正式預設為本機 `BGE` rerank + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
+- 專案仍保留 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代比較；其中 `qasper_guarded_evidence_synopsis_v3` 現在同時也是主線 default 所對齊的策略組合
+- 已以 BGE apples-to-apples 重跑 `production_like_v1`、`assembler_v2`、`evidence_synopsis_v2`、`evidence_synopsis_v3`；目前 README 主線只展示 `v3` 分數，而完整策略比較直接收斂於 `docs/qasper-retrieval-miss-analysis.md`
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
 - 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
 - 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件

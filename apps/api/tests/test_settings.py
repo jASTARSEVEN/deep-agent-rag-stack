@@ -38,12 +38,12 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.chunk_txt_parent_group_size == 4
     assert settings.chunk_table_preserve_max_chars == 4000
     assert settings.chunk_table_max_rows_per_child == 20
-    assert settings.retrieval_evidence_synopsis_enabled is False
-    assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
+    assert settings.retrieval_evidence_synopsis_enabled is True
+    assert settings.retrieval_evidence_synopsis_variant == "qasper_v3"
     assert settings.rerank_provider == "bge"
     assert settings.rerank_model == "BAAI/bge-reranker-v2-m3"
-    assert settings.rerank_top_n == 6
+    assert settings.rerank_top_n == 30
     assert settings.rerank_max_chars_per_doc == 2000
-    assert settings.assembler_max_contexts == 6
-    assert settings.assembler_max_chars_per_context == 2500
-    assert settings.assembler_max_children_per_parent == 3
+    assert settings.assembler_max_contexts == 10
+    assert settings.assembler_max_chars_per_context == 3600
+    assert settings.assembler_max_children_per_parent == 7
