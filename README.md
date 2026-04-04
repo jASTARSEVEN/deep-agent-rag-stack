@@ -84,8 +84,8 @@ This repository now treats `qasper_guarded_query_focus_v1` as the current mainli
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=10`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
+- `ASSEMBLER_MAX_CONTEXTS=9`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
 Latest mainline benchmark snapshot:
@@ -112,6 +112,7 @@ Notes:
 
 - The README intentionally shows only the latest mainline `query_focus_v1` benchmark reference.
 - These numbers come from the current hosted-runtime default stack (`easypinex-host / BAAI/bge-reranker-v2-m3`) after a fresh compose rebuild and benchmark package re-import.
+- The current mainline budget sweet spot is `9 x 3000 = 27000` assembled characters. A more aggressive cost-priority profile is still kept as `qasper_guarded_query_focus_budget_6x3000`.
 - Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 

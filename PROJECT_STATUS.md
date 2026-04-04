@@ -56,7 +56,7 @@
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 對齊 `qasper_guarded_query_focus_v1` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=query_focus_v1`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 對齊 `qasper_guarded_query_focus_v1` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=query_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
 - `qasper_guarded_query_focus_v1` 已由 benchmark-gated lane 提升為專案主線策略：在 `qasper_guarded_evidence_synopsis_v3` 之上補 query-side intent/slot planner、focus query 與 rerank evidence need brief
 - retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷

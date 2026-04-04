@@ -56,6 +56,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.easypinex_host_rerank_timeout_seconds == 60.0
     assert settings.rerank_top_n == 30
     assert settings.rerank_max_chars_per_doc == 2000
-    assert settings.assembler_max_contexts == 10
-    assert settings.assembler_max_chars_per_context == 3600
+    assert settings.assembler_max_contexts == 9
+    assert settings.assembler_max_chars_per_context == 3000
     assert settings.assembler_max_children_per_parent == 7

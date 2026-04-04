@@ -143,8 +143,8 @@ class AppSettings(BaseSettings):
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
     rerank_retry_on_429_attempts: Annotated[int, Field(alias="RERANK_RETRY_ON_429_ATTEMPTS")] = 4
     rerank_retry_on_429_backoff_seconds: Annotated[float, Field(alias="RERANK_RETRY_ON_429_BACKOFF_SECONDS")] = 16.0
-    assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 10
-    assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 3600
+    assembler_max_contexts: Annotated[int, Field(alias="ASSEMBLER_MAX_CONTEXTS")] = 9
+    assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 3000
     assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 7
     chat_provider: Annotated[str, Field(alias="CHAT_PROVIDER")] = "deterministic"
     chat_model: Annotated[str, Field(alias="CHAT_MODEL")] = "gpt-4.1-mini"

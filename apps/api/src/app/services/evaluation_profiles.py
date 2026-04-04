@@ -23,6 +23,8 @@ QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2 = "qasper_guarded_evidence_synopsis_v2"
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3 = "qasper_guarded_evidence_synopsis_v3"
 # query focus lane 第一輪 profile 名稱。
 QASPER_GUARDED_QUERY_FOCUS_V1 = "qasper_guarded_query_focus_v1"
+# query focus 成本優先 profile：6 contexts x 3000 chars。
+QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000 = "qasper_guarded_query_focus_budget_6x3000"
 # assembler lane 第一輪 deterministic gate profile 名稱。
 QASPER_GUARDED_ASSEMBLER_V1_GATE = "qasper_guarded_assembler_v1_gate"
 # assembler lane 第二輪 deterministic gate profile 名稱。
@@ -154,6 +156,32 @@ def _qasper_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[s
         "retrieval_query_focus_enabled": True,
         "retrieval_query_focus_variant": "query_focus_v1",
         "retrieval_query_focus_confidence_threshold": 0.7,
+        "assembler_max_contexts": 9,
+        "assembler_max_chars_per_context": 3000,
+    }
+
+
+def _query_focus_budget_sweep_overrides(
+    *,
+    settings: AppSettings,
+    max_contexts: int,
+    max_chars_per_context: int,
+) -> dict[str, int | str | bool]:
+    """建立 query focus budget sweep profile 的覆寫欄位。
+
+    參數：
+    - `settings`：目前應用程式設定。
+    - `max_contexts`：assembler 最多保留的 context 數量。
+    - `max_chars_per_context`：每個 context 的最大字元數。
+
+    回傳：
+    - `dict[str, int | str | bool]`：在 query focus v1 基礎上僅改 assembler budget 的覆寫欄位。
+    """
+
+    return {
+        **_qasper_guarded_query_focus_v1_overrides(settings=settings),
+        "assembler_max_contexts": max_contexts,
+        "assembler_max_chars_per_context": max_chars_per_context,
     }
 
 
@@ -188,6 +216,10 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     QASPER_GUARDED_QUERY_FOCUS_V1: EvaluationProfileSpec(
         name=QASPER_GUARDED_QUERY_FOCUS_V1,
         lane_name="query_focus",
+    ),
+    QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000: EvaluationProfileSpec(
+        name=QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
+        lane_name="query_focus_budget",
     ),
     QASPER_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
         name=QASPER_GUARDED_ASSEMBLER_V1_GATE,
@@ -321,6 +353,12 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
         return _qasper_guarded_evidence_synopsis_v3_overrides(settings=settings)
     if evaluation_profile == QASPER_GUARDED_QUERY_FOCUS_V1:
         return _qasper_guarded_query_focus_v1_overrides(settings=settings)
+    if evaluation_profile == QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000:
+        return _query_focus_budget_sweep_overrides(
+            settings=settings,
+            max_contexts=6,
+            max_chars_per_context=3000,
+        )
 
     spec = EVALUATION_PROFILE_SPECS[evaluation_profile]
     merged_overrides: dict[str, int | str | bool] = {}

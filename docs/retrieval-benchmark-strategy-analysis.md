@@ -86,9 +86,10 @@
 
 - `query_focus_v1` 已通過這一輪 benchmark governance，可保留程式碼，不需回退。
 - 它的角色不是取代 `evidence_synopsis_v3`，而是作為其上層的 query-side semantic-gap 補強。
-- 下一輪若還要繼續打 semantic-gap，應優先做：
-  - 更精準的 zh-TW table-field alias / slot 抽取
-  - 英文 count/comparison 之外的下一個高 ROI intent
+- assembled budget sweep 已顯示：
+  - `9 x 3000 = 27000` 是主線 sweet spot：相對 `10 x 3500 = 35000` 少 `8000` 字元，三資料集平均 `Recall@10 / nDCG@10 / MRR@10` 全持平。
+  - `6 x 3000 = 18000` 雖然更省，但平均 `Recall@10` 下降約 `0.037`，不適合作為主線。
+- 因此主線切到 `9 x 3000`，並另外保留 `qasper_guarded_query_focus_budget_6x3000` 作為成本優先 profile。
 
 ---
 

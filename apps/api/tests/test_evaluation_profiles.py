@@ -13,6 +13,7 @@ from app.services.evaluation_profiles import (
     QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
     QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
     QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE,
+    QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
     QASPER_GUARDED_QUERY_FOCUS_V1,
     QASPER_GUARDED_QUERY_FOCUS_V1_GATE,
     SUPPORTED_EVALUATION_PROFILES,
@@ -33,6 +34,7 @@ def test_profile_registry_exposes_supported_profiles() -> None:
     assert QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE in SUPPORTED_EVALUATION_PROFILES
     assert QASPER_GUARDED_QUERY_FOCUS_V1 in SUPPORTED_EVALUATION_PROFILES
     assert QASPER_GUARDED_QUERY_FOCUS_V1_GATE in SUPPORTED_EVALUATION_PROFILES
+    assert QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000 in SUPPORTED_EVALUATION_PROFILES
 
 
 def test_gate_profile_inherits_live_profile_overrides() -> None:
@@ -92,6 +94,8 @@ def test_query_focus_profile_extends_v3_with_query_focus_knobs() -> None:
     assert overrides["retrieval_query_focus_enabled"] is True
     assert overrides["retrieval_query_focus_variant"] == "query_focus_v1"
     assert overrides["retrieval_query_focus_confidence_threshold"] == 0.7
+    assert overrides["assembler_max_contexts"] == 9
+    assert overrides["assembler_max_chars_per_context"] == 3000
     assert gate_overrides["rerank_provider"] == "deterministic"
     assert gate_overrides["retrieval_query_focus_enabled"] is True
 
@@ -115,3 +119,21 @@ def test_strategy_lane_registry_provides_profile_sequence_and_rollback_target() 
     assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_ASSEMBLER) == HYPOTHESIS_EVIDENCE_SYNOPSIS
     assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS) == HYPOTHESIS_QUERY_FOCUS
     assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_QUERY_FOCUS) is None
+
+
+def test_query_focus_budget_profiles_only_tighten_assembler_budget() -> None:
+    """query focus 成本 profile 應只改 assembler budget，並保留 query focus 主線設定。"""
+
+    settings = AppSettings()
+    overrides = get_evaluation_profile_overrides(
+        settings=settings,
+        evaluation_profile=QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
+    )
+
+    assert overrides["retrieval_query_focus_enabled"] is True
+    assert overrides["retrieval_query_focus_variant"] == "query_focus_v1"
+    assert overrides["retrieval_evidence_synopsis_variant"] == "qasper_v3"
+    assert overrides["assembler_max_contexts"] == 6
+    assert overrides["assembler_max_chars_per_context"] == 3000
+    assert overrides["assembler_max_children_per_parent"] == settings.assembler_max_children_per_parent
+    assert overrides["rerank_top_n"] == settings.rerank_top_n

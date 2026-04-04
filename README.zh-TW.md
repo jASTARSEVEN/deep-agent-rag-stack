@@ -88,8 +88,8 @@
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=10`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
+- `ASSEMBLER_MAX_CONTEXTS=9`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
 最新主線 benchmark 快照：
@@ -116,6 +116,7 @@
 
 - README 這裡刻意只呈現最新主線 `query_focus_v1` 的 benchmark 參考結果。
 - 上表分數來自目前 hosted-runtime 預設組合（`easypinex-host / BAAI/bge-reranker-v2-m3`）在 fresh compose rebuild 與 benchmark package 重建後的實跑結果。
+- 目前主線採用的 assembler budget sweet spot 為 `9 x 3000 = 27000`；另外仍保留一條更激進的成本優先 profile：`qasper_guarded_query_focus_budget_6x3000`。
 - 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 
