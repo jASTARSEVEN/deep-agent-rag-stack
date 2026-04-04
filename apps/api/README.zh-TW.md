@@ -104,6 +104,29 @@
   - 變體只可影響 benchmark/profile-gated wording，不得旁路 SQL gate、ready-only 過濾或 production defaults
   - `qasper_v3` 的定位是受控 evaluation profile，不是 production runtime 預設值
 
+## Rerank Provider 支援模式
+
+internal retrieval service 現在透過同一個 `RerankProvider` contract 支援四種 rerank provider：
+
+- `bge`
+  - 目前 production 預設 provider
+  - 預設 model：`BAAI/bge-reranker-v2-m3`
+  - 以本機 `torch + transformers` 推論實作
+- `qwen`
+  - 可選的 instruction-aware provider
+  - 建議 model：`Qwen/Qwen3-Reranker-0.6B`
+  - 需要 `transformers>=4.51.0`
+- `cohere`
+  - 可選的 hosted provider
+  - 需要 `COHERE_API_KEY`
+- `deterministic`
+  - 供離線測試 / 本機 regression 使用的穩定 provider
+
+補充說明：
+- 這次變更後，`bge` 仍是預設 runtime 選擇。
+- `qwen` 已支援，但不是預設 runtime provider。
+- 兩種本機模型 provider 若本機尚未快取權重，首次使用時都可能先下載模型。
+
 ## 主要目錄結構
 
 - `src/app/main.py`：FastAPI 應用程式進入點
@@ -151,7 +174,10 @@
 - `ready` 現在代表 chunk tree、embedding 與可供 PGroonga 使用的 retrieval content 都已完成。
 - 本模組目前已具備 internal retrieval foundation，涵蓋 SQL gate、vector recall、PGroonga FTS recall、Python 層 `RRF`、minimal rerank 與 table-aware retrieval assembler，但尚未公開為 HTTP API。
 - assembler 會將 rerank 後的 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata，並以 budget guardrails 控制成本。
-- rerank 預設可用 `RERANK_PROVIDER=deterministic` 做離線測試；正式 compose 建議改用 `RERANK_PROVIDER=cohere` 並提供 `COHERE_API_KEY`。
+- rerank 可用 `RERANK_PROVIDER=deterministic` 做離線測試。
+- 目前 compose/runtime 預設 rerank 路徑為 `RERANK_PROVIDER=bge` 與 `RERANK_MODEL=BAAI/bge-reranker-v2-m3`。
+- `RERANK_PROVIDER=qwen` 也已支援 `Qwen/Qwen3-Reranker-0.6B`，但需要更多記憶體與 `transformers>=4.51.0`。
+- `RERANK_PROVIDER=cohere` 仍可作為可選 hosted provider，前提是有提供 `COHERE_API_KEY`。
 - 若要把 `QASPER` / `UDA` 類資料集收斂到現有 benchmark，可使用 `python -m app.scripts.prepare_external_benchmark` 依序執行 `prepare-source`、`filter-items`、`align-spans`、`build-snapshot` 與 `report`。
 - 本模組目前只啟用 LlamaParse 的標準 Markdown 轉換路徑，未來才會再評估 agentic mode。
 - 未支援格式仍維持受控 `failed`。

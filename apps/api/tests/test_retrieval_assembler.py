@@ -939,6 +939,7 @@ def _build_candidate(
         rerank_rank=rrf_rank,
         rerank_score=1.0,
         rerank_applied=True,
+        rerank_fallback_reason=None,
     )
 
 

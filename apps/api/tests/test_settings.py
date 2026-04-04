@@ -3,10 +3,14 @@
 from app.core.settings import AppSettings
 
 
-def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
+def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> None:
     """空字串環境變數應回退為 API 設定預設值。"""
 
+    monkeypatch.delenv("RERANK_PROVIDER", raising=False)
+    monkeypatch.delenv("RERANK_MODEL", raising=False)
+
     settings = AppSettings(
+        _env_file=None,
         MINIO_SECURE="",
         MAX_UPLOAD_SIZE_BYTES="",
         CHUNK_MIN_PARENT_SECTION_LENGTH="",
@@ -36,6 +40,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.chunk_table_max_rows_per_child == 20
     assert settings.retrieval_evidence_synopsis_enabled is False
     assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
+    assert settings.rerank_provider == "bge"
+    assert settings.rerank_model == "BAAI/bge-reranker-v2-m3"
     assert settings.rerank_top_n == 6
     assert settings.rerank_max_chars_per_doc == 2000
     assert settings.assembler_max_contexts == 6

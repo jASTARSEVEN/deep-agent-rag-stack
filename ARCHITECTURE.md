@@ -200,9 +200,10 @@
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
-9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；正式 provider 為 Cohere，測試與離線驗證使用 deterministic provider
+9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為本機 `BAAI/bge-reranker-v2-m3`，另支援 `Qwen/Qwen3-Reranker-0.6B`、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
 11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；若啟用 benchmark/profile-gated `Evidence synopsis:`，其補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
+11.5. 本機 Hugging Face rerank provider 採 lazy load + process-local cache；首次使用可能下載權重並增加延遲，但任何 provider 建立/推論失敗都必須回退到既有 RRF fail-open 路徑
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion
 14. `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 限制的是同一 parent 內可採信的命中 child 數；被此 guardrail 淘汰的 hit 不得在後續 expansion 階段再補回 context
@@ -226,7 +227,7 @@
 32. evaluation candidate preview 與 benchmark run 一律沿用正式 retrieval pipeline，因此 non-ready 文件不得出現在候選、document search 或 assembled evidence
 33. evaluation metrics 正式輸出 `nDCG@k`、`Recall@k`、`MRR@k`、`Precision@k` 與 `Document Coverage@k`，並可按 `zh-TW / en / mixed / recall / rerank / assembled` 切分
 34. rerank runtime failure 仍維持 fail-open fallback 回退到 RRF 順序，但必須記錄 warning log，且 evaluation preview / benchmark per-query detail 必須暴露 `fallback_reason`，避免 reviewer 將 fallback 誤判為真實 rerank 排序
-35. Cohere rerank 僅允許對 `HTTP 429 Too Many Requests` 做有限次數的 retry/backoff，且必須先等待；等待秒數需加入 jitter，避免 benchmark 批次中的多題在同一時間重撞；非 429 的 HTTP/network 錯誤不得無差別重試，以免拉長失敗路徑並掩蓋真正異常
+35. `Cohere` rerank 僅允許對 `HTTP 429 Too Many Requests` 做有限次數的 retry/backoff，且必須先等待；等待秒數需加入 jitter，避免 benchmark 批次中的多題在同一時間重撞；非 429 的 HTTP/network 錯誤不得無差別重試，以免拉長失敗路徑並掩蓋真正異常
 
 ### Table-aware chunking 規則
 1. Markdown table 必須至少包含 header row 與 delimiter row，且後續連續 pipe rows 視為同一張表

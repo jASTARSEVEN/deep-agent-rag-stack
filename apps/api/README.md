@@ -104,6 +104,29 @@ This module contains the project's FastAPI service. It currently provides:
   - variants only affect benchmark/profile-gated wording and must not bypass SQL gate, ready-only filtering, or production defaults
   - the `qasper_v3` variant is intended for controlled evaluation profiles rather than the default production runtime
 
+## Rerank Provider Support Modes
+
+The internal retrieval service now supports four rerank providers behind the same `RerankProvider` contract:
+
+- `bge`
+  - default production provider
+  - default model: `BAAI/bge-reranker-v2-m3`
+  - implemented with local `torch + transformers` inference
+- `qwen`
+  - optional instruction-aware provider
+  - recommended model: `Qwen/Qwen3-Reranker-0.6B`
+  - requires `transformers>=4.51.0`
+- `cohere`
+  - optional hosted provider
+  - requires `COHERE_API_KEY`
+- `deterministic`
+  - offline test / fallback-friendly provider for local regression tests
+
+Notes:
+- `bge` remains the default runtime choice after this change.
+- `qwen` is supported but is not the default runtime choice.
+- Both local-model providers may download weights on first use unless the model is already cached locally.
+
 ## Main Directory Structure
 
 - `src/app/main.py`: FastAPI application entry point
@@ -151,7 +174,10 @@ This module contains the project's FastAPI service. It currently provides:
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
-- Use `RERANK_PROVIDER=deterministic` for offline tests, or switch to `RERANK_PROVIDER=cohere` and provide `COHERE_API_KEY` for compose-backed retrieval ranking.
+- Use `RERANK_PROVIDER=deterministic` for offline tests.
+- The default compose/runtime rerank path is `RERANK_PROVIDER=bge` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
+- `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
+- `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
 - To fold `QASPER` / `UDA`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.

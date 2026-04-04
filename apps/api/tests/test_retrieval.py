@@ -12,9 +12,14 @@ from app.auth.verifier import CurrentPrincipal
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.reranking import (
+    BGERerankProvider,
     CohereRerankProvider,
     DeterministicRerankProvider,
+    QwenRerankProvider,
     RerankInputDocument,
+    RerankScore,
+    _score_with_bge_reranker,
+    _score_with_qwen_reranker,
     build_rerank_provider,
 )
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text
@@ -33,18 +38,28 @@ def _uuid() -> str:
     return str(uuid4())
 
 
-def test_build_rerank_provider_supports_deterministic_and_cohere(app_settings) -> None:
-    """rerank provider factory 應支援 deterministic 與 Cohere。"""
+def test_build_rerank_provider_supports_deterministic_bge_qwen_and_cohere(app_settings) -> None:
+    """rerank provider factory 應支援 deterministic、BGE、Qwen 與 Cohere。"""
 
     deterministic_settings = app_settings.model_copy(update={"rerank_provider": "deterministic"})
+    bge_settings = app_settings.model_copy(
+        update={"rerank_provider": "bge", "rerank_model": "BAAI/bge-reranker-v2-m3"}
+    )
+    qwen_settings = app_settings.model_copy(
+        update={"rerank_provider": "qwen", "rerank_model": "Qwen/Qwen3-Reranker-0.6B"}
+    )
     cohere_settings = app_settings.model_copy(
         update={"rerank_provider": "cohere", "cohere_api_key": "test-key", "rerank_model": "rerank-v3.5"}
     )
 
     deterministic_provider = build_rerank_provider(deterministic_settings)
+    bge_provider = build_rerank_provider(bge_settings)
+    qwen_provider = build_rerank_provider(qwen_settings)
     cohere_provider = build_rerank_provider(cohere_settings)
 
     assert isinstance(deterministic_provider, DeterministicRerankProvider)
+    assert isinstance(bge_provider, BGERerankProvider)
+    assert isinstance(qwen_provider, QwenRerankProvider)
     assert isinstance(cohere_provider, CohereRerankProvider)
 
 
@@ -175,6 +190,302 @@ def test_build_rerank_provider_requires_cohere_api_key(app_settings) -> None:
         assert "COHERE_API_KEY" in str(exc)
     else:  # pragma: no cover - 失敗時才會進來。
         raise AssertionError("預期缺少 COHERE_API_KEY 時應拋出 ValueError。")
+
+
+def test_bge_rerank_provider_delegates_to_bge_runtime(monkeypatch) -> None:
+    """BGE rerank provider 應委派給 BGE runtime helper 並回傳排序結果。"""
+
+    captured_arguments: dict[str, object] = {}
+
+    def fake_score_with_bge_reranker(*, query, documents, top_n, model_name):  # noqa: ANN001
+        captured_arguments["query"] = query
+        captured_arguments["documents"] = documents
+        captured_arguments["top_n"] = top_n
+        captured_arguments["model_name"] = model_name
+        return [
+            RerankScore(candidate_id="doc-2", score=0.9),
+            RerankScore(candidate_id="doc-1", score=0.4),
+        ]
+
+    monkeypatch.setattr("app.services.reranking._score_with_bge_reranker", fake_score_with_bge_reranker)
+
+    provider = BGERerankProvider(model="BAAI/bge-reranker-v2-m3")
+    results = provider.rerank(
+        query="what is panda",
+        documents=[
+            RerankInputDocument(candidate_id="doc-1", text="alpha"),
+            RerankInputDocument(candidate_id="doc-2", text="beta"),
+        ],
+        top_n=2,
+    )
+
+    assert [item.candidate_id for item in results] == ["doc-2", "doc-1"]
+    assert captured_arguments["model_name"] == "BAAI/bge-reranker-v2-m3"
+    assert captured_arguments["top_n"] == 2
+
+
+def test_qwen_rerank_provider_delegates_to_qwen_runtime(monkeypatch) -> None:
+    """Qwen rerank provider 應委派給 Qwen runtime helper 並回傳排序結果。"""
+
+    captured_arguments: dict[str, object] = {}
+
+    def fake_score_with_qwen_reranker(*, query, documents, top_n, model_name):  # noqa: ANN001
+        captured_arguments["query"] = query
+        captured_arguments["documents"] = documents
+        captured_arguments["top_n"] = top_n
+        captured_arguments["model_name"] = model_name
+        return [
+            RerankScore(candidate_id="doc-2", score=0.8),
+            RerankScore(candidate_id="doc-1", score=0.3),
+        ]
+
+    monkeypatch.setattr("app.services.reranking._score_with_qwen_reranker", fake_score_with_qwen_reranker)
+
+    provider = QwenRerankProvider(model="Qwen/Qwen3-Reranker-0.6B")
+    results = provider.rerank(
+        query="which document",
+        documents=[
+            RerankInputDocument(candidate_id="doc-1", text="alpha"),
+            RerankInputDocument(candidate_id="doc-2", text="beta"),
+        ],
+        top_n=2,
+    )
+
+    assert [item.candidate_id for item in results] == ["doc-2", "doc-1"]
+    assert captured_arguments["model_name"] == "Qwen/Qwen3-Reranker-0.6B"
+    assert captured_arguments["top_n"] == 2
+
+
+def test_score_with_bge_reranker_sorts_sigmoid_scores(monkeypatch) -> None:
+    """BGE score helper 應將模型分數正規化後排序。"""
+
+    class FakeTensor:
+        """最小 tensor 測試替身。"""
+
+        def __init__(self, values: list[float]) -> None:
+            self._values = values
+
+        def view(self, *_args) -> "FakeTensor":
+            return self
+
+        def detach(self) -> "FakeTensor":
+            return self
+
+        def cpu(self) -> "FakeTensor":
+            return self
+
+        def float(self) -> "FakeTensor":
+            return self
+
+        def tolist(self) -> list[float]:
+            return list(self._values)
+
+    class FakeNoGrad:
+        """模擬 torch.no_grad() context manager。"""
+
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    class FakeTorchModule:
+        """最小 torch 測試替身。"""
+
+        @staticmethod
+        def no_grad() -> FakeNoGrad:
+            return FakeNoGrad()
+
+        @staticmethod
+        def sigmoid(tensor: FakeTensor) -> FakeTensor:
+            del tensor
+            return FakeTensor([0.2, 0.9, 0.6])
+
+    class FakeTokenizer:
+        """最小 tokenizer 測試替身。"""
+
+        def __call__(self, pairs, *, padding, truncation, return_tensors, max_length):  # noqa: ANN001
+            del padding, truncation, return_tensors, max_length
+            assert pairs[0][0] == "which document"
+            return {"input_ids": [1, 2, 3]}
+
+    class FakeModel:
+        """最小 model 測試替身。"""
+
+        def __call__(self, **inputs):  # noqa: ANN003, ANN001
+            del inputs
+
+            class FakeOutput:
+                """最小 logits 輸出替身。"""
+
+                logits = FakeTensor([1.0, 3.0, 2.0])
+
+            return FakeOutput()
+
+    monkeypatch.setattr(
+        "app.services.reranking._load_bge_reranker_runtime",
+        lambda model_name: (FakeTokenizer(), FakeModel(), "cpu", FakeTorchModule()),
+    )
+
+    results = _score_with_bge_reranker(
+        query="which document",
+        documents=[
+            RerankInputDocument(candidate_id="doc-1", text="alpha"),
+            RerankInputDocument(candidate_id="doc-2", text="beta"),
+            RerankInputDocument(candidate_id="doc-3", text="gamma"),
+        ],
+        top_n=2,
+        model_name="BAAI/bge-reranker-v2-m3",
+    )
+
+    assert [item.candidate_id for item in results] == ["doc-2", "doc-3"]
+    assert results[0].score == pytest.approx(0.9)
+
+
+def test_score_with_qwen_reranker_formats_inputs_and_sorts_scores(monkeypatch) -> None:
+    """Qwen score helper 應套用官方格式並依 yes 機率排序。"""
+
+    class FakeTensor:
+        """最小 tensor 測試替身。"""
+
+        def __init__(self, values):
+            self._values = values
+
+        def __getitem__(self, key):  # noqa: ANN001
+            if isinstance(key, tuple) and len(key) == 3:
+                rows, last_index, columns = key
+                del rows, columns
+                if last_index == -1:
+                    return FakeTensor([row[last_index] for row in self._values])
+            if isinstance(key, tuple) and len(key) == 2:
+                rows, column = key
+                del rows
+                if isinstance(column, int):
+                    return FakeTensor([row[column] for row in self._values])
+            raise TypeError("測試替身只支援欄位切片。")
+
+        def exp(self) -> "FakeTensor":
+            return self
+
+        def detach(self) -> "FakeTensor":
+            return self
+
+        def cpu(self) -> "FakeTensor":
+            return self
+
+        def float(self) -> "FakeTensor":
+            return self
+
+        def tolist(self):
+            return list(self._values)
+
+    class FakeNoGrad:
+        """模擬 torch.no_grad() context manager。"""
+
+        def __enter__(self) -> None:
+            return None
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            del exc_type, exc, tb
+            return False
+
+    class FakeTorchModule:
+        """最小 torch 測試替身。"""
+
+        class nn:
+            """最小 nn namespace。"""
+
+            class functional:
+                """最小 functional namespace。"""
+
+                @staticmethod
+                def log_softmax(tensor: FakeTensor, dim: int) -> FakeTensor:
+                    del dim
+                    return tensor
+
+        @staticmethod
+        def no_grad() -> FakeNoGrad:
+            return FakeNoGrad()
+
+        @staticmethod
+        def stack(tensors, dim: int):  # noqa: ANN001
+            del dim
+            first_tensor, second_tensor = tensors
+            return FakeTensor(
+                [
+                    [first_value, second_value]
+                    for first_value, second_value in zip(first_tensor.tolist(), second_tensor.tolist(), strict=True)
+                ]
+            )
+
+    class FakeTokenizer:
+        """最小 tokenizer 測試替身。"""
+
+        def __call__(
+            self,
+            inputs,
+            *,
+            padding=False,
+            truncation=None,
+            return_attention_mask=True,
+            max_length=None,
+            return_tensors=None,
+        ):  # noqa: ANN001
+            del padding, truncation, return_attention_mask, max_length, return_tensors
+            if isinstance(inputs, list) and inputs and isinstance(inputs[0], str):
+                assert "<Instruct>:" in inputs[0]
+                return {"input_ids": [[11, 12], [21, 22]]}
+            raise AssertionError("測試替身只預期收到格式化後的字串列表。")
+
+        def pad(self, inputs, *, padding, return_tensors, max_length=None):  # noqa: ANN001
+            del padding, return_tensors, max_length
+            return {"input_ids": inputs["input_ids"]}
+
+    class FakeModel:
+        """最小 model 測試替身。"""
+
+        def __call__(self, **inputs):  # noqa: ANN003, ANN001
+            del inputs
+
+            class FakeOutput:
+                """最小 logits 輸出替身。"""
+
+                logits = FakeTensor(
+                    [
+                        [[0.1, 0.8]],
+                        [[0.1, 0.4]],
+                    ]
+                )
+
+            return FakeOutput()
+
+    monkeypatch.setattr(
+        "app.services.reranking._load_qwen_reranker_runtime",
+        lambda model_name: (
+            FakeTokenizer(),
+            FakeModel(),
+            "cpu",
+            FakeTorchModule(),
+            [1, 2],
+            [3, 4],
+            0,
+            1,
+        ),
+    )
+
+    results = _score_with_qwen_reranker(
+        query="which document",
+        documents=[
+            RerankInputDocument(candidate_id="doc-1", text="alpha"),
+            RerankInputDocument(candidate_id="doc-2", text="beta"),
+        ],
+        top_n=2,
+        model_name="Qwen/Qwen3-Reranker-0.6B",
+    )
+
+    assert [item.candidate_id for item in results] == ["doc-1", "doc-2"]
+    assert results[0].score == pytest.approx(0.8)
 
 
 def test_build_match_chunks_rpc_statement_uses_postgres_bind_types() -> None:

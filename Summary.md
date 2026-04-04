@@ -35,7 +35,7 @@
 - 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
 - PDF 解析：`OpenDataLoader PDF`、`Unstructured partition_pdf`、`LlamaParse SaaS (optional)`
 - Office 文件解析：`Unstructured partition_docx`、`partition_pptx`、`partition_xlsx`
-- LLM / rerank：`OpenAI`、`Cohere Rerank v4`
+- LLM / rerank：`OpenAI`、`BAAI BGE-Rerank-v2-m3`、`Qwen3-Reranker-0.6B (optional)`、`Cohere Rerank v4 (optional)`
 - 本機編排：`Docker Compose`
 - 對外入口：`Caddy reverse proxy + automatic TLS`
 - 資料庫升級：`Alembic + migration runner`
@@ -90,7 +90,7 @@
 2. 再做 vector recall
 3. 再做 FTS recall
 4. 用 `RRF` 合併候選
-5. 用 `Cohere Rerank v4` 重排
+5. 用 rerank provider 重排（預設 `BAAI BGE-Rerank-v2-m3`，可選 `Qwen3-Reranker-0.6B` 與 `Cohere Rerank v4`）
 6. 將候選內容交給 LLM 生成回答與 citations
 
 ### 關鍵字檢索

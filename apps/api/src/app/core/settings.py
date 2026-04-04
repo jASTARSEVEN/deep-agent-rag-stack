@@ -124,8 +124,8 @@ class AppSettings(BaseSettings):
     retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "generic_v1"
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
-    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "deterministic"
-    rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "rerank-v3.5"
+    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "bge"
+    rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "BAAI/bge-reranker-v2-m3"
     cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
     rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 6
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
