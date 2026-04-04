@@ -1,0 +1,31 @@
+{
+  "benchmark_name": "qasper-curated-v1-100",
+  "dataset": {
+    "dataset_id": "e836874e-5183-5f09-8241-eddb155adab1",
+    "query_type": "fact_lookup",
+    "generated_at": "2026-04-04T14:55:15.143405+00:00"
+  },
+  "reference": {
+    "evaluation_profile": "qasper_guarded_query_focus_v1"
+  },
+  "source_dataset_breakdown": {
+    "qasper": 100
+  },
+  "snapshot_files": [
+    "manifest.json",
+    "documents.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "alignment_candidates.jsonl",
+    "alignment_review_queue.jsonl",
+    "filter_report.json",
+    "review_overrides.jsonl",
+    "openai_review_log.jsonl"
+  ],
+  "stats": {
+    "question_count": 100,
+    "question_with_gold_span_count": 100,
+    "span_count": 164,
+    "document_count": 42
+  }
+}

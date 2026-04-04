@@ -1,0 +1,29 @@
+{
+  "benchmark_name": "uda-curated-v1-100",
+  "dataset": {
+    "dataset_id": "3cca653e-ffd5-5ab8-8464-27aaac194bb4",
+    "query_type": "fact_lookup",
+    "generated_at": "2026-04-04T14:58:58.919411+00:00"
+  },
+  "reference": {
+    "evaluation_profile": "qasper_guarded_query_focus_v1"
+  },
+  "source_dataset_breakdown": {
+    "uda": 100
+  },
+  "snapshot_files": [
+    "manifest.json",
+    "documents.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "alignment_candidates.jsonl",
+    "alignment_review_queue.jsonl",
+    "filter_report.json"
+  ],
+  "stats": {
+    "question_count": 100,
+    "question_with_gold_span_count": 100,
+    "span_count": 100,
+    "document_count": 45
+  }
+}

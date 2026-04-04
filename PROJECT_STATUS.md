@@ -63,6 +63,11 @@
 - 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 `qasper_guarded_query_focus_v1`：相對 `qasper_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平，三資料集平均 `nDCG@10 +0.0194`，確認可保留此 lane
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
+- 已新增 `apps/api/src/app/scripts/prepare_uda_full_source.py`，可將官方 `UDA-Benchmark` `extended_qa_info_bench` 與 full-source docs 正規化為現有 `prepare_external_benchmark --dataset uda` 可直接使用的 JSONL row contract
+- 已新增兩份正式外部 `100` 題 package，且 reference run 統一使用 `qasper_guarded_query_focus_v1`：
+  - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最終 `100` 題 / `42` 份文件 / `164` 個 gold spans，assembled `Recall@10=0.5900`、`nDCG@10=0.3812`、`MRR@10=0.3153`
+  - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最終 `100` 題 / `45` 份文件 / `100` 個 gold spans，assembled `Recall@10=0.8300`、`nDCG@10=0.6816`、`MRR@10=0.6336`
+- `docs/retrieval-benchmark-strategy-analysis.md` 已新增 `External 100Q Baseline` 區塊，固定以 `qasper_guarded_query_focus_v1` 呈現 `QASPER 100`、`UDA 100` 與 `self excluded` macro average 分數
 - `UDA` pilot 這一輪的 benchmark governance 結果為：`9` 題 auto-matched、`21` 題由 `OpenAI` review 核准、再補 `4` 題 deterministic span override；reference run assembled 指標提升到 `Recall@10=0.6538`、`nDCG@10=0.5288`、`MRR@10=0.4968`
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
 - 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`

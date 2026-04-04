@@ -13,6 +13,7 @@ from openai import OpenAI
 
 from app.core.settings import get_settings
 from app.scripts.prepare_external_benchmark import (
+    ALIGNMENT_REVIEW_QUEUE_FILE,
     ALIGNMENT_CANDIDATES_FILE,
     FILTERED_ITEMS_FILE,
     PREPARED_ITEMS_FILE,
@@ -63,6 +64,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default="gpt-4.1-mini", help="OpenAI model 名稱。")
     parser.add_argument("--max-items", type=int, default=None, help="最多 review 幾題。")
     parser.add_argument("--replace", action="store_true", help="覆蓋既有 review_overrides，而不是 merge。")
+    parser.add_argument(
+        "--review-source",
+        choices=("prepared_items", "filtered_items", "alignment_review_queue"),
+        default="prepared_items",
+        help="本輪 review 題目來源；預設維持相容，仍從 prepared_items 取題。",
+    )
     return parser
 
 
@@ -379,19 +386,40 @@ def map_snippets_to_spans(*, review_payload: dict[str, Any], windows_by_id: dict
     return spans
 
 
-def load_review_candidates(workspace_dir: Path) -> list[dict[str, Any]]:
-    """載入可供 LLM review 的 prepared items。
+def _load_review_source_rows(*, workspace_dir: Path, review_source: str) -> list[dict[str, Any]]:
+    """依指定來源載入可供 review 的題目列。
 
     參數：
     - `workspace_dir`：benchmark curation workspace。
+    - `review_source`：review 題目來源。
+
+    回傳：
+    - `list[dict[str, Any]]`：指定來源的題目列表。
+    """
+
+    if review_source == "prepared_items":
+        return read_jsonl(workspace_dir / PREPARED_ITEMS_FILE)
+    if review_source == "filtered_items":
+        return read_jsonl(workspace_dir / FILTERED_ITEMS_FILE)
+    if review_source == "alignment_review_queue":
+        return read_jsonl(workspace_dir / ALIGNMENT_REVIEW_QUEUE_FILE)
+    raise ValueError(f"不支援的 review_source：{review_source}")
+
+
+def load_review_candidates(*, workspace_dir: Path, review_source: str) -> list[dict[str, Any]]:
+    """載入可供 LLM review 的題目。
+
+    參數：
+    - `workspace_dir`：benchmark curation workspace。
+    - `review_source`：review 題目來源。
 
     回傳：
     - `list[dict[str, Any]]`：可 review 的題目列表。
     """
 
-    prepared_items = read_jsonl(workspace_dir / PREPARED_ITEMS_FILE)
+    candidate_rows = _load_review_source_rows(workspace_dir=workspace_dir, review_source=review_source)
     candidates: list[dict[str, Any]] = []
-    for item in prepared_items:
+    for item in candidate_rows:
         query_text = str(item.get("query_text", "")).strip()
         answer_text = str(item.get("answer_text", "")).strip()
         if not query_text:
@@ -443,7 +471,15 @@ def merge_alignment_rows(*, workspace_dir: Path, review_items: list[dict[str, An
     write_jsonl(alignment_path, existing_rows)
 
 
-def review_with_openai(*, workspace_dir: Path, area_id: str, model: str, max_items: int | None, replace: bool) -> dict[str, Any]:
+def review_with_openai(
+    *,
+    workspace_dir: Path,
+    area_id: str,
+    model: str,
+    max_items: int | None,
+    replace: bool,
+    review_source: str,
+) -> dict[str, Any]:
     """執行 OpenAI review，並輸出 review overrides 與 log。
 
     參數：
@@ -452,6 +488,7 @@ def review_with_openai(*, workspace_dir: Path, area_id: str, model: str, max_ite
     - `model`：OpenAI model 名稱。
     - `max_items`：最多處理幾題；`None` 代表全部。
     - `replace`：是否覆蓋既有 overrides。
+    - `review_source`：review 題目來源。
 
     回傳：
     - `dict[str, Any]`：review 摘要。
@@ -462,7 +499,9 @@ def review_with_openai(*, workspace_dir: Path, area_id: str, model: str, max_ite
         raise ValueError("使用 OpenAI review 前必須提供 OPENAI_API_KEY。")
 
     ready_documents = load_ready_documents_for_area(area_id=area_id)
-    review_items = [item for item in load_review_candidates(workspace_dir) if item["file_name"] in ready_documents]
+    review_items = [
+        item for item in load_review_candidates(workspace_dir=workspace_dir, review_source=review_source) if item["file_name"] in ready_documents
+    ]
     if max_items is not None:
         review_items = review_items[:max_items]
 
@@ -520,6 +559,7 @@ def review_with_openai(*, workspace_dir: Path, area_id: str, model: str, max_ite
     return {
         "workspace_dir": str(workspace_dir),
         "model": model,
+        "review_source": review_source,
         "review_item_count": len(review_items),
         "approved_count": approved_count,
         "rejected_count": rejected_count,
@@ -546,6 +586,7 @@ def main() -> None:
         model=args.model,
         max_items=args.max_items,
         replace=args.replace,
+        review_source=args.review_source,
     )
     print(json.dumps(summary, ensure_ascii=False))
 

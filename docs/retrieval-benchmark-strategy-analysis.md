@@ -154,6 +154,34 @@
 
 ---
 
+## 2026-04-04 External 100Q Baseline
+
+這一節固定記錄「排除 self」之後，目前兩份外部 `100` 題 package 在正式 profile 下的最新分數。
+
+正式基線規則：
+
+- dataset 固定為：
+  - `qasper-curated-v1-100`
+  - `uda-curated-v1-100`
+- evaluation profile 固定為 `qasper_guarded_query_focus_v1`
+- `self` dataset 不納入這一節，也不納入 macro average
+
+### External 100Q Metrics
+
+| Dataset | Evaluation Profile | Question Count | Recall@10 | nDCG@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `qasper-curated-v1-100` | `qasper_guarded_query_focus_v1` | `100` | `0.5900` | `0.3812` | `0.3153` | `0.0640` | `0.8100` |
+| `uda-curated-v1-100` | `qasper_guarded_query_focus_v1` | `100` | `0.8300` | `0.6816` | `0.6336` | `0.0830` | `1.0000` |
+| `External macro average (self excluded)` | `qasper_guarded_query_focus_v1` | `100 + 100` | `0.7100` | `0.5314` | `0.4745` | `0.0735` | `0.9050` |
+
+### External 100Q 判讀
+
+1. `QASPER 100` 仍然明顯比 `UDA 100` 難，assembled `nDCG@10` 只有 `0.3812`，表示 query-to-evidence semantic gap 仍是主要瓶頸。
+2. `UDA 100` 在同一 profile 下 assembled `Recall@10=0.8300`、`nDCG@10=0.6816`，代表官方 `nq` full-source 子集對目前主線更友善，且 rerank/assembler 能穩定把 evidence 留住。
+3. 這一節不與 pilot package 做 uplift 比較，因為 `27/26` 題 pilot 與 `100` 題版不是同一 benchmark population，直接比 uplift 會誤導。
+
+---
+
 ## 目前建議保留的常規比較集合
 
 這一節只保留仍對未來改善有決策價值的 lane。

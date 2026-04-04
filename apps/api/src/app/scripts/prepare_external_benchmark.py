@@ -42,6 +42,12 @@ SNAPSHOT_REQUIRED_FILES = (
     "gold_spans.jsonl",
 )
 
+# 若 workspace 存在 reviewer / LLM 覆核產物，snapshot 應一併保留，形成可驗證證據鏈。
+OPTIONAL_SNAPSHOT_AUXILIARY_FILES = (
+    REVIEW_OVERRIDES_FILE,
+    "openai_review_log.jsonl",
+)
+
 # curated v1 允許的最大短答案長度，避免把摘要型答案誤收進 fact lookup。
 MAX_SHORT_ANSWER_CHARS = 240
 
@@ -95,6 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser_cmd.add_argument("--output-dir", required=True)
     build_parser_cmd.add_argument("--benchmark-name", required=True)
     build_parser_cmd.add_argument("--include-review-items", action="store_true")
+    build_parser_cmd.add_argument(
+        "--target-question-count",
+        type=int,
+        default=None,
+        help="若提供，僅保留前 N 題已核准題目，且若不足 N 題則直接失敗。",
+    )
+    build_parser_cmd.add_argument(
+        "--reference-evaluation-profile",
+        default=None,
+        help="snapshot manifest 內要標記的正式 benchmark profile。",
+    )
 
     report_parser = subparsers.add_parser("report")
     report_parser.add_argument("--workspace-dir", required=True)
@@ -1113,7 +1130,15 @@ def read_review_overrides(workspace_dir: Path) -> dict[str, dict[str, Any]]:
     return {row["item_id"]: row for row in rows if row.get("item_id")}
 
 
-def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str, include_review_items: bool) -> dict[str, Any]:
+def build_snapshot(
+    *,
+    workspace_dir: Path,
+    output_dir: Path,
+    benchmark_name: str,
+    include_review_items: bool,
+    target_question_count: int | None = None,
+    reference_evaluation_profile: str | None = None,
+) -> dict[str, Any]:
     """以 auto-matched 與 reviewed-approved 題目建立 snapshot。
 
     參數：
@@ -1121,6 +1146,8 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
     - `output_dir`：snapshot 輸出目錄。
     - `benchmark_name`：snapshot 名稱。
     - `include_review_items`：是否保留尚未有 spans 的 review queue 題目。
+    - `target_question_count`：若提供，僅保留前 N 題已核准題目，且不足時直接失敗。
+    - `reference_evaluation_profile`：若提供，寫入 manifest 的正式跑分 profile。
 
     回傳：
     - `dict[str, Any]`：snapshot 摘要。
@@ -1133,11 +1160,7 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
     alignment_rows = read_jsonl(workspace_dir / ALIGNMENT_CANDIDATES_FILE)
     overrides = read_review_overrides(workspace_dir)
 
-    questions: list[dict[str, Any]] = []
-    spans: list[dict[str, Any]] = []
-    included_document_names: set[str] = set()
-    accepted_item_count = 0
-    dataset_counter: Counter[str] = Counter()
+    accepted_rows: list[dict[str, Any]] = []
 
     for alignment_row in alignment_rows:
         item = filtered_items.get(alignment_row["item_id"]) or prepared_items.get(alignment_row["item_id"])
@@ -1157,19 +1180,47 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
             include_item = True
         if not include_item:
             continue
+        accepted_rows.append(
+            {
+                "item": item,
+                "alignment_status": alignment_row["status"],
+                "accepted_spans": accepted_spans,
+            }
+        )
 
+    if target_question_count is not None:
+        if target_question_count <= 0:
+            raise ValueError("target_question_count 必須大於 0。")
+        if len(accepted_rows) < target_question_count:
+            raise ValueError(
+                f"已核准題目僅有 {len(accepted_rows)} 題，無法建立要求的 {target_question_count} 題 snapshot。"
+            )
+        accepted_rows = accepted_rows[:target_question_count]
+
+    questions: list[dict[str, Any]] = []
+    spans: list[dict[str, Any]] = []
+    included_document_names: set[str] = set()
+    accepted_item_count = 0
+    dataset_counter: Counter[str] = Counter()
+
+    for accepted_row in accepted_rows:
+        item = accepted_row["item"]
+        accepted_spans = accepted_row["accepted_spans"]
+        question_id = stable_uuid(f"question::{benchmark_name}::{item['item_id']}")
         questions.append(
             {
-                "question_id": item["item_id"],
+                "question_id": question_id,
                 "dataset_id": stable_uuid(f"benchmark::{benchmark_name}"),
                 "query_type": "fact_lookup",
                 "language": item["language"],
                 "question": item["query_text"],
                 "notes": json.dumps(
                     {
+                        "source_item_id": item["item_id"],
                         "dataset": item["dataset"],
                         "source_document_id": item["source_document_id"],
                         "answer_text": item.get("answer_text"),
+                        "alignment_status": accepted_row["alignment_status"],
                     },
                     ensure_ascii=False,
                 ),
@@ -1181,8 +1232,10 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
         for span_index, span in enumerate(accepted_spans):
             spans.append(
                 {
-                    "span_id": stable_uuid(f"span::{item['item_id']}::{span['start_offset']}::{span['end_offset']}::{span_index}"),
-                    "question_id": item["item_id"],
+                    "span_id": stable_uuid(
+                        f"span::{benchmark_name}::{question_id}::{span['start_offset']}::{span['end_offset']}::{span_index}"
+                    ),
+                    "question_id": question_id,
                     "file_name": item["file_name"],
                     "start_offset": int(span["start_offset"]),
                     "end_offset": int(span["end_offset"]),
@@ -1208,6 +1261,15 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
         if row["file_name"] in included_document_names or include_review_items
     ]
 
+    snapshot_files = list(SNAPSHOT_REQUIRED_FILES) + [
+        ALIGNMENT_CANDIDATES_FILE,
+        ALIGNMENT_REVIEW_QUEUE_FILE,
+        FILTER_REPORT_FILE,
+    ]
+    for auxiliary_name in OPTIONAL_SNAPSHOT_AUXILIARY_FILES:
+        if (workspace_dir / auxiliary_name).exists():
+            snapshot_files.append(auxiliary_name)
+
     manifest = {
         "benchmark_name": benchmark_name,
         "dataset": {
@@ -1215,12 +1277,11 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
             "query_type": "fact_lookup",
             "generated_at": now_iso(),
         },
+        "reference": {
+            "evaluation_profile": reference_evaluation_profile,
+        },
         "source_dataset_breakdown": dict(sorted(dataset_counter.items())),
-        "snapshot_files": list(SNAPSHOT_REQUIRED_FILES) + [
-            ALIGNMENT_CANDIDATES_FILE,
-            ALIGNMENT_REVIEW_QUEUE_FILE,
-            FILTER_REPORT_FILE,
-        ],
+        "snapshot_files": snapshot_files,
         "stats": {
             "question_count": len(questions),
             "question_with_gold_span_count": accepted_item_count,
@@ -1233,7 +1294,9 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
     write_jsonl(output_dir / "questions.jsonl", questions)
     write_jsonl(output_dir / "gold_spans.jsonl", spans)
     write_json(output_dir / "manifest.json", manifest)
-    for auxiliary_name in (ALIGNMENT_CANDIDATES_FILE, ALIGNMENT_REVIEW_QUEUE_FILE, FILTER_REPORT_FILE):
+    for auxiliary_name in snapshot_files:
+        if auxiliary_name in SNAPSHOT_REQUIRED_FILES:
+            continue
         source_path = workspace_dir / auxiliary_name
         if source_path.exists():
             shutil.copy2(source_path, output_dir / auxiliary_name)
@@ -1246,6 +1309,7 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
         "span_count": len(spans),
         "document_count": len(documents),
         "include_review_items": include_review_items,
+        "reference_evaluation_profile": reference_evaluation_profile,
     }
 
 
@@ -1312,6 +1376,8 @@ def main() -> None:
             output_dir=Path(args.output_dir).resolve(),
             benchmark_name=args.benchmark_name,
             include_review_items=args.include_review_items,
+            target_question_count=args.target_question_count,
+            reference_evaluation_profile=args.reference_evaluation_profile,
         )
     elif args.command == "report":
         summary = build_report(workspace_dir=Path(args.workspace_dir).resolve())

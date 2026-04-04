@@ -12,6 +12,7 @@ from app.scripts.prepare_external_benchmark import (
     ALIGNMENT_CANDIDATES_FILE,
     ALIGNMENT_REVIEW_QUEUE_FILE,
     FILTER_REPORT_FILE,
+    OPTIONAL_SNAPSHOT_AUXILIARY_FILES,
     PREPARED_DOCUMENTS_FILE,
     PREPARED_ITEMS_FILE,
     REVIEW_OVERRIDES_FILE,
@@ -390,3 +391,167 @@ def test_build_snapshot_can_include_reviewed_item_not_in_filtered_set(tmp_path: 
         if line.strip()
     ]
     assert questions[0]["question"] == "What is the alpha answer?"
+
+
+def test_build_snapshot_can_limit_question_count_and_copy_optional_review_files(tmp_path: Path) -> None:
+    """build_snapshot 應可限制題數並複製可選 review 證據檔。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證 manifest 與輸出檔案正確。
+    """
+
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    source_dir = workspace_dir / "source_documents"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_file = source_dir / "paper-3.md"
+    source_file.write_text("Alpha one.\n\nBeta two.\n", encoding="utf-8")
+
+    prepared_documents = [
+        {
+            "dataset": "qasper",
+            "source_document_id": "paper-3",
+            "file_name": "paper-3.md",
+            "title": "Paper Three",
+            "source_path": str(source_file),
+            "content_type": "text/markdown",
+            "created_at": "2026-04-04T00:00:00+00:00",
+        }
+    ]
+    prepared_items = [
+        {
+            "item_id": "item-1",
+            "dataset": "qasper",
+            "source_document_id": "paper-3",
+            "file_name": "paper-3.md",
+            "query_text": "What is alpha?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Alpha one.",
+            "evidence_texts": ["Alpha one."],
+            "answer_type": "extractive",
+            "source_question_index": 0,
+            "source_metadata": {"paper_id": "paper-3"},
+            "created_at": "2026-04-04T00:00:00+00:00",
+        },
+        {
+            "item_id": "item-2",
+            "dataset": "qasper",
+            "source_document_id": "paper-3",
+            "file_name": "paper-3.md",
+            "query_text": "What is beta?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Beta two.",
+            "evidence_texts": ["Beta two."],
+            "answer_type": "extractive",
+            "source_question_index": 1,
+            "source_metadata": {"paper_id": "paper-3"},
+            "created_at": "2026-04-04T00:00:00+00:00",
+        },
+    ]
+
+    (workspace_dir / PREPARED_DOCUMENTS_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_documents) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / PREPARED_ITEMS_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_items) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / "filtered_items.jsonl").write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_items) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / ALIGNMENT_CANDIDATES_FILE).write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "item_id": "item-1",
+                        "dataset": "qasper",
+                        "file_name": "paper-3.md",
+                        "query_text": "What is alpha?",
+                        "answer_text": "Alpha one.",
+                        "language": "en",
+                        "query_type": "fact_lookup",
+                        "status": "auto_matched",
+                        "accepted_spans": [{"start_offset": 0, "end_offset": len("Alpha one.")}],
+                        "review_candidates": [],
+                        "rejected_evidences": [],
+                        "source_metadata": {"paper_id": "paper-3"},
+                        "generated_at": "2026-04-04T00:00:00+00:00",
+                    },
+                    ensure_ascii=False,
+                ),
+                json.dumps(
+                    {
+                        "item_id": "item-2",
+                        "dataset": "qasper",
+                        "file_name": "paper-3.md",
+                        "query_text": "What is beta?",
+                        "answer_text": "Beta two.",
+                        "language": "en",
+                        "query_type": "fact_lookup",
+                        "status": "needs_review",
+                        "accepted_spans": [],
+                        "review_candidates": [],
+                        "rejected_evidences": [],
+                        "source_metadata": {"paper_id": "paper-3"},
+                        "generated_at": "2026-04-04T00:00:00+00:00",
+                    },
+                    ensure_ascii=False,
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / ALIGNMENT_REVIEW_QUEUE_FILE).write_text(
+        json.dumps({"item_id": "item-2"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / FILTER_REPORT_FILE).write_text(
+        json.dumps({"kept_item_count": 2}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / REVIEW_OVERRIDES_FILE).write_text(
+        json.dumps(
+            {
+                "item_id": "item-2",
+                "decision": "approved",
+                "spans": [{"start_offset": len("Alpha one.\n\n"), "end_offset": len("Alpha one.\n\nBeta two.")}],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    openai_log_file = workspace_dir / OPTIONAL_SNAPSHOT_AUXILIARY_FILES[1]
+    openai_log_file.write_text(
+        json.dumps({"item_id": "item-2", "decision": "approved"}, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "snapshot"
+    summary = build_snapshot(
+        workspace_dir=workspace_dir,
+        output_dir=output_dir,
+        benchmark_name="limited-reviewed",
+        include_review_items=False,
+        target_question_count=1,
+        reference_evaluation_profile="qasper_guarded_query_focus_v1",
+    )
+
+    assert summary["question_count"] == 1
+    assert summary["reference_evaluation_profile"] == "qasper_guarded_query_focus_v1"
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["reference"]["evaluation_profile"] == "qasper_guarded_query_focus_v1"
+    assert manifest["stats"]["question_count"] == 1
+    assert REVIEW_OVERRIDES_FILE in manifest["snapshot_files"]
+    assert OPTIONAL_SNAPSHOT_AUXILIARY_FILES[1] in manifest["snapshot_files"]
+    assert (output_dir / REVIEW_OVERRIDES_FILE).exists()
+    assert (output_dir / OPTIONAL_SNAPSHOT_AUXILIARY_FILES[1]).exists()
