@@ -54,6 +54,8 @@ def upgrade() -> None:
         sa.Column("baseline_run_id", sa.String(length=36), nullable=True),
         sa.Column("created_by_sub", sa.String(length=255), nullable=False),
         sa.Column("total_items", sa.Integer(), nullable=False),
+        sa.Column("evaluation_profile", sa.String(length=64), nullable=False, server_default="production_like_v1"),
+        sa.Column("config_snapshot_json", sa.Text(), nullable=False, server_default="{}"),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),

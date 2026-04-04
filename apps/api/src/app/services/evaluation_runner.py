@@ -170,6 +170,9 @@ def _build_evaluation_config_snapshot(*, settings: AppSettings, top_k: int) -> d
                 "max_candidates": settings.retrieval_max_candidates,
                 "evidence_synopsis_enabled": settings.retrieval_evidence_synopsis_enabled,
                 "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
+                "query_focus_enabled": settings.retrieval_query_focus_enabled,
+                "query_focus_variant": settings.retrieval_query_focus_variant,
+                "query_focus_confidence_threshold": settings.retrieval_query_focus_confidence_threshold,
                 "rrf_k": settings.retrieval_rrf_k,
                 "hnsw_ef_search": settings.retrieval_hnsw_ef_search,
             },
@@ -332,6 +335,7 @@ def _evaluate_single_item(
         "language": item.language.value,
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
+        "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
         "rerank": _build_stage_detail(
             rerank_relevances,

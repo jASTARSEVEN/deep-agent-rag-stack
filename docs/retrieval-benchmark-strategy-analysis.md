@@ -12,7 +12,7 @@
 閱讀順序也依此重新整理：
 
 1. 先看正式 runtime。
-2. 再看 apples-to-apples 的 BGE 對照。
+2. 再看目前保留的常規比較集合。
 3. 最後看歷史策略與診斷結論。
 
 ## Benchmark 改善策略
@@ -34,6 +34,61 @@
 這個策略的核心不是「連續調參直到分數上升」，而是：
 
 > **每一輪都要先用真實 benchmark 驗證，再以最新 miss/chunk 診斷來決定下一輪，而不是靠猜測連續疊規則。**
+
+---
+
+## 2026-04-04 實測更新：`query_focus_v1`
+
+這一輪不是只看離線 artifact，而是實際做了以下重建與驗證：
+
+1. 以 `Docker Compose` 重建資料庫與 runtime stack。
+2. 依各 benchmark package / reproduce 文件重新建立三個 area 與對應 source documents。
+3. 等待文件正式進入 `ready` 後，再匯入三個 snapshot：
+   - `tw-insurance-rag-benchmark-v1`
+   - `qasper-curated-v1-pilot`
+   - `uda-curated-v1-pilot`
+4. 以目前程式碼在重建後的資料庫上，直接比較：
+   - `qasper_guarded_evidence_synopsis_v3`
+   - `qasper_guarded_query_focus_v1`
+
+### 驗證結果摘要
+
+| Dataset | `v3` Recall@10 | `query_focus_v1` Recall@10 | Recall uplift | `v3` nDCG@10 | `query_focus_v1` nDCG@10 | nDCG uplift | `v3` MRR@10 | `query_focus_v1` MRR@10 | MRR uplift |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.8667` | `+0.0000` | `0.7283` | `0.7481` | `+0.0197` | `0.6825` | `0.7083` | `+0.0258` |
+| `QASPER` | `0.8148` | `0.8148` | `+0.0000` | `0.5353` | `0.5353` | `+0.0000` | `0.4467` | `0.4467` | `+0.0000` |
+| `UDA` | `0.8462` | `0.8846` | `+0.0385` | `0.7357` | `0.7742` | `+0.0385` | `0.7083` | `0.7468` | `+0.0385` |
+| 三資料集平均 | `0.8425` | `0.8554` | `+0.0128` | `0.6664` | `0.6858` | `+0.0194` | `0.6125` | `0.6339` | `+0.0214` |
+
+### 這輪真正證明了什麼
+
+1. `query_focus_v1` 在重建後的真實資料庫上沒有造成 regression。
+2. `self` 的提升不是靠擴池，而是 query-side intent/slot 對齊把既有 evidence 排得更前面。
+3. `UDA` 的提升直接命中原本最代表性的 comparison 題：
+   - `Does this approach perform better in the multi-domain or single-domain setting?`
+4. `QASPER` 持平，代表目前這組 bilingual core intent 規則沒有破壞英文 general retrieval，但也尚未打開新的 QASPER uplift。
+
+### self dataset 實際改善題
+
+`query_focus_v1` 在 `tw-insurance-rag-benchmark-v1` 上實際推前了 3 題：
+
+- `投保臻滿億2變額萬能壽險會有身分限制嗎?`
+  - `rank 2 -> 1`
+  - planner intent：`eligibility_identity`
+- `保利美美元利率變動型終身壽險其累計最高投保金額為何?`
+  - `rank 7 -> 6`
+  - planner intent：`amount_max`
+- `被保險人-基本資料變更需有誰簽章及應備文件為何`
+  - `rank 4 -> 2`
+  - planner intent：`eligibility_identity`
+
+### 對 lane 決策的直接意義
+
+- `query_focus_v1` 已通過這一輪 benchmark governance，可保留程式碼，不需回退。
+- 它的角色不是取代 `evidence_synopsis_v3`，而是作為其上層的 query-side semantic-gap 補強。
+- 下一輪若還要繼續打 semantic-gap，應優先做：
+  - 更精準的 zh-TW table-field alias / slot 抽取
+  - 英文 count/comparison 之外的下一個高 ROI intent
 
 ---
 
@@ -105,59 +160,10 @@
 | 類別 | Profile / 組合 | 為何保留 |
 | --- | --- | --- |
 | 正式 runtime baseline | `easypinex-host + BAAI/bge-reranker-v2-m3 + qasper_v3 + query-aware assembler anchor` | 代表目前最接近正式主線的實際分數，應作為後續 runtime 回歸基準。 |
-| BGE apples-to-apples baseline | `production_like_v1` | 用來隔離 provider 差異，作為所有 current HEAD lane 的共同基線。 |
-| 跨資料集平均 nDCG 最佳 lane | `qasper_guarded_assembler_v2_bge` | 目前仍是三資料集平均 `nDCG@10 uplift` 最佳的 current HEAD lane。 |
-| QASPER ranking stress lane | `qasper_guarded_evidence_synopsis_v2_bge` | QASPER `nDCG@10` 最佳，適合觀察 ranking quality。 |
-| QASPER recall stress lane | `qasper_guarded_evidence_synopsis_v3_bge` | QASPER `Recall@10` 最佳，適合觀察 recall ceiling 與 semantic-gap 類 miss。 |
+| 主線前一版 baseline | `qasper_guarded_evidence_synopsis_v3` | 用來直接比較 query-side 對齊是否帶來實質 uplift。 |
+| Query-side semantic-gap lane | `qasper_guarded_query_focus_v1` | 已在 compose 重建後的真實資料庫上驗證：self / UDA 提升、QASPER 持平，適合作為下一輪 query-side 對齊基線。 |
 
 不再保留為常規比較集合的 lane，不代表完全無價值，而是它們已不再是 current HEAD 上值得固定重跑的主集合。
-
----
-
-## BGE apples-to-apples 參考
-
-這一節保留，是因為它能隔離 hosted provider 差異，讓策略比較更乾淨。
-
-### 本輪方法學
-
-- 日期：`2026-04-04`
-- rerank provider：`BAAI/bge-reranker-v2-m3`
-- 資料集：
-  - `QASPER`：`qasper-curated-v1-pilot`
-  - `self`：`tw-insurance-rag-benchmark-v1`
-  - `UDA`：`uda-curated-v1-pilot`
-- artifact：
-  - `QASPER + self`：`.omx/tmp/bge-core-profiles-latest.json`
-  - `UDA`：`benchmarks/uda-curated-v1-pilot/bge_core_profiles_summary.json`
-- 本輪已完成 BGE 重跑的 current HEAD profile：
-  - `production_like_v1`
-  - `qasper_guarded_assembler_v2_bge`
-  - `qasper_guarded_evidence_synopsis_v2_bge`
-  - `qasper_guarded_evidence_synopsis_v3_bge`
-
-### 三資料集平均 nDCG@10 uplift 排名
-
-| Profile | QASPER nDCG@10 | self nDCG@10 | UDA nDCG@10 | 三資料集平均 nDCG@10 | 相對 baseline 平均 uplift |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `production_like_v1` | `0.5201` | `0.7622` | `0.5288` | `0.6037` | `+0.0000` |
-| `qasper_guarded_assembler_v2_bge` | `0.5558` | `0.7727` | `0.5288` | `0.6191` | `+0.0154` |
-| `qasper_guarded_evidence_synopsis_v2_bge` | `0.5743` | `0.7254` | `0.5264` | `0.6087` | `+0.0050` |
-| `qasper_guarded_evidence_synopsis_v3_bge` | `0.5661` | `0.7283` | `0.5288` | `0.6077` | `+0.0040` |
-
-### 平均 Recall / MRR 補充
-
-| Profile | 平均 Recall@10 | Recall uplift | 平均 MRR@10 | MRR uplift |
-| --- | ---: | ---: | ---: | ---: |
-| `production_like_v1` | `0.7525` | `+0.0000` | `0.5565` | `+0.0000` |
-| `qasper_guarded_assembler_v2_bge` | `0.7883` | `+0.0358` | `0.5658` | `+0.0093` |
-| `qasper_guarded_evidence_synopsis_v2_bge` | `0.7908` | `+0.0383` | `0.5519` | `-0.0046` |
-| `qasper_guarded_evidence_synopsis_v3_bge` | `0.8031` | `+0.0506` | `0.5467` | `-0.0098` |
-
-### BGE 對照的核心結論
-
-1. 若主目標是三資料集平均 `nDCG@10 uplift`，最佳 lane 仍是 `qasper_guarded_assembler_v2_bge`。
-2. `evidence synopsis` 系列仍有價值，但更像是 QASPER-leaning lane，而不是跨資料集平均品質最佳解。
-3. `v3` 的平均 Recall uplift 最大，但沒有同步帶來平均 MRR uplift，因此不適合直接作為「整體最佳」結論。
 
 ---
 
@@ -169,10 +175,8 @@
 
 | 方法 | 核心思想 | 最新可用數值 | 狀態 | 對未來改善的價值 |
 | --- | --- | --- | --- | --- |
-| `production_like_v1` | 主線 baseline | 三資料集平均 nDCG@10=`0.6037` | 已重跑 | 所有 current HEAD 策略比較的共同基線 |
-| `assembler_v2` | rerank 已命中時，改善 assembled retention | 三資料集平均 nDCG uplift=`+0.0154` | 已重跑 | 目前平均 nDCG 目標下最值得保留的跨資料集 lane |
-| `evidence_synopsis_v2` | 用 evidence-oriented phrasing 補強排序判別 | QASPER nDCG@10=`0.5743` | 已重跑 | 適合觀察 ranking quality 與 semantic-gap 類排序問題 |
-| `evidence_synopsis_v3` | 在 v2 上補 alias / task / metric bridge | QASPER Recall@10=`0.8889` | 已重跑 | 適合觀察 recall ceiling，但不能單獨當平均品質最佳證據 |
+| `evidence_synopsis_v3` | `query_focus_v1` 前一版主線 | 三資料集平均 `Recall@10=0.8425`、`nDCG@10=0.6664`、`MRR@10=0.6125` | 已重跑 | 作為 query-side 對齊前的直接比較基線 |
+| `query_focus_v1` | 以 intent/slot planner 補 query-side evidence 對齊 | 三資料集平均 `Recall@10 uplift=+0.0128`、`nDCG@10 uplift=+0.0194`、`MRR@10 uplift=+0.0214` | 已實測 | 適合觀察中文 table-field 與英文 comparison/count 類 semantic-gap 問題 |
 
 ### 歷史測過、但不建議作為常規主集合的策略
 
@@ -192,7 +196,7 @@
 2. `assembler lane` 是第一個明顯有效的高 ROI lane。
 3. `fact-heavy child refinement` 到 `evidence synopsis` 系列，其實都在指向同一個結論：
    - 高 ROI 的槓桿在 evidence density 與 query-to-evidence phrasing 對齊。
-4. 但若回到 current HEAD 的跨資料集平均 `nDCG@10 uplift`，目前最佳平衡點仍是 `assembler_v2`。
+4. 在目前 hosted 主線已與 `BAAI/bge-reranker-v2-m3` 對齊的前提下，額外保留 BGE apples-to-apples 對照已無決策必要。
 
 ---
 
@@ -240,16 +244,12 @@
 
 ## 三資料集綜合決策
 
-- 若主目標是隔離 provider 差異、比較 current HEAD 策略：
-  - 以 `production_like_v1` 對照 `qasper_guarded_assembler_v2_bge`、`qasper_guarded_evidence_synopsis_v2_bge`、`qasper_guarded_evidence_synopsis_v3_bge`。
 - 若主目標是看目前正式主線真實表現：
   - 以 `easypinex-host + BAAI/bge-reranker-v2-m3 + qasper_v3 + query-aware assembler anchor` 作為最新 baseline。
-- 若主目標是跨資料集平均 `nDCG@10 uplift`：
-  - 優先看 `qasper_guarded_assembler_v2_bge`。
-- 若主目標是 QASPER recall ceiling：
-  - 優先看 `qasper_guarded_evidence_synopsis_v3_bge`。
-- 若主目標是 QASPER ranking quality：
-  - 優先看 `qasper_guarded_evidence_synopsis_v2_bge`。
+- 若主目標是看 query-side semantic-gap 對齊是否成立：
+  - 直接比較 `qasper_guarded_evidence_synopsis_v3` 與 `qasper_guarded_query_focus_v1`。
+- 若主目標是跨資料集平均 uplift：
+  - 目前優先看 `query_focus_v1` 在重建後真實資料庫上的三資料集平均 uplift。
 
 ---
 
@@ -257,16 +257,15 @@
 
 ### Primary
 
-下一輪最值得的唯一主假設應是：
+下一輪最值得的唯一主假設已不再是「要不要做 query-side 對齊」，而是：
 
-> 讓 `evidence synopsis / recall phrasing` 只在真正需要時介入，專注收斂 `recall_only` 與 `rerank_only` 的 semantic-gap miss。
+> 在保留 `query_focus_v1` 的前提下，擴充下一批高 ROI intents / field aliases，專注收斂剩餘的 `recall_only` 與 `rerank_only` semantic-gap miss。
 
-可聚焦的方向：
+可聚焦方向：
 
-- 讓 alias / task / metric / baseline-list 類 bridge 更 selective。
-- 讓 bridge 補強只在真正需要的 query 類型生效。
-- 在不破壞 `self` 的前提下，補強中文保險 query 與條款 phrasing 的 lexical / semantic 對齊。
-- 讓長 numeric / tabular question 的 query wording 更容易撞到正確 evidence 類型。
+- 補強 zh-TW table-field query 的 alias 與 target-field vocabulary。
+- 擴充英文除 `count_total / comparison_axis` 之外的下一個高 ROI intent。
+- 保持高信心 gating，避免把 query rewrite 擴成 generic prompt engineering。
 
 ### Secondary
 

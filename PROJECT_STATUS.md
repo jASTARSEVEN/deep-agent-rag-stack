@@ -56,13 +56,14 @@
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 對齊 `qasper_guarded_evidence_synopsis_v3_bge` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 對齊 `qasper_guarded_query_focus_v1` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=query_focus_v1`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
-- 已以 BGE apples-to-apples 重跑 `production_like_v1`、`assembler_v2`、`evidence_synopsis_v2`、`evidence_synopsis_v3`；目前 README 主線只展示 `v3` 分數，而完整策略比較直接收斂於 `docs/retrieval-benchmark-strategy-analysis.md`
+- `qasper_guarded_query_focus_v1` 已由 benchmark-gated lane 提升為專案主線策略：在 `qasper_guarded_evidence_synopsis_v3` 之上補 query-side intent/slot planner、focus query 與 rerank evidence need brief
+- retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷
+- 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 `qasper_guarded_query_focus_v1`：相對 `qasper_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平，三資料集平均 `nDCG@10 +0.0194`，確認可保留此 lane
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
 - `UDA` pilot 這一輪的 benchmark governance 結果為：`9` 題 auto-matched、`21` 題由 `OpenAI` review 核准、再補 `4` 題 deterministic span override；reference run assembled 指標提升到 `Recall@10=0.6538`、`nDCG@10=0.5288`、`MRR@10=0.4968`
-- `UDA` pilot 的四條 current-head profile 也已完成 BGE apples-to-apples 對照；在 `26` 題資料集上，`production_like_v1`、`assembler_v2` 與 `qasper_v3` 的 UDA nDCG@10 持平，而 `generic_v1` 略低
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
 - 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
 - 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件

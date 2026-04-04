@@ -6,6 +6,7 @@ from app.core.settings import AppSettings
 from app.scripts.run_qasper_omx_loop import (
     HYPOTHESIS_ASSEMBLER,
     HYPOTHESIS_EVIDENCE_SYNOPSIS,
+    HYPOTHESIS_QUERY_FOCUS,
     QASPER_BENCHMARK_WEIGHT,
     SELF_BENCHMARK_WEIGHT,
     build_deterministic_gate_result,
@@ -133,8 +134,8 @@ def test_rollback_strategy_switches_from_assembler_to_evidence_synopsis_lane() -
     ]
 
 
-def test_rollback_strategy_stops_after_evidence_synopsis_lane() -> None:
-    """evidence-synopsis lane rollback 後，若無後續 lane 應停止。"""
+def test_rollback_strategy_switches_from_evidence_synopsis_to_query_focus_lane() -> None:
+    """evidence-synopsis lane rollback 後，應切到 query-focus lane。"""
 
     rethink = build_rollback_strategy(
         effect_check={
@@ -144,6 +145,24 @@ def test_rollback_strategy_stops_after_evidence_synopsis_lane() -> None:
             "target_recall": 0.8,
         },
         attempted_profiles=["qasper_guarded_evidence_synopsis_v1"],
+    )
+
+    assert rethink is not None
+    assert rethink["main_hypothesis"] == HYPOTHESIS_QUERY_FOCUS
+    assert rethink["candidate_profiles"] == ["qasper_guarded_query_focus_v1"]
+
+
+def test_rollback_strategy_stops_after_query_focus_lane() -> None:
+    """query-focus lane rollback 後，若無後續 lane 應停止。"""
+
+    rethink = build_rollback_strategy(
+        effect_check={
+            "main_hypothesis": HYPOTHESIS_QUERY_FOCUS,
+            "baseline_profile": "production_like_v1",
+            "baseline_metrics": {},
+            "target_recall": 0.8,
+        },
+        attempted_profiles=["qasper_guarded_query_focus_v1"],
     )
 
     assert rethink is None

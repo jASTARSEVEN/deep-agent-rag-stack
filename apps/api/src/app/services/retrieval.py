@@ -16,6 +16,12 @@ from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
+from app.services.retrieval_query import (
+    QueryFocusPlan,
+    build_query_focus_plan_from_settings,
+    extract_query_tokens,
+    get_query_focus_boost_terms,
+)
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
 
@@ -71,6 +77,12 @@ class RetrievalTrace:
     max_candidates: int
     rerank_top_n: int
     candidates: list[RetrievalTraceEntry]
+    query_focus_applied: bool = False
+    query_focus_language: str = "en"
+    query_focus_intents: list[str] | None = None
+    query_focus_slots: dict[str, str] | None = None
+    focus_query: str = ""
+    rerank_query: str = ""
 
 
 @dataclass(slots=True)
@@ -154,15 +166,26 @@ def retrieve_area_candidates(
 
     require_area_access(session=session, principal=principal, area_id=area_id)
 
+    query_focus_plan = build_query_focus_plan_from_settings(settings=settings, query=query)
     recalled_matches = _recall_ranked_candidates(
         session=session,
         settings=settings,
         area_id=area_id,
-        query=query,
+        query=query_focus_plan.focus_query if query_focus_plan.applied else query,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=settings)
-    ranked_matches = _apply_ranking_policy(matches=rrf_matches, query=query, settings=settings)
-    reranked_matches = _apply_rerank(matches=ranked_matches, query=query, settings=settings)
+    ranked_matches = _apply_ranking_policy(
+        matches=rrf_matches,
+        query=query,
+        settings=settings,
+        focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
+        query_focus_plan=query_focus_plan,
+    )
+    reranked_matches = _apply_rerank(
+        matches=ranked_matches,
+        query=query_focus_plan.rerank_query if query_focus_plan.applied else query,
+        settings=settings,
+    )
     candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
 
     return RetrievalResult(
@@ -173,6 +196,12 @@ def retrieve_area_candidates(
             fts_top_k=settings.retrieval_fts_top_k,
             max_candidates=settings.retrieval_max_candidates,
             rerank_top_n=min(settings.rerank_top_n, len(reranked_matches)),
+            query_focus_applied=query_focus_plan.applied,
+            query_focus_language=query_focus_plan.language,
+            query_focus_intents=list(query_focus_plan.intents),
+            query_focus_slots=dict(query_focus_plan.slots),
+            focus_query=query_focus_plan.focus_query,
+            rerank_query=query_focus_plan.rerank_query,
             candidates=[
                 RetrievalTraceEntry(
                     chunk_id=candidate.chunk_id,
@@ -344,6 +373,8 @@ def _apply_ranking_policy(
     matches: list[RankedChunkMatch],
     query: str,
     settings: AppSettings,
+    focus_query: str | None = None,
+    query_focus_plan: QueryFocusPlan | None = None,
 ) -> list[RankedChunkMatch]:
     """套用最小 ranking policy，降低目錄噪音並保留商品名命中優勢。
 
@@ -351,18 +382,30 @@ def _apply_ranking_policy(
     - `matches`：已完成 Python RRF 的候選。
     - `query`：使用者查詢文字。
     - `settings`：API 執行期設定。
+    - `focus_query`：若 query focus 已套用，供 token-based ranking 使用的 focus query。
+    - `query_focus_plan`：本次 retrieval 的 query focus plan；未套用時可為空值。
 
     回傳：
     - `list[RankedChunkMatch]`：已套用最小 ranking rules 的候選排序。
     """
     del settings
-    query_tokens = _extract_query_tokens(query)
+    token_query = focus_query or query
+    query_tokens = _extract_query_tokens(token_query)
+    intent_boost_terms = (
+        get_query_focus_boost_terms(
+            intents=query_focus_plan.intents,
+            language=query_focus_plan.language,
+        )
+        if query_focus_plan is not None and query_focus_plan.applied
+        else ()
+    )
     scored_matches = [
         (
             _ranking_policy_score(
                 match=match,
                 query=query,
                 query_tokens=query_tokens,
+                intent_boost_terms=intent_boost_terms,
             ),
             index,
             match,
@@ -383,16 +426,7 @@ def _apply_ranking_policy(
 def _extract_query_tokens(query: str) -> list[str]:
     """抽出 ranking policy 使用的 query tokens。"""
 
-    stripped_query = query.strip()
-    if not stripped_query:
-        return []
-    whitespace_tokens = [token.strip().lower() for token in stripped_query.split() if token.strip()]
-    if whitespace_tokens:
-        return whitespace_tokens
-    fallback_tokens = [token.lower() for token in stripped_query.replace("？", " ").replace("?", " ").replace("，", " ").split() if token]
-    if fallback_tokens:
-        return fallback_tokens
-    return [stripped_query.lower()]
+    return extract_query_tokens(query=query)
 
 
 def _ranking_policy_score(
@@ -400,6 +434,7 @@ def _ranking_policy_score(
     match: RankedChunkMatch,
     query: str,
     query_tokens: list[str],
+    intent_boost_terms: tuple[str, ...] = (),
 ) -> float:
     """計算最小 ranking policy 分數。"""
 
@@ -418,6 +453,13 @@ def _ranking_policy_score(
         content_token_hits = sum(1 for token in query_tokens if token and token in content)
         score += min(heading_token_hits, 4) * 0.025
         score += min(content_token_hits, 6) * 0.008
+
+    if intent_boost_terms:
+        normalized_boost_terms = [term.strip().lower() for term in intent_boost_terms if term.strip()]
+        boost_heading_hits = sum(1 for term in normalized_boost_terms if term in heading)
+        boost_content_hits = sum(1 for term in normalized_boost_terms if term in content)
+        score += min(boost_heading_hits, 3) * 0.02
+        score += min(boost_content_hits, 3) * 0.006
 
     if _is_table_of_contents_chunk(match):
         score -= 0.12

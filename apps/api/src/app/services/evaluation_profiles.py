@@ -21,6 +21,8 @@ QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1 = "qasper_guarded_evidence_synopsis_v1"
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2 = "qasper_guarded_evidence_synopsis_v2"
 # evidence synopsis lane 第三輪 profile 名稱。
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3 = "qasper_guarded_evidence_synopsis_v3"
+# query focus lane 第一輪 profile 名稱。
+QASPER_GUARDED_QUERY_FOCUS_V1 = "qasper_guarded_query_focus_v1"
 # assembler lane 第一輪 deterministic gate profile 名稱。
 QASPER_GUARDED_ASSEMBLER_V1_GATE = "qasper_guarded_assembler_v1_gate"
 # assembler lane 第二輪 deterministic gate profile 名稱。
@@ -31,6 +33,8 @@ QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE = "qasper_guarded_evidence_synopsis_v1_
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "qasper_guarded_evidence_synopsis_v2_gate"
 # evidence synopsis lane 第三輪 deterministic gate profile 名稱。
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "qasper_guarded_evidence_synopsis_v3_gate"
+# query focus lane 第一輪 deterministic gate profile 名稱。
+QASPER_GUARDED_QUERY_FOCUS_V1_GATE = "qasper_guarded_query_focus_v1_gate"
 
 # 無需進入 iteration 的 effect-check 假設名稱。
 HYPOTHESIS_NONE = "no_iteration_needed"
@@ -38,6 +42,8 @@ HYPOTHESIS_NONE = "no_iteration_needed"
 HYPOTHESIS_ASSEMBLER = "rerank_hit_but_assembled_drop"
 # 補強 rerank text 的 evidence synopsis 假設名稱。
 HYPOTHESIS_EVIDENCE_SYNOPSIS = "evidence_synopsis_for_fact_windows"
+# 補強 query-side semantic gap 對齊的 query focus 假設名稱。
+HYPOTHESIS_QUERY_FOCUS = "query_focus_for_semantic_gap"
 
 # guarded profile 的安全上限，避免 benchmark-only 調參失控。
 MAX_GUARDED_RECALL_DEPTH = 100
@@ -140,6 +146,17 @@ def _qasper_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) -> 
     }
 
 
+def _qasper_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `qasper_guarded_query_focus_v1` 的覆寫欄位。"""
+
+    return {
+        **_qasper_guarded_evidence_synopsis_v3_overrides(settings=settings),
+        "retrieval_query_focus_enabled": True,
+        "retrieval_query_focus_variant": "query_focus_v1",
+        "retrieval_query_focus_confidence_threshold": 0.7,
+    }
+
+
 # evaluation profile registry；新增策略時優先在此處新增資料定義，而非分散到多處 if/else。
 EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     PRODUCTION_LIKE_V1: EvaluationProfileSpec(name=PRODUCTION_LIKE_V1),
@@ -167,6 +184,10 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3: EvaluationProfileSpec(
         name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
         lane_name="evidence_synopsis",
+    ),
+    QASPER_GUARDED_QUERY_FOCUS_V1: EvaluationProfileSpec(
+        name=QASPER_GUARDED_QUERY_FOCUS_V1,
+        lane_name="query_focus",
     ),
     QASPER_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
         name=QASPER_GUARDED_ASSEMBLER_V1_GATE,
@@ -203,6 +224,13 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
         is_gate=True,
         lane_name="evidence_synopsis",
     ),
+    QASPER_GUARDED_QUERY_FOCUS_V1_GATE: EvaluationProfileSpec(
+        name=QASPER_GUARDED_QUERY_FOCUS_V1_GATE,
+        base_profile=QASPER_GUARDED_QUERY_FOCUS_V1,
+        overrides={"rerank_provider": "deterministic"},
+        is_gate=True,
+        lane_name="query_focus",
+    ),
 }
 
 # benchmark strategy lane registry；新增策略時應以新增 lane 定義為主。
@@ -221,6 +249,12 @@ BENCHMARK_STRATEGY_LANES: dict[str, BenchmarkStrategyLaneSpec] = {
             QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2,
             QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
         ),
+        rollback_target_hypothesis=HYPOTHESIS_QUERY_FOCUS,
+    ),
+    HYPOTHESIS_QUERY_FOCUS: BenchmarkStrategyLaneSpec(
+        name="query_focus",
+        main_hypothesis=HYPOTHESIS_QUERY_FOCUS,
+        profile_sequence=(QASPER_GUARDED_QUERY_FOCUS_V1,),
         rollback_target_hypothesis=None,
     ),
 }
@@ -233,6 +267,9 @@ QASPER_GUARDED_ASSEMBLER_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_ASSEMBLE
 
 # evidence synopsis lane 的固定 profile 順序。
 QASPER_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_EVIDENCE_SYNOPSIS].profile_sequence
+
+# query focus lane 的固定 profile 順序。
+QASPER_GUARDED_QUERY_FOCUS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_QUERY_FOCUS].profile_sequence
 
 
 def resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
@@ -282,6 +319,8 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
         return _qasper_guarded_evidence_synopsis_v2_overrides(settings=settings)
     if evaluation_profile == QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3:
         return _qasper_guarded_evidence_synopsis_v3_overrides(settings=settings)
+    if evaluation_profile == QASPER_GUARDED_QUERY_FOCUS_V1:
+        return _qasper_guarded_query_focus_v1_overrides(settings=settings)
 
     spec = EVALUATION_PROFILE_SPECS[evaluation_profile]
     merged_overrides: dict[str, int | str | bool] = {}

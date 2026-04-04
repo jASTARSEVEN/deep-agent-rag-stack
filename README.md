@@ -71,12 +71,15 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-This repository now treats `qasper_guarded_evidence_synopsis_v3_bge` as the latest published apples-to-apples benchmark reference. In runtime terms, the default stack uses:
+This repository now treats `qasper_guarded_query_focus_v1` as the current mainline retrieval strategy. In runtime terms, the default stack uses:
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=query_focus_v1`
+- `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
@@ -88,25 +91,27 @@ This repository now treats `qasper_guarded_evidence_synopsis_v3_bge` as the late
 Latest mainline benchmark snapshot:
 
 - Date: `2026-04-04`
-- Mainline profile label: `qasper_guarded_evidence_synopsis_v3_bge`
-- Artifact: `.omx/tmp/bge-core-profiles-latest.json`
+- Mainline profile label: `qasper_guarded_query_focus_v1`
+- Validation mode: fresh `Docker Compose` rebuild + benchmark package re-import
 - Datasets:
   - `QASPER` (`qasper-curated-v1-pilot`)
   - `tw-insurance-rag-benchmark-v1`
-  - weighted objective (`self=0.6`, `QASPER=0.4`)
+  - `uda-curated-v1-pilot`
+  - three-dataset average
 
 Mainline assembled metrics:
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `QASPER` | `0.8889` | `0.5661` | `0.4609` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
-| `weighted (self=0.6, qasper=0.4)` | `0.8756` | `0.6634` | `0.5939` |
+| `QASPER` | `0.8148` | `0.5353` | `0.4467` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7481` | `0.7083` |
+| `uda-curated-v1-pilot` | `0.8846` | `0.7742` | `0.7468` |
+| `three-dataset average` | `0.8554` | `0.6858` | `0.6339` |
 
 Notes:
 
-- The README intentionally shows only the latest published `v3` benchmark reference.
-- The hosted runtime default is now `easypinex-host / BAAI/bge-reranker-v2-m3`; rerun the benchmark before treating the numbers above as hosted-provider results.
+- The README intentionally shows only the latest mainline `query_focus_v1` benchmark reference.
+- These numbers come from the current hosted-runtime default stack (`easypinex-host / BAAI/bge-reranker-v2-m3`) after a fresh compose rebuild and benchmark package re-import.
 - Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 

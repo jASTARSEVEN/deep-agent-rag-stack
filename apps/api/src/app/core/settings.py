@@ -28,6 +28,9 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_MAX_CANDIDATES",
     "RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED",
     "RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT",
+    "RETRIEVAL_QUERY_FOCUS_ENABLED",
+    "RETRIEVAL_QUERY_FOCUS_VARIANT",
+    "RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD",
     "RETRIEVAL_RRF_K",
     "RETRIEVAL_HNSW_EF_SEARCH",
     "RERANK_TOP_N",
@@ -125,6 +128,9 @@ class AppSettings(BaseSettings):
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 30
     retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = True
     retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "qasper_v3"
+    retrieval_query_focus_enabled: Annotated[bool, Field(alias="RETRIEVAL_QUERY_FOCUS_ENABLED")] = True
+    retrieval_query_focus_variant: Annotated[str, Field(alias="RETRIEVAL_QUERY_FOCUS_VARIANT")] = "query_focus_v1"
+    retrieval_query_focus_confidence_threshold: Annotated[float, Field(alias="RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD")] = 0.7
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
     rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "easypinex-host"

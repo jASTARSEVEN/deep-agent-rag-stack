@@ -75,12 +75,15 @@
 
 ## Evaluation Benchmark
 
-本專案目前將 `qasper_guarded_evidence_synopsis_v3_bge` 視為最新公開的 apples-to-apples benchmark 參考。以實際 runtime 設定來說，預設組合為：
+本專案目前將 `qasper_guarded_query_focus_v1` 視為目前的主線 retrieval 策略。以實際 runtime 設定來說，預設組合為：
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=query_focus_v1`
+- `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
@@ -92,25 +95,27 @@
 最新主線 benchmark 快照：
 
 - 日期：`2026-04-04`
-- 主線 profile 標籤：`qasper_guarded_evidence_synopsis_v3_bge`
-- artifact：`.omx/tmp/bge-core-profiles-latest.json`
+- 主線 profile 標籤：`qasper_guarded_query_focus_v1`
+- 驗證方式：fresh `Docker Compose` rebuild + benchmark package re-import
 - 使用資料集：
   - `QASPER`（`qasper-curated-v1-pilot`）
   - `tw-insurance-rag-benchmark-v1`
-  - weighted objective（`self=0.6`、`QASPER=0.4`）
+  - `uda-curated-v1-pilot`
+  - 三資料集平均
 
 主線 assembled 指標：
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `QASPER` | `0.8889` | `0.5661` | `0.4609` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
-| `weighted (self=0.6, qasper=0.4)` | `0.8756` | `0.6634` | `0.5939` |
+| `QASPER` | `0.8148` | `0.5353` | `0.4467` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7481` | `0.7083` |
+| `uda-curated-v1-pilot` | `0.8846` | `0.7742` | `0.7468` |
+| `三資料集平均` | `0.8554` | `0.6858` | `0.6339` |
 
 補充說明：
 
-- README 這裡刻意只呈現最新公開的 `v3` benchmark 參考結果。
-- 目前 hosted runtime 預設已改為 `easypinex-host / BAAI/bge-reranker-v2-m3`；若要把上表視為 hosted-provider 指標，需先重跑 benchmark。
+- README 這裡刻意只呈現最新主線 `query_focus_v1` 的 benchmark 參考結果。
+- 上表分數來自目前 hosted-runtime 預設組合（`easypinex-host / BAAI/bge-reranker-v2-m3`）在 fresh compose rebuild 與 benchmark package 重建後的實跑結果。
 - 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 

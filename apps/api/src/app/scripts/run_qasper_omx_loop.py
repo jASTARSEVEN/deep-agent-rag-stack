@@ -15,6 +15,7 @@ from app.services.evaluation_dataset import create_evaluation_run, get_evaluatio
 from app.services.evaluation_profiles import (
     HYPOTHESIS_ASSEMBLER,
     HYPOTHESIS_EVIDENCE_SYNOPSIS,
+    HYPOTHESIS_QUERY_FOCUS,
     HYPOTHESIS_NONE,
     PRODUCTION_LIKE_V1,
     get_candidate_profiles_for_hypothesis,
@@ -280,6 +281,8 @@ def build_rollback_strategy(
     next_hypothesis = get_rollback_target_hypothesis(main_hypothesis=current_hypothesis)
     if next_hypothesis == HYPOTHESIS_EVIDENCE_SYNOPSIS:
         reason = "assembler lane rollback，改以 evidence-synopsis lane 作為下一輪單一主假設。"
+    elif next_hypothesis == HYPOTHESIS_QUERY_FOCUS:
+        reason = "evidence-synopsis lane rollback，改以 query-focus lane 作為下一輪單一主假設。"
     elif next_hypothesis is None:
         return None
 

@@ -700,6 +700,10 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[0].rerank_applied is True
     assert result.trace.query == "中文檢索"
+    assert result.trace.query_focus_applied is False
+    assert result.trace.query_focus_language == "zh-TW"
+    assert result.trace.focus_query == "中文檢索"
+    assert result.trace.rerank_query == "中文檢索"
     assert result.trace.candidates[0].chunk_id == ready_child.id
 
 
@@ -1484,6 +1488,101 @@ def test_retrieve_area_candidates_includes_traditional_chinese_evidence_synopsis
     assert "Evidence synopsis:" in captured_documents[0].text
     assert "此段落包含數量" in captured_documents[0].text
     assert "此段落列出評估指標" in captured_documents[0].text
+
+
+def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """query focus 啟用時，rerank query 與 trace 應帶入 planner 結果。"""
+
+    settings = app_settings.model_copy(update={"retrieval_query_focus_enabled": True})
+    area = Area(id=_uuid(), name="Retrieval Query Focus")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="query-focus.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-query-focus/query-focus.md",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.table,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="二、 契約變更申請時間及應備文件",
+        content="保單借款 要保人 被保險人 同一人",
+        content_preview="保單借款 要保人 被保險人 同一人",
+        char_count=len("保單借款 要保人 被保險人 同一人"),
+        start_offset=0,
+        end_offset=len("保單借款 要保人 被保險人 同一人"),
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.table,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="二、 契約變更申請時間及應備文件",
+        content="保單借款 要保人 被保險人 同一人",
+        content_preview="保單借款 要保人 被保險人 同一人",
+        char_count=len("保單借款 要保人 被保險人 同一人"),
+        start_offset=0,
+        end_offset=len("保單借款 要保人 被保險人 同一人"),
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    db_session.add_all([document, parent, child])
+    db_session.commit()
+
+    captured_queries: list[str] = []
+
+    class CapturingRerankProvider:
+        """記錄 query focus rerank query 的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存 rerank query 並回傳固定分數。
+
+            參數：
+            - `query`：送進 rerank 的 query。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del top_n
+            captured_queries.append(query)
+            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="網路保險申請保單借款的身分限制",
+    )
+
+    assert captured_queries
+    assert captured_queries[0].startswith("網路保險申請保單借款的身分限制\nNeed:")
+    assert result.trace.query_focus_applied is True
+    assert result.trace.query_focus_language == "zh-TW"
+    assert result.trace.query_focus_intents == ["eligibility_identity"]
+    assert result.trace.query_focus_slots["target_field"] == "身分限制"
+    assert "要保人" in result.trace.focus_query
+    assert result.trace.rerank_query == captured_queries[0]
 
 
 def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:

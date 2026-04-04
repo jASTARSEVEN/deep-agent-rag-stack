@@ -117,6 +117,8 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
+    assert preview_payload["query_focus"]["applied"] is False
+    assert preview_payload["query_focus"]["focus_query"] == "zh-TW facts"
     assert preview_payload["recall"]["items"]
     assert preview_payload["rerank"]["items"]
     assert preview_payload["assembled"]["items"]
@@ -132,7 +134,9 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_payload["run"]["evaluation_profile"] == "production_like_v1"
     assert run_payload["run"]["config_snapshot"]["top_k"] == 5
     assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] == app_settings.rerank_top_n
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is True
     assert "recall" in run_payload["summary_metrics"]
+    assert run_payload["per_query"][0]["query_focus"]["applied"] is False
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]
     assert run_payload["per_query"][0]["rerank"]["first_hit_rank"] == preview_payload["rerank"]["first_hit_rank"]
@@ -144,6 +148,105 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert artifact is not None
     persisted_report = json.loads(artifact.report_json)
     assert persisted_report["per_query"][0]["item_id"] == item_id
+
+
+def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, db_session, app_settings) -> None:
+    """query focus profile 應在 run report 中暴露 planner detail 與 snapshot。"""
+
+    client.app.state.settings = app_settings.model_copy(update={"retrieval_query_focus_enabled": True})
+
+    area = Area(id=_uuid(), name="Evaluation Query Focus Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="query-focus.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/query-focus.md",
+        display_text="保單借款 要保人 被保險人 同一人",
+        normalized_text="保單借款 要保人 被保險人 同一人",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.table,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="二、 契約變更申請時間及應備文件",
+        content=document.display_text or "",
+        content_preview=document.display_text or "",
+        char_count=len(document.display_text or ""),
+        start_offset=0,
+        end_offset=len(document.display_text or ""),
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.table,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="二、 契約變更申請時間及應備文件",
+        content=document.display_text or "",
+        content_preview=document.display_text or "",
+        char_count=len(document.display_text or ""),
+        start_offset=0,
+        end_offset=len(document.display_text or ""),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, parent, child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Query Focus Dataset"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "網路保險申請保單借款的身分限制", "language": "zh-TW", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": document.id,
+            "start_offset": 0,
+            "end_offset": len(document.display_text or ""),
+            "relevance_grade": 3,
+        },
+    )
+
+    preview_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["query_focus"]["applied"] is True
+    assert preview_payload["query_focus"]["intents"] == ["eligibility_identity"]
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5, "evaluation_profile": "qasper_guarded_query_focus_v1"},
+    )
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is True
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_variant"] == "query_focus_v1"
+    assert run_payload["per_query"][0]["query_focus"]["applied"] is True
+    assert run_payload["per_query"][0]["query_focus"]["intents"] == ["eligibility_identity"]
 
 
 def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_session, app_settings) -> None:

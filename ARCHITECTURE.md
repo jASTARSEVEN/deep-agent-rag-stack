@@ -200,9 +200,10 @@
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
+8.5. 主線 default 已啟用 `query_focus_v1`：在 recall 前先做 query-side intent/slot planner；高信心時才改用 `focus_query` 餵 embedding / FTS / ranking，並用 `original query + one-line evidence need brief` 作為 rerank query；未達門檻時必須完全回退到原 query
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為 `Easypinex-host /v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:`，且對齊 `qasper_guarded_evidence_synopsis_v3_bge` 的策略組合（`easypinex-host / BAAI/bge-reranker-v2-m3 + qasper_v3`；現有公開比較 artifact 仍以 BGE apples-to-apples 參考為主）。其補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
+11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:` 與 `query_focus_v1`，對齊 `qasper_guarded_query_focus_v1` 的策略組合（`easypinex-host / BAAI/bge-reranker-v2-m3 + qasper_v3 + query_focus_v1`）。其中 document-side 補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
 11.5. 本機 Hugging Face rerank provider 採 lazy load + process-local cache；首次使用可能下載權重並增加延遲，但任何 provider 建立/推論失敗都必須回退到既有 RRF fail-open 路徑
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion
@@ -211,7 +212,7 @@
 16. `table` chunks 在 assembler 與 parent-level rerank 文字組裝內都維持 Markdown table 文字；同一 context 內多個 row-group child 合併時只保留一次表頭
 17. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限，而 `ASSEMBLER_MAX_CHARS_PER_CONTEXT` 同時決定 full-parent 與 expanded-window 的 materialization budget
 18. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意；此約束同樣適用於 Cohere 與 Easypinex-host hosted provider
-19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫
+19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，供 chat debug 與 evaluation reviewer 逐題分析
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
 22. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流

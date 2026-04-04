@@ -219,11 +219,24 @@ class EvaluationCandidateStageResponse(BaseModel):
     items: list[EvaluationStageCandidate]
 
 
+class EvaluationQueryFocusDetail(BaseModel):
+    """單題 query focus planner 明細。"""
+
+    applied: bool
+    language: str
+    confidence: float
+    intents: list[str]
+    slots: dict[str, str]
+    focus_query: str
+    rerank_query: str
+
+
 class EvaluationCandidatePreviewResponse(BaseModel):
     """人工複核用 candidate preview 回應。"""
 
     dataset: EvaluationDatasetSummary
     item: EvaluationItemSummary
+    query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
     rerank: EvaluationCandidateStageResponse
     assembled: EvaluationCandidateStageResponse
@@ -279,6 +292,7 @@ class EvaluationPerQueryDetail(BaseModel):
     language: EvaluationLanguage
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
+    query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail
     rerank: EvaluationPerQueryStageDetail
     assembled: EvaluationPerQueryStageDetail
