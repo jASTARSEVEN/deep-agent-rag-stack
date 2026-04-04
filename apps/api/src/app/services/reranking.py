@@ -311,13 +311,14 @@ class CohereRerankProvider(RerankProvider):
 class EasypinexHostRerankProvider(RerankProvider):
     """使用 easypinex-host `/v1/rerank` HTTP API 的 provider。"""
 
-    def __init__(self, *, base_url: str, api_key: str, model: str) -> None:
+    def __init__(self, *, base_url: str, api_key: str, model: str, timeout_seconds: float = 10.0) -> None:
         """初始化 easypinex-host rerank provider。
 
         參數：
         - `base_url`：easypinex-host service 的 base URL，例如 `http://host:8000`。
         - `api_key`：easypinex-host service 使用的 Bearer API key。
         - `model`：要使用的 rerank model 名稱。
+        - `timeout_seconds`：每次 HTTP request 的 timeout 秒數。
 
         回傳：
         - `None`：此建構子只負責保存設定。
@@ -327,6 +328,7 @@ class EasypinexHostRerankProvider(RerankProvider):
         self._endpoint = f"{normalized_base_url}/v1/rerank"
         self._api_key = api_key
         self._model = model
+        self._timeout_seconds = max(1.0, timeout_seconds)
 
     def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
         """呼叫 easypinex-host HTTP API 產生 rerank 結果。
@@ -365,7 +367,7 @@ class EasypinexHostRerankProvider(RerankProvider):
         )
 
         try:
-            with urlopen(request, timeout=10) as response:
+            with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             raise RuntimeError("Easypinex-host rerank API 呼叫失敗。") from exc
@@ -426,6 +428,7 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
             base_url=settings.easypinex_host_rerank_base_url,
             api_key=settings.easypinex_host_rerank_api_key,
             model=settings.rerank_model,
+            timeout_seconds=settings.easypinex_host_rerank_timeout_seconds,
         )
     raise ValueError(f"不支援的 rerank provider：{settings.rerank_provider}")
 

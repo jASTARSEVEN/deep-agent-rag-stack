@@ -273,6 +273,7 @@ def test_easypinex_host_rerank_provider_posts_contract_and_parses_scores(monkeyp
         base_url="http://helper.local:8000/",
         api_key="helper-key",
         model="BAAI/bge-reranker-v2-m3",
+        timeout_seconds=42.0,
     )
     results = provider.rerank(
         query="部署 rerank",
@@ -284,7 +285,7 @@ def test_easypinex_host_rerank_provider_posts_contract_and_parses_scores(monkeyp
     )
 
     assert [item.candidate_id for item in results] == ["doc-2", "doc-1"]
-    assert captured_request["timeout"] == 10
+    assert captured_request["timeout"] == 42.0
     assert captured_request["url"] == "http://helper.local:8000/v1/rerank"
     assert captured_request["method"] == "POST"
     assert captured_request["authorization"] == "Bearer helper-key"

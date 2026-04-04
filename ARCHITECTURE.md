@@ -200,9 +200,9 @@
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
-9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為本機 `BAAI/bge-reranker-v2-m3`，另支援 `Qwen/Qwen3-Reranker-0.6B`、`Cohere`、Easypinex-host `/v1/rerank` hosted provider 與測試用 `deterministic`
+9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為 `Easypinex-host /v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:`，且對齊 `qasper_guarded_evidence_synopsis_v3_bge`（`BGE + qasper_v3`）。其補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
+11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:`，且對齊 `qasper_guarded_evidence_synopsis_v3_bge` 的策略組合（`easypinex-host / BAAI/bge-reranker-v2-m3 + qasper_v3`；現有公開比較 artifact 仍以 BGE apples-to-apples 參考為主）。其補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
 11.5. 本機 Hugging Face rerank provider 採 lazy load + process-local cache；首次使用可能下載權重並增加延遲，但任何 provider 建立/推論失敗都必須回退到既有 RRF fail-open 路徑
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion

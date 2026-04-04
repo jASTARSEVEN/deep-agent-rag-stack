@@ -36,6 +36,7 @@ EMPTY_STRING_ENV_KEYS = {
     "RERANK_RETRY_ON_429_BACKOFF_SECONDS",
     "EASYPINEX_HOST_RERANK_BASE_URL",
     "EASYPINEX_HOST_RERANK_API_KEY",
+    "EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS",
     "ASSEMBLER_MAX_CONTEXTS",
     "ASSEMBLER_MAX_CHARS_PER_CONTEXT",
     "ASSEMBLER_MAX_CHILDREN_PER_PARENT",
@@ -126,11 +127,12 @@ class AppSettings(BaseSettings):
     retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "qasper_v3"
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
-    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "bge"
+    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "easypinex-host"
     rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "BAAI/bge-reranker-v2-m3"
     cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
-    easypinex_host_rerank_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_RERANK_BASE_URL")] = None
+    easypinex_host_rerank_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_RERANK_BASE_URL")] = "http://easypinex.duckdns.org:8000"
     easypinex_host_rerank_api_key: Annotated[str | None, Field(alias="EASYPINEX_HOST_RERANK_API_KEY")] = None
+    easypinex_host_rerank_timeout_seconds: Annotated[float, Field(alias="EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS")] = 60.0
     rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 30
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
     rerank_retry_on_429_attempts: Annotated[int, Field(alias="RERANK_RETRY_ON_429_ATTEMPTS")] = 4

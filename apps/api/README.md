@@ -58,6 +58,7 @@ This module contains the project's FastAPI service. It currently provides:
 - `COHERE_API_KEY`
 - `EASYPINEX_HOST_RERANK_BASE_URL`
 - `EASYPINEX_HOST_RERANK_API_KEY`
+- `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS`
 - `RERANK_TOP_N`
 - `RERANK_MAX_CHARS_PER_DOC`
 - `ASSEMBLER_MAX_CONTEXTS`
@@ -97,21 +98,21 @@ This module contains the project's FastAPI service. It currently provides:
   - `en`
   - `zh-TW`
 - Supported evidence synopsis variants:
-  - `generic_v1`: the default production-safe synopsis phrasing
-  - `qasper_v3`: a benchmark-gated variant that adds dataset alias bridges, task framing bridges, and metric-aspect bridges for QASPER-style semantic-gap misses, with localized output for supported language profiles
+  - `generic_v1`: the baseline production-safe synopsis phrasing
+  - `qasper_v3`: the current mainline runtime variant that adds dataset alias bridges, task framing bridges, and metric-aspect bridges for QASPER-style semantic-gap misses, with localized output for supported language profiles
 - Runtime knobs:
   - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true` enables synopsis generation for rerank text assembly
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `generic_v1`
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `qasper_v3`
 - Guardrails:
   - variants only affect benchmark/profile-gated wording and must not bypass SQL gate, ready-only filtering, or production defaults
-  - the `qasper_v3` variant is intended for controlled evaluation profiles rather than the default production runtime
+  - even though `qasper_v3` is the current runtime default, wording changes must still remain configurable and must not bypass SQL gate, ready-only filtering, or production defaults
 
 ## Rerank Provider Support Modes
 
 The internal retrieval service now supports five rerank providers behind the same `RerankProvider` contract:
 
 - `bge`
-  - default production provider
+  - optional local cross-encoder provider
   - default model: `BAAI/bge-reranker-v2-m3`
   - implemented with local `torch + transformers` inference
 - `qwen`
@@ -122,13 +123,15 @@ The internal retrieval service now supports five rerank providers behind the sam
   - optional hosted provider
   - requires `COHERE_API_KEY`
 - `easypinex-host`
-  - optional hosted provider for the Easypinex-host `/v1/rerank` service
+  - default runtime provider for the Easypinex-host `/v1/rerank` service
+  - default model: `BAAI/bge-reranker-v2-m3`
   - requires `EASYPINEX_HOST_RERANK_BASE_URL` and `EASYPINEX_HOST_RERANK_API_KEY`
+  - uses `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS` to control HTTP timeout; the default is `60s`
 - `deterministic`
   - offline test / fallback-friendly provider for local regression tests
 
 Notes:
-- `bge` remains the default runtime choice after this change.
+- `easypinex-host` is the default runtime choice after this change.
 - `qwen` is supported but is not the default runtime choice.
 - Both local-model providers may download weights on first use unless the model is already cached locally.
 
@@ -180,10 +183,10 @@ Notes:
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests.
-- The default compose/runtime rerank path is `RERANK_PROVIDER=bge` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
+- The default compose/runtime rerank path is `RERANK_PROVIDER=easypinex-host` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
 - `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
 - `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
-- `RERANK_PROVIDER=easypinex-host` is available for Easypinex-host rerank services that expose `POST /v1/rerank`; configure `EASYPINEX_HOST_RERANK_BASE_URL` and `EASYPINEX_HOST_RERANK_API_KEY`.
+- `RERANK_PROVIDER=easypinex-host` is available for Easypinex-host rerank services that expose `POST /v1/rerank`; configure `EASYPINEX_HOST_RERANK_BASE_URL`, `EASYPINEX_HOST_RERANK_API_KEY`, `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS`, and use a supported model such as `BAAI/bge-reranker-v2-m3` or `Qwen/Qwen3-Reranker-0.6B`.
 - To fold `QASPER` / `UDA`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.

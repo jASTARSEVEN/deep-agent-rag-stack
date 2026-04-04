@@ -43,7 +43,7 @@
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
 - 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / `easypinex-host` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
-- 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，其中 production 預設已切到 BGE
+- 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，並將 runtime 預設切到 `easypinex-host / BAAI/bge-reranker-v2-m3`
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
 - assembler 已升級為 precision-first materializer：小 parent 直接回完整 parent，大 parent 以命中 child 為中心做 budget-aware expansion；table hit 會優先補齊完整表格與前後說明文字
 - 專案已開始將 retrieval/assembler 收斂為單一 retrieval tool，供 LangGraph chat runtime 使用
@@ -59,7 +59,7 @@
 - 受控 OMX benchmark loop 的正式決策基準已升級為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`；effect-check、deterministic gate 與 implement decision 皆改為同時考慮兩者
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 對齊 `qasper_guarded_evidence_synopsis_v3_bge`：正式預設為本機 `BGE` rerank + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 對齊 `qasper_guarded_evidence_synopsis_v3_bge` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
 - 專案仍保留 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代比較；其中 `qasper_guarded_evidence_synopsis_v3` 現在同時也是主線 default 所對齊的策略組合
 - 已以 BGE apples-to-apples 重跑 `production_like_v1`、`assembler_v2`、`evidence_synopsis_v2`、`evidence_synopsis_v3`；目前 README 主線只展示 `v3` 分數，而完整策略比較直接收斂於 `docs/retrieval-benchmark-strategy-analysis.md`
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
@@ -183,7 +183,7 @@
 
 ### Phase 4.2 — 已完成的 minimal rerank slice
 - 已在 API 端加入 rerank provider abstraction，現支援 `deterministic`、`bge`、`qwen`、`cohere` 與 `easypinex-host`
-- 已將 production 預設 rerank provider 改為 `bge`，預設 model 為 `BAAI/bge-reranker-v2-m3`；`Qwen/Qwen3-Reranker-0.6B` 則作為可選本機 provider
+- 已將 production 預設 rerank provider 改為 `easypinex-host`，預設 model 為 `BAAI/bge-reranker-v2-m3`；`Qwen/Qwen3-Reranker-0.6B` 與本機 `BAAI/bge-reranker-v2-m3` 則作為可選 provider
 - 已在 internal retrieval service 將流程擴充為 SQL gate -> vector recall / FTS recall -> `RRF` -> rerank
 - 已為 retrieval candidates 補上 `rrf_rank`、`rerank_rank`、`rerank_score` 與 `rerank_applied`
 - 已新增 in-memory retrieval trace metadata，保留 query、top-k 設定與每筆 candidate 的 ranking trace

@@ -71,9 +71,9 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-This repository now treats `qasper_guarded_evidence_synopsis_v3_bge` as the mainline retrieval default. In runtime terms, that means the default stack uses:
+This repository now treats `qasper_guarded_evidence_synopsis_v3_bge` as the latest published apples-to-apples benchmark reference. In runtime terms, the default stack uses:
 
-- `RERANK_PROVIDER=bge`
+- `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
@@ -105,7 +105,8 @@ Mainline assembled metrics:
 
 Notes:
 
-- The README intentionally shows only the mainline `v3` result.
+- The README intentionally shows only the latest published `v3` benchmark reference.
+- The hosted runtime default is now `easypinex-host / BAAI/bge-reranker-v2-m3`; rerun the benchmark before treating the numbers above as hosted-provider results.
 - Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 

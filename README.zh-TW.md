@@ -75,9 +75,9 @@
 
 ## Evaluation Benchmark
 
-本專案目前已將 `qasper_guarded_evidence_synopsis_v3_bge` 視為主線 retrieval 預設。以實際 runtime 設定來說，預設組合為：
+本專案目前將 `qasper_guarded_evidence_synopsis_v3_bge` 視為最新公開的 apples-to-apples benchmark 參考。以實際 runtime 設定來說，預設組合為：
 
-- `RERANK_PROVIDER=bge`
+- `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
@@ -109,7 +109,8 @@
 
 補充說明：
 
-- README 這裡刻意只呈現主線 `v3` 結果。
+- README 這裡刻意只呈現最新公開的 `v3` benchmark 參考結果。
+- 目前 hosted runtime 預設已改為 `easypinex-host / BAAI/bge-reranker-v2-m3`；若要把上表視為 hosted-provider 指標，需先重跑 benchmark。
 - 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 
