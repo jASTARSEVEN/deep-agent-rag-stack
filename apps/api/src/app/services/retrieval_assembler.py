@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field
+import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -197,15 +198,11 @@ def assemble_retrieval_result(
             dropped_chunk_ids.extend(record.candidate.chunk_id for record in records)
             continue
 
-        sorted_records = sorted(
-            records,
-            key=lambda record: (
-                record.chunk.child_index if record.chunk.child_index is not None else -1,
-                record.order,
-            ),
+        kept_records, dropped_records = _select_anchor_records(
+            records=records,
+            query=_extract_retrieval_query(trace=retrieval_result.trace),
+            max_children_per_parent=settings.assembler_max_children_per_parent,
         )
-        kept_records = sorted_records[: settings.assembler_max_children_per_parent]
-        dropped_records = sorted_records[settings.assembler_max_children_per_parent :]
 
         if not kept_records:
             dropped_chunk_ids.extend(record.candidate.chunk_id for record in records)
@@ -426,6 +423,111 @@ def _materialize_context(
     if len(normalized_text) <= max_chars:
         return included_chunks, normalized_text, False
     return included_chunks, normalized_text[:max_chars], True
+
+
+def _select_anchor_records(
+    *,
+    records: list[_CandidateRecord],
+    query: str,
+    max_children_per_parent: int,
+) -> tuple[list[_CandidateRecord], list[_CandidateRecord]]:
+    """依 query-aware anchor score 與既有 rank 訊號挑選 parent 內保留 child。
+
+    參數：
+    - `records`：同一 parent 下的候選 child records。
+    - `query`：本次 retrieval query。
+    - `max_children_per_parent`：同一 parent 最多保留幾個 hit children。
+
+    回傳：
+    - `tuple[list[_CandidateRecord], list[_CandidateRecord]]`：保留與捨棄的 child records。
+    """
+
+    if max_children_per_parent <= 0:
+        return [], list(records)
+
+    ranked_records = sorted(
+        records,
+        key=lambda record: (
+            -_compute_anchor_score(query=query, record=record),
+            record.candidate.rerank_rank if record.candidate.rerank_rank is not None else 1_000_000,
+            record.candidate.rrf_rank if record.candidate.rrf_rank is not None else 1_000_000,
+            record.candidate.vector_rank if record.candidate.vector_rank is not None else 1_000_000,
+            record.candidate.fts_rank if record.candidate.fts_rank is not None else 1_000_000,
+            record.chunk.child_index if record.chunk.child_index is not None else 1_000_000,
+            record.order,
+        ),
+    )
+    return ranked_records[:max_children_per_parent], ranked_records[max_children_per_parent:]
+
+
+def _extract_retrieval_query(*, trace: RetrievalTrace | dict[str, object]) -> str:
+    """從 retrieval trace 讀出 query，兼容 dataclass 與 dict 形式。
+
+    參數：
+    - `trace`：retrieval trace；可能是 dataclass 或可序列化 dict。
+
+    回傳：
+    - `str`：本次 retrieval query；缺少時回空字串。
+    """
+
+    if isinstance(trace, dict):
+        query = trace.get("query")
+        return query if isinstance(query, str) else ""
+    return trace.query
+
+
+def _compute_anchor_score(*, query: str, record: _CandidateRecord) -> float:
+    """計算單一 child record 在 parent 內作為 assembler anchor 的分數。
+
+    參數：
+    - `query`：本次 retrieval query。
+    - `record`：待評分的 child record。
+
+    回傳：
+    - `float`：anchor 分數；越高代表越應優先保留。
+    """
+
+    normalized_query = query.strip().casefold()
+    normalized_heading = (record.chunk.heading or "").strip().casefold()
+    normalized_content = (record.chunk.content or "").strip().casefold()
+    query_tokens = _tokenize_anchor_query(query=query)
+
+    score = 0.0
+    if normalized_query:
+        if normalized_query in normalized_heading:
+            score += 10.0
+        if normalized_query in normalized_content:
+            score += 8.0
+
+    if query_tokens:
+        heading_token_hits = sum(1 for token in query_tokens if token in normalized_heading)
+        content_token_hits = sum(1 for token in query_tokens if token in normalized_content)
+        score += min(heading_token_hits, 6) * 2.0
+        score += min(content_token_hits, 12) * 1.0
+
+    return score
+
+
+def _tokenize_anchor_query(*, query: str) -> list[str]:
+    """將 query 切成供 assembler anchor scoring 使用的 tokens。
+
+    參數：
+    - `query`：本次 retrieval query。
+
+    回傳：
+    - `list[str]`：去重後的 query tokens。
+    """
+
+    normalized_query = query.casefold()
+    raw_tokens = re.split(r"[\s,.;:!?()\[\]{}\"'`/\\|]+", normalized_query)
+    tokens: list[str] = []
+    for token in raw_tokens:
+        stripped = token.strip()
+        if len(stripped) < 2:
+            continue
+        if stripped not in tokens:
+            tokens.append(stripped)
+    return tokens
 
 
 def _should_use_full_parent(*, parent_chunk: DocumentChunk, max_chars: int) -> bool:

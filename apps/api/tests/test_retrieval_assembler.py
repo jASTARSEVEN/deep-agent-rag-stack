@@ -763,6 +763,179 @@ def test_assemble_retrieval_result_enforces_budget_and_trace(db_session, app_set
     assert assembled.trace.assembler.contexts[0].truncated is True
 
 
+def test_assemble_retrieval_result_prefers_query_matching_anchor_within_parent(db_session, app_settings) -> None:
+    """assembler 應優先保留 parent 內最像 query 的 hit child，而不是單看 child 順序。"""
+
+    settings = app_settings.model_copy(
+        update={
+            "assembler_max_contexts": 1,
+            "assembler_max_chars_per_context": 48,
+            "assembler_max_children_per_parent": 1,
+        }
+    )
+    area = Area(id="area-assemble-query-anchor", name="Assemble Query Anchor")
+    document = Document(
+        id="document-assemble-query-anchor",
+        area_id=area.id,
+        file_name="anchor.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-assemble-query-anchor/anchor.md",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id="parent-assemble-query-anchor",
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Generative Model",
+        content="intro\n\ntraining setup\n\nwe use the Yelp Challenge dataset\n\nclosing",
+        content_preview="intro",
+        char_count=68,
+        start_offset=0,
+        end_offset=68,
+    )
+    child_one = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-query-anchor-1",
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Generative Model",
+        content="intro section",
+        start_offset=0,
+        end_offset=13,
+    )
+    child_two = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-query-anchor-2",
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Generative Model",
+        content="training setup",
+        start_offset=15,
+        end_offset=29,
+    )
+    child_three = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-query-anchor-3",
+        position=3,
+        section_index=0,
+        child_index=2,
+        heading="Generative Model",
+        content="we use the Yelp Challenge dataset",
+        start_offset=31,
+        end_offset=64,
+    )
+    db_session.add_all([area, document, parent, child_one, child_two, child_three])
+    db_session.commit()
+
+    retrieval_result = RetrievalResult(
+        candidates=[
+            _build_candidate(child_one, source="hybrid", rrf_rank=1),
+            _build_candidate(child_two, source="hybrid", rrf_rank=2),
+            _build_candidate(child_three, source="hybrid", rrf_rank=3),
+        ],
+        trace=_build_trace(query="Which dataset do they use a starting point in generating fake reviews?"),
+    )
+
+    assembled = assemble_retrieval_result(session=db_session, settings=settings, retrieval_result=retrieval_result)
+
+    assert len(assembled.assembled_contexts) == 1
+    assert assembled.assembled_contexts[0].chunk_ids == [child_three.id]
+    assert assembled.trace.assembler.contexts[0].kept_chunk_ids == [child_three.id]
+    assert assembled.trace.assembler.contexts[0].dropped_chunk_ids == [child_one.id, child_two.id]
+
+
+def test_assemble_retrieval_result_accepts_dict_trace_for_query_aware_anchor(db_session, app_settings) -> None:
+    """assembler 在 evaluation 路徑收到 dict trace 時仍應可做 query-aware anchor 選擇。"""
+
+    settings = app_settings.model_copy(
+        update={
+            "assembler_max_contexts": 1,
+            "assembler_max_chars_per_context": 48,
+            "assembler_max_children_per_parent": 1,
+        }
+    )
+    area = Area(id="area-assemble-dict-trace", name="Assemble Dict Trace")
+    document = Document(
+        id="document-assemble-dict-trace",
+        area_id=area.id,
+        file_name="dict-trace.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-assemble-dict-trace/dict-trace.md",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id="parent-assemble-dict-trace",
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Generative Model",
+        content="intro\n\ntraining setup\n\nwe use the Yelp Challenge dataset\n\nclosing",
+        content_preview="intro",
+        char_count=68,
+        start_offset=0,
+        end_offset=68,
+    )
+    child_one = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-dict-trace-1",
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Generative Model",
+        content="intro section",
+        start_offset=0,
+        end_offset=13,
+    )
+    child_two = _build_ready_child(
+        app_settings=settings,
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_id="child-dict-trace-2",
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Generative Model",
+        content="we use the Yelp Challenge dataset",
+        start_offset=31,
+        end_offset=64,
+    )
+    db_session.add_all([area, document, parent, child_one, child_two])
+    db_session.commit()
+
+    retrieval_result = RetrievalResult(
+        candidates=[
+            _build_candidate(child_one, source="hybrid", rrf_rank=1),
+            _build_candidate(child_two, source="hybrid", rrf_rank=2),
+        ],
+        trace={"query": "Which dataset do they use a starting point in generating fake reviews?"},
+    )
+
+    assembled = assemble_retrieval_result(session=db_session, settings=settings, retrieval_result=retrieval_result)
+
+    assert assembled.assembled_contexts[0].chunk_ids == [child_two.id]
+
+
 def test_assemble_retrieval_result_preserves_citation_offsets(db_session, app_settings) -> None:
     """citation metadata 應保留原始 child offsets。"""
 
