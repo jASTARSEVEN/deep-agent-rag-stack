@@ -316,7 +316,7 @@
 - 針對 table-heavy 題目持續補強 row-aware retrieval / row-header-aware rerank text，優先處理「章節有命中、表格列沒命中」的案例。
 - benchmark 主流程預設只顯示最新 completed run，但資料庫仍保留歷史 run 以供回歸比較與異常追查。
 - 若要做穩定 regression gate，應補一條 deterministic evaluation profile，避免真實 provider rate limit 與暫時性外部失敗污染品質判讀。
-- 依 `docs/qasper-retrieval-miss-analysis.md` 的目前分析，下一個最值得投入的方向應是 `evidence-centric child refinement`，而不是繼續放大 recall pool 或 assembled budget。
+- 依 `docs/retrieval-benchmark-strategy-analysis.md` 的目前分析，下一個最值得投入的方向應是 `evidence-centric child refinement`，而不是繼續放大 recall pool 或 assembled budget。
 
 ## Phase 8.1 — Query-Aware Retrieval Profiles
 

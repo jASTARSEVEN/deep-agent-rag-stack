@@ -1,13 +1,13 @@
-# QASPER Retrieval Miss Analysis（截至 2026-04-04，含 BGE rerank 最新重跑）
+# Retrieval Benchmark Strategy Analysis（截至 2026-04-04，改以三資料集平均 nDCG uplift 為主）
 
 ## 文件目的
 
-此文件用來回答四件事：
+此文件目前改成回答四件事：
 
-1. 目前 QASPER retrieval 最佳 lane 是哪一條？
-2. 歷史上哪些策略已經試過，哪些方向已被證明低 ROI？
-3. 在 `QASPER` 與自家 benchmark `tw-insurance-rag-benchmark-v1` 上，各策略分別表現如何？
-4. 下一輪若要繼續優化，最值得投入的唯一主假設是什麼？
+1. 若把 `QASPER`、`tw-insurance-rag-benchmark-v1`、`UDA-Benchmark pilot` 一起看，哪條 lane 的 **平均 nDCG@10 uplift** 最好？
+2. 同一組 lane 在三個資料集上，各自的 trade-off 是什麼？
+3. 哪些策略仍值得保留在 current HEAD 的常規比較集合中？
+4. 歷史上的 miss 類型與已知低 ROI 方向有哪些，避免之後重複回頭試？
 
 > 本文件會同時保留：
 > - **current HEAD 可直接重跑的最新 BGE benchmark**
@@ -16,7 +16,8 @@
 >
 > 產品決策註記：
 > - README 目前已將 `qasper_guarded_evidence_synopsis_v3_bge` 視為主線 default
-> - 本分析文件仍以策略比較與 benchmark 證據整理為主，不刻意改寫不同 lane 的客觀對照結果
+> - 但在本文件裡，**主排序目標已改為三資料集平均 `nDCG@10 uplift`**
+> - 也就是說，QASPER 單點最佳不再自動等於「整體最佳」
 
 ---
 
@@ -29,44 +30,104 @@
 - 資料集：
   - `QASPER`：`qasper-curated-v1-pilot`
   - `self`：`tw-insurance-rag-benchmark-v1`
-- 本輪 artifact：`.omx/tmp/bge-core-profiles-latest.json`
+  - `UDA`：`uda-curated-v1-pilot`（OpenAI review 擴充版）
+- 本輪 artifact：
+  - `QASPER + self`：`.omx/tmp/bge-core-profiles-latest.json`
+  - `UDA`：`benchmarks/uda-curated-v1-pilot/bge_core_profiles_summary.json`
 - 本輪已完成 BGE 重跑的 current HEAD profile：
   - `production_like_v1`
   - `qasper_guarded_assembler_v2_bge`
   - `qasper_guarded_evidence_synopsis_v2_bge`
   - `qasper_guarded_evidence_synopsis_v3_bge`
+- `UDA` pilot package 補充：
+  - benchmark package：`benchmarks/uda-curated-v1-pilot`
+  - source scope：官方 `UDA-Benchmark` 的 `extended_qa_info_bench + src_doc_files_example`
+  - 最終收斂：`12` 份文件、`26` 題、`38` 個 gold spans
+  - `9` 題 auto-matched，`21` 題由 `OpenAI API` review 核准，再補 `4` 題 deterministic override
 
-### 目前最佳 QASPER Recall（BGE）
+### 三資料集平均 nDCG@10 uplift 排名
 
-- profile：`qasper_guarded_evidence_synopsis_v3_bge`
-- assembled Recall@10：`0.8889`
-- assembled nDCG@10：`0.5661`
-- assembled MRR@10：`0.4609`
+| Profile | QASPER nDCG@10 | self nDCG@10 | UDA nDCG@10 | 三資料集平均 nDCG@10 | 相對 baseline 平均 uplift |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `production_like_v1` | `0.5201` | `0.7622` | `0.5288` | `0.6037` | `+0.0000` |
+| `qasper_guarded_assembler_v2_bge` | `0.5558` | `0.7727` | `0.5288` | `0.6191` | `+0.0154` |
+| `qasper_guarded_evidence_synopsis_v2_bge` | `0.5743` | `0.7254` | `0.5264` | `0.6087` | `+0.0050` |
+| `qasper_guarded_evidence_synopsis_v3_bge` | `0.5661` | `0.7283` | `0.5288` | `0.6077` | `+0.0040` |
 
-### 目前最佳 QASPER 綜合品質（BGE）
+### 三資料集平均 recall / MRR 補充
 
-- profile：`qasper_guarded_evidence_synopsis_v2_bge`
-- assembled Recall@10：`0.8519`
-- assembled nDCG@10：`0.5743`
-- assembled MRR@10：`0.4829`
-
-### 目前最佳 weighted multi-benchmark 平衡（BGE）
-
-- profile：`qasper_guarded_assembler_v2_bge`
-- weighted Recall@10：`0.8711`
-- weighted nDCG@10：`0.6860`
-- weighted MRR@10：`0.6247`
+| Profile | 平均 Recall@10 | Recall uplift | 平均 MRR@10 | MRR uplift |
+| --- | ---: | ---: | ---: | ---: |
+| `production_like_v1` | `0.7525` | `+0.0000` | `0.5565` | `+0.0000` |
+| `qasper_guarded_assembler_v2_bge` | `0.7883` | `+0.0358` | `0.5658` | `+0.0093` |
+| `qasper_guarded_evidence_synopsis_v2_bge` | `0.7908` | `+0.0383` | `0.5519` | `-0.0046` |
+| `qasper_guarded_evidence_synopsis_v3_bge` | `0.8031` | `+0.0506` | `0.5467` | `-0.0098` |
 
 ### 核心結論
 
-- 在 **同一個 BGE rerank provider** 下做 apples-to-apples 比較後：
-  - `evidence_synopsis_v3` 仍然是 **QASPER recall 最佳**
-  - `evidence_synopsis_v2` 是 **QASPER ranking quality 最佳**
-  - `assembler_v2` 反而成為 **weighted 與 self benchmark 最穩定** 的 lane
-- 這代表：
-  - alias / task / metric bridge 仍然能明顯拉高 QASPER hit rate
-  - 但 bridge 類強化在自家 benchmark 上仍有成本
-  - 若決策目標是 weighted multi-benchmark，而不是只看 QASPER recall，當前最佳平衡點更接近 `assembler_v2`
+1. 若主目標改為 **三資料集平均 nDCG@10 uplift**，目前最佳 lane 是 `qasper_guarded_assembler_v2_bge`
+   - 平均 nDCG@10：`0.6191`
+   - 相對 baseline 平均 uplift：`+0.0154`
+
+2. `evidence synopsis` 仍然有效，但它們現在更像是 **QASPER-leaning lane**
+   - `v2` 在 QASPER nDCG@10 最好：`0.5743`
+   - `v3` 在 QASPER Recall@10 最好：`0.8889`
+   - 但兩者在 self 與 UDA 上都沒有形成更好的平均 nDCG uplift
+
+3. `assembler_v2` 是目前最接近「跨資料集都不太失真」的 lane
+   - QASPER：有明確 uplift
+   - self：三條 lane 中最佳
+   - UDA：與 baseline / `v3` 持平，沒有額外退化
+
+4. 若目標不是平均 nDCG，而是平均 recall，排序會變
+   - `v3` 的平均 Recall uplift 最大：`+0.0506`
+   - 但它的平均 MRR uplift 是負值：`-0.0098`
+   - 因此它不符合本輪「綜合三資料集、以 nDCG 為主」的優先目標
+
+---
+
+## 三資料集綜合判讀
+
+### 1. `QASPER`
+
+- 最佳 nDCG@10：`qasper_guarded_evidence_synopsis_v2_bge = 0.5743`
+- 最佳 Recall@10：`qasper_guarded_evidence_synopsis_v3_bge = 0.8889`
+- 判讀：
+  - alias / task / metric bridge 的確對 QASPER 有利
+  - 但這個 gain 不是免費的，因為它沒有自動跨到其他資料集
+
+### 2. `tw-insurance-rag-benchmark-v1`
+
+- 最佳 nDCG@10：`qasper_guarded_assembler_v2_bge = 0.7727`
+- 最佳 MRR@10：`qasper_guarded_assembler_v2_bge = 0.7219`
+- 判讀：
+  - self benchmark 目前仍明確偏向 `assembler_v2`
+  - `evidence synopsis` 在 self 上沒有帶來同等級的 quality uplift
+
+### 3. `UDA-Benchmark pilot`
+
+- 最新 reference run（`production_like_v1`）：
+  - assembled Recall@10：`0.6538`
+  - assembled nDCG@10：`0.5288`
+  - assembled MRR@10：`0.4968`
+- 四條 current-head lane 的 assembled nDCG@10：
+  - `production_like_v1 = 0.5288`
+  - `assembler_v2 = 0.5288`
+  - `evidence_synopsis_v2 = 0.5264`
+  - `evidence_synopsis_v3 = 0.5288`
+- 判讀：
+  - `UDA` 這一輪的主收益，不是來自策略切換，而是來自 benchmark governance 擴充
+  - 也就是 `auto-align + OpenAI review + deterministic override`
+  - 在 current HEAD lane 層級，UDA 目前沒有提供足夠強的訊號去推翻 `assembler_v2` 的平均 nDCG 優勢
+
+### 三資料集綜合決策
+
+- 若主目標是 **平均 nDCG uplift**：
+  - 選 `qasper_guarded_assembler_v2_bge`
+- 若主目標是 **QASPER recall 壓力測試**：
+  - 選 `qasper_guarded_evidence_synopsis_v3_bge`
+- 若主目標是 **QASPER ranking quality 壓力測試**：
+  - 選 `qasper_guarded_evidence_synopsis_v2_bge`
 
 ---
 
@@ -97,9 +158,9 @@
 | 方法 | 核心思想 | 最新可用數值 | 狀態 | 判讀 |
 | --- | --- | --- | --- | --- |
 | depth lane | 先把召回池加深 | 歷史最佳 Recall@10=`0.4074` | 本輪未納入 BGE 長跑批 | 問題不只是池子太淺 |
-| assembler lane | rerank 已命中，但 assembled retention 不足 | **BGE 最新**：QASPER Recall@10=`0.7778` / weighted Recall@10=`0.8711` | 已重跑 | 現在是 weighted 與 self benchmark 最穩定的 lane |
+| assembler lane | rerank 已命中，但 assembled retention 不足 | **BGE 最新**：QASPER Recall@10=`0.7778` / 三資料集平均 nDCG uplift=`+0.0154` | 已重跑 | 目前是平均 nDCG 目標下的最佳 lane |
 | fact-heavy child refinement + assembler v2 | 只對 Dataset / Setup / Metrics 類長 child 做 evidence-centric refinement，再搭配 assembler v2 | 歷史最佳 Recall@10=`0.7407` | retired lane，current HEAD 無法忠實重跑 | 仍代表 evidence density 是高 ROI 槓桿 |
-| evidence synopsis v3 | 在 v2 基礎上補 alias bridge / task framing bridge / metric-aspect bridge | **BGE 最新**：QASPER Recall@10=`0.8889` / weighted Recall@10=`0.8756` | 已重跑 | QASPER recall 最佳，但 weighted nDCG / MRR 不如 assembler_v2 |
+| evidence synopsis v3 | 在 v2 基礎上補 alias bridge / task framing bridge / metric-aspect bridge | **BGE 最新**：QASPER Recall@10=`0.8889` / 平均 Recall uplift=`+0.0506` | 已重跑 | QASPER recall 最佳，但平均 nDCG 不是最佳 |
 | coverage lane | 在固定 output budget 下擴大 pre-assembly coverage | 歷史最佳 Recall@10=`0.3704` | 本輪未納入 BGE 長跑批 | 雜訊高、低 ROI |
 | heading-aware recall | 用 heading lexical hit 補強召回 | 歷史最佳 Recall@10=`0.5185` | retired lane，current HEAD 無法忠實重跑 | 有訊號，但不是主要瓶頸 |
 | parent-first lexical recall | 先 parent lexical hit，再回填 child | 歷史最佳 Recall@10=`0.4444` | retired lane，current HEAD 無法忠實重跑 | parent hit 太寬，回填仍不精準 |
@@ -112,100 +173,9 @@
 - `assembler lane` 是第一個明顯有效的高 ROI lane
 - `fact-heavy child refinement + assembler v2` 與後續 `evidence synopsis` 都指向同一件事：
   **真正高 ROI 的槓桿在 evidence density，而不是單純擴大候選池**
-- 但在 2026-04-04 的 BGE apples-to-apples 重跑下，若把 self benchmark 一起算進來，`assembler_v2` 的整體平衡反而比 `evidence synopsis` 更穩
+- 但在 current HEAD 的三資料集平均 `nDCG@10 uplift` 目標下，`assembler_v2` 仍是最佳平衡點
 
 ---
-
-## 基準與主要候選
-
-### Baseline：`production_like_v1`
-
-- assembled Recall@10：`0.7037`
-- assembled nDCG@10：`0.5201`
-- assembled MRR@10：`0.4549`
-
-### `qasper_guarded_assembler_v2_bge`
-
-- assembled Recall@10：`0.7778`
-- assembled nDCG@10：`0.5558`
-- assembled MRR@10：`0.4787`
-
-### `qasper_guarded_evidence_synopsis_v2_bge`
-
-- assembled Recall@10：`0.8519`
-- assembled nDCG@10：`0.5743`
-- assembled MRR@10：`0.4829`
-
-### `qasper_guarded_evidence_synopsis_v3_bge`
-
-- assembled Recall@10：`0.8889`
-- assembled nDCG@10：`0.5661`
-- assembled MRR@10：`0.4609`
-
-### 高階判讀
-
-- 在 **QASPER 單 benchmark** 上：
-  - `evidence_synopsis_v2` 是綜合品質最佳
-  - `evidence_synopsis_v3` 是 recall 最佳
-- 但在 **weighted / self benchmark** 上：
-  - `assembler_v2` 反而是目前更穩定的平衡點
-
-> 也就是說，  
-> `evidence synopsis` 仍然有效，  
-> 但它現在更像是「針對 QASPER 壓力測試的高 recall lane」，  
-> 而不是 current HEAD 下最穩的 weighted default 候選。
-
----
-
-## QASPER 分數變化總結
-
-### 相對 `production_like_v1`
-
-| Profile | Recall@10 delta | nDCG@10 delta | MRR@10 delta |
-| --- | ---: | ---: | ---: |
-| `qasper_guarded_assembler_v2_bge` | `+0.0741` | `+0.0357` | `+0.0238` |
-| `qasper_guarded_evidence_synopsis_v2_bge` | `+0.1481` | `+0.0542` | `+0.0279` |
-| `qasper_guarded_evidence_synopsis_v3_bge` | `+0.1852` | `+0.0460` | `+0.0060` |
-
-### BGE 重跑下的高階判讀
-
-- 若目標是 **QASPER ranking quality**，`v2` 仍優於 `v3`
-- 若目標是 **QASPER pure recall**，`v3` 仍然更高
-- `assembler_v2` 雖然 QASPER recall 不如 `v2/v3`，但整體沒有出現 self benchmark 的退化
-
----
-
-## 雙 benchmark 對照：2026-04-04 BGE apples-to-apples 結果
-
-除了 QASPER，也必須同步看 `tw-insurance-rag-benchmark-v1`。
-
-### Assembled 指標總覽
-
-| Profile | QASPER Recall@10 | QASPER nDCG@10 | QASPER MRR@10 | self Recall@10 | self nDCG@10 | self MRR@10 | weighted Recall@10 | weighted nDCG@10 | weighted MRR@10 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `production_like_v1` | `0.7037` | `0.5201` | `0.4549` | `0.9000` | `0.7622` | `0.7178` | `0.8215` | `0.6654` | `0.6126` |
-| `qasper_guarded_assembler_v2_bge` | `0.7778` | `0.5558` | `0.4787` | `0.9333` | `0.7727` | `0.7219` | `0.8711` | `0.6860` | `0.6247` |
-| `qasper_guarded_evidence_synopsis_v2_bge` | `0.8519` | `0.5743` | `0.4829` | `0.8667` | `0.7254` | `0.6792` | `0.8607` | `0.6650` | `0.6007` |
-| `qasper_guarded_evidence_synopsis_v3_bge` | `0.8889` | `0.5661` | `0.4609` | `0.8667` | `0.7283` | `0.6825` | `0.8756` | `0.6634` | `0.5939` |
-
-### 關鍵判讀
-
-1. 在 apples-to-apples 的 BGE 比較下，QASPER 單 benchmark 的最佳 lane 已更清楚：
-   - recall：`evidence_synopsis_v3`
-   - nDCG / MRR：`evidence_synopsis_v2`
-
-2. 但 self benchmark 的最佳 lane 不是 `evidence synopsis`
-   - `assembler_v2` 在 Recall / nDCG / MRR 全部優於 `production_like_v1`
-   - `evidence_synopsis_v2/v3` 則都比 `production_like_v1` 略退
-
-3. 若採 weighted multi-benchmark objective，當前最平衡的 lane 是 `assembler_v2`
-   - weighted Recall@10：`0.8711`
-   - weighted nDCG@10：`0.6860`
-   - weighted MRR@10：`0.6247`
-
-4. 因此目前更精準的結論應是：
-   - `evidence synopsis` 是 **QASPER-oriented high-recall lane**
-   - `assembler_v2` 是 **current HEAD + BGE 下的整體平衡最佳 lane**
 
 ---
 

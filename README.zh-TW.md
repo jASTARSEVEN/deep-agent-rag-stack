@@ -110,7 +110,7 @@
 補充說明：
 
 - README 這裡刻意只呈現主線 `v3` 結果。
-- 若要看不同策略的對照，請直接參考 [`docs/qasper-retrieval-miss-analysis.md`](docs/qasper-retrieval-miss-analysis.md)。
+- 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 
 ## 目前尚未完成

@@ -58,17 +58,19 @@ PY
 ## 步驟 3：建立 pilot workspace
 
 ```bash
+rm -rf /tmp/qasper-pilot-workspace
+
 cd /Users/pin/Desktop/workspace/deep-agent-rag-stack/apps/api
 
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark prepare-source \
   --dataset qasper \
   --input-path /tmp/qasper-pilot/qasper-train-v0.3.json \
-  --workspace-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace \
+  --workspace-dir /tmp/qasper-pilot-workspace \
   --limit-documents 8 \
   --limit-items 40
 
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark filter-items \
-  --workspace-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace
+  --workspace-dir /tmp/qasper-pilot-workspace
 ```
 
 預期：
@@ -107,7 +109,7 @@ curl -sS \
 上傳產生出的 markdown 文件：
 
 ```bash
-for f in /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace/source_documents/*.md; do
+for f in /tmp/qasper-pilot-workspace/source_documents/*.md; do
   curl -sS \
     -H "Authorization: Bearer $TOKEN" \
     -F "file=@$f" \
@@ -126,12 +128,12 @@ cd /Users/pin/Desktop/workspace/deep-agent-rag-stack/apps/api
 
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark align-spans \
-  --workspace-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace \
+  --workspace-dir /tmp/qasper-pilot-workspace \
   --area-id "$AREA_ID"
 
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark report \
-  --workspace-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace
+  --workspace-dir /tmp/qasper-pilot-workspace
 ```
 
 本次 reference run 的對齊結果為：
@@ -148,7 +150,7 @@ PYTHONPATH=src python -m app.scripts.prepare_external_benchmark report \
 
 ```bash
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark build-snapshot \
-  --workspace-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-pilot-workspace \
+  --workspace-dir /tmp/qasper-pilot-workspace \
   --output-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-curated-v1-pilot \
   --benchmark-name qasper-curated-v1-pilot
 ```

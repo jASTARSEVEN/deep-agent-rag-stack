@@ -1,0 +1,58 @@
+{
+  "run": {
+    "id": "593638b8-a3c7-4471-ba56-7d242a8e65fa",
+    "dataset_id": "3d779672-b561-5d64-aa76-035d37d4e0b4",
+    "status": "completed",
+    "evaluation_profile": "production_like_v1",
+    "created_by_sub": "b907d381-84a3-4562-a367-3d4ab87f5190",
+    "total_items": 26,
+    "created_at": "2026-04-04T09:02:09.661835Z",
+    "completed_at": "2026-04-04T09:09:45.109695Z"
+  },
+  "config_snapshot": {
+    "assembler": {
+      "max_chars_per_context": 3600,
+      "max_children_per_parent": 7,
+      "max_contexts": 10
+    },
+    "rerank": {
+      "max_chars_per_doc": 2000,
+      "model": "BAAI/bge-reranker-v2-m3",
+      "provider": "bge",
+      "top_n": 30
+    },
+    "retrieval": {
+      "evidence_synopsis_enabled": true,
+      "evidence_synopsis_variant": "qasper_v3",
+      "fts_top_k": 30,
+      "hnsw_ef_search": 100,
+      "max_candidates": 30,
+      "rrf_k": 60,
+      "vector_top_k": 30
+    },
+    "top_k": 10
+  },
+  "summary_metrics": {
+    "recall": {
+      "nDCG_at_k": 0.3126602803730588,
+      "recall_at_k": 0.5,
+      "mrr_at_k": 0.2482905982905983,
+      "precision_at_k": 0.057692307692307696,
+      "document_coverage_at_k": 0.7307692307692307
+    },
+    "rerank": {
+      "nDCG_at_k": 0.7352760136865375,
+      "recall_at_k": 0.8461538461538461,
+      "mrr_at_k": 0.7083333333333334,
+      "precision_at_k": 0.08846153846153847,
+      "document_coverage_at_k": 0.9615384615384616
+    },
+    "assembled": {
+      "nDCG_at_k": 0.5287733119008243,
+      "recall_at_k": 0.6538461538461539,
+      "mrr_at_k": 0.49679487179487175,
+      "precision_at_k": 0.06923076923076923,
+      "document_coverage_at_k": 0.9615384615384616
+    }
+  }
+}

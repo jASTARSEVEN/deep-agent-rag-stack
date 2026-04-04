@@ -1128,6 +1128,7 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
 
     output_dir.mkdir(parents=True, exist_ok=True)
     prepared_documents = read_jsonl(workspace_dir / PREPARED_DOCUMENTS_FILE)
+    prepared_items = {row["item_id"]: row for row in read_jsonl(workspace_dir / PREPARED_ITEMS_FILE)}
     filtered_items = {row["item_id"]: row for row in read_jsonl(workspace_dir / FILTERED_ITEMS_FILE)}
     alignment_rows = read_jsonl(workspace_dir / ALIGNMENT_CANDIDATES_FILE)
     overrides = read_review_overrides(workspace_dir)
@@ -1139,7 +1140,9 @@ def build_snapshot(*, workspace_dir: Path, output_dir: Path, benchmark_name: str
     dataset_counter: Counter[str] = Counter()
 
     for alignment_row in alignment_rows:
-        item = filtered_items[alignment_row["item_id"]]
+        item = filtered_items.get(alignment_row["item_id"]) or prepared_items.get(alignment_row["item_id"])
+        if item is None:
+            continue
         accepted_spans = list(alignment_row.get("accepted_spans", []))
         override = overrides.get(item["item_id"])
         if override:

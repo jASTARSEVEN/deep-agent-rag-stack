@@ -282,3 +282,111 @@ def test_align_build_snapshot_and_import_round_trip(app, db_session, app_setting
     report = build_report(workspace_dir=workspace_dir)
     assert report["approved_override_count"] == 1
     assert report["status_counts"]["needs_review"] == 1
+
+
+def test_build_snapshot_can_include_reviewed_item_not_in_filtered_set(tmp_path: Path) -> None:
+    """build_snapshot 應可納入僅存在 prepared_items 的 reviewed item。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證 snapshot 可正常建立。
+    """
+
+    workspace_dir = tmp_path / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    source_dir = workspace_dir / "source_documents"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_file = source_dir / "paper-2.md"
+    source_file.write_text("Alpha answer evidence.", encoding="utf-8")
+
+    prepared_documents = [
+        {
+            "dataset": "uda",
+            "source_document_id": "paper-2",
+            "file_name": "paper-2.md",
+            "title": "Paper Two",
+            "source_path": str(source_file),
+            "content_type": "text/markdown",
+            "created_at": "2026-04-04T00:00:00+00:00",
+        }
+    ]
+    prepared_items = [
+        {
+            "item_id": "item-prepared-only",
+            "dataset": "uda",
+            "source_document_id": "paper-2",
+            "file_name": "paper-2.md",
+            "query_text": "What is the alpha answer?",
+            "language": "en",
+            "query_type": "fact_lookup",
+            "answer_text": "Alpha answer evidence.",
+            "evidence_texts": [],
+            "answer_type": "short_answer",
+            "source_question_index": 0,
+            "source_metadata": {"row_index": 0},
+            "created_at": "2026-04-04T00:00:00+00:00",
+        }
+    ]
+
+    (workspace_dir / PREPARED_DOCUMENTS_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_documents) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / PREPARED_ITEMS_FILE).write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in prepared_items) + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / "filtered_items.jsonl").write_text("", encoding="utf-8")
+    (workspace_dir / ALIGNMENT_CANDIDATES_FILE).write_text(
+        json.dumps(
+            {
+                "item_id": "item-prepared-only",
+                "dataset": "uda",
+                "file_name": "paper-2.md",
+                "query_text": "What is the alpha answer?",
+                "answer_text": "Alpha answer evidence.",
+                "language": "en",
+                "query_type": "fact_lookup",
+                "status": "needs_review",
+                "accepted_spans": [],
+                "review_candidates": [],
+                "rejected_evidences": [],
+                "source_metadata": {"row_index": 0},
+                "generated_at": "2026-04-04T00:00:00+00:00",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (workspace_dir / REVIEW_OVERRIDES_FILE).write_text(
+        json.dumps(
+            {
+                "item_id": "item-prepared-only",
+                "decision": "approved",
+                "spans": [{"start_offset": 0, "end_offset": len("Alpha answer evidence.")}],
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "snapshot"
+    summary = build_snapshot(
+        workspace_dir=workspace_dir,
+        output_dir=output_dir,
+        benchmark_name="prepared-only-reviewed",
+        include_review_items=False,
+    )
+
+    assert summary["question_count"] == 1
+    assert summary["span_count"] == 1
+    questions = [
+        json.loads(line)
+        for line in (output_dir / "questions.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert questions[0]["question"] == "What is the alpha answer?"

@@ -106,7 +106,7 @@ Mainline assembled metrics:
 Notes:
 
 - The README intentionally shows only the mainline `v3` result.
-- Strategy-by-strategy comparisons are tracked directly in [`docs/qasper-retrieval-miss-analysis.md`](docs/qasper-retrieval-miss-analysis.md) (Traditional Chinese).
+- Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 
 ## Not Yet Implemented
