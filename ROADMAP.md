@@ -308,8 +308,8 @@
   - `assembled`：`nDCG@k 0.824`、`Recall@k 0.862`、`MRR@k 0.810`
 - `Doc Coverage@k = 1.000` 代表正確文件基本都有進入候選集合；目前主要缺口已不在文件級 coverage，而在最後 evidence materialization。
 - `assembled` 指標仍略低於 `rerank`，表示少數題目雖已在 rerank 前段命中，但進入最終 context 時仍有 evidence 流失。
-- 對外 benchmark（例如 QASPER）的持續優化，應優先透過受控 OMX 五-agent loop 與 benchmark/profile-gated profile 進行，不可直接改 production defaults。
-- 受控 OMX loop 若單輪 `rollback`，應優先在既定替代 lane 內自動重想策略，而不是直接終止整個 benchmark-driven iteration。
+- 對外 benchmark（例如 QASPER）的持續優化，應先以目前主線設定實際跑分建立 baseline，再對單一主假設做最小實作與重跑驗證。
+- 若新策略造成 benchmark 指標退化，除分析文件外其餘改動應一律回退；若提升，則應在保留改動的前提下重新分析最新 miss 題與目前查到的 chunks，再決定下一輪策略。
 
 後續改善重點：
 - 以 `rerank hit / assembled miss` 題目為主，檢查 assembler 的 `max_contexts`、`max_chars_per_context`、`max_children_per_parent` 與 materialization 策略，避免 evidence 在最後一層被裁掉。

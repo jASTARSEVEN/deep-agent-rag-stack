@@ -54,13 +54,10 @@
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
-- 專案已新增受控 OMX QASPER optimization loop CLI，可固定輸出 `effect-check -> effect-opt -> advice-agent -> guard-agent -> implement-agent` artifact，並在 `Recall@10 < 80%` 或 rollback 後依既定替代 lane 自動進入下一輪
-- 受控 OMX QASPER loop 已改為先跑 deterministic gate；只有 gate 確認 `Recall@10 > 80%` 後才會進入 live rerank
-- 受控 OMX benchmark loop 的正式決策基準已升級為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`；effect-check、deterministic gate 與 implement decision 皆改為同時考慮兩者
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
 - 專案已將主線 retrieval default 對齊 `qasper_guarded_evidence_synopsis_v3_bge` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3`，並同步將 assembler budget 提升到 `max_contexts=10` / `max_chars_per_context=3600` / `max_children_per_parent=7`
-- 專案仍保留 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代比較；其中 `qasper_guarded_evidence_synopsis_v3` 現在同時也是主線 default 所對齊的策略組合
+- benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
 - 已以 BGE apples-to-apples 重跑 `production_like_v1`、`assembler_v2`、`evidence_synopsis_v2`、`evidence_synopsis_v3`；目前 README 主線只展示 `v3` 分數，而完整策略比較直接收斂於 `docs/retrieval-benchmark-strategy-analysis.md`
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
@@ -244,7 +241,6 @@
 - 已為 Cohere rerank 補上僅針對 `HTTP 429 Too Many Requests` 的 retry/backoff；其他 HTTP/network 錯誤仍直接 fail-open，不會無差別重試
 - HTTP 429 retry/backoff 現在會加入 jitter，避免 benchmark 批次中的多題在相同等待秒數後同時重撞 Cohere rate limit
 - 已新增外部 benchmark curation 測試，驗證 `QASPER` prepare/filter 與 `align/build/import` round-trip 不會破壞既有 snapshot contract
-- 已新增 `python -m app.scripts.run_qasper_omx_loop`，可對 QASPER pilot 與自家 benchmark 自動執行受控 OMX 五-agent 循環、輸出 compare artifacts，並以既定 guardrails 決定 `continue / stop / rollback`
 
 ### Phase 5.1 — 已完成的 Chat MVP on LangGraph Server
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
@@ -270,7 +266,7 @@
 ### Current Focus
 - 規劃 `Phase 8.1 — Query-Aware Retrieval Profiles`，將 `fact_lookup / document_summary / cross_document_compare` 收斂為顯式 profile
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
-- 以受控 OMX QASPER loop 持續驗證 `evidence synopsis` 是否能再突破 `Recall@10 >= 0.8`
+- 持續依 `docs/retrieval-benchmark-strategy-analysis.md` 的最新 miss 題，挑選單一主假設做實跑驗證與深度分析
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
 
@@ -278,6 +274,7 @@
 
 ### 最適合立即進行的工作
 1. 進入 `Phase 8.1 — Query-Aware Retrieval Profiles`，補上 query intent classification 與 profile trace metadata
+2. 依最新 miss 題與當前 chunks，優先處理 `recall_only / rerank_only` 類 semantic-gap 問題
 2. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
 3. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
 4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性

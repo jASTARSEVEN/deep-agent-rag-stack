@@ -116,9 +116,9 @@
 2. reviewer 透過 `POST /areas/{area_id}/evaluation/datasets` 建立 area-scoped dataset；目前 query type 固定為 `fact_lookup`，language 固定支援 `zh-TW | en | mixed`。
 3. reviewer 透過 `POST /evaluation/datasets/{dataset_id}/items` 建立題目後，前端呼叫 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview` 取得 `recall / rerank / assembled` 三階段候選與文件內搜尋結果。
 4. reviewer 一律透過既有 `GET /documents/{document_id}/preview` 的 `display_text + offsets` contract 檢視全文，再以 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/spans` 標註 `document_id + start_offset + end_offset + relevance_grade`，或以 `mark-miss` 標記 `retrieval_miss`。
-5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs`、`python -m app.scripts.run_retrieval_eval` 或受控的 `python -m app.scripts.run_qasper_omx_loop` 觸發；所有 runner 都必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
-6. `run_qasper_omx_loop` 目前仍保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` 受控 lane，並固定輸出 `effect-check -> effect-opt -> advice-agent -> guard-agent -> deterministic-gate -> implement-agent` artifact；其中 evidence synopsis v3 以 alias bridge / task framing bridge / metric-aspect bridge 補強 QASPER 剩餘 semantic-gap miss。即使主線 default 已對齊 `qasper_guarded_evidence_synopsis_v3_bge`，loop 仍需保留多 lane 比較能力，以便持續觀察 weighted objective 與策略回歸。其正式 benchmark 決策基準已改為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`。只有 deterministic gate 的 weighted `Recall@10 > 0.8` 時才可進入 live rerank。若本輪判定 `rollback` 且仍有替代 lane，必須再產出一份 rollback-rethink artifact，切換單一主假設後自動進入下一輪。
-7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 與 strategy lane registry 進行，資料庫不得新增策略專用欄位
+5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；所有 runner 都必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
+6. benchmark 改善任務的正式策略為：先實際跑分建立 baseline；每一輪只允許一個主假設與最小改動；改動後必須重新跑分，若相對目前最佳結果退化，除分析文件外其餘改動一律回退；無論提升與否，都必須重新分析 miss 題與當前查到的 chunks，才能決定下一輪策略。
+7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 進行，資料庫不得新增策略專用欄位
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式。
