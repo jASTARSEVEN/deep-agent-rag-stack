@@ -168,6 +168,8 @@ def _build_evaluation_config_snapshot(*, settings: AppSettings, top_k: int) -> d
                 "vector_top_k": settings.retrieval_vector_top_k,
                 "fts_top_k": settings.retrieval_fts_top_k,
                 "max_candidates": settings.retrieval_max_candidates,
+                "evidence_synopsis_enabled": settings.retrieval_evidence_synopsis_enabled,
+                "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
                 "rrf_k": settings.retrieval_rrf_k,
                 "hnsw_ef_search": settings.retrieval_hnsw_ef_search,
             },

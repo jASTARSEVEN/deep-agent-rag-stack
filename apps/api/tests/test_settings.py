@@ -17,6 +17,7 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
         CHUNK_TABLE_PRESERVE_MAX_CHARS="",
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
+        RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
         RERANK_TOP_N="",
         RERANK_MAX_CHARS_PER_DOC="",
         ASSEMBLER_MAX_CONTEXTS="",
@@ -34,6 +35,7 @@ def test_app_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.chunk_table_preserve_max_chars == 4000
     assert settings.chunk_table_max_rows_per_child == 20
     assert settings.retrieval_evidence_synopsis_enabled is False
+    assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
     assert settings.rerank_top_n == 6
     assert settings.rerank_max_chars_per_doc == 2000
     assert settings.assembler_max_contexts == 6

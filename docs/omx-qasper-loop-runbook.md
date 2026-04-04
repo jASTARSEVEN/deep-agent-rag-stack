@@ -31,7 +31,7 @@
 1. `fact_lookup_evidence_retention`
    - 條件：`assembled Recall@10 < 0.8`
    - assembler lane：`qasper_guarded_assembler_v1 -> qasper_guarded_assembler_v2`
-   - evidence synopsis lane：`qasper_guarded_evidence_synopsis_v1 -> qasper_guarded_evidence_synopsis_v2`
+   - evidence synopsis lane：`qasper_guarded_evidence_synopsis_v1 -> qasper_guarded_evidence_synopsis_v2 -> qasper_guarded_evidence_synopsis_v3`
 
 若 weighted baseline `Recall@10 >= 0.8`，則直接 `stop`。
 
@@ -44,6 +44,7 @@
 - `assembler_max_chars_per_context`
 - `assembler_max_children_per_parent`
 - `retrieval_evidence_synopsis_enabled`
+- `retrieval_evidence_synopsis_variant`
 
 禁止混入：
 
@@ -52,6 +53,20 @@
 - production default 的 rerank text / rerank structure 改寫
 - benchmark snapshot / gold span / alignment artifact 修改
 - production default 變更
+
+## Strategy Governance
+
+為避免每新增一種 benchmark 策略就讓 code 持續膨脹，現在正式規則如下：
+
+- evaluation profile 必須集中定義在單一 registry
+- benchmark lane / rollback 順序必須集中定義在單一 strategy lane registry
+- 新增策略時，優先新增 registry data，而不是在多個檔案複製 `if/else`
+- 資料庫不得新增策略專用欄位；run 層只允許保存通用欄位：
+  - `evaluation_profile`
+  - `config_snapshot_json`
+  - `report_json`
+  - `baseline_compare_json`
+- 若某策略需要額外說明，應進 artifact / 文件，而不是長成 schema 欄位
 
 ## 自動執行入口
 

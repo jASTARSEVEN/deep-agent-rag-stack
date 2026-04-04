@@ -84,6 +84,25 @@
 - `LANGSMITH_PROJECT`
 - `LANGSMITH_ENDPOINT`
 - `LANGSMITH_WORKSPACE_ID`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT`
+
+## Evidence Synopsis 支援模式
+
+`src/app/services/retrieval_text.py` 現在已將「語言無關的 evidence 類別」與「語言 profile / benchmark-gated phrasing 變體」分開管理。
+
+- 支援的輸出語言 profile：
+  - `en`
+  - `zh-TW`
+- 支援的 evidence synopsis 變體：
+  - `generic_v1`：目前預設、可安全沿用於 production 的通用型 phrasing
+  - `qasper_v3`：只供 benchmark/profile-gated 使用的變體，會額外補上 dataset alias bridge、task framing bridge 與 metric-aspect bridge，用來處理 QASPER 類 semantic-gap miss，且會依支援語言 profile 輸出對應本地化文案
+- 執行期開關：
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`：在 rerank 文件組裝時啟用 synopsis
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>`：指定 synopsis phrasing 變體；預設為 `generic_v1`
+- Guardrails：
+  - 變體只可影響 benchmark/profile-gated wording，不得旁路 SQL gate、ready-only 過濾或 production defaults
+  - `qasper_v3` 的定位是受控 evaluation profile，不是 production runtime 預設值
 
 ## 主要目錄結構
 

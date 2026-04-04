@@ -18,6 +18,10 @@ EVIDENCE_CATEGORY_ENUMERATION = "enumeration"
 EVIDENCE_CATEGORY_METRIC_COMPARISON = "metric_comparison"
 # `source_material` 表示來源資料、種子資源與起始語料類 evidence category。
 EVIDENCE_CATEGORY_SOURCE_MATERIAL = "source_material"
+# `generic_v1` 表示目前正式的通用型 synopsis 變體。
+EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1 = "generic_v1"
+# `qasper_v3` 表示依 miss analysis 補強 alias/task/metric framing 的 benchmark-gated 變體。
+EVIDENCE_SYNOPSIS_VARIANT_QASPER_V3 = "qasper_v3"
 
 # evidence synopsis 輸出的固定 category 順序。
 EVIDENCE_CATEGORY_ORDER = (
@@ -100,7 +104,19 @@ EVIDENCE_LANGUAGE_PROFILE_EN = EvidenceSynopsisLanguageProfile(
     ),
     label_anchor_tokens=("label", "labels", "class", "classes", "category", "categories", "polarity", "polarities"),
     label_group_tokens=("positive", "negative", "seed", "lexicon", "annotation", "annotated", "group", "word", "words"),
-    enumeration_scope_tokens=("task", "tasks", "question type", "question types", "category", "categories", "stage", "stages", "step", "steps"),
+    enumeration_scope_tokens=(
+        "task",
+        "tasks",
+        "question type",
+        "question types",
+        "types of questions",
+        "category",
+        "categories",
+        "stage",
+        "stages",
+        "step",
+        "steps",
+    ),
     enumeration_list_tokens=("namely", "including", "includes", "such as", ",", ";", "\n- ", "\n* "),
     metric_tokens=("precision", "recall", "f1", "mrr", "ndcg", "latency", "throughput", "energy", "accuracy", "perplexity", "auc", "map", "r@", "p@"),
     source_tokens=("starting point", "source corpus", "source dataset", "seed resource", "built from", "derived from", "initialized from", "based on", "we use the", "we used the", "using the"),
@@ -196,18 +212,24 @@ def build_rerank_document_text(
         return structured_text
     return structured_text[:max_chars]
 
-
-def build_evidence_synopsis(*, heading: str | None, content: str) -> str:
+def build_evidence_synopsis(
+    *,
+    heading: str | None,
+    content: str,
+    variant: str = EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
+) -> str:
     """為 benchmark/profile-gated rerank 產生語言感知的 fact-oriented 補充摘要。
 
     架構說明：
     - evidence 類別判斷採語言無關流程。
     - 各語言的 lexical signal 與輸出文案由 language profile registry 提供。
     - 目前正式支援 `en` 與 `zh-TW`；未來新增語言時，原則上只需新增 profile。
+    - `variant` 僅用於 benchmark/profile-gated 的 phrasing 擴充，不得污染 production defaults。
 
     參數：
     - `heading`：候選片段標題；允許為空值。
     - `content`：候選正文內容。
+    - `variant`：synopsis 變體；預設為 `generic_v1`。
 
     回傳：
     - `str`：若命中 fact-heavy signal，依推定語言回傳本地化 synopsis；否則回空字串。
@@ -228,7 +250,18 @@ def build_evidence_synopsis(*, heading: str | None, content: str) -> str:
         normalized_heading=normalized_heading_lower,
         normalized_content=normalized_content_lower,
     )
-    return "\n".join(f"- {output_profile.synopsis_templates[category]}" for category in categories).strip()
+    synopsis_lines = [output_profile.synopsis_templates[category] for category in categories]
+    synopsis_lines.extend(
+        _build_variant_specific_synopsis_lines(
+            normalized_heading=normalized_heading_lower,
+            normalized_content=normalized_content_lower,
+            output_profile=output_profile,
+            categories=categories,
+            variant=variant,
+        )
+    )
+    deduplicated_lines = list(dict.fromkeys(line for line in synopsis_lines if line.strip()))
+    return "\n".join(f"- {line}" for line in deduplicated_lines).strip()
 
 
 def _merge_table_contents(*, contents: list[str]) -> str:
@@ -276,6 +309,132 @@ def _build_evidence_signal_categories(*, normalized_heading: str, normalized_con
     if _looks_source_material_fact(normalized_heading=normalized_heading, normalized_content=normalized_content):
         detected_categories.append(EVIDENCE_CATEGORY_SOURCE_MATERIAL)
     return tuple(category for category in EVIDENCE_CATEGORY_ORDER if category in detected_categories)
+
+
+def _build_variant_specific_synopsis_lines(
+    *,
+    normalized_heading: str,
+    normalized_content: str,
+    output_profile: EvidenceSynopsisLanguageProfile,
+    categories: tuple[str, ...],
+    variant: str,
+) -> list[str]:
+    """依指定 variant 產生額外的 benchmark-gated synopsis lines。
+
+    參數：
+    - `normalized_heading`：已標準化且 casefold 後的標題。
+    - `normalized_content`：已標準化且 casefold 後的正文。
+    - `output_profile`：此次輸出語言 profile。
+    - `categories`：已命中的 evidence categories。
+    - `variant`：要套用的 synopsis 變體。
+
+    回傳：
+    - `list[str]`：額外附加的 synopsis lines；若 variant 無額外規則則回空列表。
+    """
+
+    if variant != EVIDENCE_SYNOPSIS_VARIANT_QASPER_V3:
+        return []
+    if output_profile.language_code == "en":
+        return _build_qasper_v3_english_synopsis_lines(
+            normalized_heading=normalized_heading,
+            normalized_content=normalized_content,
+            categories=categories,
+        )
+    if output_profile.language_code == "zh-TW":
+        return _build_qasper_v3_traditional_chinese_synopsis_lines(
+            normalized_heading=normalized_heading,
+            normalized_content=normalized_content,
+            categories=categories,
+        )
+    return []
+
+
+def _build_qasper_v3_english_synopsis_lines(
+    *,
+    normalized_heading: str,
+    normalized_content: str,
+    categories: tuple[str, ...],
+) -> list[str]:
+    """建立 `qasper_v3` 的英文補充 synopsis lines。
+
+    參數：
+    - `normalized_heading`：已標準化且 casefold 後的標題。
+    - `normalized_content`：已標準化且 casefold 後的正文。
+    - `categories`：已命中的 evidence categories。
+
+    回傳：
+    - `list[str]`：英文 variant-specific synopsis lines。
+    """
+
+    extra_lines: list[str] = []
+    combined = f"{normalized_heading}\n{normalized_content}"
+
+    if EVIDENCE_CATEGORY_QUANTITATIVE in categories and _looks_dataset_alias_bridge_target(combined=combined):
+        extra_lines.append(
+            "This passage may answer task-dataset size or dataset-alias questions, including question-answer pair statistics."
+        )
+    if EVIDENCE_CATEGORY_ENUMERATION in categories:
+        extra_lines.append(
+            "This passage states the specific task types or question types being unified."
+        )
+    if EVIDENCE_CATEGORY_LABEL_DEFINITION in categories:
+        extra_lines.append(
+            "This passage states the supervision labels or label schema available in the dataset."
+        )
+    if EVIDENCE_CATEGORY_METRIC_COMPARISON in categories:
+        extra_lines.append(
+            "This passage states the aspects compared across models, including evaluation metrics and operational characteristics."
+        )
+    if EVIDENCE_CATEGORY_SOURCE_MATERIAL in categories:
+        extra_lines.append(
+            "This passage states which dataset or corpus is used as the starting point."
+        )
+
+    return extra_lines
+
+
+def _build_qasper_v3_traditional_chinese_synopsis_lines(
+    *,
+    normalized_heading: str,
+    normalized_content: str,
+    categories: tuple[str, ...],
+) -> list[str]:
+    """建立 `qasper_v3` 的繁體中文補充 synopsis lines。
+
+    參數：
+    - `normalized_heading`：已標準化且 casefold 後的標題。
+    - `normalized_content`：已標準化且 casefold 後的正文。
+    - `categories`：已命中的 evidence categories。
+
+    回傳：
+    - `list[str]`：繁體中文 variant-specific synopsis lines。
+    """
+
+    extra_lines: list[str] = []
+    combined = f"{normalized_heading}\n{normalized_content}"
+
+    if EVIDENCE_CATEGORY_QUANTITATIVE in categories and _looks_dataset_alias_bridge_target(combined=combined):
+        extra_lines.append(
+            "此段落可能回答任務資料集規模、資料集別名或問答對統計等問題。"
+        )
+    if EVIDENCE_CATEGORY_ENUMERATION in categories:
+        extra_lines.append(
+            "此段落指出被統整的具體任務型別或問題型別。"
+        )
+    if EVIDENCE_CATEGORY_LABEL_DEFINITION in categories:
+        extra_lines.append(
+            "此段落指出資料集中可用於監督的標籤或標籤結構。"
+        )
+    if EVIDENCE_CATEGORY_METRIC_COMPARISON in categories:
+        extra_lines.append(
+            "此段落指出不同模型之間被比較的面向，包括評估指標與操作特性。"
+        )
+    if EVIDENCE_CATEGORY_SOURCE_MATERIAL in categories:
+        extra_lines.append(
+            "此段落指出哪個資料集或語料被用作起始來源。"
+        )
+
+    return extra_lines
 
 
 def _select_output_language_profile(
@@ -445,3 +604,35 @@ def _contains_numeric_signal(*, text: str) -> bool:
     """
 
     return bool(_ARABIC_NUMERIC_PATTERN.search(text) or _CJK_NUMERIC_PATTERN.search(text))
+
+
+def _looks_dataset_alias_bridge_target(*, combined: str) -> bool:
+    """判斷內容是否值得加上 dataset-alias bridge 類 phrasing。
+
+    參數：
+    - `combined`：標題與正文合併後的標準化文字。
+
+    回傳：
+    - `bool`：若內容像是 dataset size / dataset and metrics / task dataset 類統計描述，回傳 `True`。
+    """
+
+    return any(
+        token in combined
+        for token in (
+            "dataset and evaluation metrics",
+            "question-answer pairs",
+            "types of questions",
+            "task dataset",
+            "sentences",
+            "characters",
+            "資料集與評估指標",
+            "資料集和評估指標",
+            "問答對",
+            "問題型別",
+            "問題類型",
+            "任務資料集",
+            "句子",
+            "字元",
+            "字符",
+        )
+    )

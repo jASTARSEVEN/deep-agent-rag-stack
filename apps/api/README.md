@@ -84,6 +84,25 @@ This module contains the project's FastAPI service. It currently provides:
 - `LANGSMITH_PROJECT`
 - `LANGSMITH_ENDPOINT`
 - `LANGSMITH_WORKSPACE_ID`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT`
+
+## Evidence Synopsis Support Modes
+
+`src/app/services/retrieval_text.py` now separates language-agnostic evidence categories from localized language profiles and benchmark-gated phrasing variants.
+
+- Supported output language profiles:
+  - `en`
+  - `zh-TW`
+- Supported evidence synopsis variants:
+  - `generic_v1`: the default production-safe synopsis phrasing
+  - `qasper_v3`: a benchmark-gated variant that adds dataset alias bridges, task framing bridges, and metric-aspect bridges for QASPER-style semantic-gap misses, with localized output for supported language profiles
+- Runtime knobs:
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true` enables synopsis generation for rerank text assembly
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `generic_v1`
+- Guardrails:
+  - variants only affect benchmark/profile-gated wording and must not bypass SQL gate, ready-only filtering, or production defaults
+  - the `qasper_v3` variant is intended for controlled evaluation profiles rather than the default production runtime
 
 ## Main Directory Structure
 

@@ -27,6 +27,7 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_FTS_TOP_K",
     "RETRIEVAL_MAX_CANDIDATES",
     "RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED",
+    "RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT",
     "RETRIEVAL_RRF_K",
     "RETRIEVAL_HNSW_EF_SEARCH",
     "RERANK_TOP_N",
@@ -120,6 +121,7 @@ class AppSettings(BaseSettings):
     retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 8
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 12
     retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = False
+    retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "generic_v1"
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
     rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "deterministic"

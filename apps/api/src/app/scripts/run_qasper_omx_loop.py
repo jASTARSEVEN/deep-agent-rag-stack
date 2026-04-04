@@ -13,25 +13,15 @@ from app.db.session import create_database_engine, create_session_factory
 from app.scripts.compare_benchmark_runs import compare_reports, load_report_from_run_id, read_report_json
 from app.services.evaluation_dataset import create_evaluation_run, get_evaluation_run_report
 from app.services.evaluation_profiles import (
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE,
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1,
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE,
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
+    HYPOTHESIS_ASSEMBLER,
+    HYPOTHESIS_EVIDENCE_SYNOPSIS,
+    HYPOTHESIS_NONE,
     PRODUCTION_LIKE_V1,
-    QASPER_GUARDED_ASSEMBLER_SEQUENCE,
-    QASPER_GUARDED_ASSEMBLER_V1,
-    QASPER_GUARDED_ASSEMBLER_V1_GATE,
-    QASPER_GUARDED_ASSEMBLER_V2_GATE,
+    get_candidate_profiles_for_hypothesis,
     get_evaluation_profile_overrides,
+    get_gate_profile_for_profile,
+    get_rollback_target_hypothesis,
 )
-
-
-# 無需進入 iteration 的 effect-check 假設名稱。
-HYPOTHESIS_NONE = "no_iteration_needed"
-# rerank hit 但 assembled drop 的假設名稱。
-HYPOTHESIS_ASSEMBLER = "rerank_hit_but_assembled_drop"
-# 補強 rerank text 的 evidence synopsis 假設名稱。
-HYPOTHESIS_EVIDENCE_SYNOPSIS = "evidence_synopsis_for_fact_windows"
 
 # 內建的 QASPER pilot dataset 識別碼。
 DEFAULT_QASPER_DATASET_ID = "db6d581c-2feb-5914-afb8-b4f1fa2092e2"
@@ -59,11 +49,7 @@ def _candidate_profiles_for_hypothesis(*, main_hypothesis: str) -> list[str]:
     - `list[str]`：此主假設對應的 candidate profile 順序。
     """
 
-    if main_hypothesis == HYPOTHESIS_ASSEMBLER:
-        return list(QASPER_GUARDED_ASSEMBLER_SEQUENCE)
-    if main_hypothesis == HYPOTHESIS_EVIDENCE_SYNOPSIS:
-        return list(QASPER_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE)
-    return []
+    return get_candidate_profiles_for_hypothesis(main_hypothesis=main_hypothesis)
 
 
 def _gate_profile_for_profile(*, profile_name: str) -> str:
@@ -76,13 +62,7 @@ def _gate_profile_for_profile(*, profile_name: str) -> str:
     - `str`：對應的 deterministic gate profile 名稱。
     """
 
-    mapping = {
-        QASPER_GUARDED_ASSEMBLER_V1: QASPER_GUARDED_ASSEMBLER_V1_GATE,
-        "qasper_guarded_assembler_v2": QASPER_GUARDED_ASSEMBLER_V2_GATE,
-        QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1: QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE,
-        "qasper_guarded_evidence_synopsis_v2": QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
-    }
-    return mapping[profile_name]
+    return get_gate_profile_for_profile(profile_name=profile_name)
 
 
 def _assembled_metric(*, report_payload: dict[str, Any], metric_name: str) -> float | None:
@@ -297,12 +277,10 @@ def build_rollback_strategy(
     if current_hypothesis == HYPOTHESIS_NONE:
         return None
 
-    if current_hypothesis == HYPOTHESIS_ASSEMBLER:
-        next_hypothesis = HYPOTHESIS_EVIDENCE_SYNOPSIS
+    next_hypothesis = get_rollback_target_hypothesis(main_hypothesis=current_hypothesis)
+    if next_hypothesis == HYPOTHESIS_EVIDENCE_SYNOPSIS:
         reason = "assembler lane rollback，改以 evidence-synopsis lane 作為下一輪單一主假設。"
-    elif current_hypothesis == HYPOTHESIS_EVIDENCE_SYNOPSIS:
-        return None
-    else:
+    elif next_hypothesis is None:
         return None
 
     remaining_profiles = [

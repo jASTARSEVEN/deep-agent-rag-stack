@@ -582,6 +582,54 @@ def test_build_evidence_synopsis_emits_fact_oriented_hints() -> None:
     assert "evaluation metrics" in metric_synopsis
 
 
+def test_build_evidence_synopsis_qasper_v3_adds_alias_task_and_metric_bridges() -> None:
+    """qasper_v3 應補強 alias / task / metric framing bridge。"""
+
+    dataset_alias_synopsis = build_evidence_synopsis(
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        variant="qasper_v3",
+    )
+    task_synopsis = build_evidence_synopsis(
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="There are three types of questions, namely tumor size, proximal resection margin and distal resection margin.",
+        variant="qasper_v3",
+    )
+    metric_synopsis = build_evidence_synopsis(
+        heading="Experimental Setup",
+        content="We compare perplexity, R@3, latency, and energy usage across language models.",
+        variant="qasper_v3",
+    )
+
+    assert "dataset-alias questions" in dataset_alias_synopsis
+    assert "task types or question types being unified" in task_synopsis
+    assert "aspects compared across models" in metric_synopsis
+
+
+def test_build_evidence_synopsis_qasper_v3_supports_traditional_chinese_bridges() -> None:
+    """qasper_v3 應補上繁體中文的 alias / task / metric bridge phrasing。"""
+
+    dataset_alias_synopsis = build_evidence_synopsis(
+        heading="資料集與評估指標",
+        content="此 QA-CTS 資料集包含 17,833 句、826,987 字元與 2,714 組問答對。",
+        variant="qasper_v3",
+    )
+    task_synopsis = build_evidence_synopsis(
+        heading="實驗研究",
+        content="此任務包括腫瘤大小、近端切緣與遠端切緣三種問題型別。",
+        variant="qasper_v3",
+    )
+    metric_synopsis = build_evidence_synopsis(
+        heading="實驗設計",
+        content="本文比較困惑度、R@3、延遲與能耗等面向。",
+        variant="qasper_v3",
+    )
+
+    assert "任務資料集規模、資料集別名或問答對統計" in dataset_alias_synopsis
+    assert "被統整的具體任務型別或問題型別" in task_synopsis
+    assert "不同模型之間被比較的面向" in metric_synopsis
+
+
 def test_build_evidence_synopsis_supports_traditional_chinese_with_localized_output() -> None:
     """evidence synopsis 應能支援繁體中文並輸出本地化提示。"""
 
@@ -832,6 +880,102 @@ def test_retrieve_area_candidates_includes_evidence_synopsis_in_rerank_documents
     assert len(captured_documents) == 1
     assert "Evidence synopsis:" in captured_documents[0].text
     assert "quantitative evidence" in captured_documents[0].text
+
+
+def test_retrieve_area_candidates_includes_qasper_v3_bridge_phrasing_in_rerank_documents(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """qasper_v3 variant 啟用時，rerank 文件應包含 alias/task bridge phrasing。"""
+
+    settings = app_settings.model_copy(
+        update={
+            "retrieval_evidence_synopsis_enabled": True,
+            "retrieval_evidence_synopsis_variant": "qasper_v3",
+        }
+    )
+    area = Area(id=_uuid(), name="Retrieval Evidence Synopsis V3")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="evidence-synopsis-v3.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-evidence-synopsis-v3/evidence-synopsis-v3.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        content_preview="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        char_count=81,
+        start_offset=0,
+        end_offset=81,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
+        content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        content_preview="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
+        char_count=81,
+        start_offset=0,
+        end_offset=81,
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    db_session.add_all([parent, child])
+    db_session.commit()
+
+    captured_documents: list[RerankInputDocument] = []
+
+    class CapturingRerankProvider:
+        """記錄 v3 rerank 文件輸入的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存輸入並回傳固定分數。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del query, top_n
+            captured_documents.extend(documents)
+            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="How big is QA-CTS task dataset?",
+    )
+
+    assert len(captured_documents) == 1
+    assert "dataset-alias questions" in captured_documents[0].text
 
 
 def test_retrieve_area_candidates_includes_traditional_chinese_evidence_synopsis_in_rerank_documents(

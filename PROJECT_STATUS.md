@@ -53,9 +53,10 @@
 - 專案已新增受控 OMX QASPER optimization loop CLI，可固定輸出 `effect-check -> effect-opt -> advice-agent -> guard-agent -> implement-agent` artifact，並在 `Recall@10 < 80%` 或 rollback 後依既定替代 lane 自動進入下一輪
 - 受控 OMX QASPER loop 已改為先跑 deterministic gate；只有 gate 確認 `Recall@10 > 80%` 後才會進入 live rerank
 - 受控 OMX benchmark loop 的正式決策基準已升級為 weighted multi-benchmark objective：`tw-insurance-rag-benchmark-v1=0.6`、`QASPER=0.4`；effect-check、deterministic gate 與 implement decision 皆改為同時考慮兩者
+- benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - 已新增並更新 `docs/qasper-retrieval-miss-analysis.md`，整理 refinement 前後的 QASPER miss case、已試策略對照與目前最高 ROI 改善建議
-- 專案目前保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代使用，且不影響 production runtime defaults
-- 專案已新增 benchmark/profile-gated 的 `qasper_guarded_evidence_synopsis_v1 / v2`，以 evidence synopsis 改善 rerank/assembly 對 fact-heavy windows 的表達能力，且不影響 production runtime defaults
+- 專案目前保留 benchmark/profile-gated 的 `qasper_guarded_assembler_v1 / v2` 與 `qasper_guarded_evidence_synopsis_v1 / v2 / v3` evaluation profiles，供外部 benchmark 壓力測試與受控 OMX 五-agent 迭代使用，且不影響 production runtime defaults
+- 專案已新增 benchmark/profile-gated 的 `qasper_guarded_evidence_synopsis_v3 / v3_gate`，以 alias bridge / task framing bridge / metric-aspect bridge 補強 QASPER 剩餘 semantic-gap miss；其中 QASPER deterministic gate 已提升至 `Recall@10=0.8519`，但 self benchmark 仍未改善，weighted gate 目前仍未通過
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
 - 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
 - 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件

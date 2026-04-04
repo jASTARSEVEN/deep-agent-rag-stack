@@ -126,7 +126,11 @@ def test_rollback_strategy_switches_from_assembler_to_evidence_synopsis_lane() -
 
     assert rethink is not None
     assert rethink["main_hypothesis"] == HYPOTHESIS_EVIDENCE_SYNOPSIS
-    assert rethink["candidate_profiles"] == ["qasper_guarded_evidence_synopsis_v1", "qasper_guarded_evidence_synopsis_v2"]
+    assert rethink["candidate_profiles"] == [
+        "qasper_guarded_evidence_synopsis_v1",
+        "qasper_guarded_evidence_synopsis_v2",
+        "qasper_guarded_evidence_synopsis_v3",
+    ]
 
 
 def test_rollback_strategy_stops_after_evidence_synopsis_lane() -> None:

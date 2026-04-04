@@ -492,7 +492,11 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
                 content=group.content,
                 max_chars=settings.rerank_max_chars_per_doc,
                 evidence_synopsis=(
-                    build_evidence_synopsis(heading=group.heading, content=group.content)
+                    build_evidence_synopsis(
+                        heading=group.heading,
+                        content=group.content,
+                        variant=settings.retrieval_evidence_synopsis_variant,
+                    )
                     if settings.retrieval_evidence_synopsis_enabled
                     else None
                 ),
