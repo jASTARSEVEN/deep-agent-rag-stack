@@ -53,6 +53,9 @@ This module contains the project's FastAPI service. It currently provides:
 - `EMBEDDING_MODEL`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_HTTP_REFERER`
+- `OPENROUTER_TITLE`
 - `RERANK_PROVIDER`
 - `RERANK_MODEL`
 - `COHERE_API_KEY`
@@ -179,6 +182,9 @@ Notes:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
+- The default embedding path is now `EMBEDDING_PROVIDER=openrouter` with `EMBEDDING_MODEL=qwen/qwen3-embedding-8b`, and the retrieval schema expects `4096` dimensions.
+- The OpenRouter path uses the OpenAI-compatible `/api/v1/embeddings` endpoint and forwards optional `OPENROUTER_HTTP_REFERER` / `OPENROUTER_TITLE` headers when configured.
+- Hosted providers that return fewer than `4096` dimensions are zero-padded before persistence/query-time use so older OpenAI-compatible paths do not fail on the widened schema.
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests.

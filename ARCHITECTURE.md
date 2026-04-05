@@ -185,6 +185,8 @@
 11. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
 12. `child` chunk 才是後續 retrieval 的最小候選單位
 13. child chunk embedding 的正式輸入為 `heading + content` 的自然拼接文字；若沒有 heading，則只使用 content
+13.5. `document_chunks.embedding` 與 query embedding 目前固定採 `4096` 維 schema，以對齊 `qwen/qwen3-embedding-8b` 主線設定
+13.6. 若 hosted embedding provider 回傳維度小於 `4096`，系統會在寫入與查詢階段做零補齊；回傳維度大於 `4096` 則直接視為設定錯誤
 14. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
 15. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
 16. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
@@ -197,11 +199,12 @@
 2. SQL gate 先以 area scope + effective role 驗證完成，之後才進入 recall
 3. 只有 `documents.status=ready` 且 `chunk_type=child` 的 chunk 會進入 recall
 4. `document_chunks.embedding` 與 `content` (經 PGroonga 索引) 都屬於 retrieval 的 SQL-first 欄位
+4.5. embedding provider abstraction 目前正式支援 `openrouter`、`openai` 與 `deterministic`；其中 runtime 預設為 `OpenRouter / qwen/qwen3-embedding-8b`
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `PGroonga`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
-6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
+6. PostgreSQL vector recall 在 `1536` 維時使用 `hnsw` index；目前 `4096` 維 `qwen/qwen3-embedding-8b` 主線因 `pgvector` 的 `hnsw` 維度限制，暫時退回無 ANN index 的精確掃描路徑
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前的主線實作包含 hybrid recall、候選合併、rerank 與 context assembly，但這些 stage 的具體組合不再視為固定不可變的唯一路徑；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
-8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新重跑快照為 `qasper_v3 + query_focus=false + assembler 10 x 3600`
+8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + query_focus=false + assembler 9 x 3000`
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為 `Easypinex-host /v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
 11. parent-level rerank 若啟用，會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；document-side 補充文字仍應走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程

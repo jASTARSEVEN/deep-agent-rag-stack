@@ -65,7 +65,7 @@ def app_settings(tmp_path: Path) -> AppSettings:
         CELERY_RESULT_BACKEND="redis://redis:6379/1",
         EMBEDDING_PROVIDER="deterministic",
         EMBEDDING_MODEL="text-embedding-3-small",
-        EMBEDDING_DIMENSIONS=1536,
+        EMBEDDING_DIMENSIONS=4096,
         RETRIEVAL_VECTOR_TOP_K=8,
         RETRIEVAL_FTS_TOP_K=8,
         RETRIEVAL_MAX_CANDIDATES=12,

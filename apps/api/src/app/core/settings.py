@@ -23,6 +23,8 @@ EMPTY_STRING_ENV_KEYS = {
     "CHUNK_TABLE_PRESERVE_MAX_CHARS",
     "CHUNK_TABLE_MAX_ROWS_PER_CHILD",
     "EMBEDDING_DIMENSIONS",
+    "OPENROUTER_HTTP_REFERER",
+    "OPENROUTER_TITLE",
     "RETRIEVAL_VECTOR_TOP_K",
     "RETRIEVAL_FTS_TOP_K",
     "RETRIEVAL_MAX_CANDIDATES",
@@ -119,10 +121,13 @@ class AppSettings(BaseSettings):
     keycloak_admin_password: Annotated[str, Field(alias="KEYCLOAK_ADMIN_PASSWORD")] = "admin"
     keycloak_realm: Annotated[str, Field(alias="KEYCLOAK_REALM")] = "deep-agent-dev"
     auth_test_mode: Annotated[bool, Field(alias="AUTH_TEST_MODE")] = False
-    embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
-    embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
-    embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
+    embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openrouter"
+    embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "qwen/qwen3-embedding-8b"
+    embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 4096
     openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
+    openrouter_api_key: Annotated[str | None, Field(alias="OPENROUTER_API_KEY")] = None
+    openrouter_http_referer: Annotated[str | None, Field(alias="OPENROUTER_HTTP_REFERER")] = None
+    openrouter_title: Annotated[str | None, Field(alias="OPENROUTER_TITLE")] = None
     retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 30
     retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 30
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 30

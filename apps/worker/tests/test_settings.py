@@ -24,6 +24,8 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         EMBEDDING_MAX_BATCH_TEXTS="",
         EMBEDDING_RETRY_MAX_ATTEMPTS="",
         EMBEDDING_RETRY_BASE_DELAY_SECONDS="",
+        OPENROUTER_HTTP_REFERER="",
+        OPENROUTER_TITLE="",
         OPENDATALOADER_USE_STRUCT_TREE="",
         OPENDATALOADER_QUIET="",
         LLAMAPARSE_DO_NOT_CACHE="",
@@ -47,6 +49,8 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.embedding_max_batch_texts == 64
     assert settings.embedding_retry_max_attempts == 3
     assert settings.embedding_retry_base_delay_seconds == 2.0
+    assert settings.openrouter_http_referer is None
+    assert settings.openrouter_title is None
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True

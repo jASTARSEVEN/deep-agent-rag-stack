@@ -31,7 +31,7 @@
 - rerank model：`BAAI/bge-reranker-v2-m3`
 - rerank top N：`30`
 - rerank max chars per doc：`2000`
-- evidence synopsis：`enabled=true`，variant=`qasper_v3`
+- evidence synopsis：`enabled=true`，variant=`generic_v1`
 - query focus：`enabled=false`，variant=`generic_field_focus_v1`
 - vector / FTS / max candidates：`30 / 30 / 30`
 - assembler budget：`9 x 3000`
@@ -66,7 +66,7 @@
 
 | 類別 | 應保留項目 | 保留理由 |
 | --- | --- | --- |
-| current mainline baseline | `production_like_v1`（實際 snapshot：`qasper_v3 + query_focus off + 9x3000`） | 這是目前真正會被拿來回歸檢查的 baseline，所有文件都應以它為準。 |
+| current mainline baseline | `production_like_v1`（實際 snapshot：`generic_v1 + query_focus off + 9x3000`） | 這是目前真正會被拿來回歸檢查的 baseline，所有文件都應以它為準。 |
 | self / pilot stability set | `uda-curated-v1-pilot`、`tw-insurance-rag-benchmark-v1`、`qasper-curated-v1-pilot` | 這組最適合檢查主線策略是否在既有自家 benchmark 上失穩。 |
 | external pressure-test trio | `msmarco-curated-v1-100`、`uda-curated-v1-100`、`qasper-curated-v1-100` | 三者合併後可以同時觀察 snippet-bundle sanity check、same-document localization 與英文 semantic-gap。 |
 | hard external lane | `qasper-curated-v1-100` | 若要找下一輪最高 ROI 的 hard case，仍應優先看這份。 |
@@ -104,7 +104,7 @@
 
 這條歷史資料現在的意義只剩下：
 
-> query focus 類策略仍值得演進，但任何新 lane 都必須直接對目前這條 `qasper_v3 + query_focus off + 9x3000` baseline 比較，不能再對已淘汰的舊 snapshot 做勝負判讀。
+> query focus 類策略仍值得演進，但任何新 lane 都必須直接對目前這條 `generic_v1 + query_focus off + 9x3000` baseline 比較，不能再對已淘汰的舊 snapshot 做勝負判讀。
 
 ## 下一輪最高 ROI 假設
 

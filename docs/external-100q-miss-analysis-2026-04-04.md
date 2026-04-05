@@ -11,7 +11,7 @@
 
 本輪 `production_like_v1` 的重要前提：
 
-- `retrieval_evidence_synopsis_variant = qasper_v3`
+- `retrieval_evidence_synopsis_variant = generic_v1`
 - `retrieval_query_focus_enabled = false`
 - `assembler = 10 x 3600`
 

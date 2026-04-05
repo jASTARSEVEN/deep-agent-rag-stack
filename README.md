@@ -78,7 +78,7 @@ Current `production_like_v1` snapshot from the fresh rerun artifacts:
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
 - `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
 - `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
 - `RETRIEVAL_VECTOR_TOP_K=30`

@@ -20,6 +20,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         CHUNK_TXT_PARENT_GROUP_SIZE="",
         CHUNK_TABLE_PRESERVE_MAX_CHARS="",
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
+        OPENROUTER_HTTP_REFERER="",
+        OPENROUTER_TITLE="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
         RETRIEVAL_QUERY_FOCUS_ENABLED="",
@@ -44,6 +46,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.chunk_txt_parent_group_size == 4
     assert settings.chunk_table_preserve_max_chars == 4000
     assert settings.chunk_table_max_rows_per_child == 20
+    assert settings.openrouter_http_referer is None
+    assert settings.openrouter_title is None
     assert settings.retrieval_evidence_synopsis_enabled is True
     assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
     assert settings.retrieval_query_focus_enabled is True

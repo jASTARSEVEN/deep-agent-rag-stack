@@ -42,6 +42,9 @@
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
+- 專案已將 embedding 主線切到 `OpenRouter / qwen/qwen3-embedding-8b`，並把 retrieval schema 與 `match_chunks` RPC 一併升級為固定 `4096` 維
+- 專案已新增 `openrouter` embedding provider，支援可選 `HTTP-Referer` / `X-OpenRouter-Title` headers；既有較小維度的 hosted provider 回應則會在寫入與 query 時零補齊到 `4096`
+- 由於目前 `pgvector` `hnsw` index 無法覆蓋 `4096` 維 vector，主線已暫時改為無 ANN index 的精確向量掃描；功能正確性保留，效能優化需待後續 `halfvec` 或其他索引策略
 - 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / `easypinex-host` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
 - 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，並將 runtime 預設切到 `easypinex-host / BAAI/bge-reranker-v2-m3`
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
@@ -70,8 +73,8 @@
   - `benchmarks/msmarco-curated-v1-100`：官方 `MS MARCO v1.1` validation QA rows、`180` prepared items、`154` filtered items、`103` auto-matched、`47` 個 `OpenAI` review overrides，最終 `100` 題 / `100` 份 snippet-bundle 文件 / `114` 個 gold spans，最新 rerun assembled `Recall@10=1.0000`、`nDCG@10=0.9674`、`MRR@10=0.9550`
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最新 rerun assembled `Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
-- 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `qasper_v3 + query_focus off + 9x3000`
-- 已於 `2026-04-05` 以同一條 current `production_like_v1`（`qasper_v3 + query_focus off + 9x3000`）重跑六個 benchmark dataset，並依難度由簡單到困難排序更新長期文件：`MS MARCO 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
+- 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
+- 已於 `2026-04-05` 以同一條 current `production_like_v1`（`generic_v1 + query_focus off + 9x3000`）重跑六個 benchmark dataset，並依難度由簡單到困難排序更新長期文件：`MS MARCO 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為六資料集 rerun 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100` 與 `MS MARCO 100`
 - 已完成 `QASPER 100`、`UDA 100` 與 `MS MARCO 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單
 - `UDA` pilot 這一輪的 benchmark governance 結果為：`9` 題 auto-matched、`21` 題由 `OpenAI` review 核准、再補 `4` 題 deterministic span override；reference run assembled 指標提升到 `Recall@10=0.6538`、`nDCG@10=0.5288`、`MRR@10=0.4968`
@@ -183,7 +186,7 @@
 ### Phase 4.1 — 已完成的 retrieval foundation
 - 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
 - 已補 worker indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
-- 已導入 embedding provider abstraction，初版支援 `openai`，並保留 `deterministic` 供離線測試
+- 已導入 embedding provider abstraction，現支援 `openrouter`、`openai` 與 `deterministic`，其中主線預設為 `OpenRouter / qwen/qwen3-embedding-8b`
 - 已將 child chunk embedding 輸入調整為 `heading + content` 的自然拼接文字，改善 chunk 被切碎時的主題召回
 - 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba

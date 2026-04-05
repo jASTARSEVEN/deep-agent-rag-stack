@@ -58,6 +58,9 @@ This module contains the project's Celery worker. It currently provides the mini
 - `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
 - `OPENAI_API_KEY`
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_HTTP_REFERER`
+- `OPENROUTER_TITLE`
 
 ## Main Directory Structure
 
@@ -95,6 +98,9 @@ This module contains the project's Celery worker. It currently provides the mini
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
+- The default embedding path is now `EMBEDDING_PROVIDER=openrouter` with `EMBEDDING_MODEL=qwen/qwen3-embedding-8b`, and the storage schema expects `4096` dimensions.
+- The OpenRouter path uses the OpenAI-compatible `/api/v1/embeddings` endpoint and forwards optional `OPENROUTER_HTTP_REFERER` / `OPENROUTER_TITLE` headers when configured.
+- Hosted providers that return fewer than `4096` dimensions are zero-padded before persistence so older OpenAI-compatible paths do not fail on the widened schema.
 - OpenAI embeddings are now sent in batches controlled by `EMBEDDING_MAX_BATCH_TEXTS`; if a batch is still rejected for request-size overflow, the worker recursively splits that batch and retries with smaller requests.
 - OpenAI embeddings now retry only transient failures such as `429`, `5xx`, and connection/timeout errors with bounded backoff. Permanent `400`-class request errors become controlled failed jobs instead of unexpected task crashes.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
