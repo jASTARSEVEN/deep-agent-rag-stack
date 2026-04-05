@@ -85,13 +85,17 @@
 
 ## 檢索需求
 
-### 檢索順序
+### 目前主線檢索路徑
+目前主線實作通常會包含：
 1. 先做 SQL gate
-2. 再做 vector recall
-3. 再做 FTS recall
-4. 用 `RRF` 合併候選
-5. 用 rerank provider 重排（預設 `BAAI BGE-Rerank-v2-m3`，可選 `Qwen3-Reranker-0.6B`、`Cohere Rerank v4` 與 `Easypinex-host /v1/rerank hosted provider`）
-6. 將候選內容交給 LLM 生成回答與 citations
+2. 再做 vector recall 與 / 或 FTS recall
+3. 視策略需要做候選合併（目前常見為 `RRF`）
+4. 視策略需要做 rerank（預設 `BAAI BGE-Rerank-v2-m3`，可選 `Qwen3-Reranker-0.6B`、`Cohere Rerank v4` 與 `Easypinex-host /v1/rerank hosted provider`）
+5. 將候選內容交給 LLM 生成回答與 citations
+
+補充約束：
+- `SQL gate`、`deny-by-default` 與 `ready-only` 仍是不可放寬的保護邊界
+- 其餘檢索 / ranking / assembly 組合屬於可演進的實作策略，不再視為不可繞過的固定順序
 
 ### 關鍵字檢索
 - 使用 Postgres FTS

@@ -75,49 +75,41 @@
 
 ## Evaluation Benchmark
 
-本專案目前將 `production_like_v1` 視為 generic-first 的主線 retrieval benchmark baseline。以實際 runtime 設定來說，預設組合為：
+本專案已於 `2026-04-05` 重新用 `production_like_v1` 對目前 Compose benchmark 環境內已載入的每一個資料集重新實跑。
+
+這次新 artifact 顯示的 `production_like_v1` 真實設定快照為：
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
-- `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
-- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
-- `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=9`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
+- `ASSEMBLER_MAX_CONTEXTS=10`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
-最新主線 benchmark 快照：
-
-- 日期：`2026-04-04`
-- 主線 profile 標籤：`production_like_v1`
-- 驗證方式：fresh `Docker Compose` rebuild + benchmark package re-import
-- 使用資料集：
-  - `QASPER`（`qasper-curated-v1-pilot`）
-  - `tw-insurance-rag-benchmark-v1`
-  - `uda-curated-v1-pilot`
-  - 三資料集平均
-
-主線 assembled 指標：
+最新重跑快照（`production_like_v1`，assembled 指標）：
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `QASPER` | `0.8148` | `0.5353` | `0.4467` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7481` | `0.7083` |
-| `uda-curated-v1-pilot` | `0.8846` | `0.7742` | `0.7468` |
-| `三資料集平均` | `0.8554` | `0.6858` | `0.6339` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
+| `qasper-curated-v1-pilot` | `0.8148` | `0.5353` | `0.4467` |
+| `uda-curated-v1-pilot` | `0.8462` | `0.7357` | `0.7083` |
+| `qasper-curated-v1-100` | `0.6200` | `0.3903` | `0.3183` |
+| `uda-curated-v1-100` | `0.8600` | `0.6972` | `0.6447` |
+| `pilot 三資料集平均` | `0.8425` | `0.6664` | `0.6125` |
+| `external 100Q 平均` | `0.7400` | `0.5437` | `0.4815` |
 
 補充說明：
 
-- README 這裡刻意只呈現最新 generic-first 主線的 benchmark 參考結果。
-- 上表分數來自目前 hosted-runtime 預設組合（`easypinex-host / BAAI/bge-reranker-v2-m3`）在 fresh compose rebuild 與 benchmark package 重建後的實跑結果。
-- 目前主線採用的 assembler budget sweet spot 為 `9 x 3000 = 27000`；另外仍保留一條更激進的成本優先 profile：`generic_guarded_query_focus_budget_6x3000`。
-- 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
+- 這一節現在以目前實際 `production_like_v1` run artifact 為準，不再沿用舊的 `generic_field_focus_v1 + 9x3000` 敘述。
+- 這 5 次 run 的 run id 依序為 `a5cc80a1-fab0-4184-94da-02bbac6eb428`、`c7bd9111-ce84-4fda-b799-826e70173db2`、`d137f59b-a372-4c6a-bcc2-ba9e1e226cd2`、`653032cb-9694-4878-915a-d73ebddd006d`、`986c130d-6ccf-45b8-a47f-a07e15753ec0`。
+- 若要看策略脈絡與最新判讀，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
+- external `100Q` 的詳細 miss 題目與原因歸類，請參考 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 
 ## 目前尚未完成

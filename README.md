@@ -71,49 +71,41 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-This repository now treats `production_like_v1` as the generic-first mainline retrieval benchmark baseline. In runtime terms, the default stack uses:
+The repository was re-tested on `2026-04-05` by rerunning `production_like_v1` against every benchmark dataset currently loaded in the Compose-backed benchmark environment.
+
+Current `production_like_v1` snapshot from the new run artifacts:
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
-- `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
-- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
-- `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=9`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
+- `ASSEMBLER_MAX_CONTEXTS=10`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
-Latest mainline benchmark snapshot:
-
-- Date: `2026-04-04`
-- Mainline profile label: `production_like_v1`
-- Validation mode: fresh `Docker Compose` rebuild + benchmark package re-import
-- Datasets:
-  - `QASPER` (`qasper-curated-v1-pilot`)
-  - `tw-insurance-rag-benchmark-v1`
-  - `uda-curated-v1-pilot`
-  - three-dataset average
-
-Mainline assembled metrics:
+Latest rerun snapshot (`production_like_v1`, assembled metrics):
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `QASPER` | `0.8148` | `0.5353` | `0.4467` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7481` | `0.7083` |
-| `uda-curated-v1-pilot` | `0.8846` | `0.7742` | `0.7468` |
-| `three-dataset average` | `0.8554` | `0.6858` | `0.6339` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
+| `qasper-curated-v1-pilot` | `0.8148` | `0.5353` | `0.4467` |
+| `uda-curated-v1-pilot` | `0.8462` | `0.7357` | `0.7083` |
+| `qasper-curated-v1-100` | `0.6200` | `0.3903` | `0.3183` |
+| `uda-curated-v1-100` | `0.8600` | `0.6972` | `0.6447` |
+| `pilot trio average` | `0.8425` | `0.6664` | `0.6125` |
+| `external 100Q average` | `0.7400` | `0.5437` | `0.4815` |
 
 Notes:
 
-- The README intentionally shows only the latest generic-first mainline benchmark reference.
-- These numbers come from the current hosted-runtime default stack (`easypinex-host / BAAI/bge-reranker-v2-m3`) after a fresh compose rebuild and benchmark package re-import.
-- The current mainline budget sweet spot is `9 x 3000 = 27000` assembled characters. A more aggressive cost-priority profile is still kept as `generic_guarded_query_focus_budget_6x3000`.
-- Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
+- This section now reflects the actual current `production_like_v1` run artifacts; it no longer assumes the older `generic_field_focus_v1 + 9x3000` snapshot.
+- The five run reports were produced on `2026-04-05` with run ids `a5cc80a1-fab0-4184-94da-02bbac6eb428`, `c7bd9111-ce84-4fda-b799-826e70173db2`, `d137f59b-a372-4c6a-bcc2-ba9e1e226cd2`, `653032cb-9694-4878-915a-d73ebddd006d`, and `986c130d-6ccf-45b8-a47f-a07e15753ec0`.
+- Strategy history and current interpretation are tracked in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
+- Detailed external `100Q` miss lists are tracked in [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 
 ## Not Yet Implemented
