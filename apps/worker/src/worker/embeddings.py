@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import time
 from abc import ABC, abstractmethod
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from worker.core.settings import WorkerSettings
 from worker.db_types import DEFAULT_EMBEDDING_DIMENSIONS
@@ -213,6 +216,7 @@ class OpenAIEmbeddingProvider(HostedEmbeddingProvider):
             retry_max_attempts=retry_max_attempts,
             retry_base_delay_seconds=retry_base_delay_seconds,
             provider_name="OpenAI",
+            send_dimensions=True,
         )
 
 
@@ -268,6 +272,115 @@ class OpenRouterEmbeddingProvider(HostedEmbeddingProvider):
         )
 
 
+class EasypinexHostEmbeddingProvider(EmbeddingProvider):
+    """使用 easypinex-host `/v1/embeddings` HTTP API 的 provider。"""
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        dimensions: int,
+        max_batch_texts: int,
+        retry_max_attempts: int,
+        retry_base_delay_seconds: float,
+        timeout_seconds: float = 60.0,
+    ) -> None:
+        """初始化 easypinex-host embedding provider。
+
+        參數：
+        - `base_url`：easypinex-host service 的 base URL，例如 `http://host:8000`。
+        - `api_key`：easypinex-host service 使用的 Bearer API key。
+        - `model`：要使用的 embedding model 名稱。
+        - `dimensions`：預期輸出向量維度。
+        - `max_batch_texts`：每批最多送出的文字筆數。
+        - `retry_max_attempts`：暫時性失敗時的最大重試次數。
+        - `retry_base_delay_seconds`：暫時性失敗的 retry 初始等待秒數。
+        - `timeout_seconds`：每次 HTTP request 的 timeout 秒數。
+
+        回傳：
+        - `None`：此建構子只負責保存設定。
+        """
+
+        normalized_base_url = base_url.rstrip("/")
+        self._endpoint = f"{normalized_base_url}/v1/embeddings"
+        self._api_key = api_key
+        self._model = model
+        self._dimensions = dimensions
+        self._max_batch_texts = max(1, max_batch_texts)
+        self._retry_max_attempts = max(1, retry_max_attempts)
+        self._retry_base_delay_seconds = max(0.0, retry_base_delay_seconds)
+        self._timeout_seconds = max(1.0, timeout_seconds)
+
+    def embed_texts(self, texts: list[str]) -> list[list[float]]:
+        """呼叫 easypinex-host HTTP API 產生 embeddings。
+
+        參數：
+        - `texts`：要嵌入的文字清單。
+
+        回傳：
+        - `list[list[float]]`：與輸入順序一致的向量結果。
+        """
+
+        embeddings: list[list[float]] = []
+        for offset in range(0, len(texts), self._max_batch_texts):
+            batch_texts = texts[offset : offset + self._max_batch_texts]
+            embeddings.extend(self._embed_batch(batch_texts))
+        return [
+            _normalize_embedding_dimensions(
+                embedding=embedding,
+                target_dimensions=self._dimensions,
+                provider_name="Easypinex-host",
+            )
+            for embedding in embeddings
+        ]
+
+    def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        """以單一 batch 呼叫 easypinex-host embeddings API。"""
+
+        payload = json.dumps(
+            {
+                "model": self._model,
+                "input": texts,
+            }
+        ).encode("utf-8")
+        request = Request(
+            self._endpoint,
+            data=payload,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            method="POST",
+        )
+        last_error: Exception | None = None
+        for attempt in range(1, self._retry_max_attempts + 1):
+            try:
+                with urlopen(request, timeout=self._timeout_seconds) as response:
+                    response_payload = json.loads(response.read().decode("utf-8"))
+                raw_data = response_payload.get("data", [])
+                embeddings: list[list[float]] = []
+                for item in raw_data:
+                    embedding = item.get("embedding")
+                    if isinstance(embedding, list) and all(isinstance(value, (int, float)) for value in embedding):
+                        embeddings.append([float(value) for value in embedding])
+                return embeddings
+            except HTTPError as exc:
+                last_error = exc
+                if exc.code not in {408, 409, 429} and exc.code < 500:
+                    raise ValueError(f"Easypinex-host embeddings 失敗：{exc}") from exc
+            except (URLError, TimeoutError) as exc:
+                last_error = exc
+            if attempt >= self._retry_max_attempts:
+                break
+            sleep_seconds = self._retry_base_delay_seconds * (2 ** (attempt - 1))
+            if sleep_seconds > 0:
+                time.sleep(sleep_seconds)
+        raise RuntimeError("Easypinex-host embeddings API 呼叫失敗。") from last_error
+
+
 def build_embedding_provider(settings: WorkerSettings) -> EmbeddingProvider:
     """依照設定建立 embedding provider。
 
@@ -310,6 +423,23 @@ def build_embedding_provider(settings: WorkerSettings) -> EmbeddingProvider:
             retry_base_delay_seconds=settings.embedding_retry_base_delay_seconds,
             http_referer=settings.openrouter_http_referer,
             title=settings.openrouter_title,
+        )
+    if provider == "easypinex-host":
+        base_url = settings.easypinex_host_embedding_base_url
+        api_key = settings.easypinex_host_embedding_api_key
+        if not base_url:
+            raise ValueError("使用 easypinex-host embeddings 前必須提供 EASYPINEX_HOST_EMBEDDING_BASE_URL。")
+        if not api_key:
+            raise ValueError("使用 easypinex-host embeddings 前必須提供 EASYPINEX_HOST_EMBEDDING_API_KEY。")
+        return EasypinexHostEmbeddingProvider(
+            base_url=base_url,
+            api_key=api_key,
+            model=settings.embedding_model,
+            dimensions=settings.embedding_dimensions,
+            max_batch_texts=settings.embedding_max_batch_texts,
+            retry_max_attempts=settings.embedding_retry_max_attempts,
+            retry_base_delay_seconds=settings.embedding_retry_base_delay_seconds,
+            timeout_seconds=settings.easypinex_host_embedding_timeout_seconds or 60.0,
         )
     raise ValueError(f"不支援的 embedding provider：{settings.embedding_provider}")
 

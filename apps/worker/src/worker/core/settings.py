@@ -34,6 +34,9 @@ EMPTY_STRING_ENV_KEYS = {
     "EMBEDDING_DIMENSIONS",
     "OPENROUTER_HTTP_REFERER",
     "OPENROUTER_TITLE",
+    "EASYPINEX_HOST_EMBEDDING_BASE_URL",
+    "EASYPINEX_HOST_EMBEDDING_API_KEY",
+    "EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS",
     "OPENDATALOADER_USE_STRUCT_TREE",
     "OPENDATALOADER_QUIET",
     "LLAMAPARSE_DO_NOT_CACHE",
@@ -99,16 +102,21 @@ class WorkerSettings(BaseSettings):
     llamaparse_api_key: Annotated[str | None, Field(alias="LLAMAPARSE_API_KEY")] = None
     llamaparse_do_not_cache: Annotated[bool, Field(alias="LLAMAPARSE_DO_NOT_CACHE")] = True
     llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False
-    embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openrouter"
-    embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "qwen/qwen3-embedding-8b"
+    embedding_provider: Annotated[str, Field(alias="EMBEDDING_PROVIDER")] = "openai"
+    embedding_model: Annotated[str, Field(alias="EMBEDDING_MODEL")] = "text-embedding-3-small"
     embedding_max_batch_texts: Annotated[int, Field(alias="EMBEDDING_MAX_BATCH_TEXTS")] = 64
     embedding_retry_max_attempts: Annotated[int, Field(alias="EMBEDDING_RETRY_MAX_ATTEMPTS")] = 3
     embedding_retry_base_delay_seconds: Annotated[float, Field(alias="EMBEDDING_RETRY_BASE_DELAY_SECONDS")] = 2.0
-    embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 4096
+    embedding_dimensions: Annotated[int, Field(alias="EMBEDDING_DIMENSIONS")] = 1536
     openai_api_key: Annotated[str | None, Field(alias="OPENAI_API_KEY")] = None
     openrouter_api_key: Annotated[str | None, Field(alias="OPENROUTER_API_KEY")] = None
     openrouter_http_referer: Annotated[str | None, Field(alias="OPENROUTER_HTTP_REFERER")] = None
     openrouter_title: Annotated[str | None, Field(alias="OPENROUTER_TITLE")] = None
+    easypinex_host_embedding_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_BASE_URL")] = None
+    easypinex_host_embedding_api_key: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_API_KEY")] = None
+    easypinex_host_embedding_timeout_seconds: Annotated[
+        float | None, Field(alias="EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS")
+    ] = 60.0
 
     @model_validator(mode="before")
     @classmethod

@@ -42,9 +42,9 @@
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
 - 專案已具備 document delete、reindex、chunk summary 與 parent-child chunk tree 最小主流程
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
-- 專案已將 embedding 主線切到 `OpenRouter / qwen/qwen3-embedding-8b`，並把 retrieval schema 與 `match_chunks` RPC 一併升級為固定 `4096` 維
-- 專案已新增 `openrouter` embedding provider，支援可選 `HTTP-Referer` / `X-OpenRouter-Title` headers；既有較小維度的 hosted provider 回應則會在寫入與 query 時零補齊到 `4096`
-- 由於目前 `pgvector` `hnsw` index 無法覆蓋 `4096` 維 vector，主線已暫時改為無 ANN index 的精確向量掃描；功能正確性保留，效能優化需待後續 `halfvec` 或其他索引策略
+- 專案已將 embedding 主線切到 `easypinex-host / Qwen/Qwen3-Embedding-0.6B`，並把 retrieval schema 與 `match_chunks` RPC 調整為固定 `1024` 維
+- 專案已新增 `easypinex-host` embedding provider，走 `POST /v1/embeddings` 與 Bearer auth；`0.6B` 模型與 schema 維度一致，不再需要先前 `4096` 路徑的零補齊 workaround
+- 由於 `1024` 維已回到 `pgvector` `hnsw` index 支援範圍，主線已恢復 ANN 向量召回路徑，不再使用 `4096` 維時期的精確掃描 fallback
 - 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / `easypinex-host` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
 - 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，並將 runtime 預設切到 `easypinex-host / BAAI/bge-reranker-v2-m3`
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
@@ -186,7 +186,7 @@
 ### Phase 4.1 — 已完成的 retrieval foundation
 - 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
 - 已補 worker indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
-- 已導入 embedding provider abstraction，現支援 `openrouter`、`openai` 與 `deterministic`，其中主線預設為 `OpenRouter / qwen/qwen3-embedding-8b`
+- 已導入 embedding provider abstraction，現支援 `easypinex-host`、`openrouter`、`openai` 與 `deterministic`，其中主線預設為 `easypinex-host / Qwen/Qwen3-Embedding-0.6B`
 - 已將 child chunk embedding 輸入調整為 `heading + content` 的自然拼接文字，改善 chunk 被切碎時的主題召回
 - 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
-from worker.embeddings import OpenAIEmbeddingProvider, OpenRouterEmbeddingProvider
+from worker.embeddings import EasypinexHostEmbeddingProvider, OpenAIEmbeddingProvider, OpenRouterEmbeddingProvider
 
 
 class _FakeTooLargeError(Exception):
@@ -93,7 +93,7 @@ def _build_openai_provider(*, client, dimensions: int = 4, max_batch_texts: int 
     return provider
 
 
-def _build_openrouter_provider(*, client, dimensions: int = 4096, max_batch_texts: int = 64) -> OpenRouterEmbeddingProvider:
+def _build_openrouter_provider(*, client, dimensions: int = 1024, max_batch_texts: int = 64) -> OpenRouterEmbeddingProvider:
     """建立不經真實 OpenAI client 初始化的 OpenRouter provider 測試實例。
 
     參數：
@@ -107,7 +107,7 @@ def _build_openrouter_provider(*, client, dimensions: int = 4096, max_batch_text
 
     provider = object.__new__(OpenRouterEmbeddingProvider)
     provider._client = client
-    provider._model = "qwen/qwen3-embedding-8b"
+    provider._model = "qwen/qwen3-embedding-0.6b"
     provider._dimensions = dimensions
     provider._max_batch_texts = max_batch_texts
     provider._retry_max_attempts = 3
@@ -209,20 +209,20 @@ def test_openrouter_embedding_provider_sends_dimensions_and_float_encoding() -> 
     - `None`：以斷言驗證 OpenRouter request payload。
     """
 
-    client = _FakeEmbeddingsClient(lambda request_kwargs: _build_response(list(request_kwargs["input"]), dimensions=4096))
-    provider = _build_openrouter_provider(client=client, dimensions=4096)
+    client = _FakeEmbeddingsClient(lambda request_kwargs: _build_response(list(request_kwargs["input"]), dimensions=1024))
+    provider = _build_openrouter_provider(client=client, dimensions=1024)
 
     embeddings = provider.embed_texts(["alpha"])
 
     assert client.calls == [
         {
-            "model": "qwen/qwen3-embedding-8b",
+            "model": "qwen/qwen3-embedding-0.6b",
             "input": ["alpha"],
-            "dimensions": 4096,
+            "dimensions": 1024,
             "encoding_format": "float",
         }
     ]
-    assert len(embeddings[0]) == 4096
+    assert len(embeddings[0]) == 1024
 
 
 def test_openrouter_embedding_provider_uses_openrouter_client_options(monkeypatch) -> None:
@@ -252,15 +252,15 @@ def test_openrouter_embedding_provider_uses_openrouter_client_options(monkeypatc
 
             openai_init_calls.append(dict(kwargs))
             self.embeddings = SimpleNamespace(
-                create=lambda **request_kwargs: _build_response(list(request_kwargs["input"]), dimensions=4096)
+                create=lambda **request_kwargs: _build_response(list(request_kwargs["input"]), dimensions=1024)
             )
 
     monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=FakeOpenAI))
 
     provider = OpenRouterEmbeddingProvider(
         api_key="openrouter-key",
-        model="qwen/qwen3-embedding-8b",
-        dimensions=4096,
+        model="qwen/qwen3-embedding-0.6b",
+        dimensions=1024,
         max_batch_texts=8,
         retry_max_attempts=3,
         retry_base_delay_seconds=0.0,
@@ -280,4 +280,59 @@ def test_openrouter_embedding_provider_uses_openrouter_client_options(monkeypatc
             },
         }
     ]
-    assert len(embeddings[0]) == 4096
+    assert len(embeddings[0]) == 1024
+
+
+def test_easypinex_host_embedding_provider_uses_http_contract(monkeypatch) -> None:
+    """easypinex-host embedding provider 應使用 `/v1/embeddings` contract。
+
+    參數：
+    - `monkeypatch`：pytest 提供的 monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 easypinex-host request 與回應解析。
+    """
+
+    captured_request: dict[str, object] = {}
+
+    class FakeResponse:
+        """模擬 `urlopen()` 回傳物件。"""
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self) -> bytes:
+            return (
+                b'{"object":"list","model":"Qwen/Qwen3-Embedding-0.6B","data":[{"object":"embedding","index":0,"embedding":[1.0,1.0,1.0]}]}'
+            )
+
+    def fake_urlopen(request, timeout):
+        captured_request["url"] = request.full_url
+        captured_request["timeout"] = timeout
+        captured_request["headers"] = dict(request.header_items())
+        captured_request["body"] = request.data.decode("utf-8")
+        return FakeResponse()
+
+    monkeypatch.setattr("worker.embeddings.urlopen", fake_urlopen)
+
+    provider = EasypinexHostEmbeddingProvider(
+        base_url="http://helper.local:8000",
+        api_key="embed-key",
+        model="Qwen/Qwen3-Embedding-0.6B",
+        dimensions=1024,
+        max_batch_texts=8,
+        retry_max_attempts=3,
+        retry_base_delay_seconds=0.0,
+        timeout_seconds=12.0,
+    )
+
+    embeddings = provider.embed_texts(["alpha"])
+
+    assert captured_request["url"] == "http://helper.local:8000/v1/embeddings"
+    assert captured_request["timeout"] == 12.0
+    assert captured_request["headers"]["Authorization"] == "Bearer embed-key"
+    assert '"model": "Qwen/Qwen3-Embedding-0.6B"' in captured_request["body"]
+    assert embeddings == [[1.0, 1.0, 1.0] + [0.0] * 1021]

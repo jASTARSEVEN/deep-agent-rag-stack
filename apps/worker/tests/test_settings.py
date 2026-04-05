@@ -26,6 +26,9 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         EMBEDDING_RETRY_BASE_DELAY_SECONDS="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
+        EASYPINEX_HOST_EMBEDDING_BASE_URL="",
+        EASYPINEX_HOST_EMBEDDING_API_KEY="",
+        EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS="",
         OPENDATALOADER_USE_STRUCT_TREE="",
         OPENDATALOADER_QUIET="",
         LLAMAPARSE_DO_NOT_CACHE="",
@@ -51,6 +54,9 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.embedding_retry_base_delay_seconds == 2.0
     assert settings.openrouter_http_referer is None
     assert settings.openrouter_title is None
+    assert settings.easypinex_host_embedding_base_url is None
+    assert settings.easypinex_host_embedding_api_key is None
+    assert settings.easypinex_host_embedding_timeout_seconds == 60.0
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True

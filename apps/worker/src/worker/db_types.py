@@ -5,7 +5,7 @@ from sqlalchemy.sql.type_api import TypeEngine
 
 
 # 目前 retrieval schema 固定使用的 embedding 維度。
-DEFAULT_EMBEDDING_DIMENSIONS = 4096
+DEFAULT_EMBEDDING_DIMENSIONS = 1536
 
 
 try:

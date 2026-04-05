@@ -98,9 +98,9 @@
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
 - `ready` 現在代表 chunking 與 embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
-- 目前預設 embedding 路徑已改為 `EMBEDDING_PROVIDER=openrouter` 與 `EMBEDDING_MODEL=qwen/qwen3-embedding-8b`，而儲存 schema 固定使用 `4096` 維。
-- OpenRouter 路徑會走 OpenAI-compatible 的 `/api/v1/embeddings` endpoint，並在有設定時轉送 `OPENROUTER_HTTP_REFERER` / `OPENROUTER_TITLE` headers。
-- 若 hosted provider 回傳的維度小於 `4096`，系統會在寫入前自動做零補齊，避免既有 OpenAI-compatible 路徑在 schema 升維後直接失效。
+- 目前預設 embedding 路徑已改為 `EMBEDDING_PROVIDER=easypinex-host` 與 `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`，而儲存 schema 固定使用 `1024` 維。
+- easypinex-host 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 embedding base URL / API key 設定。
+- 目前主線 embedding 模型與 schema 維度一致，因此 worker 不再依賴先前 `4096` 維路徑的零補齊 workaround。
 - OpenAI embeddings 現在會依 `EMBEDDING_MAX_BATCH_TEXTS` 分批送出；若單批仍因 request size 超限被拒絕，worker 會自動再將該批二分後重送。
 - OpenAI embeddings 目前只會對暫時性失敗（例如 `429`、`5xx`、連線/timeout）做有限次 backoff retry；`400` 這類永久性錯誤會直接轉成受控 failed，避免 task 以 unexpected exception 結束。
 - 本模組目前只啟用 LlamaParse 的標準 Markdown 轉換路徑，未來才會再評估 agentic mode。

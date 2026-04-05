@@ -22,6 +22,9 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
+        EASYPINEX_HOST_EMBEDDING_BASE_URL="",
+        EASYPINEX_HOST_EMBEDDING_API_KEY="",
+        EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
         RETRIEVAL_QUERY_FOCUS_ENABLED="",
@@ -48,6 +51,9 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.chunk_table_max_rows_per_child == 20
     assert settings.openrouter_http_referer is None
     assert settings.openrouter_title is None
+    assert settings.easypinex_host_embedding_base_url is None
+    assert settings.easypinex_host_embedding_api_key is None
+    assert settings.easypinex_host_embedding_timeout_seconds == 60.0
     assert settings.retrieval_evidence_synopsis_enabled is True
     assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
     assert settings.retrieval_query_focus_enabled is True

@@ -185,8 +185,8 @@
 11. `table child` 採 table-aware 規則：小型表格保留整表，大型表格依 row groups 切分並重複表頭
 12. `child` chunk 才是後續 retrieval 的最小候選單位
 13. child chunk embedding 的正式輸入為 `heading + content` 的自然拼接文字；若沒有 heading，則只使用 content
-13.5. `document_chunks.embedding` 與 query embedding 目前固定採 `4096` 維 schema，以對齊 `qwen/qwen3-embedding-8b` 主線設定
-13.6. 若 hosted embedding provider 回傳維度小於 `4096`，系統會在寫入與查詢階段做零補齊；回傳維度大於 `4096` 則直接視為設定錯誤
+13.5. `document_chunks.embedding` 與 query embedding 目前固定採 `1024` 維 schema，以對齊 `Qwen/Qwen3-Embedding-0.6B` 主線設定
+13.6. 目前主線 provider 與 schema 維度一致；若 hosted provider 回傳維度與 schema 不符，系統會依 provider 能力嘗試對齊，否則直接視為設定錯誤
 14. LangChain `metadata` 不直接進資料模型；只用來回推既有 SQL 欄位
 15. `document.status = ready` 的成立條件包含 chunk tree 成功寫入
 16. `status != ready` 的文件不得保留可供 retrieval 使用的 chunks
@@ -199,9 +199,9 @@
 2. SQL gate 先以 area scope + effective role 驗證完成，之後才進入 recall
 3. 只有 `documents.status=ready` 且 `chunk_type=child` 的 chunk 會進入 recall
 4. `document_chunks.embedding` 與 `content` (經 PGroonga 索引) 都屬於 retrieval 的 SQL-first 欄位
-4.5. embedding provider abstraction 目前正式支援 `openrouter`、`openai` 與 `deterministic`；其中 runtime 預設為 `OpenRouter / qwen/qwen3-embedding-8b`
+4.5. embedding provider abstraction 目前正式支援 `easypinex-host`、`openrouter`、`openai` 與 `deterministic`；其中 runtime 預設為 `easypinex-host / Qwen/Qwen3-Embedding-0.6B`
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `PGroonga`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
-6. PostgreSQL vector recall 在 `1536` 維時使用 `hnsw` index；目前 `4096` 維 `qwen/qwen3-embedding-8b` 主線因 `pgvector` 的 `hnsw` 維度限制，暫時退回無 ANN index 的精確掃描路徑
+6. PostgreSQL vector recall 目前已回到 `hnsw` index 路徑；`1024` 維 `Qwen/Qwen3-Embedding-0.6B` 主線位於 `pgvector` 的 ANN 維度限制內
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前的主線實作包含 hybrid recall、候選合併、rerank 與 context assembly，但這些 stage 的具體組合不再視為固定不可變的唯一路徑；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + query_focus=false + assembler 9 x 3000`
