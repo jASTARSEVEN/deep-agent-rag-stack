@@ -165,8 +165,8 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
         content_type="text/markdown",
         file_size=128,
         storage_key="evaluation/query-focus.md",
-        display_text="保單借款 要保人 被保險人 同一人",
-        normalized_text="保單借款 要保人 被保險人 同一人",
+        display_text="文件申請 研究助理 專案成員",
+        normalized_text="文件申請 研究助理 專案成員",
         status=DocumentStatus.ready,
     )
     parent = DocumentChunk(
@@ -178,7 +178,7 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
         position=0,
         section_index=0,
         child_index=None,
-        heading="二、 契約變更申請時間及應備文件",
+        heading="三、 文件申請資格",
         content=document.display_text or "",
         content_preview=document.display_text or "",
         char_count=len(document.display_text or ""),
@@ -194,7 +194,7 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
         position=1,
         section_index=0,
         child_index=0,
-        heading="二、 契約變更申請時間及應備文件",
+        heading="三、 文件申請資格",
         content=document.display_text or "",
         content_preview=document.display_text or "",
         char_count=len(document.display_text or ""),
@@ -213,7 +213,7 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
     item_id = client.post(
         f"/evaluation/datasets/{dataset_id}/items",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"query_text": "網路保險申請保單借款的身分限制", "language": "zh-TW", "query_type": "fact_lookup"},
+        json={"query_text": "文件申請資格有哪些？", "language": "zh-TW", "query_type": "fact_lookup"},
     ).json()["id"]
     client.post(
         f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
@@ -234,19 +234,21 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
     assert preview_payload["query_focus"]["applied"] is True
-    assert preview_payload["query_focus"]["intents"] == ["eligibility_identity"]
+    assert preview_payload["query_focus"]["intents"] == ["eligibility_or_actor", "enumeration_or_inventory"]
+    assert preview_payload["query_focus"]["variant"] == "generic_field_focus_v1"
+    assert preview_payload["query_focus"]["rule_family"] == "generic"
 
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"top_k": 5, "evaluation_profile": "qasper_guarded_query_focus_v1"},
+        json={"top_k": 5, "evaluation_profile": "generic_guarded_query_focus_v1"},
     )
     assert run_response.status_code == 201
     run_payload = run_response.json()
     assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is True
-    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_variant"] == "query_focus_v1"
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_variant"] == "generic_field_focus_v1"
     assert run_payload["per_query"][0]["query_focus"]["applied"] is True
-    assert run_payload["per_query"][0]["query_focus"]["intents"] == ["eligibility_identity"]
+    assert run_payload["per_query"][0]["query_focus"]["intents"] == ["eligibility_or_actor", "enumeration_or_inventory"]
 
 
 def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_session, app_settings) -> None:
@@ -383,12 +385,12 @@ def test_evaluation_run_supports_qasper_evidence_synopsis_profile_snapshot(clien
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"top_k": 5, "evaluation_profile": "qasper_guarded_evidence_synopsis_v1"},
+        json={"top_k": 5, "evaluation_profile": "generic_guarded_evidence_synopsis_v1"},
     )
 
     assert run_response.status_code == 201
     run_payload = run_response.json()
-    assert run_payload["run"]["evaluation_profile"] == "qasper_guarded_evidence_synopsis_v1"
+    assert run_payload["run"]["evaluation_profile"] == "generic_guarded_evidence_synopsis_v1"
     assert run_payload["run"]["config_snapshot"]["retrieval"]["vector_top_k"] == app_settings.retrieval_vector_top_k
     assert run_payload["run"]["config_snapshot"]["retrieval"]["fts_top_k"] == app_settings.retrieval_fts_top_k
     assert run_payload["run"]["config_snapshot"]["retrieval"]["max_candidates"] == app_settings.retrieval_max_candidates

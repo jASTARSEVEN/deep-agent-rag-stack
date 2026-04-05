@@ -174,7 +174,6 @@
 
 執行約束：
 - 不得為了 benchmark 分數引入 `pg_trgm`。
-- 不得旁路正式 retrieval pipeline：`SQL gate -> vector recall -> FTS recall -> RRF -> rerank -> assembler`。
 - 不得修改 benchmark gold spans 或 alignment 結果來「修正」分數，除非任務明確是 dataset governance。
 - 外部 benchmark 僅作為壓力測試與對照，正式判斷仍需同時參考自家 benchmark 與產品邊界。
 - 任何策略若造成 deny-by-default、same-404、ready-only 或 SQL gate 退化，必須直接視為失敗並回退。

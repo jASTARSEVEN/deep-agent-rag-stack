@@ -8,8 +8,10 @@ import re
 from app.core.settings import AppSettings
 
 
-# `query_focus_v1` 表示目前唯一支援的 query focus planner 變體。
-QUERY_FOCUS_VARIANT_V1 = "query_focus_v1"
+# `generic_field_focus_v1` 表示目前唯一正式支援的通用 query focus planner 變體。
+QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1 = "generic_field_focus_v1"
+# `generic` 表示通用 evidence-field 規則家族。
+QUERY_FOCUS_RULE_FAMILY_GENERIC = "generic"
 
 # `zh-TW` 表示繁體中文 query language。
 QUERY_LANGUAGE_ZH_TW = "zh-TW"
@@ -18,30 +20,36 @@ QUERY_LANGUAGE_EN = "en"
 # `mixed` 表示中英混合 query language。
 QUERY_LANGUAGE_MIXED = "mixed"
 
-# `amount_max` 表示累計最高投保金額或上限類意圖。
-QUERY_INTENT_AMOUNT_MAX = "amount_max"
-# `age_range` 表示投保年齡或可投保歲數類意圖。
-QUERY_INTENT_AGE_RANGE = "age_range"
-# `payment_term` 表示繳費年期或繳別限制類意圖。
-QUERY_INTENT_PAYMENT_TERM = "payment_term"
-# `deadline` 表示申請期限或時效類意圖。
-QUERY_INTENT_DEADLINE = "deadline"
-# `eligibility_identity` 表示身分資格或申請限制類意圖。
-QUERY_INTENT_ELIGIBILITY_IDENTITY = "eligibility_identity"
-# `count_total` 表示總數、規模或 total count 類意圖。
-QUERY_INTENT_COUNT_TOTAL = "count_total"
-# `comparison_axis` 表示兩個設定或方案的比較意圖。
+# `amount_or_limit` 表示金額、額度或上限類意圖。
+QUERY_INTENT_AMOUNT_OR_LIMIT = "amount_or_limit"
+# `date_or_deadline` 表示日期、期限或 time window 類意圖。
+QUERY_INTENT_DATE_OR_DEADLINE = "date_or_deadline"
+# `eligibility_or_actor` 表示資格、適用對象或責任角色類意圖。
+QUERY_INTENT_ELIGIBILITY_OR_ACTOR = "eligibility_or_actor"
+# `count_or_size` 表示數量、總數或規模類意圖。
+QUERY_INTENT_COUNT_OR_SIZE = "count_or_size"
+# `comparison_axis` 表示比較結果或比較面向類意圖。
 QUERY_INTENT_COMPARISON_AXIS = "comparison_axis"
+# `source_material` 表示來源資料、來源語料或 pretraining source 類意圖。
+QUERY_INTENT_SOURCE_MATERIAL = "source_material"
+# `metric_or_evaluation_axis` 表示評估指標或量測面向類意圖。
+QUERY_INTENT_METRIC_OR_EVALUATION_AXIS = "metric_or_evaluation_axis"
+# `label_or_annotation_schema` 表示標籤或標註規則類意圖。
+QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA = "label_or_annotation_schema"
+# `enumeration_or_inventory` 表示清單、列舉或 inventory 類意圖。
+QUERY_INTENT_ENUMERATION_OR_INVENTORY = "enumeration_or_inventory"
 
-# 本模組正式支援的 intents。
+# 本模組正式支援的通用 intents。
 SUPPORTED_QUERY_FOCUS_INTENTS = (
-    QUERY_INTENT_AMOUNT_MAX,
-    QUERY_INTENT_AGE_RANGE,
-    QUERY_INTENT_PAYMENT_TERM,
-    QUERY_INTENT_DEADLINE,
-    QUERY_INTENT_ELIGIBILITY_IDENTITY,
-    QUERY_INTENT_COUNT_TOTAL,
+    QUERY_INTENT_AMOUNT_OR_LIMIT,
+    QUERY_INTENT_DATE_OR_DEADLINE,
+    QUERY_INTENT_ELIGIBILITY_OR_ACTOR,
+    QUERY_INTENT_COUNT_OR_SIZE,
     QUERY_INTENT_COMPARISON_AXIS,
+    QUERY_INTENT_SOURCE_MATERIAL,
+    QUERY_INTENT_METRIC_OR_EVALUATION_AXIS,
+    QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA,
+    QUERY_INTENT_ENUMERATION_OR_INVENTORY,
 )
 
 # CJK script 偵測 pattern。
@@ -52,6 +60,47 @@ _LATIN_PATTERN = re.compile(r"[A-Za-z]")
 _WHITESPACE_PATTERN = re.compile(r"\s+")
 # query token 抽取 pattern；會同時保留英文詞與 CJK 片段。
 _QUERY_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*|[\u3400-\u4dbf\u4e00-\u9fff]+")
+# 英文 subject fallback token 抽取 pattern。
+_ENGLISH_WORD_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+# 英文比較對象抽取 pattern。
+_ENGLISH_COMPARISON_PATTERN = re.compile(
+    r"(?P<left>[A-Za-z0-9][A-Za-z0-9._/-]*)\s+(?:or|vs\.?|versus)\s+(?P<right>[A-Za-z0-9][A-Za-z0-9._/-]*)",
+    re.IGNORECASE,
+)
+# 中文比較對象抽取 pattern。
+_CJK_COMPARISON_PATTERN = re.compile(r"(?P<left>[^\s，。！？?、；]+)\s*(?:與|和|或|跟)\s*(?P<right>[^\s，。！？?、；]+)")
+
+# 英文 subject fallback 停用詞。
+ENGLISH_SUBJECT_STOPWORDS = {
+    "a",
+    "an",
+    "are",
+    "as",
+    "at",
+    "be",
+    "can",
+    "did",
+    "do",
+    "does",
+    "for",
+    "how",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "the",
+    "their",
+    "they",
+    "this",
+    "to",
+    "was",
+    "what",
+    "when",
+    "which",
+    "who",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +116,8 @@ class QueryFocusPlan:
     focus_query: str
     rerank_query: str
     applied: bool
+    variant: str
+    rule_family: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,58 +133,135 @@ class QueryFocusIntentSpec:
 
 # 繁體中文 query focus intents registry。
 QUERY_FOCUS_SPECS_ZH_TW: dict[str, QueryFocusIntentSpec] = {
-    QUERY_INTENT_AMOUNT_MAX: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_AMOUNT_MAX,
-        trigger_phrases=("累計最高", "最高投保金額", "最高保額", "上限"),
-        target_field="最高投保金額",
-        evidence_terms=("累計最高", "最高投保金額", "投保金額", "上限"),
-        rerank_brief="Need: 精確的最高投保金額或上限欄位。",
+    QUERY_INTENT_AMOUNT_OR_LIMIT: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_AMOUNT_OR_LIMIT,
+        trigger_phrases=("多少錢", "金額", "額度", "上限", "最高", "限額"),
+        target_field="金額或上限",
+        evidence_terms=("金額", "額度", "上限", "最高"),
+        rerank_brief="Need: 精確的金額、額度或上限欄位。",
     ),
-    QUERY_INTENT_AGE_RANGE: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_AGE_RANGE,
-        trigger_phrases=("幾歲", "投保年齡", "年齡限制", "可投保"),
-        target_field="投保年齡",
-        evidence_terms=("投保年齡", "年齡限制", "可投保"),
-        rerank_brief="Need: 精確的投保年齡或年齡限制欄位。",
+    QUERY_INTENT_DATE_OR_DEADLINE: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_DATE_OR_DEADLINE,
+        trigger_phrases=("何時", "日期", "時間", "期限", "截止", "多久內"),
+        target_field="日期或期限",
+        evidence_terms=("日期", "時間", "期限", "截止"),
+        rerank_brief="Need: 精確的日期、期限或 time window 欄位。",
     ),
-    QUERY_INTENT_PAYMENT_TERM: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_PAYMENT_TERM,
-        trigger_phrases=("各年期", "年期", "繳費年期", "繳別"),
-        target_field="繳費年期",
-        evidence_terms=("繳費年期", "年期", "繳別"),
-        rerank_brief="Need: 精確的繳費年期或繳別欄位。",
+    QUERY_INTENT_ELIGIBILITY_OR_ACTOR: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_ELIGIBILITY_OR_ACTOR,
+        trigger_phrases=("誰可以", "資格", "條件", "適用對象", "身分", "角色", "負責"),
+        target_field="資格或責任對象",
+        evidence_terms=("資格", "條件", "適用對象", "責任對象"),
+        rerank_brief="Need: 精確的資格、適用對象或責任角色欄位。",
     ),
-    QUERY_INTENT_DEADLINE: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_DEADLINE,
-        trigger_phrases=("申請時間", "期限", "時效", "多久內"),
-        target_field="申請時間",
-        evidence_terms=("申請時間", "期限", "時效", "提出申請"),
-        rerank_brief="Need: 精確的申請時間或期限欄位。",
+    QUERY_INTENT_COUNT_OR_SIZE: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_COUNT_OR_SIZE,
+        trigger_phrases=("多少", "幾個", "幾項", "規模", "數量", "總數", "大小"),
+        target_field="數量或規模",
+        evidence_terms=("數量", "規模", "總數", "大小"),
+        rerank_brief="Need: 精確的數量、總數或規模 evidence。",
     ),
-    QUERY_INTENT_ELIGIBILITY_IDENTITY: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_ELIGIBILITY_IDENTITY,
-        trigger_phrases=("身分限制", "資格限制", "誰可以", "誰可", "要保人", "被保險人"),
-        target_field="身分限制",
-        evidence_terms=("身分限制", "資格限制", "要保人", "被保險人", "同一人"),
-        rerank_brief="Need: 精確的資格限制或身分限制欄位。",
+    QUERY_INTENT_COMPARISON_AXIS: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_COMPARISON_AXIS,
+        trigger_phrases=("比較", "差異", "相比", "優於", "哪個較", "哪個更"),
+        target_field="比較結果或比較面向",
+        evidence_terms=("比較", "差異", "優於", "表現"),
+        rerank_brief="Need: 直接的比較結果或比較面向 evidence。",
+    ),
+    QUERY_INTENT_SOURCE_MATERIAL: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_SOURCE_MATERIAL,
+        trigger_phrases=("來源", "取自", "來自", "基於", "使用哪些資料", "使用什麼資料"),
+        target_field="來源資料",
+        evidence_terms=("來源資料", "資料來源", "來源語料", "起始資料"),
+        rerank_brief="Need: 精確的來源資料、來源語料或起始來源 evidence。",
+    ),
+    QUERY_INTENT_METRIC_OR_EVALUATION_AXIS: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_METRIC_OR_EVALUATION_AXIS,
+        trigger_phrases=("指標", "評估", "衡量", "量測", "怎麼評估", "表現"),
+        target_field="評估指標或評估面向",
+        evidence_terms=("評估", "指標", "衡量", "面向"),
+        rerank_brief="Need: 精確的評估指標或評估面向 evidence。",
+    ),
+    QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA,
+        trigger_phrases=("標籤", "標註", "註記", "分類", "類別", "規則"),
+        target_field="標籤或標註規則",
+        evidence_terms=("標籤", "標註", "分類", "規則"),
+        rerank_brief="Need: 精確的標籤、類別或標註規則 evidence。",
+    ),
+    QUERY_INTENT_ENUMERATION_OR_INVENTORY: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_ENUMERATION_OR_INVENTORY,
+        trigger_phrases=("哪些", "列出", "包含哪些", "種類", "型別", "步驟", "清單"),
+        target_field="項目清單或列舉內容",
+        evidence_terms=("列舉", "清單", "項目", "種類"),
+        rerank_brief="Need: 完整的項目清單、列舉內容或 inventory evidence。",
     ),
 }
 
 # 英文 query focus intents registry。
 QUERY_FOCUS_SPECS_EN: dict[str, QueryFocusIntentSpec] = {
-    QUERY_INTENT_COUNT_TOTAL: QueryFocusIntentSpec(
-        intent=QUERY_INTENT_COUNT_TOTAL,
-        trigger_phrases=("how many", "in total", "total", "overall", "count"),
-        target_field="total count",
-        evidence_terms=("total count", "in total", "both generated and true", "reviews"),
-        rerank_brief="Need: exact total count evidence, including both generated and true reviews.",
+    QUERY_INTENT_AMOUNT_OR_LIMIT: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_AMOUNT_OR_LIMIT,
+        trigger_phrases=("how much", "amount", "limit", "maximum", "max"),
+        target_field="amount or limit",
+        evidence_terms=("amount", "limit", "maximum", "cap"),
+        rerank_brief="Need: exact amount, limit, or cap evidence.",
+    ),
+    QUERY_INTENT_DATE_OR_DEADLINE: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_DATE_OR_DEADLINE,
+        trigger_phrases=("when", "date", "deadline", "due", "how long"),
+        target_field="date or deadline",
+        evidence_terms=("date", "deadline", "due", "time window"),
+        rerank_brief="Need: exact date, deadline, or time-window evidence.",
+    ),
+    QUERY_INTENT_ELIGIBILITY_OR_ACTOR: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_ELIGIBILITY_OR_ACTOR,
+        trigger_phrases=("who can", "eligible", "eligibility", "requirement", "responsible", "role"),
+        target_field="eligibility or actor",
+        evidence_terms=("eligibility", "requirement", "actor", "responsible party"),
+        rerank_brief="Need: direct eligibility, actor, or responsible-party evidence.",
+    ),
+    QUERY_INTENT_COUNT_OR_SIZE: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_COUNT_OR_SIZE,
+        trigger_phrases=("how many", "count", "total", "size", "how large", "how big", "number of"),
+        target_field="count or size",
+        evidence_terms=("count", "size", "total", "number"),
+        rerank_brief="Need: exact count, total, or size evidence.",
     ),
     QUERY_INTENT_COMPARISON_AXIS: QueryFocusIntentSpec(
         intent=QUERY_INTENT_COMPARISON_AXIS,
-        trigger_phrases=("perform better", "better", "better in", "single-domain", "multi-domain", "compared with"),
-        target_field="comparison result",
-        evidence_terms=("comparison", "perform better", "single-domain", "multi-domain", "performance"),
-        rerank_brief="Need: direct comparison evidence between the two settings.",
+        trigger_phrases=("compare", "compared", "better", "difference", "versus", "vs", "outperform"),
+        target_field="comparison result or axis",
+        evidence_terms=("comparison", "difference", "performance", "versus"),
+        rerank_brief="Need: direct comparison evidence between the compared settings.",
+    ),
+    QUERY_INTENT_SOURCE_MATERIAL: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_SOURCE_MATERIAL,
+        trigger_phrases=("source", "data source", "source dataset", "source corpus", "based on", "derived from", "pretrained on"),
+        target_field="source material",
+        evidence_terms=("source material", "data source", "corpus", "dataset"),
+        rerank_brief="Need: direct source-material, data-source, or pretraining-source evidence.",
+    ),
+    QUERY_INTENT_METRIC_OR_EVALUATION_AXIS: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_METRIC_OR_EVALUATION_AXIS,
+        trigger_phrases=("metric", "metrics", "evaluate", "evaluation", "measure", "measured", "score"),
+        target_field="metric or evaluation axis",
+        evidence_terms=("metric", "evaluation", "measure", "score"),
+        rerank_brief="Need: direct metric or evaluation-axis evidence.",
+    ),
+    QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_LABEL_OR_ANNOTATION_SCHEMA,
+        trigger_phrases=("label", "labels", "annotation", "annotated", "schema", "class"),
+        target_field="label or annotation schema",
+        evidence_terms=("label", "annotation", "schema", "class"),
+        rerank_brief="Need: direct label, class, or annotation-schema evidence.",
+    ),
+    QUERY_INTENT_ENUMERATION_OR_INVENTORY: QueryFocusIntentSpec(
+        intent=QUERY_INTENT_ENUMERATION_OR_INVENTORY,
+        trigger_phrases=("what are", "list", "types of", "categories of", "inventory", "stages"),
+        target_field="inventory or enumeration",
+        evidence_terms=("list", "inventory", "categories", "types"),
+        rerank_brief="Need: complete inventory, list, or enumeration evidence.",
     ),
 }
 
@@ -143,20 +271,10 @@ QUERY_FOCUS_SPECS_MIXED: dict[str, QueryFocusIntentSpec] = {
     **QUERY_FOCUS_SPECS_EN,
 }
 
-# zh-TW action token 候選。
-QUERY_ACTION_TOKENS_ZH_TW = ("投保", "申請", "借款", "理賠", "變更")
-# en action token 候選。
-QUERY_ACTION_TOKENS_EN = ("evaluate", "perform", "compare", "count", "measure")
-
 # zh-TW qualifier token 候選。
-QUERY_QUALIFIER_TOKENS_ZH_TW = ("各年期", "網路保險", "累計", "最高", "多久內", "可投保")
+QUERY_QUALIFIER_TOKENS_ZH_TW = ("最高", "最低", "總計", "累計", "申請", "比較", "完整", "主要")
 # en qualifier token 候選。
-QUERY_QUALIFIER_TOKENS_EN = ("in total", "both generated and true", "single-domain", "multi-domain")
-
-# zh-TW domain object token 候選。
-QUERY_DOMAIN_OBJECT_TOKENS_ZH_TW = ("保單借款", "更約權", "投保", "保險")
-# en domain object token 候選。
-QUERY_DOMAIN_OBJECT_TOKENS_EN = ("reviews", "amazon mechanical turk", "setting", "performance")
+QUERY_QUALIFIER_TOKENS_EN = ("maximum", "minimum", "total", "overall", "main", "complete", "direct")
 
 
 def build_query_focus_plan_from_settings(*, settings: AppSettings, query: str) -> QueryFocusPlan:
@@ -209,14 +327,19 @@ def build_query_focus_plan(
         focus_query=normalized_query,
         rerank_query=normalized_query,
         applied=False,
+        variant=variant,
+        rule_family=_resolve_query_focus_rule_family(variant=variant),
     )
-    if not enabled or variant != QUERY_FOCUS_VARIANT_V1 or not normalized_query:
+    if not enabled or variant != QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1 or not normalized_query:
         return baseline_plan
 
     specs = _get_query_focus_specs(language=language)
     lowered_query = normalized_query.casefold()
     matched_specs = tuple(
-        spec for spec in specs.values() if any(trigger.casefold() in lowered_query for trigger in spec.trigger_phrases)
+        spec
+        for intent in SUPPORTED_QUERY_FOCUS_INTENTS
+        if (spec := specs.get(intent)) is not None
+        and any(trigger.casefold() in lowered_query for trigger in spec.trigger_phrases)
     )
     if not matched_specs:
         return baseline_plan
@@ -249,6 +372,8 @@ def build_query_focus_plan(
         focus_query=focus_query,
         rerank_query=rerank_query,
         applied=applied,
+        variant=variant,
+        rule_family=QUERY_FOCUS_RULE_FAMILY_GENERIC,
     )
 
 
@@ -343,6 +468,21 @@ def get_query_focus_boost_terms(*, intents: tuple[str, ...], language: str) -> t
     return tuple(terms)
 
 
+def _resolve_query_focus_rule_family(*, variant: str) -> str:
+    """依 planner variant 回傳對應的規則家族名稱。
+
+    參數：
+    - `variant`：planner 變體名稱。
+
+    回傳：
+    - `str`：規則家族名稱；未知變體回空字串。
+    """
+
+    if variant == QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1:
+        return QUERY_FOCUS_RULE_FAMILY_GENERIC
+    return ""
+
+
 def _get_query_focus_specs(*, language: str) -> dict[str, QueryFocusIntentSpec]:
     """依語言選擇 planner intent registry。
 
@@ -380,61 +520,45 @@ def _extract_query_focus_slots(
     """
 
     slots: dict[str, str] = {}
-    product_name = _extract_product_name(
+    subject = _extract_subject(
         normalized_query=normalized_query,
         lowered_query=lowered_query,
         language=language,
         matched_specs=matched_specs,
     )
-    if product_name:
-        slots["product_name"] = product_name
-
-    action_tokens = _get_language_phrase_candidates(
-        language=language,
-        zh_candidates=QUERY_ACTION_TOKENS_ZH_TW,
-        en_candidates=QUERY_ACTION_TOKENS_EN,
-    )
-    action = _extract_first_phrase(
-        lowered_query=lowered_query,
-        original_query=normalized_query,
-        phrases=action_tokens,
-    )
-    if action:
-        slots["action"] = action
+    if subject:
+        slots["subject"] = subject
 
     target_fields = [spec.target_field for spec in matched_specs if spec.target_field]
     if target_fields:
         slots["target_field"] = " / ".join(dict.fromkeys(target_fields))
 
-    qualifier_tokens = _get_language_phrase_candidates(
+    qualifier = _extract_qualifier(
+        lowered_query=lowered_query,
+        original_query=normalized_query,
         language=language,
-        zh_candidates=QUERY_QUALIFIER_TOKENS_ZH_TW,
-        en_candidates=QUERY_QUALIFIER_TOKENS_EN,
     )
-    qualifier = _extract_all_phrases(lowered_query=lowered_query, original_query=normalized_query, phrases=qualifier_tokens)
     if qualifier:
-        slots["qualifier"] = " / ".join(qualifier)
+        slots["qualifier"] = qualifier
 
-    domain_tokens = _get_language_phrase_candidates(
-        language=language,
-        zh_candidates=QUERY_DOMAIN_OBJECT_TOKENS_ZH_TW,
-        en_candidates=QUERY_DOMAIN_OBJECT_TOKENS_EN,
+    comparison_target = _extract_comparison_target(
+        normalized_query=normalized_query,
+        matched_specs=matched_specs,
     )
-    domain_object = _extract_all_phrases(lowered_query=lowered_query, original_query=normalized_query, phrases=domain_tokens)
-    if domain_object:
-        slots["domain_object"] = " / ".join(domain_object)
+    if comparison_target:
+        slots["comparison_target"] = comparison_target
 
     return slots
 
 
-def _extract_product_name(
+def _extract_subject(
     *,
     normalized_query: str,
     lowered_query: str,
     language: str,
     matched_specs: tuple[QueryFocusIntentSpec, ...],
 ) -> str | None:
-    """抽取 query 開頭的產品或主語片段。
+    """抽取 query 中的主語或主題片段。
 
     參數：
     - `normalized_query`：正規化後的原始 query。
@@ -443,11 +567,41 @@ def _extract_product_name(
     - `matched_specs`：本次命中的 intents。
 
     回傳：
-    - `str | None`：若成功抽到主語片段則回傳，否則回空值。
+    - `str | None`：若成功抽到主題片段則回傳，否則回空值。
     """
 
-    if language not in {QUERY_LANGUAGE_ZH_TW, QUERY_LANGUAGE_MIXED}:
-        return None
+    if language in {QUERY_LANGUAGE_ZH_TW, QUERY_LANGUAGE_MIXED}:
+        prefixed_subject = _extract_prefixed_subject(
+            normalized_query=normalized_query,
+            lowered_query=lowered_query,
+            matched_specs=matched_specs,
+        )
+        if prefixed_subject:
+            return prefixed_subject
+    if language in {QUERY_LANGUAGE_EN, QUERY_LANGUAGE_MIXED}:
+        return _extract_subject_from_english_tokens(
+            normalized_query=normalized_query,
+            matched_specs=matched_specs,
+        )
+    return None
+
+
+def _extract_prefixed_subject(
+    *,
+    normalized_query: str,
+    lowered_query: str,
+    matched_specs: tuple[QueryFocusIntentSpec, ...],
+) -> str | None:
+    """從 trigger phrase 前綴抽取中文主題片段。
+
+    參數：
+    - `normalized_query`：正規化後的原始 query。
+    - `lowered_query`：正規化並 casefold 後的 query。
+    - `matched_specs`：本次命中的 intents。
+
+    回傳：
+    - `str | None`：若成功抽到前綴主題則回傳，否則回空值。
+    """
 
     trigger_positions = [
         lowered_query.find(trigger.casefold())
@@ -460,7 +614,98 @@ def _extract_product_name(
 
     prefix = normalized_query[: min(trigger_positions)].strip(" ，。！？?/:：-")
     prefix = prefix.rstrip("的")
-    return prefix.strip() or None
+    candidate = re.sub(r"(的)?(申請|使用|比較)$", "", prefix).strip()
+    return candidate or None
+
+
+def _extract_subject_from_english_tokens(
+    *,
+    normalized_query: str,
+    matched_specs: tuple[QueryFocusIntentSpec, ...],
+) -> str | None:
+    """從英文 query token 萃取主語片段。
+
+    參數：
+    - `normalized_query`：正規化後的原始 query。
+    - `matched_specs`：本次命中的 intents。
+
+    回傳：
+    - `str | None`：若成功抽到英文主語片段則回傳，否則回空值。
+    """
+
+    excluded_tokens = {
+        token.casefold()
+        for spec in matched_specs
+        for phrase in spec.trigger_phrases
+        for token in _ENGLISH_WORD_PATTERN.findall(phrase.casefold())
+    }
+    subject_tokens = [
+        token
+        for token in _ENGLISH_WORD_PATTERN.findall(normalized_query)
+        if token.casefold() not in ENGLISH_SUBJECT_STOPWORDS and token.casefold() not in excluded_tokens
+    ]
+    if not subject_tokens:
+        return None
+    return " ".join(subject_tokens[:4]).strip() or None
+
+
+def _extract_qualifier(*, lowered_query: str, original_query: str, language: str) -> str | None:
+    """抽取 query 中的補充 qualifier。
+
+    參數：
+    - `lowered_query`：正規化並 casefold 後的 query。
+    - `original_query`：正規化後的原始 query。
+    - `language`：planner 判定的語言。
+
+    回傳：
+    - `str | None`：若命中 qualifier 短語則回傳，否則回空值。
+    """
+
+    qualifier_tokens = _get_language_phrase_candidates(
+        language=language,
+        zh_candidates=QUERY_QUALIFIER_TOKENS_ZH_TW,
+        en_candidates=QUERY_QUALIFIER_TOKENS_EN,
+    )
+    qualifier = _extract_all_phrases(
+        lowered_query=lowered_query,
+        original_query=original_query,
+        phrases=qualifier_tokens,
+    )
+    if not qualifier:
+        return None
+    return " / ".join(qualifier)
+
+
+def _extract_comparison_target(
+    *,
+    normalized_query: str,
+    matched_specs: tuple[QueryFocusIntentSpec, ...],
+) -> str | None:
+    """抽取 query 中的比較對象。
+
+    參數：
+    - `normalized_query`：正規化後的原始 query。
+    - `matched_specs`：本次命中的 intents。
+
+    回傳：
+    - `str | None`：若命中比較對象則回傳，否則回空值。
+    """
+
+    if QUERY_INTENT_COMPARISON_AXIS not in {spec.intent for spec in matched_specs}:
+        return None
+
+    english_match = _ENGLISH_COMPARISON_PATTERN.search(normalized_query)
+    if english_match is not None:
+        left = english_match.group("left").strip()
+        right = english_match.group("right").strip()
+        return f"{left} / {right}"
+
+    cjk_match = _CJK_COMPARISON_PATTERN.search(normalized_query)
+    if cjk_match is not None:
+        left = cjk_match.group("left").strip()
+        right = cjk_match.group("right").strip()
+        return f"{left} / {right}"
+    return None
 
 
 def _get_language_phrase_candidates(
@@ -485,25 +730,6 @@ def _get_language_phrase_candidates(
     if language == QUERY_LANGUAGE_EN:
         return en_candidates
     return (*zh_candidates, *en_candidates)
-
-
-def _extract_first_phrase(*, lowered_query: str, original_query: str, phrases: tuple[str, ...]) -> str | None:
-    """找出 query 中第一個命中的短語。
-
-    參數：
-    - `lowered_query`：正規化並 casefold 後的 query。
-    - `original_query`：原始 query。
-    - `phrases`：待檢查的短語候選。
-
-    回傳：
-    - `str | None`：命中的第一個短語；若未命中則回空值。
-    """
-
-    for phrase in phrases:
-        index = lowered_query.find(phrase.casefold())
-        if index >= 0:
-            return original_query[index : index + len(phrase)]
-    return None
 
 
 def _extract_all_phrases(*, lowered_query: str, original_query: str, phrases: tuple[str, ...]) -> list[str]:
@@ -549,9 +775,9 @@ def _score_query_focus_confidence(*, slots: dict[str, str], matched_specs: tuple
         confidence += 0.35
     if slots.get("target_field"):
         confidence += 0.25
-    if slots.get("product_name") or slots.get("domain_object"):
+    if slots.get("subject") or slots.get("comparison_target"):
         confidence += 0.20
-    if slots.get("qualifier") or slots.get("action"):
+    if slots.get("qualifier"):
         confidence += 0.20
     return min(confidence, 1.0)
 
@@ -574,7 +800,7 @@ def _build_focus_query(
     """
 
     candidates = [normalized_query]
-    for slot_name in ("product_name", "domain_object", "action", "target_field", "qualifier"):
+    for slot_name in ("subject", "target_field", "qualifier", "comparison_target"):
         slot_value = slots.get(slot_name)
         if slot_value:
             candidates.extend(part.strip() for part in slot_value.split(" / ") if part.strip())

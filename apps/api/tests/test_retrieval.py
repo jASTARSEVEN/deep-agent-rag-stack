@@ -1001,52 +1001,24 @@ def test_build_evidence_synopsis_emits_fact_oriented_hints() -> None:
     assert "evaluation metrics" in metric_synopsis
 
 
-def test_build_evidence_synopsis_qasper_v3_adds_alias_task_and_metric_bridges() -> None:
-    """qasper_v3 應補強 alias / task / metric framing bridge。"""
+def test_build_evidence_synopsis_generic_variant_does_not_add_benchmark_specific_bridges() -> None:
+    """generic_v1 不應補上 benchmark-specific bridge phrasing。"""
 
-    dataset_alias_synopsis = build_evidence_synopsis(
+    dataset_synopsis = build_evidence_synopsis(
         heading="Experimental Studies ::: Dataset and Evaluation Metrics",
         content="It contains 17,833 sentences, 826,987 characters and 2,714 question-answer pairs.",
-        variant="qasper_v3",
-    )
-    task_synopsis = build_evidence_synopsis(
-        heading="Experimental Studies ::: Dataset and Evaluation Metrics",
-        content="There are three types of questions, namely tumor size, proximal resection margin and distal resection margin.",
-        variant="qasper_v3",
-    )
-    metric_synopsis = build_evidence_synopsis(
-        heading="Experimental Setup",
-        content="We compare perplexity, R@3, latency, and energy usage across language models.",
-        variant="qasper_v3",
-    )
-
-    assert "dataset-alias questions" in dataset_alias_synopsis
-    assert "task types or question types being unified" in task_synopsis
-    assert "aspects compared across models" in metric_synopsis
-
-
-def test_build_evidence_synopsis_qasper_v3_supports_traditional_chinese_bridges() -> None:
-    """qasper_v3 應補上繁體中文的 alias / task / metric bridge phrasing。"""
-
-    dataset_alias_synopsis = build_evidence_synopsis(
-        heading="資料集與評估指標",
-        content="此 QA-CTS 資料集包含 17,833 句、826,987 字元與 2,714 組問答對。",
-        variant="qasper_v3",
-    )
-    task_synopsis = build_evidence_synopsis(
-        heading="實驗研究",
-        content="此任務包括腫瘤大小、近端切緣與遠端切緣三種問題型別。",
-        variant="qasper_v3",
+        variant="generic_v1",
     )
     metric_synopsis = build_evidence_synopsis(
         heading="實驗設計",
         content="本文比較困惑度、R@3、延遲與能耗等面向。",
-        variant="qasper_v3",
+        variant="generic_v1",
     )
 
-    assert "任務資料集規模、資料集別名或問答對統計" in dataset_alias_synopsis
-    assert "被統整的具體任務型別或問題型別" in task_synopsis
-    assert "不同模型之間被比較的面向" in metric_synopsis
+    assert "dataset-alias questions" not in dataset_synopsis
+    assert "question-answer pair statistics" not in dataset_synopsis
+    assert "被統整的具體任務型別或問題型別" not in metric_synopsis
+    assert "不同模型之間被比較的面向" not in metric_synopsis
 
 
 def test_build_evidence_synopsis_supports_traditional_chinese_with_localized_output() -> None:
@@ -1301,27 +1273,27 @@ def test_retrieve_area_candidates_includes_evidence_synopsis_in_rerank_documents
     assert "quantitative evidence" in captured_documents[0].text
 
 
-def test_retrieve_area_candidates_includes_qasper_v3_bridge_phrasing_in_rerank_documents(
+def test_retrieve_area_candidates_generic_synopsis_does_not_include_benchmark_bridge_phrasing(
     db_session, app_settings, monkeypatch
 ) -> None:
-    """qasper_v3 variant 啟用時，rerank 文件應包含 alias/task bridge phrasing。"""
+    """generic synopsis variant 啟用時，rerank 文件不應包含 benchmark bridge phrasing。"""
 
     settings = app_settings.model_copy(
         update={
             "retrieval_evidence_synopsis_enabled": True,
-            "retrieval_evidence_synopsis_variant": "qasper_v3",
+            "retrieval_evidence_synopsis_variant": "generic_v1",
         }
     )
-    area = Area(id=_uuid(), name="Retrieval Evidence Synopsis V3")
+    area = Area(id=_uuid(), name="Retrieval Generic Evidence Synopsis")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
     document = Document(
         id=_uuid(),
         area_id=area.id,
-        file_name="evidence-synopsis-v3.md",
+        file_name="evidence-synopsis-generic.md",
         content_type="text/markdown",
         file_size=100,
-        storage_key="area/document-evidence-synopsis-v3/evidence-synopsis-v3.md",
+        storage_key="area/document-evidence-synopsis-generic/evidence-synopsis-generic.md",
         status=DocumentStatus.ready,
     )
     db_session.add(document)
@@ -1394,7 +1366,9 @@ def test_retrieve_area_candidates_includes_qasper_v3_bridge_phrasing_in_rerank_d
     )
 
     assert len(captured_documents) == 1
-    assert "dataset-alias questions" in captured_documents[0].text
+    assert "Evidence synopsis:" in captured_documents[0].text
+    assert "dataset-alias questions" not in captured_documents[0].text
+    assert "question-answer pair statistics" not in captured_documents[0].text
 
 
 def test_retrieve_area_candidates_includes_traditional_chinese_evidence_synopsis_in_rerank_documents(
@@ -1495,7 +1469,12 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
 ) -> None:
     """query focus 啟用時，rerank query 與 trace 應帶入 planner 結果。"""
 
-    settings = app_settings.model_copy(update={"retrieval_query_focus_enabled": True})
+    settings = app_settings.model_copy(
+        update={
+            "retrieval_query_focus_enabled": True,
+            "retrieval_evidence_synopsis_variant": "generic_v1",
+        }
+    )
     area = Area(id=_uuid(), name="Retrieval Query Focus")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
@@ -1517,12 +1496,12 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
         position=0,
         section_index=0,
         child_index=None,
-        heading="二、 契約變更申請時間及應備文件",
-        content="保單借款 要保人 被保險人 同一人",
-        content_preview="保單借款 要保人 被保險人 同一人",
-        char_count=len("保單借款 要保人 被保險人 同一人"),
+        heading="三、 文件申請資格",
+        content="文件申請 研究助理 專案成員",
+        content_preview="文件申請 研究助理 專案成員",
+        char_count=len("文件申請 研究助理 專案成員"),
         start_offset=0,
-        end_offset=len("保單借款 要保人 被保險人 同一人"),
+        end_offset=len("文件申請 研究助理 專案成員"),
     )
     child = DocumentChunk(
         id=_uuid(),
@@ -1533,12 +1512,12 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
         position=1,
         section_index=0,
         child_index=0,
-        heading="二、 契約變更申請時間及應備文件",
-        content="保單借款 要保人 被保險人 同一人",
-        content_preview="保單借款 要保人 被保險人 同一人",
-        char_count=len("保單借款 要保人 被保險人 同一人"),
+        heading="三、 文件申請資格",
+        content="文件申請 研究助理 專案成員",
+        content_preview="文件申請 研究助理 專案成員",
+        char_count=len("文件申請 研究助理 專案成員"),
         start_offset=0,
-        end_offset=len("保單借款 要保人 被保險人 同一人"),
+        end_offset=len("文件申請 研究助理 專案成員"),
         embedding=[0.1] * settings.embedding_dimensions,
     )
     db_session.add_all([document, parent, child])
@@ -1572,16 +1551,19 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
         principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
         settings=settings,
         area_id=area.id,
-        query="網路保險申請保單借款的身分限制",
+        query="文件申請資格有哪些？",
     )
 
     assert captured_queries
-    assert captured_queries[0].startswith("網路保險申請保單借款的身分限制\nNeed:")
+    assert captured_queries[0].startswith("文件申請資格有哪些？\nNeed:")
     assert result.trace.query_focus_applied is True
     assert result.trace.query_focus_language == "zh-TW"
-    assert result.trace.query_focus_intents == ["eligibility_identity"]
-    assert result.trace.query_focus_slots["target_field"] == "身分限制"
-    assert "要保人" in result.trace.focus_query
+    assert result.trace.query_focus_intents == ["eligibility_or_actor", "enumeration_or_inventory"]
+    assert result.trace.query_focus_slots["target_field"] == "資格或責任對象 / 項目清單或列舉內容"
+    assert result.trace.query_focus_variant == "generic_field_focus_v1"
+    assert result.trace.query_focus_rule_family == "generic"
+    assert result.trace.evidence_synopsis_variant == "generic_v1"
+    assert "資格或責任對象" in result.trace.focus_query
     assert result.trace.rerank_query == captured_queries[0]
 
 

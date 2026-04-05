@@ -5,47 +5,49 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.core.settings import AppSettings
+from app.services.retrieval_query import QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1
+from app.services.retrieval_text import EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1
 
 
 # 正式 production-like benchmark profile 名稱。
 PRODUCTION_LIKE_V1 = "production_like_v1"
 # 離線 deterministic regression gate profile 名稱。
 DETERMINISTIC_GATE_V1 = "deterministic_gate_v1"
-# assembler lane 第一輪 profile 名稱。
-QASPER_GUARDED_ASSEMBLER_V1 = "qasper_guarded_assembler_v1"
-# assembler lane 第二輪 profile 名稱。
-QASPER_GUARDED_ASSEMBLER_V2 = "qasper_guarded_assembler_v2"
-# evidence synopsis lane 第一輪 profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1 = "qasper_guarded_evidence_synopsis_v1"
-# evidence synopsis lane 第二輪 profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2 = "qasper_guarded_evidence_synopsis_v2"
-# evidence synopsis lane 第三輪 profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3 = "qasper_guarded_evidence_synopsis_v3"
-# query focus lane 第一輪 profile 名稱。
-QASPER_GUARDED_QUERY_FOCUS_V1 = "qasper_guarded_query_focus_v1"
-# query focus 成本優先 profile：6 contexts x 3000 chars。
-QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000 = "qasper_guarded_query_focus_budget_6x3000"
-# assembler lane 第一輪 deterministic gate profile 名稱。
-QASPER_GUARDED_ASSEMBLER_V1_GATE = "qasper_guarded_assembler_v1_gate"
-# assembler lane 第二輪 deterministic gate profile 名稱。
-QASPER_GUARDED_ASSEMBLER_V2_GATE = "qasper_guarded_assembler_v2_gate"
-# evidence synopsis lane 第一輪 deterministic gate profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE = "qasper_guarded_evidence_synopsis_v1_gate"
-# evidence synopsis lane 第二輪 deterministic gate profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "qasper_guarded_evidence_synopsis_v2_gate"
-# evidence synopsis lane 第三輪 deterministic gate profile 名稱。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "qasper_guarded_evidence_synopsis_v3_gate"
-# query focus lane 第一輪 deterministic gate profile 名稱。
-QASPER_GUARDED_QUERY_FOCUS_V1_GATE = "qasper_guarded_query_focus_v1_gate"
+# 通用 assembler lane 第一輪 profile 名稱。
+GENERIC_GUARDED_ASSEMBLER_V1 = "generic_guarded_assembler_v1"
+# 通用 assembler lane 第二輪 profile 名稱。
+GENERIC_GUARDED_ASSEMBLER_V2 = "generic_guarded_assembler_v2"
+# 通用 evidence synopsis lane 第一輪 profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1 = "generic_guarded_evidence_synopsis_v1"
+# 通用 evidence synopsis lane 第二輪 profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2 = "generic_guarded_evidence_synopsis_v2"
+# 通用 evidence synopsis lane 第三輪 profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3 = "generic_guarded_evidence_synopsis_v3"
+# 通用 query focus lane 第一輪 profile 名稱。
+GENERIC_GUARDED_QUERY_FOCUS_V1 = "generic_guarded_query_focus_v1"
+# 通用 query focus 成本優先 profile：6 contexts x 3000 chars。
+GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000 = "generic_guarded_query_focus_budget_6x3000"
+# 通用 assembler lane 第一輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_ASSEMBLER_V1_GATE = "generic_guarded_assembler_v1_gate"
+# 通用 assembler lane 第二輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_ASSEMBLER_V2_GATE = "generic_guarded_assembler_v2_gate"
+# 通用 evidence synopsis lane 第一輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE = "generic_guarded_evidence_synopsis_v1_gate"
+# 通用 evidence synopsis lane 第二輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "generic_guarded_evidence_synopsis_v2_gate"
+# 通用 evidence synopsis lane 第三輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "generic_guarded_evidence_synopsis_v3_gate"
+# 通用 query focus lane 第一輪 deterministic gate profile 名稱。
+GENERIC_GUARDED_QUERY_FOCUS_V1_GATE = "generic_guarded_query_focus_v1_gate"
 
 # 無需進入 iteration 的 effect-check 假設名稱。
 HYPOTHESIS_NONE = "no_iteration_needed"
 # rerank hit 但 assembled drop 的假設名稱。
-HYPOTHESIS_ASSEMBLER = "rerank_hit_but_assembled_drop"
-# 補強 rerank text 的 evidence synopsis 假設名稱。
-HYPOTHESIS_EVIDENCE_SYNOPSIS = "evidence_synopsis_for_fact_windows"
-# 補強 query-side semantic gap 對齊的 query focus 假設名稱。
-HYPOTHESIS_QUERY_FOCUS = "query_focus_for_semantic_gap"
+HYPOTHESIS_ASSEMBLER = "assembler_retention_guard"
+# 補強 rerank text 的通用 evidence synopsis 假設名稱。
+HYPOTHESIS_EVIDENCE_SYNOPSIS = "generic_evidence_synopsis_for_fact_windows"
+# 補強 query-side semantic gap 對齊的通用 query focus 假設名稱。
+HYPOTHESIS_QUERY_FOCUS = "generic_query_focus_for_semantic_gap"
 
 # guarded profile 的安全上限，避免 benchmark-only 調參失控。
 MAX_GUARDED_RECALL_DEPTH = 100
@@ -93,8 +95,8 @@ def _deterministic_gate_overrides(*, settings: AppSettings) -> dict[str, int | s
     }
 
 
-def _qasper_guarded_assembler_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_assembler_v1` 的覆寫欄位。"""
+def _generic_guarded_assembler_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_assembler_v1` 的覆寫欄位。"""
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 8), MAX_GUARDED_RECALL_DEPTH),
@@ -104,8 +106,8 @@ def _qasper_guarded_assembler_v1_overrides(*, settings: AppSettings) -> dict[str
     }
 
 
-def _qasper_guarded_assembler_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_assembler_v2` 的覆寫欄位。"""
+def _generic_guarded_assembler_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_assembler_v2` 的覆寫欄位。"""
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 10), MAX_GUARDED_RECALL_DEPTH),
@@ -115,49 +117,51 @@ def _qasper_guarded_assembler_v2_overrides(*, settings: AppSettings) -> dict[str
     }
 
 
-def _qasper_guarded_evidence_synopsis_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_evidence_synopsis_v1` 的覆寫欄位。"""
+def _generic_guarded_evidence_synopsis_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_evidence_synopsis_v1` 的覆寫欄位。"""
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 20), MAX_GUARDED_RECALL_DEPTH),
         "retrieval_evidence_synopsis_enabled": True,
+        "retrieval_evidence_synopsis_variant": EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
         "assembler_max_contexts": max(settings.assembler_max_contexts, 8),
         "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3200),
         "assembler_max_children_per_parent": max(settings.assembler_max_children_per_parent, 5),
     }
 
 
-def _qasper_guarded_evidence_synopsis_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_evidence_synopsis_v2` 的覆寫欄位。"""
+def _generic_guarded_evidence_synopsis_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_evidence_synopsis_v2` 的覆寫欄位。"""
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 30), MAX_GUARDED_RECALL_DEPTH),
         "retrieval_evidence_synopsis_enabled": True,
+        "retrieval_evidence_synopsis_variant": EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
         "assembler_max_contexts": max(settings.assembler_max_contexts, 10),
         "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3600),
         "assembler_max_children_per_parent": max(settings.assembler_max_children_per_parent, 7),
     }
 
 
-def _qasper_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_evidence_synopsis_v3` 的覆寫欄位。"""
+def _generic_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_evidence_synopsis_v3` 的覆寫欄位。"""
 
     return {
-        **_qasper_guarded_evidence_synopsis_v2_overrides(settings=settings),
-        "retrieval_evidence_synopsis_variant": "qasper_v3",
+        **_generic_guarded_evidence_synopsis_v2_overrides(settings=settings),
+        "assembler_max_contexts": 9,
+        "assembler_max_chars_per_context": 3000,
+        "assembler_max_children_per_parent": 7,
     }
 
 
-def _qasper_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `qasper_guarded_query_focus_v1` 的覆寫欄位。"""
+def _generic_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
+    """建立 `generic_guarded_query_focus_v1` 的覆寫欄位。"""
 
     return {
-        **_qasper_guarded_evidence_synopsis_v3_overrides(settings=settings),
+        **_generic_guarded_evidence_synopsis_v3_overrides(settings=settings),
         "retrieval_query_focus_enabled": True,
-        "retrieval_query_focus_variant": "query_focus_v1",
+        "retrieval_query_focus_variant": QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         "retrieval_query_focus_confidence_threshold": 0.7,
-        "assembler_max_contexts": 9,
-        "assembler_max_chars_per_context": 3000,
     }
 
 
@@ -179,7 +183,7 @@ def _query_focus_budget_sweep_overrides(
     """
 
     return {
-        **_qasper_guarded_query_focus_v1_overrides(settings=settings),
+        **_generic_guarded_query_focus_v1_overrides(settings=settings),
         "assembler_max_contexts": max_contexts,
         "assembler_max_chars_per_context": max_chars_per_context,
     }
@@ -193,72 +197,72 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
         overrides={},
         base_profile=None,
     ),
-    QASPER_GUARDED_ASSEMBLER_V1: EvaluationProfileSpec(
-        name=QASPER_GUARDED_ASSEMBLER_V1,
+    GENERIC_GUARDED_ASSEMBLER_V1: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_ASSEMBLER_V1,
         lane_name="assembler",
     ),
-    QASPER_GUARDED_ASSEMBLER_V2: EvaluationProfileSpec(
-        name=QASPER_GUARDED_ASSEMBLER_V2,
+    GENERIC_GUARDED_ASSEMBLER_V2: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_ASSEMBLER_V2,
         lane_name="assembler",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_QUERY_FOCUS_V1: EvaluationProfileSpec(
-        name=QASPER_GUARDED_QUERY_FOCUS_V1,
+    GENERIC_GUARDED_QUERY_FOCUS_V1: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_QUERY_FOCUS_V1,
         lane_name="query_focus",
     ),
-    QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000: EvaluationProfileSpec(
-        name=QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
+    GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
         lane_name="query_focus_budget",
     ),
-    QASPER_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_ASSEMBLER_V1_GATE,
-        base_profile=QASPER_GUARDED_ASSEMBLER_V1,
+    GENERIC_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_ASSEMBLER_V1_GATE,
+        base_profile=GENERIC_GUARDED_ASSEMBLER_V1,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="assembler",
     ),
-    QASPER_GUARDED_ASSEMBLER_V2_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_ASSEMBLER_V2_GATE,
-        base_profile=QASPER_GUARDED_ASSEMBLER_V2,
+    GENERIC_GUARDED_ASSEMBLER_V2_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_ASSEMBLER_V2_GATE,
+        base_profile=GENERIC_GUARDED_ASSEMBLER_V2,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="assembler",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE,
-        base_profile=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE,
+        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
-        base_profile=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
+        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE,
-        base_profile=QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
+    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE,
+        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="evidence_synopsis",
     ),
-    QASPER_GUARDED_QUERY_FOCUS_V1_GATE: EvaluationProfileSpec(
-        name=QASPER_GUARDED_QUERY_FOCUS_V1_GATE,
-        base_profile=QASPER_GUARDED_QUERY_FOCUS_V1,
+    GENERIC_GUARDED_QUERY_FOCUS_V1_GATE: EvaluationProfileSpec(
+        name=GENERIC_GUARDED_QUERY_FOCUS_V1_GATE,
+        base_profile=GENERIC_GUARDED_QUERY_FOCUS_V1,
         overrides={"rerank_provider": "deterministic"},
         is_gate=True,
         lane_name="query_focus",
@@ -270,23 +274,23 @@ BENCHMARK_STRATEGY_LANES: dict[str, BenchmarkStrategyLaneSpec] = {
     HYPOTHESIS_ASSEMBLER: BenchmarkStrategyLaneSpec(
         name="assembler",
         main_hypothesis=HYPOTHESIS_ASSEMBLER,
-        profile_sequence=(QASPER_GUARDED_ASSEMBLER_V1, QASPER_GUARDED_ASSEMBLER_V2),
+        profile_sequence=(GENERIC_GUARDED_ASSEMBLER_V1, GENERIC_GUARDED_ASSEMBLER_V2),
         rollback_target_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS,
     ),
     HYPOTHESIS_EVIDENCE_SYNOPSIS: BenchmarkStrategyLaneSpec(
         name="evidence_synopsis",
         main_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS,
         profile_sequence=(
-            QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1,
-            QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2,
-            QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3,
+            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
+            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
+            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
         ),
         rollback_target_hypothesis=HYPOTHESIS_QUERY_FOCUS,
     ),
     HYPOTHESIS_QUERY_FOCUS: BenchmarkStrategyLaneSpec(
         name="query_focus",
         main_hypothesis=HYPOTHESIS_QUERY_FOCUS,
-        profile_sequence=(QASPER_GUARDED_QUERY_FOCUS_V1,),
+        profile_sequence=(GENERIC_GUARDED_QUERY_FOCUS_V1,),
         rollback_target_hypothesis=None,
     ),
 }
@@ -295,13 +299,13 @@ BENCHMARK_STRATEGY_LANES: dict[str, BenchmarkStrategyLaneSpec] = {
 SUPPORTED_EVALUATION_PROFILES = tuple(EVALUATION_PROFILE_SPECS.keys())
 
 # assembler lane 的固定 profile 順序。
-QASPER_GUARDED_ASSEMBLER_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_ASSEMBLER].profile_sequence
+GENERIC_GUARDED_ASSEMBLER_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_ASSEMBLER].profile_sequence
 
 # evidence synopsis lane 的固定 profile 順序。
-QASPER_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_EVIDENCE_SYNOPSIS].profile_sequence
+GENERIC_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_EVIDENCE_SYNOPSIS].profile_sequence
 
 # query focus lane 的固定 profile 順序。
-QASPER_GUARDED_QUERY_FOCUS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_QUERY_FOCUS].profile_sequence
+GENERIC_GUARDED_QUERY_FOCUS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_QUERY_FOCUS].profile_sequence
 
 
 def resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
@@ -341,19 +345,19 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
         return {}
     if evaluation_profile == DETERMINISTIC_GATE_V1:
         return _deterministic_gate_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_ASSEMBLER_V1:
-        return _qasper_guarded_assembler_v1_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_ASSEMBLER_V2:
-        return _qasper_guarded_assembler_v2_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_EVIDENCE_SYNOPSIS_V1:
-        return _qasper_guarded_evidence_synopsis_v1_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_EVIDENCE_SYNOPSIS_V2:
-        return _qasper_guarded_evidence_synopsis_v2_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_EVIDENCE_SYNOPSIS_V3:
-        return _qasper_guarded_evidence_synopsis_v3_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_QUERY_FOCUS_V1:
-        return _qasper_guarded_query_focus_v1_overrides(settings=settings)
-    if evaluation_profile == QASPER_GUARDED_QUERY_FOCUS_BUDGET_6X3000:
+    if evaluation_profile == GENERIC_GUARDED_ASSEMBLER_V1:
+        return _generic_guarded_assembler_v1_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_ASSEMBLER_V2:
+        return _generic_guarded_assembler_v2_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1:
+        return _generic_guarded_evidence_synopsis_v1_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2:
+        return _generic_guarded_evidence_synopsis_v2_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3:
+        return _generic_guarded_evidence_synopsis_v3_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_QUERY_FOCUS_V1:
+        return _generic_guarded_query_focus_v1_overrides(settings=settings)
+    if evaluation_profile == GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000:
         return _query_focus_budget_sweep_overrides(
             settings=settings,
             max_contexts=6,

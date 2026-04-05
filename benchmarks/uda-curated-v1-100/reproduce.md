@@ -2,7 +2,7 @@
 
 ## 目的
 
-此文件說明如何在目前 repo 內重現 `uda-curated-v1-100` 的建立流程與 `qasper_guarded_query_focus_v1` reference run。  
+此文件說明如何在目前 repo 內重現 `uda-curated-v1-100` 的建立流程與 `production_like_v1` reference run。  
 重現目標是取得與本 package 相同 contract、相同 profile 的 `100` 題 benchmark 分數，而不是重跑原始 `UDA-QA` leaderboard。
 
 ## 先備條件
@@ -153,7 +153,7 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchma
   --output-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/uda-curated-v1-100 \
   --benchmark-name uda-curated-v1-100 \
   --target-question-count 100 \
-  --reference-evaluation-profile qasper_guarded_query_focus_v1
+  --reference-evaluation-profile production_like_v1
 ```
 
 預期：
@@ -187,7 +187,7 @@ DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
   --dataset-id 3cca653e-ffd5-5ab8-8464-27aaac194bb4 \
   --top-k 10 \
-  --evaluation-profile qasper_guarded_query_focus_v1 \
+  --evaluation-profile production_like_v1 \
   --actor-sub ea33183f-1e9f-458f-a405-bb365b8266c0
 ```
 

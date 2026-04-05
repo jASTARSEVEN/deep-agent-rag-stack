@@ -81,6 +81,9 @@ class RetrievalTrace:
     query_focus_language: str = "en"
     query_focus_intents: list[str] | None = None
     query_focus_slots: dict[str, str] | None = None
+    query_focus_variant: str = ""
+    query_focus_rule_family: str = ""
+    evidence_synopsis_variant: str = ""
     focus_query: str = ""
     rerank_query: str = ""
 
@@ -200,6 +203,9 @@ def retrieve_area_candidates(
             query_focus_language=query_focus_plan.language,
             query_focus_intents=list(query_focus_plan.intents),
             query_focus_slots=dict(query_focus_plan.slots),
+            query_focus_variant=query_focus_plan.variant,
+            query_focus_rule_family=query_focus_plan.rule_family,
+            evidence_synopsis_variant=settings.retrieval_evidence_synopsis_variant,
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
             candidates=[

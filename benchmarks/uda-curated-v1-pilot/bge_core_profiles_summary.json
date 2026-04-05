@@ -17,7 +17,7 @@
       }
     },
     {
-      "name": "qasper_guarded_assembler_v2_bge",
+      "name": "generic_guarded_assembler_v2_bge",
       "overrides": {
         "rerank_top_n": 30,
         "assembler_max_contexts": 10,
@@ -34,7 +34,7 @@
       }
     },
     {
-      "name": "qasper_guarded_evidence_synopsis_v2_bge",
+      "name": "generic_guarded_evidence_synopsis_v2_bge",
       "overrides": {
         "rerank_top_n": 30,
         "retrieval_evidence_synopsis_enabled": true,
@@ -53,11 +53,11 @@
       }
     },
     {
-      "name": "qasper_guarded_evidence_synopsis_v3_bge",
+      "name": "generic_guarded_evidence_synopsis_v3_bge",
       "overrides": {
         "rerank_top_n": 30,
         "retrieval_evidence_synopsis_enabled": true,
-        "retrieval_evidence_synopsis_variant": "qasper_v3",
+        "retrieval_evidence_synopsis_variant": "generic_v1",
         "assembler_max_contexts": 10,
         "assembler_max_chars_per_context": 3600,
         "assembler_max_children_per_parent": 7

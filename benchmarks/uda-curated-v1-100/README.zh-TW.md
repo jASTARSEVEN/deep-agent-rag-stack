@@ -11,7 +11,7 @@
 - 官方 `UDA` `nq` subset 如何透過本 repo 的 helper CLI 正規化
 - 哪些題目通過目前的 `fact_lookup` 篩題規則
 - 有多少題是純 deterministic alignment 就取得 gold span
-- `qasper_guarded_query_focus_v1` reference run 的完整指標
+- `production_like_v1` reference run 的完整指標
 
 ## What's Included
 
@@ -22,7 +22,7 @@
 - `alignment_candidates.jsonl`：oversampled workspace 的 deterministic alignment 結果
 - `alignment_review_queue.jsonl`：可選 review 前的 unresolved queue
 - `filter_report.json`：oversampled workspace 的篩題摘要
-- `reference_run_summary.json`：完成的 `qasper_guarded_query_focus_v1` reference run 摘要
+- `reference_run_summary.json`：完成的 `production_like_v1` reference run 摘要
 - `reproduce.md`：逐步重現說明
 
 ## Reference Run
@@ -32,7 +32,7 @@
 - 建立時使用的 Area 名稱：`uda-100`
 - Area ID：`2edabc25-1a54-43ab-b987-efd4e040114f`
 - Reference run ID：`0274c530-8171-4f0f-bd86-bce82c15f5d7`
-- Evaluation profile：`qasper_guarded_query_focus_v1`
+- Evaluation profile：`production_like_v1`
 - 題數：`100`
 - 最終文件數：`45`
 - Oversampled filtered item 數：`140`

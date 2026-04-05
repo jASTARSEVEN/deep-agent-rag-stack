@@ -75,14 +75,14 @@
 
 ## Evaluation Benchmark
 
-本專案目前將 `qasper_guarded_query_focus_v1` 視為目前的主線 retrieval 策略。以實際 runtime 設定來說，預設組合為：
+本專案目前將 `production_like_v1` 視為 generic-first 的主線 retrieval benchmark baseline。以實際 runtime 設定來說，預設組合為：
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
 - `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
-- `RETRIEVAL_QUERY_FOCUS_VARIANT=query_focus_v1`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
 - `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
@@ -95,7 +95,7 @@
 最新主線 benchmark 快照：
 
 - 日期：`2026-04-04`
-- 主線 profile 標籤：`qasper_guarded_query_focus_v1`
+- 主線 profile 標籤：`production_like_v1`
 - 驗證方式：fresh `Docker Compose` rebuild + benchmark package re-import
 - 使用資料集：
   - `QASPER`（`qasper-curated-v1-pilot`）
@@ -114,9 +114,9 @@
 
 補充說明：
 
-- README 這裡刻意只呈現最新主線 `query_focus_v1` 的 benchmark 參考結果。
+- README 這裡刻意只呈現最新 generic-first 主線的 benchmark 參考結果。
 - 上表分數來自目前 hosted-runtime 預設組合（`easypinex-host / BAAI/bge-reranker-v2-m3`）在 fresh compose rebuild 與 benchmark package 重建後的實跑結果。
-- 目前主線採用的 assembler budget sweet spot 為 `9 x 3000 = 27000`；另外仍保留一條更激進的成本優先 profile：`qasper_guarded_query_focus_budget_6x3000`。
+- 目前主線採用的 assembler budget sweet spot 為 `9 x 3000 = 27000`；另外仍保留一條更激進的成本優先 profile：`generic_guarded_query_focus_budget_6x3000`。
 - 若要看不同策略的對照，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 

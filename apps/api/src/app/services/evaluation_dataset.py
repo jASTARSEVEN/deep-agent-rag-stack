@@ -805,6 +805,9 @@ def _build_empty_trace(
         "query_focus_language": query_focus_plan.language,
         "query_focus_intents": list(query_focus_plan.intents),
         "query_focus_slots": dict(query_focus_plan.slots),
+        "query_focus_variant": query_focus_plan.variant,
+        "query_focus_rule_family": query_focus_plan.rule_family,
+        "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
         "focus_query": query_focus_plan.focus_query,
         "rerank_query": query_focus_plan.rerank_query,
         "candidates": [],
@@ -827,6 +830,8 @@ def _build_query_focus_detail(*, query_focus_plan: QueryFocusPlan) -> Evaluation
         confidence=query_focus_plan.confidence,
         intents=list(query_focus_plan.intents),
         slots=dict(query_focus_plan.slots),
+        variant=query_focus_plan.variant,
+        rule_family=query_focus_plan.rule_family,
         focus_query=query_focus_plan.focus_query,
         rerank_query=query_focus_plan.rerank_query,
     )

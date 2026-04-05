@@ -11,7 +11,7 @@
 - 建立 package 時使用的 `50` 篇 paper oversampling 範圍
 - 哪些題目通過本 repo 目前的 `fact_lookup` 篩題規則
 - 哪些題目是 deterministic auto alignment 通過、哪些題目是靠 `OpenAI` review 補成 gold span
-- `qasper_guarded_query_focus_v1` reference run 的完整指標
+- `production_like_v1` reference run 的完整指標
 
 ## What's Included
 
@@ -24,7 +24,7 @@
 - `filter_report.json`：oversampled workspace 的篩題摘要
 - `review_overrides.jsonl`：`OpenAI` review 核准後的 span override
 - `openai_review_log.jsonl`：`OpenAI` review 證據鏈
-- `reference_run_summary.json`：完成的 `qasper_guarded_query_focus_v1` reference run 摘要
+- `reference_run_summary.json`：完成的 `production_like_v1` reference run 摘要
 - `reproduce.md`：逐步重現說明
 
 ## Reference Run
@@ -34,7 +34,7 @@
 - 建立時使用的 Area 名稱：`qasper-100`
 - Area ID：`204b0f87-bbbd-4549-ae3b-8064e535b453`
 - Reference run ID：`54c297d7-260b-40eb-88cf-999026ca9d6d`
-- Evaluation profile：`qasper_guarded_query_focus_v1`
+- Evaluation profile：`production_like_v1`
 - 題數：`100`
 - 最終文件數：`42`
 - Oversampled filtered item 數：`132`

@@ -227,6 +227,8 @@ class EvaluationQueryFocusDetail(BaseModel):
     confidence: float
     intents: list[str]
     slots: dict[str, str]
+    variant: str
+    rule_family: str
     focus_query: str
     rerank_query: str
 

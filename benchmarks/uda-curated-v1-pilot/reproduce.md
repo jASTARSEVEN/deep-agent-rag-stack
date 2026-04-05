@@ -348,4 +348,4 @@ PYTHONPATH=src python -m app.scripts.run_retrieval_eval run \
 
 - 此 pilot 不是完整 `UDA-QA`，只是一組可被本 repo 實際 ingest、對齊與重跑的官方 sample 子集。
 - `OpenAI API` review 是此版能把題數擴到 `26` 的核心步驟；若跳過這一步，只靠 auto alignment 會明顯不足。
-- `production_like_v1` 在 current HEAD 已對齊主線 default，因此它的 config snapshot 會包含 `qasper_v3` evidence synopsis 設定。
+- `production_like_v1` 在 current HEAD 已對齊主線 default，因此它的 config snapshot 會包含 `generic_v1` evidence synopsis 設定。

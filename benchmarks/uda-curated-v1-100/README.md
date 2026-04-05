@@ -11,7 +11,7 @@ This package exists so another engineer can reproduce the same `UDA 100` curatio
 - how the official `UDA` `nq` subset was normalized through the repository's helper CLI
 - which questions survived the current `fact_lookup` curation rules
 - how many items were approved through deterministic alignment alone
-- the exact `qasper_guarded_query_focus_v1` reference run metrics
+- the exact `production_like_v1` reference run metrics
 
 ## What's Included
 
@@ -22,7 +22,7 @@ This package exists so another engineer can reproduce the same `UDA 100` curatio
 - `alignment_candidates.jsonl`: deterministic alignment outcomes for the oversampled workspace
 - `alignment_review_queue.jsonl`: the unresolved queue before optional review
 - `filter_report.json`: curation summary for the oversampled workspace
-- `reference_run_summary.json`: the completed `qasper_guarded_query_focus_v1` reference run summary
+- `reference_run_summary.json`: the completed `production_like_v1` reference run summary
 - `reproduce.md`: the step-by-step reproduction guide
 
 ## Reference Run
@@ -32,7 +32,7 @@ This package exists so another engineer can reproduce the same `UDA 100` curatio
 - Area name used during creation: `uda-100`
 - Area ID: `2edabc25-1a54-43ab-b987-efd4e040114f`
 - Reference run ID: `0274c530-8171-4f0f-bd86-bce82c15f5d7`
-- Evaluation profile: `qasper_guarded_query_focus_v1`
+- Evaluation profile: `production_like_v1`
 - Item count: `100`
 - Final document count: `45`
 - Oversampled filtered item count: `140`

@@ -11,7 +11,7 @@ This package exists so another engineer can reproduce the same `QASPER 100` cura
 - the oversampled `50`-paper source scope used to build the package
 - which questions survived the repository's `fact_lookup` curation rules
 - which items were auto-aligned versus promoted through the `OpenAI` review step
-- the exact `qasper_guarded_query_focus_v1` reference run metrics
+- the exact `production_like_v1` reference run metrics
 
 ## What's Included
 
@@ -24,7 +24,7 @@ This package exists so another engineer can reproduce the same `QASPER 100` cura
 - `filter_report.json`: curation summary for the oversampled workspace
 - `review_overrides.jsonl`: approved span overrides from the `OpenAI` review pass
 - `openai_review_log.jsonl`: the `OpenAI` review evidence log
-- `reference_run_summary.json`: the completed `qasper_guarded_query_focus_v1` reference run summary
+- `reference_run_summary.json`: the completed `production_like_v1` reference run summary
 - `reproduce.md`: the step-by-step reproduction guide
 
 ## Reference Run
@@ -34,7 +34,7 @@ This package exists so another engineer can reproduce the same `QASPER 100` cura
 - Area name used during creation: `qasper-100`
 - Area ID: `204b0f87-bbbd-4549-ae3b-8064e535b453`
 - Reference run ID: `54c297d7-260b-40eb-88cf-999026ca9d6d`
-- Evaluation profile: `qasper_guarded_query_focus_v1`
+- Evaluation profile: `production_like_v1`
 - Item count: `100`
 - Final document count: `42`
 - Oversampled filtered item count: `132`

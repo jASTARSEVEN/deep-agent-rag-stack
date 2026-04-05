@@ -103,6 +103,11 @@
 - 預設 `RRF_K = 60`
 - 不做 vector 分數與 FTS 分數的線性 normalization
 
+### Benchmark 治理原則
+- benchmark 策略調整的第一核心是「不得造成 domain overfit」
+- benchmark profile 與 runtime default 都必須維持 generic-first，不得用 domain-specific wording、query rewrite 或 corpus-specific heuristic 換分數
+- 若某策略只能在特定 benchmark population 上成立、卻破壞通用檢索語意，必須直接視為失敗並回退
+
 ## 對外存取與部署邊界
 
 ### 單一公開入口

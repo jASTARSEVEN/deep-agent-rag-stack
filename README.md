@@ -71,14 +71,14 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-This repository now treats `qasper_guarded_query_focus_v1` as the current mainline retrieval strategy. In runtime terms, the default stack uses:
+This repository now treats `production_like_v1` as the generic-first mainline retrieval benchmark baseline. In runtime terms, the default stack uses:
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
 - `RETRIEVAL_QUERY_FOCUS_ENABLED=true`
-- `RETRIEVAL_QUERY_FOCUS_VARIANT=query_focus_v1`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
 - `RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
@@ -91,7 +91,7 @@ This repository now treats `qasper_guarded_query_focus_v1` as the current mainli
 Latest mainline benchmark snapshot:
 
 - Date: `2026-04-04`
-- Mainline profile label: `qasper_guarded_query_focus_v1`
+- Mainline profile label: `production_like_v1`
 - Validation mode: fresh `Docker Compose` rebuild + benchmark package re-import
 - Datasets:
   - `QASPER` (`qasper-curated-v1-pilot`)
@@ -110,9 +110,9 @@ Mainline assembled metrics:
 
 Notes:
 
-- The README intentionally shows only the latest mainline `query_focus_v1` benchmark reference.
+- The README intentionally shows only the latest generic-first mainline benchmark reference.
 - These numbers come from the current hosted-runtime default stack (`easypinex-host / BAAI/bge-reranker-v2-m3`) after a fresh compose rebuild and benchmark package re-import.
-- The current mainline budget sweet spot is `9 x 3000 = 27000` assembled characters. A more aggressive cost-priority profile is still kept as `qasper_guarded_query_focus_budget_6x3000`.
+- The current mainline budget sweet spot is `9 x 3000 = 27000` assembled characters. A more aggressive cost-priority profile is still kept as `generic_guarded_query_focus_budget_6x3000`.
 - Strategy-by-strategy comparisons are tracked directly in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 

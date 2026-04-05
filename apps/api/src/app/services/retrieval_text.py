@@ -18,10 +18,8 @@ EVIDENCE_CATEGORY_ENUMERATION = "enumeration"
 EVIDENCE_CATEGORY_METRIC_COMPARISON = "metric_comparison"
 # `source_material` 表示來源資料、種子資源與起始語料類 evidence category。
 EVIDENCE_CATEGORY_SOURCE_MATERIAL = "source_material"
-# `generic_v1` 表示目前正式的通用型 synopsis 變體。
+# `generic_v1` 表示目前唯一正式支援的通用型 synopsis 變體。
 EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1 = "generic_v1"
-# `qasper_v3` 表示依 miss analysis 補強 alias/task/metric framing，且目前已作為主線預設的變體。
-EVIDENCE_SYNOPSIS_VARIANT_QASPER_V3 = "qasper_v3"
 
 # evidence synopsis 輸出的固定 category 順序。
 EVIDENCE_CATEGORY_ORDER = (
@@ -224,7 +222,8 @@ def build_evidence_synopsis(
     - evidence 類別判斷採語言無關流程。
     - 各語言的 lexical signal 與輸出文案由 language profile registry 提供。
     - 目前正式支援 `en` 與 `zh-TW`；未來新增語言時，原則上只需新增 profile。
-    - `variant` 用於切換主線或 benchmark 專用的 phrasing 擴充；新增變體時應保持可配置與可測試。
+    - 正式 runtime 與 benchmark 治理目前只使用 `generic_v1`。
+    - `variant` 保留為可配置欄位，但未知變體不應引入額外 benchmark-specific phrasing。
 
     參數：
     - `heading`：候選片段標題；允許為空值。
@@ -329,112 +328,13 @@ def _build_variant_specific_synopsis_lines(
     - `variant`：要套用的 synopsis 變體。
 
     回傳：
-    - `list[str]`：額外附加的 synopsis lines；若 variant 無額外規則則回空列表。
+    - `list[str]`：額外附加的 synopsis lines；正式通用變體固定回空列表。
     """
 
-    if variant != EVIDENCE_SYNOPSIS_VARIANT_QASPER_V3:
+    del normalized_heading, normalized_content, output_profile, categories
+    if variant != EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1:
         return []
-    if output_profile.language_code == "en":
-        return _build_qasper_v3_english_synopsis_lines(
-            normalized_heading=normalized_heading,
-            normalized_content=normalized_content,
-            categories=categories,
-        )
-    if output_profile.language_code == "zh-TW":
-        return _build_qasper_v3_traditional_chinese_synopsis_lines(
-            normalized_heading=normalized_heading,
-            normalized_content=normalized_content,
-            categories=categories,
-        )
     return []
-
-
-def _build_qasper_v3_english_synopsis_lines(
-    *,
-    normalized_heading: str,
-    normalized_content: str,
-    categories: tuple[str, ...],
-) -> list[str]:
-    """建立 `qasper_v3` 的英文補充 synopsis lines。
-
-    參數：
-    - `normalized_heading`：已標準化且 casefold 後的標題。
-    - `normalized_content`：已標準化且 casefold 後的正文。
-    - `categories`：已命中的 evidence categories。
-
-    回傳：
-    - `list[str]`：英文 variant-specific synopsis lines。
-    """
-
-    extra_lines: list[str] = []
-    combined = f"{normalized_heading}\n{normalized_content}"
-
-    if EVIDENCE_CATEGORY_QUANTITATIVE in categories and _looks_dataset_alias_bridge_target(combined=combined):
-        extra_lines.append(
-            "This passage may answer task-dataset size or dataset-alias questions, including question-answer pair statistics."
-        )
-    if EVIDENCE_CATEGORY_ENUMERATION in categories:
-        extra_lines.append(
-            "This passage states the specific task types or question types being unified."
-        )
-    if EVIDENCE_CATEGORY_LABEL_DEFINITION in categories:
-        extra_lines.append(
-            "This passage states the supervision labels or label schema available in the dataset."
-        )
-    if EVIDENCE_CATEGORY_METRIC_COMPARISON in categories:
-        extra_lines.append(
-            "This passage states the aspects compared across models, including evaluation metrics and operational characteristics."
-        )
-    if EVIDENCE_CATEGORY_SOURCE_MATERIAL in categories:
-        extra_lines.append(
-            "This passage states which dataset or corpus is used as the starting point."
-        )
-
-    return extra_lines
-
-
-def _build_qasper_v3_traditional_chinese_synopsis_lines(
-    *,
-    normalized_heading: str,
-    normalized_content: str,
-    categories: tuple[str, ...],
-) -> list[str]:
-    """建立 `qasper_v3` 的繁體中文補充 synopsis lines。
-
-    參數：
-    - `normalized_heading`：已標準化且 casefold 後的標題。
-    - `normalized_content`：已標準化且 casefold 後的正文。
-    - `categories`：已命中的 evidence categories。
-
-    回傳：
-    - `list[str]`：繁體中文 variant-specific synopsis lines。
-    """
-
-    extra_lines: list[str] = []
-    combined = f"{normalized_heading}\n{normalized_content}"
-
-    if EVIDENCE_CATEGORY_QUANTITATIVE in categories and _looks_dataset_alias_bridge_target(combined=combined):
-        extra_lines.append(
-            "此段落可能回答任務資料集規模、資料集別名或問答對統計等問題。"
-        )
-    if EVIDENCE_CATEGORY_ENUMERATION in categories:
-        extra_lines.append(
-            "此段落指出被統整的具體任務型別或問題型別。"
-        )
-    if EVIDENCE_CATEGORY_LABEL_DEFINITION in categories:
-        extra_lines.append(
-            "此段落指出資料集中可用於監督的標籤或標籤結構。"
-        )
-    if EVIDENCE_CATEGORY_METRIC_COMPARISON in categories:
-        extra_lines.append(
-            "此段落指出不同模型之間被比較的面向，包括評估指標與操作特性。"
-        )
-    if EVIDENCE_CATEGORY_SOURCE_MATERIAL in categories:
-        extra_lines.append(
-            "此段落指出哪個資料集或語料被用作起始來源。"
-        )
-
-    return extra_lines
 
 
 def _select_output_language_profile(
@@ -604,35 +504,3 @@ def _contains_numeric_signal(*, text: str) -> bool:
     """
 
     return bool(_ARABIC_NUMERIC_PATTERN.search(text) or _CJK_NUMERIC_PATTERN.search(text))
-
-
-def _looks_dataset_alias_bridge_target(*, combined: str) -> bool:
-    """判斷內容是否值得加上 dataset-alias bridge 類 phrasing。
-
-    參數：
-    - `combined`：標題與正文合併後的標準化文字。
-
-    回傳：
-    - `bool`：若內容像是 dataset size / dataset and metrics / task dataset 類統計描述，回傳 `True`。
-    """
-
-    return any(
-        token in combined
-        for token in (
-            "dataset and evaluation metrics",
-            "question-answer pairs",
-            "types of questions",
-            "task dataset",
-            "sentences",
-            "characters",
-            "資料集與評估指標",
-            "資料集和評估指標",
-            "問答對",
-            "問題型別",
-            "問題類型",
-            "任務資料集",
-            "句子",
-            "字元",
-            "字符",
-        )
-    )

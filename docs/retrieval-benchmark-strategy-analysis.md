@@ -37,7 +37,7 @@
 
 ---
 
-## 2026-04-04 實測更新：`query_focus_v1`
+## 2026-04-04 實測更新：`generic_field_focus_v1`
 
 這一輪不是只看離線 artifact，而是實際做了以下重建與驗證：
 
@@ -48,12 +48,12 @@
    - `qasper-curated-v1-pilot`
    - `uda-curated-v1-pilot`
 4. 以目前程式碼在重建後的資料庫上，直接比較：
-   - `qasper_guarded_evidence_synopsis_v3`
-   - `qasper_guarded_query_focus_v1`
+   - `generic_guarded_evidence_synopsis_v3`
+   - `generic_guarded_query_focus_v1`
 
 ### 驗證結果摘要
 
-| Dataset | `v3` Recall@10 | `query_focus_v1` Recall@10 | Recall uplift | `v3` nDCG@10 | `query_focus_v1` nDCG@10 | nDCG uplift | `v3` MRR@10 | `query_focus_v1` MRR@10 | MRR uplift |
+| Dataset | `v3` Recall@10 | `generic_field_focus_v1` Recall@10 | Recall uplift | `v3` nDCG@10 | `generic_field_focus_v1` nDCG@10 | nDCG uplift | `v3` MRR@10 | `generic_field_focus_v1` MRR@10 | MRR uplift |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.8667` | `+0.0000` | `0.7283` | `0.7481` | `+0.0197` | `0.6825` | `0.7083` | `+0.0258` |
 | `QASPER` | `0.8148` | `0.8148` | `+0.0000` | `0.5353` | `0.5353` | `+0.0000` | `0.4467` | `0.4467` | `+0.0000` |
@@ -62,7 +62,7 @@
 
 ### 這輪真正證明了什麼
 
-1. `query_focus_v1` 在重建後的真實資料庫上沒有造成 regression。
+1. `generic_field_focus_v1` 在重建後的真實資料庫上沒有造成 regression。
 2. `self` 的提升不是靠擴池，而是 query-side intent/slot 對齊把既有 evidence 排得更前面。
 3. `UDA` 的提升直接命中原本最代表性的 comparison 題：
    - `Does this approach perform better in the multi-domain or single-domain setting?`
@@ -70,7 +70,7 @@
 
 ### self dataset 實際改善題
 
-`query_focus_v1` 在 `tw-insurance-rag-benchmark-v1` 上實際推前了 3 題：
+`generic_field_focus_v1` 在 `tw-insurance-rag-benchmark-v1` 上實際推前了 3 題：
 
 - `投保臻滿億2變額萬能壽險會有身分限制嗎?`
   - `rank 2 -> 1`
@@ -84,12 +84,12 @@
 
 ### 對 lane 決策的直接意義
 
-- `query_focus_v1` 已通過這一輪 benchmark governance，可保留程式碼，不需回退。
+- `generic_field_focus_v1` 已通過這一輪 benchmark governance，可保留程式碼，不需回退。
 - 它的角色不是取代 `evidence_synopsis_v3`，而是作為其上層的 query-side semantic-gap 補強。
 - assembled budget sweep 已顯示：
   - `9 x 3000 = 27000` 是主線 sweet spot：相對 `10 x 3500 = 35000` 少 `8000` 字元，三資料集平均 `Recall@10 / nDCG@10 / MRR@10` 全持平。
   - `6 x 3000 = 18000` 雖然更省，但平均 `Recall@10` 下降約 `0.037`，不適合作為主線。
-- 因此主線切到 `9 x 3000`，並另外保留 `qasper_guarded_query_focus_budget_6x3000` 作為成本優先 profile。
+- 因此主線切到 `9 x 3000`，並另外保留 `generic_guarded_query_focus_budget_6x3000` 作為成本優先 profile。
 
 ---
 
@@ -113,7 +113,7 @@
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS=60`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
+- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
 - 主線已套用 `query-aware assembler anchor`
 
 ### 正式 runtime：最新主線分數
@@ -163,16 +163,16 @@
 - dataset 固定為：
   - `qasper-curated-v1-100`
   - `uda-curated-v1-100`
-- evaluation profile 固定為 `qasper_guarded_query_focus_v1`
+- evaluation profile 固定為 `production_like_v1`
 - `self` dataset 不納入這一節，也不納入 macro average
 
 ### External 100Q Metrics
 
 | Dataset | Evaluation Profile | Question Count | Recall@10 | nDCG@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `qasper-curated-v1-100` | `qasper_guarded_query_focus_v1` | `100` | `0.5900` | `0.3812` | `0.3153` | `0.0640` | `0.8100` |
-| `uda-curated-v1-100` | `qasper_guarded_query_focus_v1` | `100` | `0.8300` | `0.6816` | `0.6336` | `0.0830` | `1.0000` |
-| `External macro average (self excluded)` | `qasper_guarded_query_focus_v1` | `100 + 100` | `0.7100` | `0.5314` | `0.4745` | `0.0735` | `0.9050` |
+| `qasper-curated-v1-100` | `production_like_v1` | `100` | `0.5900` | `0.3812` | `0.3153` | `0.0640` | `0.8100` |
+| `uda-curated-v1-100` | `production_like_v1` | `100` | `0.8300` | `0.6816` | `0.6336` | `0.0830` | `1.0000` |
+| `External macro average (self excluded)` | `production_like_v1` | `100 + 100` | `0.7100` | `0.5314` | `0.4745` | `0.0735` | `0.9050` |
 
 ### External 100Q 判讀
 
@@ -188,9 +188,9 @@
 
 | 類別 | Profile / 組合 | 為何保留 |
 | --- | --- | --- |
-| 正式 runtime baseline | `easypinex-host + BAAI/bge-reranker-v2-m3 + qasper_v3 + query-aware assembler anchor` | 代表目前最接近正式主線的實際分數，應作為後續 runtime 回歸基準。 |
-| 主線前一版 baseline | `qasper_guarded_evidence_synopsis_v3` | 用來直接比較 query-side 對齊是否帶來實質 uplift。 |
-| Query-side semantic-gap lane | `qasper_guarded_query_focus_v1` | 已在 compose 重建後的真實資料庫上驗證：self / UDA 提升、QASPER 持平，適合作為下一輪 query-side 對齊基線。 |
+| 正式 runtime baseline | `easypinex-host + BAAI/bge-reranker-v2-m3 + generic_v1 + query-aware assembler anchor` | 代表目前最接近正式主線的實際分數，應作為後續 runtime 回歸基準。 |
+| 主線前一版 baseline | `generic_guarded_evidence_synopsis_v3` | 用來直接比較 query-side 對齊是否帶來實質 uplift。 |
+| Query-side semantic-gap lane | `generic_guarded_query_focus_v1` | 已在 compose 重建後的真實資料庫上驗證：self / UDA 提升、QASPER 持平，適合作為下一輪 query-side 對齊基線。 |
 
 不再保留為常規比較集合的 lane，不代表完全無價值，而是它們已不再是 current HEAD 上值得固定重跑的主集合。
 
@@ -204,8 +204,8 @@
 
 | 方法 | 核心思想 | 最新可用數值 | 狀態 | 對未來改善的價值 |
 | --- | --- | --- | --- | --- |
-| `evidence_synopsis_v3` | `query_focus_v1` 前一版主線 | 三資料集平均 `Recall@10=0.8425`、`nDCG@10=0.6664`、`MRR@10=0.6125` | 已重跑 | 作為 query-side 對齊前的直接比較基線 |
-| `query_focus_v1` | 以 intent/slot planner 補 query-side evidence 對齊 | 三資料集平均 `Recall@10 uplift=+0.0128`、`nDCG@10 uplift=+0.0194`、`MRR@10 uplift=+0.0214` | 已實測 | 適合觀察中文 table-field 與英文 comparison/count 類 semantic-gap 問題 |
+| `evidence_synopsis_v3` | `generic_field_focus_v1` 前一版主線 | 三資料集平均 `Recall@10=0.8425`、`nDCG@10=0.6664`、`MRR@10=0.6125` | 已重跑 | 作為 query-side 對齊前的直接比較基線 |
+| `generic_field_focus_v1` | 以 intent/slot planner 補 query-side evidence 對齊 | 三資料集平均 `Recall@10 uplift=+0.0128`、`nDCG@10 uplift=+0.0194`、`MRR@10 uplift=+0.0214` | 已實測 | 適合觀察中文 table-field 與英文 comparison/count 類 semantic-gap 問題 |
 
 ### 歷史測過、但不建議作為常規主集合的策略
 
@@ -274,11 +274,31 @@
 ## 三資料集綜合決策
 
 - 若主目標是看目前正式主線真實表現：
-  - 以 `easypinex-host + BAAI/bge-reranker-v2-m3 + qasper_v3 + query-aware assembler anchor` 作為最新 baseline。
+  - 以 `easypinex-host + BAAI/bge-reranker-v2-m3 + generic_v1 + query-aware assembler anchor` 作為最新 baseline。
 - 若主目標是看 query-side semantic-gap 對齊是否成立：
-  - 直接比較 `qasper_guarded_evidence_synopsis_v3` 與 `qasper_guarded_query_focus_v1`。
+  - 直接比較 `generic_guarded_evidence_synopsis_v3` 與 `generic_guarded_query_focus_v1`。
 - 若主目標是跨資料集平均 uplift：
-  - 目前優先看 `query_focus_v1` 在重建後真實資料庫上的三資料集平均 uplift。
+  - 目前優先看 `generic_field_focus_v1` 在重建後真實資料庫上的三資料集平均 uplift。
+
+---
+
+## 2026-04-04 External 100Q 完整 miss 重分析
+
+本輪已補做 `QASPER 100` 與 `UDA 100` 的逐題 miss 重分析；完整清單與原因見：
+
+- `docs/external-100q-miss-analysis-2026-04-04.md`
+
+這輪最重要的診斷結論只有三點：
+
+1. `QASPER 100` 的 `41` 題 miss 中，`37` 題是 `recall_only`，而且只有 `15 / 41` 題在 recall top5 內已抓到 gold document。
+2. `UDA 100` 的 `17` 題 miss 中，`17 / 17` 題在 recall top3 內已抓到 gold document，主問題是 same-document locality / list-table answer localization，而不是 document recall。
+3. `generic_field_focus_v1` 在 external 100Q 幾乎沒有 coverage：
+   - `QASPER 100` 只啟用 `2 / 100`
+   - `UDA 100` 啟用 `0 / 100`
+
+因此下一輪主假設應該更具體地改寫成：
+
+> 不是再加深 recall pool，而是補 `english generic evidence-field` 的 planner / alias bridge，讓 retrieval 與 rerank 能辨識 `dataset`、`baseline`、`experiment`、`metric`、`annotation`、`pretraining source` 這些 field type。
 
 ---
 
@@ -288,22 +308,29 @@
 
 下一輪最值得的唯一主假設已不再是「要不要做 query-side 對齊」，而是：
 
-> 在保留 `query_focus_v1` 的前提下，擴充下一批高 ROI intents / field aliases，專注收斂剩餘的 `recall_only` 與 `rerank_only` semantic-gap miss。
+> 在保留 `generic_field_focus_v1` 的前提下，實作 `english_field_focus_v2`，優先補 `dataset / corpus / size / baseline / experiment / metric / annotation / pretraining source` 這批英文 high-ROI field intents，專注收斂 external 100Q 剩餘的 `recall_only` 與 `rerank_only` semantic-gap miss。
 
 可聚焦方向：
 
-- 補強 zh-TW table-field query 的 alias 與 target-field vocabulary。
-- 擴充英文除 `count_total / comparison_axis` 之外的下一個高 ROI intent。
+- 擴充英文 generic metadata / experiment 類 query 的 field aliases 與 target-field vocabulary。
+- 對高信心 intents 產生更明確的 focus query 與 rerank evidence need brief。
 - 保持高信心 gating，避免把 query rewrite 擴成 generic prompt engineering。
+
+這個主假設的直接理由是：
+
+- 它可直接覆蓋 `QASPER 100` 中 `33 / 41` 題的主因（`R1 + R2 + R3 + R4`）。
+- 目前 planner 幾乎沒有命中 external 100Q 的真正 miss 主戰場。
 
 ### Secondary
 
-只在主戰場處理完後，才值得開小型 secondary lane 處理剩餘 assembler 題，例如：
+只在主戰場處理完後，才值得開小型 secondary lane 處理剩餘的 same-document locality / assembler 題，例如：
 
 - `QASPER`：`How many reviews in total (both generated and true) do they evaluate on Amazon Mechanical Turk?`
-- `UDA`：`Does this approach perform better in the multi-domain or single-domain setting?`
+- `QASPER`：`What experiments do the authors present to validate their system?`
+- `UDA`：`where will this year's army-navy game be played`
+- `UDA`：`from the land of the moon movie cast`
 
-這些題目較像局部 retention 問題，而不是目前最主要的 miss 類型。
+這些題目較像局部 retention / section-anchor 問題，而不是目前最主要的 semantic-gap 類型。
 
 ### 目前不建議優先重做的方向
 

@@ -99,13 +99,12 @@
   - `zh-TW`
 - 支援的 evidence synopsis 變體：
   - `generic_v1`：作為基線的通用型 phrasing
-  - `qasper_v3`：目前主線 runtime 使用的變體，會額外補上 dataset alias bridge、task framing bridge 與 metric-aspect bridge，用來處理 QASPER 類 semantic-gap miss，且會依支援語言 profile 輸出對應本地化文案
 - 執行期開關：
   - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`：在 rerank 文件組裝時啟用 synopsis
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>`：指定 synopsis phrasing 變體；預設為 `qasper_v3`
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>`：指定 synopsis phrasing 變體；預設為 `generic_v1`
 - Guardrails：
   - 變體只可影響 benchmark/profile-gated wording，不得旁路 SQL gate、ready-only 過濾或 production defaults
-  - 即使 `qasper_v3` 已是目前 runtime 預設，所有 wording 變更仍必須保持可配置，且不得旁路 SQL gate、ready-only 過濾或 production defaults
+  - 目前主線只保留 generic-first wording；benchmark-specific bridge phrasing 已退出正式 runtime 路徑
 
 ## Rerank Provider 支援模式
 

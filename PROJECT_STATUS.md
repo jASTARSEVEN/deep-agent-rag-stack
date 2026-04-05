@@ -55,22 +55,24 @@
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
+- benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 對齊 `qasper_guarded_query_focus_v1` 的策略組合：runtime 預設改為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=qasper_v3` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=query_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 改為 generic-first 策略組合：runtime 預設為 `easypinex-host / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=generic_field_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
-- `qasper_guarded_query_focus_v1` 已由 benchmark-gated lane 提升為專案主線策略：在 `qasper_guarded_evidence_synopsis_v3` 之上補 query-side intent/slot planner、focus query 與 rerank evidence need brief
+- benchmark 治理已同步改為 generic-first：guarded query-focus lane 使用 `generic_guarded_query_focus_v1`，不再保留舊的 benchmark-specific profile naming
 - retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷
-- 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 `qasper_guarded_query_focus_v1`：相對 `qasper_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平，三資料集平均 `nDCG@10 +0.0194`，確認可保留此 lane
+- 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 generic-first query-focus lane：相對 `generic_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平，三資料集平均 `nDCG@10 +0.0194`
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
 - 已新增 `apps/api/src/app/scripts/prepare_uda_full_source.py`，可將官方 `UDA-Benchmark` `extended_qa_info_bench` 與 full-source docs 正規化為現有 `prepare_external_benchmark --dataset uda` 可直接使用的 JSONL row contract
-- 已新增兩份正式外部 `100` 題 package，且 reference run 統一使用 `qasper_guarded_query_focus_v1`：
+- 已新增兩份正式外部 `100` 題 package，且 reference run 統一使用 `production_like_v1`：
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最終 `100` 題 / `42` 份文件 / `164` 個 gold spans，assembled `Recall@10=0.5900`、`nDCG@10=0.3812`、`MRR@10=0.3153`
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最終 `100` 題 / `45` 份文件 / `100` 個 gold spans，assembled `Recall@10=0.8300`、`nDCG@10=0.6816`、`MRR@10=0.6336`
-- `docs/retrieval-benchmark-strategy-analysis.md` 已新增 `External 100Q Baseline` 區塊，固定以 `qasper_guarded_query_focus_v1` 呈現 `QASPER 100`、`UDA 100` 與 `self excluded` macro average 分數
+- `docs/retrieval-benchmark-strategy-analysis.md` 已新增 `External 100Q Baseline` 區塊，固定以 `production_like_v1` 呈現 `QASPER 100`、`UDA 100` 與 `self excluded` macro average 分數
+- 已完成 `QASPER 100` 與 `UDA 100` 的完整 miss 重分析，並新增 `docs/external-100q-miss-analysis-2026-04-04.md`：`QASPER` `41` 題 miss 中 `33` 題集中在英文 generic evidence-field semantic gap（`dataset / baseline / experiment / metric / annotation`），`UDA` `17` 題 miss 中 `15` 題集中在 same-document locality / list-table answer localization；下一輪唯一主假設已收斂為 `english_field_focus_v2`
 - `UDA` pilot 這一輪的 benchmark governance 結果為：`9` 題 auto-matched、`21` 題由 `OpenAI` review 核准、再補 `4` 題 deterministic span override；reference run assembled 指標提升到 `Recall@10=0.6538`、`nDCG@10=0.5288`、`MRR@10=0.4968`
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
-- 目前最佳 deterministic gate 已更新為 `qasper_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
+- 目前最佳 deterministic gate 已更新為 `generic_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
 - 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件
 - 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
 - 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮

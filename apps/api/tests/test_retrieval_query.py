@@ -3,110 +3,103 @@
 from __future__ import annotations
 
 from app.core.settings import AppSettings
-from app.services.retrieval_query import build_query_focus_plan, build_query_focus_plan_from_settings, extract_query_tokens
+from app.services.retrieval_query import (
+    QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
+    build_query_focus_plan,
+    build_query_focus_plan_from_settings,
+    extract_query_tokens,
+)
 
 
 def test_query_focus_plan_detects_deadline_query_in_traditional_chinese() -> None:
-    """繁中申請時間題應命中 deadline intent。"""
+    """繁中期限題應命中 date_or_deadline intent。"""
 
     plan = build_query_focus_plan(
-        query="保單更約權的申請時間",
+        query="文件申請期限是多久內？",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
     assert plan.applied is True
     assert plan.language == "zh-TW"
-    assert plan.intents == ("deadline",)
-    assert plan.slots["target_field"] == "申請時間"
-    assert "申請時間" in plan.focus_query
+    assert plan.intents == ("date_or_deadline",)
+    assert plan.slots["target_field"] == "日期或期限"
+    assert "期限" in plan.focus_query
     assert "Need:" in plan.rerank_query
+    assert plan.variant == QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1
+    assert plan.rule_family == "generic"
 
 
 def test_query_focus_plan_detects_eligibility_query_in_traditional_chinese() -> None:
-    """繁中身分限制題應命中 eligibility_identity intent。"""
+    """繁中資格題應命中 eligibility_or_actor intent。"""
 
     plan = build_query_focus_plan(
-        query="網路保險申請保單借款的身分限制",
+        query="研究助理的申請資格有哪些？",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
     assert plan.applied is True
-    assert plan.intents == ("eligibility_identity",)
-    assert plan.slots["action"] == "申請"
-    assert "身分限制" in plan.focus_query
-    assert "保單借款" in plan.focus_query
+    assert plan.intents == ("eligibility_or_actor", "enumeration_or_inventory")
+    assert plan.slots["subject"] == "研究助理"
+    assert plan.slots["target_field"] == "資格或責任對象 / 項目清單或列舉內容"
+    assert "資格" in plan.focus_query
+    assert "適用對象" in plan.focus_query
 
 
-def test_query_focus_plan_detects_amount_max_query_in_traditional_chinese() -> None:
-    """繁中最高投保金額題應命中 amount_max intent。"""
+def test_query_focus_plan_detects_amount_limit_query_in_traditional_chinese() -> None:
+    """繁中金額上限題應命中 amount_or_limit intent。"""
 
     plan = build_query_focus_plan(
-        query="保利美美元利率變動型終身壽險其累計最高投保金額為何?",
+        query="這個補助的最高金額是多少？",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
     assert plan.applied is True
-    assert plan.intents == ("amount_max",)
-    assert plan.slots["target_field"] == "最高投保金額"
-    assert "投保金額" in plan.focus_query
+    assert plan.intents == ("amount_or_limit", "count_or_size")
+    assert plan.slots["subject"] == "這個補助"
+    assert "金額或上限" in plan.focus_query
+    assert "上限" in plan.focus_query
 
 
-def test_query_focus_plan_detects_age_and_payment_term_query_in_traditional_chinese() -> None:
-    """繁中投保年齡與年期題應同時命中 age_range 與 payment_term。"""
-
-    plan = build_query_focus_plan(
-        query="新傳承富利利率變動型終身壽險幾歲可以投保？各年期的限制是什麼？",
-        enabled=True,
-        variant="query_focus_v1",
-        confidence_threshold=0.7,
-    )
-
-    assert plan.applied is True
-    assert plan.intents == ("age_range", "payment_term")
-    assert plan.slots["product_name"] == "新傳承富利利率變動型終身壽險"
-    assert "投保年齡" in plan.focus_query
-    assert "繳費年期" in plan.focus_query
-
-
-def test_query_focus_plan_detects_total_count_query_in_english() -> None:
-    """英文 total count 題應命中 count_total intent。"""
+def test_query_focus_plan_detects_count_size_query_in_english_without_domain_specific_injection() -> None:
+    """英文 dataset size 題應命中 count_or_size，且不注入 corpus-specific token。"""
 
     plan = build_query_focus_plan(
-        query="How many reviews in total (both generated and true) do they evaluate on Amazon Mechanical Turk?",
+        query="How big is the dataset?",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
     assert plan.applied is True
     assert plan.language == "en"
-    assert plan.intents == ("count_total",)
-    assert plan.slots["target_field"] == "total count"
-    assert "reviews" in plan.focus_query
-    assert "exact total count evidence" in plan.rerank_query
+    assert plan.intents == ("count_or_size",)
+    assert plan.slots["subject"] == "dataset"
+    assert "count or size" in plan.focus_query
+    assert "reviews" not in plan.focus_query
+    assert "amazon mechanical turk" not in plan.rerank_query.casefold()
 
 
 def test_query_focus_plan_detects_comparison_axis_query_in_english() -> None:
     """英文比較題應命中 comparison_axis intent。"""
 
     plan = build_query_focus_plan(
-        query="Does this approach perform better in the multi-domain or single-domain setting?",
+        query="Which setting performs better, local or hosted?",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
     assert plan.applied is True
     assert plan.intents == ("comparison_axis",)
-    assert plan.slots["target_field"] == "comparison result"
-    assert "single-domain" in plan.focus_query
-    assert "multi-domain" in plan.focus_query
+    assert plan.slots["comparison_target"] == "local / hosted"
+    assert "comparison result or axis" in plan.focus_query
+    assert "direct comparison evidence" in plan.rerank_query
 
 
 def test_query_focus_plan_does_not_apply_to_low_confidence_query() -> None:
@@ -115,7 +108,7 @@ def test_query_focus_plan_does_not_apply_to_low_confidence_query() -> None:
     plan = build_query_focus_plan(
         query="alpha",
         enabled=True,
-        variant="query_focus_v1",
+        variant=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         confidence_threshold=0.7,
     )
 
@@ -130,17 +123,17 @@ def test_query_focus_plan_respects_settings_flags() -> None:
 
     settings = AppSettings(
         RETRIEVAL_QUERY_FOCUS_ENABLED=True,
-        RETRIEVAL_QUERY_FOCUS_VARIANT="query_focus_v1",
+        RETRIEVAL_QUERY_FOCUS_VARIANT=QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD=0.7,
     )
 
     plan = build_query_focus_plan_from_settings(
         settings=settings,
-        query="保單更約權的申請時間",
+        query="文件申請期限是多久內？",
     )
 
     assert plan.applied is True
-    assert plan.intents == ("deadline",)
+    assert plan.intents == ("date_or_deadline",)
 
 
 def test_extract_query_tokens_emits_cjk_bigrams_and_latin_tokens() -> None:

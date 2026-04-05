@@ -91,7 +91,7 @@ def test_effect_check_selects_assembler_lane_when_recall_below_target() -> None:
     )
 
     assert artifact["main_hypothesis"] == HYPOTHESIS_ASSEMBLER
-    assert artifact["candidate_profiles"] == ["qasper_guarded_assembler_v1", "qasper_guarded_assembler_v2"]
+    assert artifact["candidate_profiles"] == ["generic_guarded_assembler_v1", "generic_guarded_assembler_v2"]
     assert artifact["baseline_metrics"]["weighted"]["weights"] == {
         "self": SELF_BENCHMARK_WEIGHT,
         "qasper": QASPER_BENCHMARK_WEIGHT,
@@ -122,15 +122,15 @@ def test_rollback_strategy_switches_from_assembler_to_evidence_synopsis_lane() -
             "baseline_metrics": {},
             "target_recall": 0.8,
         },
-        attempted_profiles=["qasper_guarded_assembler_v1"],
+        attempted_profiles=["generic_guarded_assembler_v1"],
     )
 
     assert rethink is not None
     assert rethink["main_hypothesis"] == HYPOTHESIS_EVIDENCE_SYNOPSIS
     assert rethink["candidate_profiles"] == [
-        "qasper_guarded_evidence_synopsis_v1",
-        "qasper_guarded_evidence_synopsis_v2",
-        "qasper_guarded_evidence_synopsis_v3",
+        "generic_guarded_evidence_synopsis_v1",
+        "generic_guarded_evidence_synopsis_v2",
+        "generic_guarded_evidence_synopsis_v3",
     ]
 
 
@@ -144,12 +144,12 @@ def test_rollback_strategy_switches_from_evidence_synopsis_to_query_focus_lane()
             "baseline_metrics": {},
             "target_recall": 0.8,
         },
-        attempted_profiles=["qasper_guarded_evidence_synopsis_v1"],
+        attempted_profiles=["generic_guarded_evidence_synopsis_v1"],
     )
 
     assert rethink is not None
     assert rethink["main_hypothesis"] == HYPOTHESIS_QUERY_FOCUS
-    assert rethink["candidate_profiles"] == ["qasper_guarded_query_focus_v1"]
+    assert rethink["candidate_profiles"] == ["generic_guarded_query_focus_v1"]
 
 
 def test_rollback_strategy_stops_after_query_focus_lane() -> None:
@@ -162,7 +162,7 @@ def test_rollback_strategy_stops_after_query_focus_lane() -> None:
             "baseline_metrics": {},
             "target_recall": 0.8,
         },
-        attempted_profiles=["qasper_guarded_query_focus_v1"],
+        attempted_profiles=["generic_guarded_query_focus_v1"],
     )
 
     assert rethink is None
@@ -181,7 +181,7 @@ def test_guard_agent_accepts_active_profile_gated_proposal() -> None:
     effect_opt = build_effect_opt(
         iteration_index=1,
         main_hypothesis=effect_check["main_hypothesis"],
-        profile_name="qasper_guarded_assembler_v1",
+        profile_name="generic_guarded_assembler_v1",
         settings=settings,
     )
     advice = {
@@ -204,14 +204,14 @@ def test_guard_agent_allows_assembler_profile_with_large_char_budget() -> None:
     effect_opt = build_effect_opt(
         iteration_index=1,
         main_hypothesis=HYPOTHESIS_ASSEMBLER,
-        profile_name="qasper_guarded_assembler_v1",
+        profile_name="generic_guarded_assembler_v1",
         settings=settings,
     )
     advice = {"guardrails": ["所有 guarded knobs 必須維持在 <= 100。"]}
 
     guard = build_guard(
         effect_check={
-            "candidate_profiles": ["qasper_guarded_assembler_v1", "qasper_guarded_assembler_v2"],
+            "candidate_profiles": ["generic_guarded_assembler_v1", "generic_guarded_assembler_v2"],
         },
         effect_opt=effect_opt,
         advice=advice,
@@ -221,13 +221,44 @@ def test_guard_agent_allows_assembler_profile_with_large_char_budget() -> None:
     assert guard["approved"] is True
 
 
+def test_guard_agent_blocks_non_generic_retrieval_variants_to_prevent_domain_overfit() -> None:
+    """若 candidate profile 想引入非 generic retrieval variant，guard-agent 應直接擋下。"""
+
+    advice = {
+        "guardrails": [
+            "所有 guarded knobs 必須維持在 <= 100。",
+            "不得修改 production defaults。",
+            "benchmark 策略不得引入非 generic-first 的 retrieval variants。",
+        ]
+    }
+
+    guard = build_guard(
+        effect_check={
+            "candidate_profiles": ["generic_guarded_query_focus_v1"],
+        },
+        effect_opt={
+            "profile_name": "generic_guarded_query_focus_v1",
+            "profile_overrides": {
+                "retrieval_query_focus_variant": "domain_locked_v1",
+                "retrieval_evidence_synopsis_variant": "generic_v1",
+            },
+        },
+        advice=advice,
+    )
+
+    assert guard["decision"] == "stop"
+    assert guard["approved"] is False
+    assert guard["domain_overfit_violations"]
+    assert "anti-domain-overfit" in guard["reason"]
+
+
 def test_deterministic_gate_blocks_live_rerank_until_recall_exceeds_target() -> None:
     """weighted deterministic gate 未達標時，不應直接進 live rerank。"""
 
     gate = build_deterministic_gate_result(
         iteration_index=1,
-        profile_name="qasper_guarded_assembler_v1",
-        gate_profile_name="qasper_guarded_assembler_v1_gate",
+        profile_name="generic_guarded_assembler_v1",
+        gate_profile_name="generic_guarded_assembler_v1_gate",
         gate_qasper_report=_report(assembled_recall=0.74, assembled_ndcg=0.47, assembled_mrr=0.43),
         gate_self_report=_report(assembled_recall=0.80, assembled_ndcg=0.78, assembled_mrr=0.75),
         target_recall=0.8,
@@ -243,8 +274,8 @@ def test_deterministic_gate_passes_before_live_rerank_when_recall_exceeds_target
 
     gate = build_deterministic_gate_result(
         iteration_index=1,
-        profile_name="qasper_guarded_evidence_synopsis_v2",
-        gate_profile_name="qasper_guarded_evidence_synopsis_v2_gate",
+        profile_name="generic_guarded_evidence_synopsis_v2",
+        gate_profile_name="generic_guarded_evidence_synopsis_v2_gate",
         gate_qasper_report=_report(assembled_recall=0.82, assembled_ndcg=0.50, assembled_mrr=0.46),
         gate_self_report=_report(assembled_recall=0.90, assembled_ndcg=0.80, assembled_mrr=0.78),
         target_recall=0.8,
@@ -264,7 +295,7 @@ def test_implement_result_continues_when_weighted_metrics_improve_but_recall_sti
 
     result = build_implement_result(
         iteration_index=1,
-        profile_name="qasper_guarded_evidence_synopsis_v1",
+        profile_name="generic_guarded_evidence_synopsis_v1",
         candidate_qasper=_report(assembled_recall=0.74, assembled_ndcg=0.47, assembled_mrr=0.43),
         candidate_self=_report(assembled_recall=0.79, assembled_ndcg=0.82, assembled_mrr=0.80),
         qasper_compare=_compare(recall_delta=0.18, ndcg_delta=0.02, mrr_delta=0.02),
@@ -283,7 +314,7 @@ def test_implement_result_rolls_back_when_weighted_objective_regresses() -> None
 
     result = build_implement_result(
         iteration_index=1,
-        profile_name="qasper_guarded_evidence_synopsis_v1",
+        profile_name="generic_guarded_evidence_synopsis_v1",
         candidate_qasper=_report(assembled_recall=0.60, assembled_ndcg=0.44, assembled_mrr=0.40),
         candidate_self=_report(assembled_recall=0.80, assembled_ndcg=0.77, assembled_mrr=0.74),
         qasper_compare=_compare(recall_delta=-0.02, ndcg_delta=-0.01, mrr_delta=-0.01),
@@ -302,7 +333,7 @@ def test_implement_result_stops_when_weighted_target_recall_is_reached() -> None
 
     result = build_implement_result(
         iteration_index=2,
-        profile_name="qasper_guarded_evidence_synopsis_v2",
+        profile_name="generic_guarded_evidence_synopsis_v2",
         candidate_qasper=_report(assembled_recall=0.75, assembled_ndcg=0.48, assembled_mrr=0.44),
         candidate_self=_report(assembled_recall=0.85, assembled_ndcg=0.81, assembled_mrr=0.79),
         qasper_compare=_compare(recall_delta=0.26, ndcg_delta=0.03, mrr_delta=0.03),

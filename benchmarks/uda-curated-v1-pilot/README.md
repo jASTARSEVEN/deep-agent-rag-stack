@@ -55,9 +55,9 @@ This package exists to let another engineer reproduce the same pilot benchmark f
 | Profile | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
 | `production_like_v1` | 0.6538 | 0.5288 | 0.4968 |
-| `qasper_guarded_assembler_v2_bge` | 0.6538 | 0.5288 | 0.4968 |
-| `qasper_guarded_evidence_synopsis_v2_bge` | 0.6538 | 0.5264 | 0.4936 |
-| `qasper_guarded_evidence_synopsis_v3_bge` | 0.6538 | 0.5288 | 0.4968 |
+| `generic_guarded_assembler_v2_bge` | 0.6538 | 0.5288 | 0.4968 |
+| `generic_guarded_evidence_synopsis_v2_bge` | 0.6538 | 0.5264 | 0.4936 |
+| `generic_guarded_evidence_synopsis_v3_bge` | 0.6538 | 0.5288 | 0.4968 |
 
 ## Notes
 
@@ -68,4 +68,4 @@ This package exists to let another engineer reproduce the same pilot benchmark f
   - `9` auto-matched items
   - `21` `OpenAI API` review approvals
   - `4` additional deterministic span overrides on top of the LLM pass
-- On the refreshed `26`-item dataset, `assembler_v2` and `qasper_v3` tie the baseline on UDA nDCG@10, while `generic_v1` is slightly lower.
+- On the refreshed `26`-item dataset, `assembler_v2` and `generic_v1` tie the baseline on UDA nDCG@10, while `generic_v1` is slightly lower.

@@ -99,13 +99,12 @@ This module contains the project's FastAPI service. It currently provides:
   - `zh-TW`
 - Supported evidence synopsis variants:
   - `generic_v1`: the baseline production-safe synopsis phrasing
-  - `qasper_v3`: the current mainline runtime variant that adds dataset alias bridges, task framing bridges, and metric-aspect bridges for QASPER-style semantic-gap misses, with localized output for supported language profiles
 - Runtime knobs:
   - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true` enables synopsis generation for rerank text assembly
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `qasper_v3`
+  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `generic_v1`
 - Guardrails:
   - variants only affect benchmark/profile-gated wording and must not bypass SQL gate, ready-only filtering, or production defaults
-  - even though `qasper_v3` is the current runtime default, wording changes must still remain configurable and must not bypass SQL gate, ready-only filtering, or production defaults
+  - the current mainline uses generic-first wording; benchmark-specific bridge phrasing is no longer part of the formal runtime path
 
 ## Rerank Provider Support Modes
 

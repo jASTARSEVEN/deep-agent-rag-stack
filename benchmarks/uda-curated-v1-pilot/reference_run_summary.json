@@ -23,7 +23,7 @@
     },
     "retrieval": {
       "evidence_synopsis_enabled": true,
-      "evidence_synopsis_variant": "qasper_v3",
+      "evidence_synopsis_variant": "generic_v1",
       "fts_top_k": 30,
       "hnsw_ef_search": 100,
       "max_candidates": 30,

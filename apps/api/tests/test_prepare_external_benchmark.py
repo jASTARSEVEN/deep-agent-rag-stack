@@ -543,13 +543,13 @@ def test_build_snapshot_can_limit_question_count_and_copy_optional_review_files(
         benchmark_name="limited-reviewed",
         include_review_items=False,
         target_question_count=1,
-        reference_evaluation_profile="qasper_guarded_query_focus_v1",
+        reference_evaluation_profile="production_like_v1",
     )
 
     assert summary["question_count"] == 1
-    assert summary["reference_evaluation_profile"] == "qasper_guarded_query_focus_v1"
+    assert summary["reference_evaluation_profile"] == "production_like_v1"
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["reference"]["evaluation_profile"] == "qasper_guarded_query_focus_v1"
+    assert manifest["reference"]["evaluation_profile"] == "production_like_v1"
     assert manifest["stats"]["question_count"] == 1
     assert REVIEW_OVERRIDES_FILE in manifest["snapshot_files"]
     assert OPTIONAL_SNAPSHOT_AUXILIARY_FILES[1] in manifest["snapshot_files"]

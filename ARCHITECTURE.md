@@ -118,6 +118,7 @@
 4. reviewer 一律透過既有 `GET /documents/{document_id}/preview` 的 `display_text + offsets` contract 檢視全文，再以 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/spans` 標註 `document_id + start_offset + end_offset + relevance_grade`，或以 `mark-miss` 標記 `retrieval_miss`。
 5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；所有 runner 都必須直接重用既有 retrieval pipeline，不能旁路 SQL gate、ready-only 或 assembler。
 6. benchmark 改善任務的正式策略為：先實際跑分建立 baseline；每一輪只允許一個主假設與最小改動；改動後必須重新跑分，若相對目前最佳結果退化，除分析文件外其餘改動一律回退；無論提升與否，都必須重新分析 miss 題與當前查到的 chunks，才能決定下一輪策略。
+6.5. benchmark 治理的第一核心是「不得造成 domain overfit」；任何 candidate profile 若引入非 generic-first 的 retrieval wording、query rewrite 或 corpus-specific heuristic，必須在治理腳本層直接視為失敗，不得進入正式 lane 比較。
 7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 進行，資料庫不得新增策略專用欄位
 
 ### 外部 benchmark curation 流程
@@ -200,10 +201,10 @@
 6. PostgreSQL vector recall 預設使用 `hnsw` index，並依賴 `pgvector >= 0.8.0` 提供 `hnsw.iterative_scan`
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前已擴充為 vector recall + FTS recall + Python `RRF` merge + parent-level rerank + table-aware assembler；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
-8.5. 主線 default 已啟用 `query_focus_v1`：在 recall 前先做 query-side intent/slot planner；高信心時才改用 `focus_query` 餵 embedding / FTS / ranking，並用 `original query + one-line evidence need brief` 作為 rerank query；未達門檻時必須完全回退到原 query
+8.5. 主線 default 已啟用 `generic_field_focus_v1`：在 recall 前先做 query-side intent/slot planner；高信心時才改用 `focus_query` 餵 embedding / FTS / ranking，並用 `original query + one-line evidence need brief` 作為 rerank query；未達門檻時必須完全回退到原 query
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為 `Easypinex-host /v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:` 與 `query_focus_v1`，對齊 `qasper_guarded_query_focus_v1` 的策略組合（`easypinex-host / BAAI/bge-reranker-v2-m3 + qasper_v3 + query_focus_v1`）。其中 document-side 補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程；主線 assembler budget 已收斂到 sweet spot `9 x 3000`，另保留 `6 x 3000` 作為成本優先 profile
+11. parent-level rerank 會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；主線 default 目前已啟用 `Evidence synopsis:` 與 `generic_field_focus_v1`，對齊 generic-first 的 production-like 組合（`easypinex-host / BAAI/bge-reranker-v2-m3 + generic_v1 + generic_field_focus_v1`）。其中 document-side 補充文字必須走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程；主線 assembler budget 已收斂到 sweet spot `9 x 3000`，另保留 `6 x 3000` 作為成本優先 profile
 11.5. 本機 Hugging Face rerank provider 採 lazy load + process-local cache；首次使用可能下載權重並增加延遲，但任何 provider 建立/推論失敗都必須回退到既有 RRF fail-open 路徑
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion

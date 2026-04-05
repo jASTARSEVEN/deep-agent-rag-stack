@@ -54,9 +54,9 @@
 | Profile | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
 | `production_like_v1` | 0.6538 | 0.5288 | 0.4968 |
-| `qasper_guarded_assembler_v2_bge` | 0.6538 | 0.5288 | 0.4968 |
-| `qasper_guarded_evidence_synopsis_v2_bge` | 0.6538 | 0.5264 | 0.4936 |
-| `qasper_guarded_evidence_synopsis_v3_bge` | 0.6538 | 0.5288 | 0.4968 |
+| `generic_guarded_assembler_v2_bge` | 0.6538 | 0.5288 | 0.4968 |
+| `generic_guarded_evidence_synopsis_v2_bge` | 0.6538 | 0.5264 | 0.4936 |
+| `generic_guarded_evidence_synopsis_v3_bge` | 0.6538 | 0.5288 | 0.4968 |
 
 ## 備註
 
@@ -67,4 +67,4 @@
   - `9` 題 auto-matched
   - `21` 題由 `OpenAI API` review 核准
   - 在 LLM review 之外，再補 `4` 題 deterministic span override
-- 在更新後的 `26` 題資料集上，`assembler_v2` 與 `qasper_v3` 在 UDA nDCG@10 上與 baseline 持平，而 `generic_v1` 略低。
+- 在更新後的 `26` 題資料集上，`assembler_v2` 與 `generic_v1` 在 UDA nDCG@10 上與 baseline 持平，而 `generic_v1` 略低。

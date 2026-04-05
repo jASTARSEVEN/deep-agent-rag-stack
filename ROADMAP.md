@@ -232,6 +232,7 @@
 - 每個 phase 至少要有一個可驗證的垂直切片
 - 不得在上一階段尚未穩定前大幅展開下一階段
 - 若某 phase 被拆成更小的子階段，需同步更新 `PROJECT_STATUS.md`
+- benchmark-driven 調整必須先通過 anti-domain-overfit 檢查；分數提升若依賴 domain-specific heuristic，不得進主線
 
 ## 近期建議順序
 

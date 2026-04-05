@@ -23,6 +23,8 @@ from app.services.evaluation_profiles import (
     get_gate_profile_for_profile,
     get_rollback_target_hypothesis,
 )
+from app.services.retrieval_query import QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1
+from app.services.retrieval_text import EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1
 
 # 內建的 QASPER pilot dataset 識別碼。
 DEFAULT_QASPER_DATASET_ID = "db6d581c-2feb-5914-afb8-b4f1fa2092e2"
@@ -38,6 +40,31 @@ DEFAULT_SELF_REFERENCE_REPORT = REPO_ROOT / "benchmarks" / "tw-insurance-rag-ben
 SELF_BENCHMARK_WEIGHT = 0.6
 # QASPER benchmark 在 weighted strategy 中的權重。
 QASPER_BENCHMARK_WEIGHT = 0.4
+
+
+def _collect_domain_overfit_violations(*, profile_overrides: dict[str, Any]) -> list[str]:
+    """檢查 candidate profile 是否違反 anti-domain-overfit guardrail。
+
+    參數：
+    - `profile_overrides`：candidate profile 的設定覆寫。
+
+    回傳：
+    - `list[str]`：所有違規原因；若為空代表通過 generic-first 檢查。
+    """
+
+    violations: list[str] = []
+    evidence_variant = profile_overrides.get("retrieval_evidence_synopsis_variant")
+    if isinstance(evidence_variant, str) and evidence_variant != EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1:
+        violations.append(
+            "retrieval_evidence_synopsis_variant 必須維持 generic_v1，避免以 benchmark-specific wording 造成 domain overfit。"
+        )
+
+    query_focus_variant = profile_overrides.get("retrieval_query_focus_variant")
+    if isinstance(query_focus_variant, str) and query_focus_variant != QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1:
+        violations.append(
+            "retrieval_query_focus_variant 必須維持 generic_field_focus_v1，避免以 domain-specific query rewrite 造成 domain overfit。"
+        )
+    return violations
 
 
 def _candidate_profiles_for_hypothesis(*, main_hypothesis: str) -> list[str]:
@@ -338,6 +365,7 @@ def build_effect_opt(
             "不修改 chunking",
             "不修改 query normalization",
             "不修改 rerank structure",
+            "不以 benchmark-specific wording 或 query rewrite 換取分數",
             "不修改 benchmark gold spans 或 alignment artifacts",
         ],
     }
@@ -363,10 +391,12 @@ def build_advice(*, effect_opt: dict[str, Any]) -> dict[str, Any]:
         "risk_points": [
             "若提升主要來自拉高候選數，可能只是以成本換分數。",
             "真實 provider 可能因 429 進入 fail-open fallback。",
+            "若 candidate profile 引入 domain-specific wording 或 query rewrite，應直接視為 domain overfit 失敗。",
         ],
         "guardrails": [
             "所有 guarded knobs 必須維持在 <= 100。",
             "不得修改 production defaults。",
+            "benchmark 策略不得引入非 generic-first 的 retrieval variants。",
         ],
         "reviewed_profile": effect_opt["profile_name"],
     }
@@ -398,18 +428,25 @@ def build_guard(*, effect_check: dict[str, Any], effect_opt: dict[str, Any], adv
         key not in bounded_keys or not isinstance(value, int) or value <= 100
         for key, value in overrides.items()
     )
-    approved = effect_opt.get("profile_name") in allowed_profiles and bounded
+    domain_overfit_violations = _collect_domain_overfit_violations(profile_overrides=overrides)
+    generic_first = not domain_overfit_violations
+    approved = effect_opt.get("profile_name") in allowed_profiles and bounded and generic_first
     return {
         "role": "guard-agent",
         "decision": "go" if approved else "stop",
         "approved": approved,
         "reason": (
-            "候選 profile 位於批准 lane，且 guarded overrides 未超出上限。"
+            "候選 profile 位於批准 lane、guarded overrides 未超出上限，且通過 anti-domain-overfit generic-first 檢查。"
             if approved
-            else "候選 profile 不在批准 lane，或 guarded overrides 超出上限。"
+            else (
+                "候選 profile 違反 anti-domain-overfit generic-first guardrail。"
+                if not generic_first
+                else "候選 profile 不在批准 lane，或 guarded overrides 超出上限。"
+            )
         ),
         "allowed_scope": sorted(overrides.keys()),
         "guardrails": advice.get("guardrails", []),
+        "domain_overfit_violations": domain_overfit_violations,
     }
 
 
