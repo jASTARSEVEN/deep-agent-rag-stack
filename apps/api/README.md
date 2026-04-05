@@ -192,7 +192,7 @@ Notes:
 - `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
 - `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
 - `RERANK_PROVIDER=easypinex-host` is available for Easypinex-host rerank services that expose `POST /v1/rerank`; configure `EASYPINEX_HOST_RERANK_BASE_URL`, `EASYPINEX_HOST_RERANK_API_KEY`, `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS`, and use a supported model such as `BAAI/bge-reranker-v2-m3` or `Qwen/Qwen3-Reranker-0.6B`.
-- To fold `QASPER` / `UDA` / `MS MARCO`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
+- To fold `QASPER` / `UDA` / `MS MARCO` / `Natural Questions`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.
 - Chat now runs through LangGraph Server built-in thread/run endpoints with custom auth; the retrieval pipeline remains SQL-gated and ready-only before the answer layer.

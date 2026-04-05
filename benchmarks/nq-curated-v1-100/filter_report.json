@@ -1,0 +1,11 @@
+{
+  "prepared_item_count": 260,
+  "kept_item_count": 250,
+  "drop_item_count": 10,
+  "reason_counts": {
+    "evidence_too_long": 5,
+    "kept": 250,
+    "layout_dependent": 5
+  },
+  "generated_at": "2026-04-05T09:43:32.072126+00:00"
+}

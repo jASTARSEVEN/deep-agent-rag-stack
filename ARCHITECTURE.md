@@ -122,10 +122,10 @@
 7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 進行，資料庫不得新增策略專用欄位
 
 ### 外部 benchmark curation 流程
-1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式。
+1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` / `MS MARCO` / `Natural Questions` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式；其中 `MS MARCO` 與 `NQ` 可直接使用 `hf://...` dataset-server 參照。
 2. `filter-items` 只保留可映射為 `fact_lookup` 的 curated v1 題目，並輸出 `filter_report.json` 供審查排除原因。
 3. `align-spans` 必須讀取目標 area 內 `ready` 文件的 `display_text`，以 `display_text-first` 對齊 evidence；gold truth 不信任外部資料集原始 offsets。
-4. 對齊結果分成 `auto_matched`、`needs_review` 與 `rejected`，並輸出 `alignment_candidates.jsonl` 與 `alignment_review_queue.jsonl`；人工複核仍重用既有 `EvaluationDrawer + documents preview`。
+4. 對齊結果分成 `auto_matched`、`needs_review` 與 `rejected`，並輸出 `alignment_candidates.jsonl` 與 `alignment_review_queue.jsonl`；若 queue 非空，可先用 `review_external_benchmark_with_openai.py` 做 `OpenAI` review 補 span，再視需要回到 `EvaluationDrawer + documents preview` 做人工複核。
 5. `build-snapshot` 只會將 `auto_matched` 與 reviewer 明確核准的 spans 轉成正式 snapshot；未具穩定 gold span 的題目不得包裝成正式 benchmark 分數來源。
 
 ### Web 登入流程

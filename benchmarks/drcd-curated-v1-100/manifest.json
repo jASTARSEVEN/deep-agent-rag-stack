@@ -1,0 +1,31 @@
+{
+  "benchmark_name": "drcd-curated-v1-100",
+  "dataset": {
+    "dataset_id": "e82455ac-45fc-501e-a13d-333552c4a2ab",
+    "query_type": "fact_lookup",
+    "generated_at": "2026-04-05T09:59:18.695815+00:00"
+  },
+  "reference": {
+    "evaluation_profile": "production_like_v1"
+  },
+  "source_dataset_breakdown": {
+    "drcd": 100
+  },
+  "snapshot_files": [
+    "manifest.json",
+    "documents.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "alignment_candidates.jsonl",
+    "alignment_review_queue.jsonl",
+    "filter_report.json",
+    "review_overrides.jsonl",
+    "openai_review_log.jsonl"
+  ],
+  "stats": {
+    "question_count": 100,
+    "question_with_gold_span_count": 100,
+    "span_count": 100,
+    "document_count": 6
+  }
+}

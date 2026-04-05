@@ -1,0 +1,29 @@
+{
+  "benchmark_name": "dureader-robust-curated-v1-100",
+  "dataset": {
+    "dataset_id": "f4a91b45-64fa-5cd7-b815-9a454888bf9c",
+    "query_type": "fact_lookup",
+    "generated_at": "2026-04-05T10:10:47.279032+00:00"
+  },
+  "reference": {
+    "evaluation_profile": "production_like_v1"
+  },
+  "source_dataset_breakdown": {
+    "dureader": 100
+  },
+  "snapshot_files": [
+    "manifest.json",
+    "documents.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "alignment_candidates.jsonl",
+    "alignment_review_queue.jsonl",
+    "filter_report.json"
+  ],
+  "stats": {
+    "question_count": 100,
+    "question_with_gold_span_count": 100,
+    "span_count": 100,
+    "document_count": 100
+  }
+}

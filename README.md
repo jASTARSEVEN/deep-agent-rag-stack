@@ -71,7 +71,7 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-The repository was re-tested on `2026-04-05` by rerunning `production_like_v1` against every benchmark dataset currently loaded in the Compose-backed benchmark environment, now including `msmarco-curated-v1-100`.
+The repository benchmark table was updated again on `2026-04-05` after adding the new `dureader-robust-curated-v1-100` package and running its `production_like_v1` reference benchmark under the same current config snapshot already used by the earlier eight-dataset baseline on `2026-04-05`.
 
 Current `production_like_v1` snapshot from the fresh rerun artifacts:
 
@@ -89,21 +89,27 @@ Current `production_like_v1` snapshot from the fresh rerun artifacts:
 - `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
-Latest rerun snapshot (`production_like_v1`, assembled metrics):
+Current benchmark overview table (`production_like_v1`, assembled metrics + corpus profile):
 
-| Dataset | Recall@10 | nDCG@10 | MRR@10 |
-| --- | ---: | ---: | ---: |
-| `msmarco-curated-v1-100` | `1.0000` | `0.9674` | `0.9550` |
-| `uda-curated-v1-pilot` | `0.8462` | `0.7333` | `0.7051` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7254` | `0.6792` |
-| `uda-curated-v1-100` | `0.8300` | `0.6818` | `0.6340` |
-| `qasper-curated-v1-pilot` | `0.7778` | `0.5507` | `0.4844` |
-| `qasper-curated-v1-100` | `0.5900` | `0.3797` | `0.3142` |
+| Dataset | Lang | Q | Docs | Gold Spans | Avg Spans / Q | Multi-Span Q | Recall@10 | nDCG@10 | MRR@10 | Difficulty |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `dureader-robust-curated-v1-100` | `zh-TW` | `100` | `100` | `100` | `1.00` | `0%` | `1.0000` | `0.9677` | `0.9570` | `1/5` |
+| `msmarco-curated-v1-100` | `en` | `100` | `100` | `114` | `1.14` | `11%` | `1.0000` | `0.9674` | `0.9550` | `1/5` |
+| `drcd-curated-v1-100` | `zh-TW` | `100` | `6` | `100` | `1.00` | `0%` | `0.9700` | `0.8650` | `0.8308` | `2/5` |
+| `nq-curated-v1-100` | `en` | `100` | `100` | `100` | `1.00` | `0%` | `0.7500` | `0.7443` | `0.7425` | `3/5` |
+| `uda-curated-v1-pilot` | `en` | `26` | `12` | `38` | `1.46` | `38%` | `0.8462` | `0.7333` | `0.7051` | `3/5` |
+| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `30` | `4` | `30` | `1.00` | `0%` | `0.8667` | `0.7254` | `0.6792` | `3/5` |
+| `uda-curated-v1-100` | `en` | `100` | `45` | `100` | `1.00` | `0%` | `0.8300` | `0.6818` | `0.6340` | `3/5` |
+| `qasper-curated-v1-pilot` | `en` | `27` | `7` | `34` | `1.26` | `19%` | `0.7778` | `0.5507` | `0.4844` | `4/5` |
+| `qasper-curated-v1-100` | `en` | `100` | `42` | `164` | `1.64` | `30%` | `0.5900` | `0.3797` | `0.3142` | `5/5` |
 
 Notes:
 
-- This section now reflects a consistent six-dataset rerun under the same current `production_like_v1` snapshot with `query_focus=false`.
-- The six run reports were produced on `2026-04-05` with run ids `5e9de20b-4781-4711-a69e-03157e61d68a`, `e57393cc-c9a3-4ceb-a36c-7af416b6ba66`, `c8e2ab5a-e193-4147-ac0c-491fb06189c5`, `821345d6-9a4d-48ea-8fb4-fb36f2af182e`, `a1885718-c3ee-4465-aca5-35354a80457d`, and `6c4636ce-85da-456c-a8b3-059b4650b1ae`.
+- This section reflects nine benchmark datasets under the same current `production_like_v1` snapshot with `query_focus=false`.
+- `Lang`, `Q`, `Docs`, and `Gold Spans` come directly from each package snapshot. `Avg Spans / Q` and `Multi-Span Q` are derived from `gold_spans.jsonl` grouped by question.
+- `Difficulty` is a repo-local heuristic from the current assembled baseline: `1/5` if `Recall@10 >= 0.95` and `nDCG@10 >= 0.90`, `2/5` if `>= 0.90` and `>= 0.80`, `3/5` if `>= 0.75` and `>= 0.65`, `4/5` if `>= 0.65` and `>= 0.45`, otherwise `5/5`.
+- `dureader-robust-curated-v1-100` comes from the official `DuReader-robust` `dev.json` wrapper, keeps the deterministic first `100` approved items from `220` prepared questions, and required `0` `OpenAI` review overrides because `needs_review = 0`.
+- The root README intentionally keeps only the intuitive profile. Run ids, curation counts, and detailed interpretation live in the per-package READMEs and [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md).
 - Strategy history and the current interpretation are tracked in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
 - [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) remains a legacy detailed miss log for the older `QASPER 100 + UDA 100` pair; the new `MS MARCO 100` rerun currently has `0` assembled misses.
 - These numbers are project benchmark results, not a generic public leaderboard claim.

@@ -75,7 +75,7 @@
 
 ## Evaluation Benchmark
 
-本專案已於 `2026-04-05` 重新用 `production_like_v1` 對目前 Compose benchmark 環境內已載入的每一個資料集重新實跑，現在也包含新加入的 `msmarco-curated-v1-100`。
+本專案已於 `2026-04-05` 再新增 `dureader-robust-curated-v1-100` package，並在與先前八資料集相同的 current `production_like_v1` 設定快照下完成它的 reference benchmark；下表因此更新為九資料集版本。
 
 這次 fresh rerun artifact 顯示的 `production_like_v1` 真實設定快照為：
 
@@ -93,21 +93,27 @@
 - `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
-最新重跑快照（`production_like_v1`，assembled 指標）：
+目前 benchmark 總表（`production_like_v1`，assembled 指標 + corpus profile）：
 
-| Dataset | Recall@10 | nDCG@10 | MRR@10 |
-| --- | ---: | ---: | ---: |
-| `msmarco-curated-v1-100` | `1.0000` | `0.9674` | `0.9550` |
-| `uda-curated-v1-pilot` | `0.8462` | `0.7333` | `0.7051` |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7254` | `0.6792` |
-| `uda-curated-v1-100` | `0.8300` | `0.6818` | `0.6340` |
-| `qasper-curated-v1-pilot` | `0.7778` | `0.5507` | `0.4844` |
-| `qasper-curated-v1-100` | `0.5900` | `0.3797` | `0.3142` |
+| Dataset | 語系 | 題數 | 文件數 | Gold Spans | 平均 Spans / 題 | 多 Span 題比例 | Recall@10 | nDCG@10 | MRR@10 | 難度 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `dureader-robust-curated-v1-100` | `zh-TW` | `100` | `100` | `100` | `1.00` | `0%` | `1.0000` | `0.9677` | `0.9570` | `1/5` |
+| `msmarco-curated-v1-100` | `en` | `100` | `100` | `114` | `1.14` | `11%` | `1.0000` | `0.9674` | `0.9550` | `1/5` |
+| `drcd-curated-v1-100` | `zh-TW` | `100` | `6` | `100` | `1.00` | `0%` | `0.9700` | `0.8650` | `0.8308` | `2/5` |
+| `nq-curated-v1-100` | `en` | `100` | `100` | `100` | `1.00` | `0%` | `0.7500` | `0.7443` | `0.7425` | `3/5` |
+| `uda-curated-v1-pilot` | `en` | `26` | `12` | `38` | `1.46` | `38%` | `0.8462` | `0.7333` | `0.7051` | `3/5` |
+| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `30` | `4` | `30` | `1.00` | `0%` | `0.8667` | `0.7254` | `0.6792` | `3/5` |
+| `uda-curated-v1-100` | `en` | `100` | `45` | `100` | `1.00` | `0%` | `0.8300` | `0.6818` | `0.6340` | `3/5` |
+| `qasper-curated-v1-pilot` | `en` | `27` | `7` | `34` | `1.26` | `19%` | `0.7778` | `0.5507` | `0.4844` | `4/5` |
+| `qasper-curated-v1-100` | `en` | `100` | `42` | `164` | `1.64` | `30%` | `0.5900` | `0.3797` | `0.3142` | `5/5` |
 
 補充說明：
 
-- 這一節現在是一套同一條 current `production_like_v1` snapshot 下、且 `query_focus=false` 的六資料集重跑結果。
-- 這 6 次 run 的 run id 依序為 `5e9de20b-4781-4711-a69e-03157e61d68a`、`e57393cc-c9a3-4ceb-a36c-7af416b6ba66`、`c8e2ab5a-e193-4147-ac0c-491fb06189c5`、`821345d6-9a4d-48ea-8fb4-fb36f2af182e`、`a1885718-c3ee-4465-aca5-35354a80457d`、`6c4636ce-85da-456c-a8b3-059b4650b1ae`。
+- 這一節目前涵蓋同一條 current `production_like_v1` snapshot 下、且 `query_focus=false` 的九個 benchmark dataset。
+- `語系`、`題數`、`文件數`、`Gold Spans` 直接來自各 package snapshot；`平均 Spans / 題` 與 `多 Span 題比例` 則是依 `gold_spans.jsonl` 逐題分組後重新計算。
+- `難度` 是依 current assembled baseline 做的 repo 內部啟發式分級：`Recall@10 >= 0.95` 且 `nDCG@10 >= 0.90` 算 `1/5`，`>= 0.90 / 0.80` 算 `2/5`，`>= 0.75 / 0.65` 算 `3/5`，`>= 0.65 / 0.45` 算 `4/5`，其餘為 `5/5`。
+- `dureader-robust-curated-v1-100` 來自官方 `DuReader-robust` `dev.json` wrapper，從 `220` 題 prepared items 中依固定順序取前 `100` 題，且因 `needs_review = 0` 不需要 `OpenAI` override。
+- 根目錄 README 刻意只保留直觀 profile；run id、curation 細節與逐步判讀改放在各 benchmark package README 與 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - 若要看策略脈絡與最新判讀，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
 - [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍是舊的 `QASPER 100 + UDA 100` 詳細 miss 紀錄；新的 `MS MARCO 100` rerun 目前 `assembled miss = 0`。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。

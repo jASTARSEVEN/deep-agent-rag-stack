@@ -195,6 +195,445 @@ def test_prepare_msmarco_source_from_jsonl(tmp_path: Path) -> None:
     assert "what is the boiling point of water" not in document_text
 
 
+def test_prepare_nq_source_from_jsonl(tmp_path: Path) -> None:
+    """NQ prepare-source 應可輸出乾淨 markdown 文件與 short-answer 題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "nq-workspace"
+    input_path = tmp_path / "nq.jsonl"
+    input_rows = [
+        {
+            "id": "nq-row-1",
+            "document": {
+                "title": "Sample Nobel Article",
+                "url": "https://example.com/nobel?foo=1&amp;bar=2",
+                "tokens": {
+                    "token": [
+                        "<H1>",
+                        "Sample",
+                        "Nobel",
+                        "Article",
+                        "</H1>",
+                        "<P>",
+                        "Wilhelm",
+                        "Conrad",
+                        "Röntgen",
+                        ",",
+                        "of",
+                        "Germany",
+                        ",",
+                        "received",
+                        "the",
+                        "first",
+                        "Nobel",
+                        "Prize",
+                        "in",
+                        "Physics",
+                        ".",
+                        "</P>",
+                    ],
+                    "is_html": [
+                        True,
+                        False,
+                        False,
+                        False,
+                        True,
+                        True,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        False,
+                        True,
+                    ],
+                    "start_byte": list(range(22)),
+                    "end_byte": list(range(1, 23)),
+                },
+            },
+            "question": {
+                "text": "who got the first nobel prize in physics",
+                "tokens": ["who", "got", "the", "first", "nobel", "prize", "in", "physics"],
+            },
+            "annotations": {
+                "id": ["ann-empty", "ann-good"],
+                "long_answer": [
+                    {"candidate_index": -1, "start_token": -1, "end_token": -1, "start_byte": -1, "end_byte": -1},
+                    {"candidate_index": 0, "start_token": 6, "end_token": 21, "start_byte": 0, "end_byte": 0},
+                ],
+                "short_answers": [
+                    {"start_token": [], "end_token": [], "start_byte": [], "end_byte": [], "text": []},
+                    {
+                        "start_token": [6],
+                        "end_token": [12],
+                        "start_byte": [0],
+                        "end_byte": [0],
+                        "text": ["Wilhelm Conrad Röntgen, of Germany"],
+                    },
+                ],
+                "yes_no_answer": [-1, -1],
+            },
+            "long_answer_candidates": {
+                "start_token": [6],
+                "end_token": [21],
+                "start_byte": [0],
+                "end_byte": [0],
+                "top_level": [True],
+            },
+        },
+        {
+            "id": "nq-row-2",
+            "document": {
+                "title": "Ignored Yes No",
+                "url": "https://example.com/ignored",
+                "tokens": {
+                    "token": ["<P>", "Yes", "</P>"],
+                    "is_html": [True, False, True],
+                    "start_byte": [0, 1, 2],
+                    "end_byte": [1, 2, 3],
+                },
+            },
+            "question": {"text": "is this ignored", "tokens": ["is", "this", "ignored"]},
+            "annotations": {
+                "id": ["ann-ignored"],
+                "long_answer": [{"candidate_index": -1, "start_token": -1, "end_token": -1, "start_byte": -1, "end_byte": -1}],
+                "short_answers": [{"start_token": [], "end_token": [], "start_byte": [], "end_byte": [], "text": []}],
+                "yes_no_answer": [1],
+            },
+            "long_answer_candidates": {"start_token": [], "end_token": [], "start_byte": [], "end_byte": [], "top_level": []},
+        },
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in input_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="nq",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_documents = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_DOCUMENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert prepared_documents[0]["dataset"] == "nq"
+    assert prepared_documents[0]["file_name"] == "Sample-Nobel-Article.md"
+    assert prepared_items[0]["answer_text"] == "Wilhelm Conrad Röntgen, of Germany"
+    assert prepared_items[0]["source_metadata"]["nq_id"] == "nq-row-1"
+    assert prepared_items[0]["source_metadata"]["document_url"] == "https://example.com/nobel?foo=1&bar=2"
+    assert "received the first Nobel Prize in Physics" in prepared_items[0]["evidence_texts"][0]
+
+    document_text = (workspace_dir / "source_documents" / "Sample-Nobel-Article.md").read_text(encoding="utf-8")
+    assert document_text.startswith("# Sample Nobel Article")
+    assert "Source URL: https://example.com/nobel?foo=1&bar=2" in document_text
+    assert "Wilhelm Conrad Röntgen, of Germany, received the first Nobel Prize in Physics." in document_text
+
+
+def test_prepare_dureader_source_from_jsonl(tmp_path: Path) -> None:
+    """DuReader prepare-source 應可輸出 bundle markdown 文件與中文 fact lookup 題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "dureader-workspace"
+    input_path = tmp_path / "search.dev.json"
+    input_rows = [
+        {
+            "question_id": "du-1",
+            "question": "微信裡分享連結後怎麼開啟第三方 app？",
+            "question_type": "DESCRIPTION",
+            "fact_or_opinion": "FACT",
+            "answers": ["可以使用 iOS 9 的 Universal Link。"],
+            "fake_answers": ["Universal Link"],
+            "documents": [
+                {
+                    "is_selected": True,
+                    "title": "微信開啟第三方 app 方法",
+                    "most_related_para": 0,
+                    "paragraphs": [
+                        "方法一：微信 API。方法二：iOS 9 Universal Link。（參考 app - 蘑菇街）",
+                    ],
+                }
+            ],
+        },
+        {
+            "question_id": "du-2",
+            "question": "這是一題意見題嗎？",
+            "question_type": "DESCRIPTION",
+            "fact_or_opinion": "OPINION",
+            "answers": ["我認為是。"],
+            "documents": [
+                {
+                    "is_selected": True,
+                    "title": "Opinion Only",
+                    "most_related_para": 0,
+                    "paragraphs": ["純意見題，不應納入 benchmark。"],
+                }
+            ],
+        },
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in input_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="dureader",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_documents = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_DOCUMENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert prepared_documents[0]["dataset"] == "dureader"
+    assert prepared_documents[0]["file_name"] == "dureader-du-1.md"
+    assert prepared_items[0]["language"] == "zh-TW"
+    assert prepared_items[0]["answer_text"] == "Universal Link"
+    assert prepared_items[0]["source_metadata"]["source_split"] == "search.dev"
+    assert prepared_items[0]["source_metadata"]["fact_or_opinion"] == "FACT"
+    assert "Universal Link" in prepared_items[0]["evidence_texts"][0]
+
+    document_text = (workspace_dir / "source_documents" / "dureader-du-1.md").read_text(encoding="utf-8")
+    assert document_text.startswith("# DuReader Bundle du-1")
+    assert "## Document 1: 微信開啟第三方 app 方法" in document_text
+    assert "方法二：iOS 9 Universal Link" in document_text
+
+
+def test_prepare_dureader_robust_source_from_jsonl(tmp_path: Path) -> None:
+    """DuReader-robust schema 也應可透過同一個 `dureader` handler 產出 benchmark 題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "dureader-robust-workspace"
+    input_path = tmp_path / "dureader_robust-dev.json"
+    input_rows = [
+        {
+            "title": "糖尿病患者可以吃什麼水果",
+            "context": "糖尿病病人應多選擇低生糖指數的水果，有助於保持血糖穩定。",
+            "question": "糖尿病患者可以吃什麼水果？",
+            "id": "robust-1",
+            "answers": {
+                "text": ["低生糖指數的水果"],
+                "answer_start": [11],
+            },
+        }
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in input_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="dureader",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert prepared_items[0]["answer_text"] == "低生糖指數的水果"
+    assert prepared_items[0]["source_metadata"]["schema_variant"] == "robust"
+    assert prepared_items[0]["source_metadata"]["source_split"] == "dureader_robust-dev"
+    assert "低生糖指數的水果" in prepared_items[0]["evidence_texts"][0]
+
+    document_text = (workspace_dir / "source_documents" / "dureader-robust-1.md").read_text(encoding="utf-8")
+    assert document_text.startswith("# 糖尿病患者可以吃什麼水果")
+    assert "## Context" in document_text
+    assert "糖尿病病人應多選擇低生糖指數的水果" in document_text
+
+
+def test_prepare_dureader_robust_article_wrapper_from_json(tmp_path: Path) -> None:
+    """官方 DuReader-robust article wrapper 也應透過 `dureader` handler 產出 paragraph 文件。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "dureader-wrapper-workspace"
+    input_path = tmp_path / "dev.json"
+    input_payload = {
+        "data": [
+            {
+                "title": "韓國",
+                "paragraphs": [
+                    {
+                        "context": "韓國全稱大韓民國，位於朝鮮半島南部。",
+                        "qas": [
+                            {
+                                "question": "韓國全稱是什麼？",
+                                "id": "qa-1",
+                                "answers": [{"text": "大韓民國", "answer_start": 4}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+    input_path.write_text(json.dumps(input_payload, ensure_ascii=False), encoding="utf-8")
+
+    prepare_summary = prepare_source(
+        dataset="dureader",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert prepared_items[0]["answer_text"] == "大韓民國"
+    assert prepared_items[0]["source_metadata"]["schema_variant"] == "robust"
+    assert prepared_items[0]["source_metadata"]["paragraph_index"] == 0
+
+    document_text = (workspace_dir / "source_documents" / "dureader-0-0.md").read_text(encoding="utf-8")
+    assert document_text.startswith("# 韓國")
+    assert "韓國全稱大韓民國" in document_text
+
+
+def test_prepare_drcd_source_from_jsonl(tmp_path: Path) -> None:
+    """DRCD prepare-source 應可輸出繁中 markdown 文件與 fact lookup 題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "drcd-workspace"
+    input_path = tmp_path / "drcd.jsonl"
+    input_rows = [
+        {
+            "title": "梵文",
+            "id": "1147",
+            "paragraphs": [
+                {
+                    "context": "在歐洲，梵語的學術研究，由德國學者陸特和漢斯雷頓開創。",
+                    "id": "1147-5",
+                    "qas": [
+                        {
+                            "id": "1147-5-1",
+                            "question": "陸特和漢斯雷頓開創了哪一地區對梵語的學術研究？",
+                            "answers": [
+                                {"answer_start": 1, "id": "1", "text": "歐洲"},
+                                {"answer_start": 1, "id": "2", "text": "歐洲"},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in input_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="drcd",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_documents = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_DOCUMENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert prepared_documents[0]["dataset"] == "drcd"
+    assert prepared_documents[0]["file_name"] == "drcd-1147.md"
+    assert prepared_items[0]["language"] == "zh-TW"
+    assert prepared_items[0]["answer_text"] == "歐洲"
+    assert prepared_items[0]["source_metadata"]["paragraph_id"] == "1147-5"
+    assert "在歐洲，梵語的學術研究" in prepared_items[0]["evidence_texts"][0]
+
+    document_text = (workspace_dir / "source_documents" / "drcd-1147.md").read_text(encoding="utf-8")
+    assert document_text.startswith("# 梵文")
+    assert "## Paragraph 1" in document_text
+    assert "在歐洲，梵語的學術研究，由德國學者陸特和漢斯雷頓開創。" in document_text
+
+
 def test_align_build_snapshot_and_import_round_trip(app, db_session, app_settings, tmp_path: Path, monkeypatch) -> None:
     """alignment/build-snapshot 應可產出現有 import snapshot 可接受的 package。
 

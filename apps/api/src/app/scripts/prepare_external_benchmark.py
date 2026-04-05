@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import html
 import json
 import re
 import shutil
@@ -77,6 +78,15 @@ MSMARCO_NO_ANSWER = "No Answer Present."
 # 向 dataset server 取 rows 時每批拉取的大小。
 MSMARCO_ROWS_BATCH_SIZE = 100
 
+# NQ evidence context 會保留答案前後多少 token，避免 gold span 過短且不易 disambiguate。
+NQ_EVIDENCE_CONTEXT_WINDOW_TOKENS = 48
+
+# DuReader evidence context 會保留答案前後多少字元，降低短答案在 bundle 內多重命中的風險。
+DUREADER_EVIDENCE_CONTEXT_WINDOW_CHARS = 120
+
+# DRCD evidence context 會保留答案前後多少字元，降低過短中文答案的多重命中。
+DRCD_EVIDENCE_CONTEXT_WINDOW_CHARS = 80
+
 
 @dataclass(slots=True)
 class NormalizedText:
@@ -96,11 +106,11 @@ def build_parser() -> argparse.ArgumentParser:
     - `argparse.ArgumentParser`：可解析外部 benchmark curation 指令的 parser。
     """
 
-    parser = argparse.ArgumentParser(description="將 QASPER / UDA 類外部資料集轉成現有 retrieval benchmark snapshot。")
+    parser = argparse.ArgumentParser(description="將 QASPER / UDA / MS MARCO / NQ / DuReader / DRCD 類外部資料集轉成現有 retrieval benchmark snapshot。")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     prepare_parser = subparsers.add_parser("prepare-source")
-    prepare_parser.add_argument("--dataset", choices=["qasper", "uda", "msmarco"], required=True)
+    prepare_parser.add_argument("--dataset", choices=["qasper", "uda", "msmarco", "nq", "dureader", "drcd"], required=True)
     prepare_parser.add_argument(
         "--input-path",
         required=True,
@@ -540,14 +550,18 @@ def read_table_like_rows(input_path: Path) -> list[dict[str, Any]]:
     if suffix == ".jsonl":
         return read_jsonl(input_path)
     if suffix == ".json":
-        payload = read_json(input_path)
+        try:
+            payload = read_json(input_path)
+        except json.JSONDecodeError:
+            return read_jsonl(input_path)
         if isinstance(payload, list):
             return payload
         if isinstance(payload, dict):
             rows = payload.get("data") or payload.get("rows")
             if isinstance(rows, list):
                 return rows
-        raise ValueError("UDA JSON input 必須是 rows list。")
+            return [payload]
+        raise ValueError("JSON input 必須是 rows list，或逐行 JSON 的 JSONL-like `.json`。")
     if suffix in {".csv", ".tsv"}:
         delimiter = "\t" if suffix == ".tsv" else ","
         with input_path.open("r", encoding="utf-8") as file:
@@ -844,6 +858,1216 @@ def prepare_msmarco_source(
     }
 
 
+def normalize_nq_tag_name(token: str) -> str:
+    """從 HTML token 中抽出標籤名稱。
+
+    參數：
+    - `token`：NQ `document.tokens.token` 內的 HTML token。
+
+    回傳：
+    - `str`：去除 `< > /` 與屬性後的大寫標籤名；若不是可辨識 HTML token 則回傳空字串。
+    """
+
+    matched = re.match(r"<\s*/?\s*([A-Za-z0-9]+)", token.strip())
+    if not matched:
+        return ""
+    return matched.group(1).upper()
+
+
+def should_insert_nq_block_break(token: str) -> bool:
+    """判斷某個 HTML token 是否應在純文字輸出中形成段落分隔。
+
+    參數：
+    - `token`：HTML token。
+
+    回傳：
+    - `bool`：若此標籤應轉成段落/區塊換行則回傳真值。
+    """
+
+    return normalize_nq_tag_name(token) in {
+        "P",
+        "DIV",
+        "TR",
+        "LI",
+        "UL",
+        "OL",
+        "TABLE",
+        "TBODY",
+        "THEAD",
+        "TD",
+        "TH",
+        "DD",
+        "DT",
+        "SECTION",
+        "ARTICLE",
+        "H1",
+        "H2",
+        "H3",
+        "H4",
+        "H5",
+        "H6",
+        "BR",
+        "HR",
+    }
+
+
+def normalize_nq_rendered_text(text: str) -> str:
+    """清理 NQ token 線性化後的標點與空白。
+
+    參數：
+    - `text`：原始渲染字串。
+
+    回傳：
+    - `str`：清理後的文字。
+    """
+
+    normalized = normalize_newlines(text)
+    normalized = re.sub(r"[ \t]+([,.;:!?%)\]\}])", r"\1", normalized)
+    normalized = re.sub(r"([(\[\{])\s+", r"\1", normalized)
+    normalized = re.sub(r"\s+([’'])\s*", r"\1", normalized)
+    normalized = re.sub(r"([A-Za-z])\s+([’']s\b)", r"\1\2", normalized)
+    normalized = re.sub(r"\s{2,}", " ", normalized)
+    normalized = re.sub(r"\n +", "\n", normalized)
+    return normalized.strip()
+
+
+def render_nq_tokens_to_text(
+    tokens: dict[str, list[Any]],
+    *,
+    start_token: int = 0,
+    end_token: int | None = None,
+) -> str:
+    """將 NQ `document.tokens` 轉成較乾淨的純文字。
+
+    參數：
+    - `tokens`：NQ 文件 token 欄位。
+    - `start_token`：要渲染的起始 token index（含）。
+    - `end_token`：要渲染的結束 token index（不含）；未提供時代表直到結尾。
+
+    回傳：
+    - `str`：線性化後的純文字。
+    """
+
+    token_values = normalize_nested_sequence(tokens.get("token"))
+    html_flags = normalize_nested_sequence(tokens.get("is_html"))
+    if end_token is None:
+        end_token = len(token_values)
+
+    rendered_parts: list[str] = []
+    previous_was_break = True
+    for token_index in range(max(0, start_token), min(end_token, len(token_values))):
+        token_value = token_values[token_index]
+        is_html = bool(html_flags[token_index]) if token_index < len(html_flags) else False
+        if not isinstance(token_value, str):
+            continue
+        if is_html:
+            if should_insert_nq_block_break(token_value) and rendered_parts and not previous_was_break:
+                rendered_parts.append("\n\n")
+                previous_was_break = True
+            continue
+        cleaned_token = html.unescape(token_value).strip()
+        if not cleaned_token:
+            continue
+        if rendered_parts and not previous_was_break:
+            rendered_parts.append(" ")
+        rendered_parts.append(cleaned_token)
+        previous_was_break = False
+
+    return normalize_nq_rendered_text("".join(rendered_parts))
+
+
+def find_nq_body_start_token(tokens: dict[str, list[Any]]) -> int:
+    """尋找 NQ 文件正文起始 token，盡量略過頁首重複 title。
+
+    參數：
+    - `tokens`：NQ 文件 token 欄位。
+
+    回傳：
+    - `int`：建議的正文起始 token index。
+    """
+
+    token_values = normalize_nested_sequence(tokens.get("token"))
+    html_flags = normalize_nested_sequence(tokens.get("is_html"))
+    for index, token_value in enumerate(token_values):
+        is_html = bool(html_flags[index]) if index < len(html_flags) else False
+        if is_html and isinstance(token_value, str) and token_value.upper() == "</H1>":
+            return index + 1
+    return 0
+
+
+def build_nq_short_answer_text(short_answer_row: dict[str, Any]) -> str:
+    """將單一 annotator 的 short answers 合併成答案字串。
+
+    參數：
+    - `short_answer_row`：NQ annotation 內單一 `short_answers` row。
+
+    回傳：
+    - `str`：合併後答案；若沒有有效 short answers 則為空字串。
+    """
+
+    parts = [part.strip() for part in normalize_nested_sequence(short_answer_row.get("text")) if isinstance(part, str) and part.strip()]
+    if not parts:
+        return ""
+    return "; ".join(parts)
+
+
+def normalize_nq_answer_key(answer_text: str) -> str:
+    """將 NQ short answer 正規化為可做 majority vote 的 key。
+
+    參數：
+    - `answer_text`：原始答案文字。
+
+    回傳：
+    - `str`：正規化 key。
+    """
+
+    return re.sub(r"\s+", " ", answer_text.strip()).lower()
+
+
+def select_nq_annotation(row: dict[str, Any]) -> dict[str, Any] | None:
+    """從 NQ 多位 annotator 中挑出最適合 benchmark 的一筆。
+
+    參數：
+    - `row`：單筆 NQ row。
+
+    回傳：
+    - `dict[str, Any] | None`：被選中的 annotation bundle；若無可用 short answer 則回傳空值。
+    """
+
+    annotations = row.get("annotations") if isinstance(row.get("annotations"), dict) else {}
+    short_answers = normalize_nested_sequence(annotations.get("short_answers"))
+    long_answers = normalize_nested_sequence(annotations.get("long_answer"))
+    annotation_ids = normalize_nested_sequence(annotations.get("id"))
+
+    candidates: list[dict[str, Any]] = []
+    answer_counter: Counter[str] = Counter()
+
+    for index, short_answer_row in enumerate(short_answers):
+        if not isinstance(short_answer_row, dict):
+            continue
+        answer_text = build_nq_short_answer_text(short_answer_row)
+        if not answer_text:
+            continue
+        long_answer_row = long_answers[index] if index < len(long_answers) and isinstance(long_answers[index], dict) else {}
+        candidate = {
+            "annotation_index": index,
+            "annotation_id": annotation_ids[index] if index < len(annotation_ids) else "",
+            "answer_text": answer_text,
+            "answer_key": normalize_nq_answer_key(answer_text),
+            "short_answer_row": short_answer_row,
+            "long_answer_row": long_answer_row,
+            "has_long_answer": int(long_answer_row.get("candidate_index", -1) >= 0),
+        }
+        candidates.append(candidate)
+        answer_counter[candidate["answer_key"]] += 1
+
+    if not candidates:
+        return None
+
+    candidates.sort(
+        key=lambda candidate: (
+            -answer_counter[candidate["answer_key"]],
+            -candidate["has_long_answer"],
+            len(candidate["answer_text"]),
+            candidate["annotation_index"],
+        )
+    )
+    return candidates[0]
+
+
+def clamp_nq_token_range(*, start_token: int, end_token: int, token_count: int) -> tuple[int, int]:
+    """將 NQ token range 壓回合法範圍。
+
+    參數：
+    - `start_token`：起始 token index。
+    - `end_token`：結束 token index（不含）。
+    - `token_count`：文件總 token 數。
+
+    回傳：
+    - `tuple[int, int]`：合法的 `(start_token, end_token)`。
+    """
+
+    normalized_start = max(0, min(start_token, token_count))
+    normalized_end = max(normalized_start, min(end_token, token_count))
+    return normalized_start, normalized_end
+
+
+def build_nq_evidence_text(tokens: dict[str, list[Any]], *, short_answer_row: dict[str, Any], long_answer_row: dict[str, Any]) -> str:
+    """從 short/long answer token 範圍抽出可對齊的 evidence context。
+
+    參數：
+    - `tokens`：NQ 文件 token 欄位。
+    - `short_answer_row`：挑選後的 short answer row。
+    - `long_answer_row`：同一 annotator 對應的 long answer row。
+
+    回傳：
+    - `str`：包含答案附近上下文的 evidence 文字。
+    """
+
+    token_values = normalize_nested_sequence(tokens.get("token"))
+    token_count = len(token_values)
+    start_tokens = [int(value) for value in normalize_nested_sequence(short_answer_row.get("start_token")) if isinstance(value, int)]
+    end_tokens = [int(value) for value in normalize_nested_sequence(short_answer_row.get("end_token")) if isinstance(value, int)]
+    if not start_tokens or not end_tokens:
+        return ""
+
+    answer_start = min(start_tokens)
+    answer_end = max(end_tokens)
+    long_start = int(long_answer_row.get("start_token", answer_start)) if isinstance(long_answer_row, dict) else answer_start
+    long_end = int(long_answer_row.get("end_token", answer_end)) if isinstance(long_answer_row, dict) else answer_end
+    if long_end <= long_start:
+        long_start, long_end = answer_start, answer_end
+
+    context_start = max(long_start, answer_start - NQ_EVIDENCE_CONTEXT_WINDOW_TOKENS)
+    context_end = min(long_end, answer_end + NQ_EVIDENCE_CONTEXT_WINDOW_TOKENS)
+    context_start, context_end = clamp_nq_token_range(
+        start_token=context_start,
+        end_token=context_end,
+        token_count=token_count,
+    )
+    return render_nq_tokens_to_text(tokens, start_token=context_start, end_token=context_end)
+
+
+def build_nq_document_content(*, title: str, url: str, tokens: dict[str, list[Any]]) -> str:
+    """將 NQ 文件 tokens 轉成可上傳的 Markdown 文件。
+
+    參數：
+    - `title`：文件標題。
+    - `url`：來源 URL。
+    - `tokens`：NQ 文件 token 欄位。
+
+    回傳：
+    - `str`：可寫入 repo 的 Markdown 內容。
+    """
+
+    body_start_token = find_nq_body_start_token(tokens)
+    body_text = render_nq_tokens_to_text(tokens, start_token=body_start_token)
+    blocks = [f"# {title}"]
+    if url:
+        blocks.extend(["", f"Source URL: {url}"])
+    if body_text:
+        blocks.extend(["", body_text])
+    return normalize_newlines("\n".join(blocks)) + "\n"
+
+
+def prepare_nq_source(
+    *,
+    input_reference: Path | str,
+    workspace_dir: Path,
+    limit_documents: int | None,
+    limit_items: int | None,
+) -> dict[str, Any]:
+    """將 Natural Questions rows 轉成中間格式與 source documents。
+
+    參數：
+    - `input_reference`：本機檔案路徑或 `hf://` dataset 參照。
+    - `workspace_dir`：benchmark 工作目錄。
+    - `limit_documents`：最多處理幾份文件。
+    - `limit_items`：最多輸出幾題。
+
+    回傳：
+    - `dict[str, Any]`：prepare 摘要。
+    """
+
+    source_dir = workspace_dir / SOURCE_DOCUMENTS_DIRNAME
+    documents_by_id: dict[str, dict[str, Any]] = {}
+    items: list[dict[str, Any]] = []
+
+    for row_index, raw_row in enumerate(resolve_prepare_source_rows(input_reference)):
+        row = raw_row if isinstance(raw_row, dict) else {}
+        document = row.get("document") if isinstance(row.get("document"), dict) else {}
+        question = row.get("question") if isinstance(row.get("question"), dict) else {}
+        tokens = document.get("tokens") if isinstance(document.get("tokens"), dict) else {}
+        selection = select_nq_annotation(row)
+        question_text = flatten_text(question.get("text"))
+        if not question_text or selection is None:
+            continue
+
+        source_document_id = flatten_text(document.get("title")) or str(row.get("id") or f"nq-document-{row_index}")
+        if limit_documents is not None and source_document_id not in documents_by_id and len(documents_by_id) >= limit_documents:
+            continue
+        if limit_items is not None and len(items) >= limit_items:
+            break
+
+        file_name = slugify_filename(source_document_id, suffix=".md")
+        source_document_path = source_dir / file_name
+        source_url = html.unescape(flatten_text(document.get("url")))
+        if source_document_id not in documents_by_id:
+            source_document_path.write_text(
+                build_nq_document_content(
+                    title=flatten_text(document.get("title")) or source_document_id,
+                    url=source_url,
+                    tokens=tokens,
+                ),
+                encoding="utf-8",
+            )
+            documents_by_id[source_document_id] = {
+                "dataset": "nq",
+                "source_document_id": source_document_id,
+                "file_name": file_name,
+                "title": flatten_text(document.get("title")) or source_document_id,
+                "source_path": str(source_document_path.resolve()),
+                "content_type": "text/markdown",
+                "created_at": now_iso(),
+            }
+
+        evidence_text = build_nq_evidence_text(
+            tokens,
+            short_answer_row=selection["short_answer_row"],
+            long_answer_row=selection["long_answer_row"],
+        )
+        items.append(
+            {
+                "item_id": stable_uuid(f"nq::{row.get('id')}::{question_text}"),
+                "dataset": "nq",
+                "source_document_id": source_document_id,
+                "file_name": file_name,
+                "query_text": question_text,
+                "language": "en",
+                "query_type": "fact_lookup",
+                "answer_text": selection["answer_text"],
+                "evidence_texts": [evidence_text] if evidence_text else [selection["answer_text"]],
+                "answer_type": "short_answer",
+                "source_question_index": row_index,
+                "source_metadata": {
+                    "nq_id": str(row.get("id") or ""),
+                    "document_title": flatten_text(document.get("title")) or source_document_id,
+                    "document_url": source_url,
+                    "annotation_id": selection["annotation_id"],
+                    "annotation_index": selection["annotation_index"],
+                },
+                "created_at": now_iso(),
+            }
+        )
+
+    documents = list(documents_by_id.values())
+    write_jsonl(workspace_dir / PREPARED_DOCUMENTS_FILE, documents)
+    write_jsonl(workspace_dir / PREPARED_ITEMS_FILE, items)
+    return {
+        "dataset": "nq",
+        "document_count": len(documents),
+        "item_count": len(items),
+        "workspace_dir": str(workspace_dir),
+    }
+
+
+def looks_like_ascii_token(token: str) -> bool:
+    """判斷 token 是否主要由 ASCII 英數與常見 URL 符號構成。
+
+    參數：
+    - `token`：待判斷 token。
+
+    回傳：
+    - `bool`：若屬於 ASCII-ish token 則回傳真值。
+    """
+
+    return bool(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/+%-]*", token))
+
+
+def render_dureader_token_sequence(tokens: list[Any]) -> str:
+    """將 DuReader segmented tokens 渲染回較自然的文字。
+
+    參數：
+    - `tokens`：DuReader segmented tokens。
+
+    回傳：
+    - `str`：重組後的文字。
+    """
+
+    normalized_tokens = [flatten_text(token) for token in normalize_nested_sequence(tokens)]
+    normalized_tokens = [token for token in normalized_tokens if token]
+    if not normalized_tokens:
+        return ""
+
+    parts: list[str] = []
+    previous_token = ""
+    no_space_before = {",", ".", "!", "?", ";", ":", "%", ")", "]", "}", "，", "。", "！", "？", "；", "：", "、", "）", "】", "》", "”", "’"}
+    no_space_after = {"(", "[", "{", "（", "【", "《", "“", "‘"}
+
+    for token in normalized_tokens:
+        if not parts:
+            parts.append(token)
+            previous_token = token
+            continue
+
+        need_space = looks_like_ascii_token(previous_token) and looks_like_ascii_token(token)
+        if token in no_space_before or previous_token in no_space_after:
+            need_space = False
+        if any("\u4e00" <= char <= "\u9fff" for char in previous_token + token):
+            need_space = False
+
+        parts.append((" " if need_space else "") + token)
+        previous_token = token
+    return "".join(parts).strip()
+
+
+def build_dureader_document_title(document: dict[str, Any], *, fallback_index: int) -> str:
+    """為 DuReader bundle 內單一文件建立標題。
+
+    參數：
+    - `document`：DuReader 單一文件 payload。
+    - `fallback_index`：若缺少標題時使用的順序號。
+
+    回傳：
+    - `str`：可寫入 Markdown heading 的標題。
+    """
+
+    title = flatten_text(document.get("title"))
+    if title:
+        return title
+    segmented_title = render_dureader_token_sequence(
+        document.get("segmented_title") if isinstance(document.get("segmented_title"), list) else []
+    )
+    if segmented_title:
+        return segmented_title
+    return f"Document {fallback_index}"
+
+
+def build_dureader_document_paragraphs(document: dict[str, Any]) -> list[str]:
+    """抽出 DuReader 單一文件可寫入 bundle 的段落文字。
+
+    參數：
+    - `document`：DuReader 單一文件 payload。
+
+    回傳：
+    - `list[str]`：依原始順序保留的段落文字。
+    """
+
+    raw_paragraphs = document.get("paragraphs") if isinstance(document.get("paragraphs"), list) else []
+    paragraphs = [flatten_text(paragraph) for paragraph in raw_paragraphs if flatten_text(paragraph)]
+    if paragraphs:
+        return paragraphs
+
+    segmented_paragraphs = document.get("segmented_paragraphs") if isinstance(document.get("segmented_paragraphs"), list) else []
+    rendered = [
+        render_dureader_token_sequence(paragraph_tokens)
+        for paragraph_tokens in segmented_paragraphs
+        if isinstance(paragraph_tokens, list)
+    ]
+    return [paragraph for paragraph in rendered if paragraph]
+
+
+def select_dureader_documents(*, documents: list[dict[str, Any]], answer_doc_indexes: list[int]) -> list[dict[str, Any]]:
+    """選出要 materialize 成 benchmark bundle 的 DuReader 文件。
+
+    參數：
+    - `documents`：題目下的文件列表。
+    - `answer_doc_indexes`：官方 answer docs index 列表；若存在會強制保留。
+
+    回傳：
+    - `list[dict[str, Any]]`：依原始順序挑選後的文件列表。
+    """
+
+    selected_indexes = {
+        index
+        for index, document in enumerate(documents)
+        if isinstance(document, dict) and document.get("is_selected")
+    }
+    selected_indexes.update(
+        index for index in answer_doc_indexes if 0 <= index < len(documents)
+    )
+    if not selected_indexes:
+        selected_indexes = set(range(min(len(documents), 3)))
+    return [
+        documents[index]
+        for index in sorted(selected_indexes)
+        if isinstance(documents[index], dict)
+    ]
+
+
+def build_dureader_evidence_window(*, paragraph_text: str, answer_text: str) -> str:
+    """從 DuReader 段落中擷取答案附近的 evidence 視窗。
+
+    參數：
+    - `paragraph_text`：段落全文。
+    - `answer_text`：候選答案文字。
+
+    回傳：
+    - `str`：答案附近的 evidence 視窗；若找不到答案則回傳原段落前段。
+    """
+
+    if not paragraph_text:
+        return ""
+    if not answer_text:
+        return paragraph_text[:MAX_EVIDENCE_CHARS].strip()
+
+    start_offset = paragraph_text.find(answer_text)
+    if start_offset < 0:
+        return paragraph_text[:MAX_EVIDENCE_CHARS].strip()
+
+    end_offset = start_offset + len(answer_text)
+    context_start = max(0, start_offset - DUREADER_EVIDENCE_CONTEXT_WINDOW_CHARS)
+    context_end = min(len(paragraph_text), end_offset + DUREADER_EVIDENCE_CONTEXT_WINDOW_CHARS)
+    return paragraph_text[context_start:context_end].strip()
+
+
+def dedupe_texts(texts: list[str]) -> list[str]:
+    """依原始順序去除重複文字。
+
+    參數：
+    - `texts`：原始文字列表。
+
+    回傳：
+    - `list[str]`：去重後列表。
+    """
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for text in texts:
+        normalized = text.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+    return deduped
+
+
+def build_dureader_answer_bundle(*, row: dict[str, Any], selected_documents: list[dict[str, Any]]) -> dict[str, Any]:
+    """為 DuReader 單題建立 answer/evidence bundle。
+
+    參數：
+    - `row`：DuReader 單題 row。
+    - `selected_documents`：本題最終要 materialize 的文件。
+
+    回傳：
+    - `dict[str, Any]`：包含 `answer_text`、`evidence_texts` 與 `answer_type` 的 bundle。
+    """
+
+    fake_answers = dedupe_texts(
+        [flatten_text(answer) for answer in normalize_nested_sequence(row.get("fake_answers"))]
+    )
+    raw_answers = dedupe_texts(
+        [flatten_text(answer) for answer in normalize_nested_sequence(row.get("answers"))]
+    )
+    short_answer_candidates = [
+        answer
+        for answer in fake_answers + raw_answers
+        if answer and len(answer) <= MAX_SHORT_ANSWER_CHARS
+    ]
+    answer_text = min(short_answer_candidates, key=len) if short_answer_candidates else ""
+
+    evidence_texts: list[str] = []
+    evidence_texts.extend(text for text in fake_answers if len(text) <= MAX_EVIDENCE_CHARS)
+    if not evidence_texts:
+        evidence_texts.extend(text for text in raw_answers if len(text) <= MAX_EVIDENCE_CHARS)
+
+    paragraph_hints: list[str] = []
+    for document in selected_documents:
+        paragraphs = build_dureader_document_paragraphs(document)
+        most_related_para = document.get("most_related_para")
+        if not isinstance(most_related_para, int) or not (0 <= most_related_para < len(paragraphs)):
+            continue
+        paragraph_hints.append(
+            build_dureader_evidence_window(
+                paragraph_text=paragraphs[most_related_para],
+                answer_text=answer_text,
+            )
+        )
+
+    evidence_texts.extend(text for text in paragraph_hints if text and len(text) <= MAX_EVIDENCE_CHARS)
+    evidence_texts = dedupe_texts(evidence_texts)[:3]
+    if not answer_text and evidence_texts:
+        short_evidences = [text for text in evidence_texts if len(text) <= MAX_SHORT_ANSWER_CHARS]
+        if short_evidences:
+            answer_text = min(short_evidences, key=len)
+
+    answer_type = "fake_answer" if fake_answers else "short_answer" if answer_text else "evidence_only"
+    return {
+        "answer_text": answer_text,
+        "evidence_texts": evidence_texts,
+        "answer_type": answer_type,
+    }
+
+
+def resolve_dureader_answer_start(*, context: str, answer_text: str, answer_start: int | None) -> int:
+    """解析 DuReader 類資料集答案在 context 內的起始 offset。
+
+    參數：
+    - `context`：原始 context。
+    - `answer_text`：答案文字。
+    - `answer_start`：資料集提供的 offset；可能是 `-1`。
+
+    回傳：
+    - `int`：若可定位則回傳有效 offset，否則回傳 `-1`。
+    """
+
+    if isinstance(answer_start, int) and answer_start >= 0:
+        return answer_start
+    if not context or not answer_text:
+        return -1
+    return context.find(answer_text)
+
+
+def build_dureader_robust_answer_text(answer_payload: dict[str, Any], *, context: str) -> tuple[str, int] | None:
+    """從 DuReader-robust `answers` 物件挑出最適合 benchmark 的答案與 offset。
+
+    參數：
+    - `answer_payload`：DuReader-robust `answers` 物件。
+    - `context`：原始 context，用於回找 `answer_start=-1` 的答案。
+
+    回傳：
+    - `tuple[str, int] | None`：`(answer_text, answer_start)`；若沒有有效答案則回傳空值。
+    """
+
+    texts = normalize_nested_sequence(answer_payload.get("text"))
+    answer_starts = normalize_nested_sequence(answer_payload.get("answer_start"))
+    candidates: list[tuple[str, int]] = []
+    counter: Counter[tuple[str, int]] = Counter()
+
+    for index, text in enumerate(texts):
+        answer_text = flatten_text(text)
+        raw_answer_start = answer_starts[index] if index < len(answer_starts) else None
+        answer_start = resolve_dureader_answer_start(
+            context=context,
+            answer_text=answer_text,
+            answer_start=raw_answer_start,
+        )
+        if not answer_text:
+            continue
+        candidate = (answer_text, answer_start)
+        candidates.append(candidate)
+        counter[candidate] += 1
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda candidate: (-counter[candidate], candidate[1], len(candidate[0])))
+    return candidates[0]
+
+
+def build_dureader_answer_list_text(*, answers: list[dict[str, Any]], context: str) -> tuple[str, int] | None:
+    """從 DuReader-robust article wrapper 的答案列表挑出最適合 benchmark 的答案與 offset。
+
+    參數：
+    - `answers`：答案列表。
+    - `context`：原始 context，用於回找 `answer_start=-1`。
+
+    回傳：
+    - `tuple[str, int] | None`：`(answer_text, answer_start)`；若沒有有效答案則回傳空值。
+    """
+
+    candidates: list[tuple[str, int]] = []
+    counter: Counter[tuple[str, int]] = Counter()
+
+    for answer in answers:
+        if not isinstance(answer, dict):
+            continue
+        answer_text = flatten_text(answer.get("text"))
+        answer_start = resolve_dureader_answer_start(
+            context=context,
+            answer_text=answer_text,
+            answer_start=answer.get("answer_start"),
+        )
+        if not answer_text:
+            continue
+        candidate = (answer_text, answer_start)
+        candidates.append(candidate)
+        counter[candidate] += 1
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda candidate: (-counter[candidate], candidate[1], len(candidate[0])))
+    return candidates[0]
+
+
+def build_dureader_robust_document_content(*, title: str, context: str) -> str:
+    """將 DuReader-robust 單題 context 轉成可上傳的 Markdown 文件。
+
+    參數：
+    - `title`：原始文章標題。
+    - `context`：題目對應全文。
+
+    回傳：
+    - `str`：可寫入 repo 的 Markdown 內容。
+    """
+
+    blocks = [f"# {title}", "", "## Context", "", context]
+    return normalize_newlines("\n".join(blocks)) + "\n"
+
+
+def build_dureader_document_content(*, question_id: str, documents: list[dict[str, Any]]) -> str:
+    """將 DuReader 單題文件集合 materialize 成單一 Markdown bundle。
+
+    參數：
+    - `question_id`：原始題目 id。
+    - `documents`：本題選中的文件列表。
+
+    回傳：
+    - `str`：可上傳到 repo 的 Markdown 內容。
+    """
+
+    blocks = [f"# DuReader Bundle {question_id}"]
+    for document_index, document in enumerate(documents, start=1):
+        title = build_dureader_document_title(document, fallback_index=document_index)
+        blocks.extend(["", f"## Document {document_index}: {title}"])
+        for paragraph_index, paragraph_text in enumerate(build_dureader_document_paragraphs(document), start=1):
+            blocks.extend(["", f"### Paragraph {paragraph_index}", "", paragraph_text])
+    return normalize_newlines("\n".join(blocks)) + "\n"
+
+
+def prepare_dureader_source(
+    *,
+    input_reference: Path | str,
+    workspace_dir: Path,
+    limit_documents: int | None,
+    limit_items: int | None,
+) -> dict[str, Any]:
+    """將 DuReader rows 轉成中間格式與 source documents。
+
+    參數：
+    - `input_reference`：本機檔案路徑。
+    - `workspace_dir`：benchmark 工作目錄。
+    - `limit_documents`：最多處理幾份文件 bundle。
+    - `limit_items`：最多輸出幾題。
+
+    回傳：
+    - `dict[str, Any]`：prepare 摘要。
+    """
+
+    source_dir = workspace_dir / SOURCE_DOCUMENTS_DIRNAME
+    documents: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
+    input_path = Path(str(input_reference)).resolve()
+    source_split = input_path.stem or "dureader"
+
+    for row_index, raw_row in enumerate(resolve_prepare_source_rows(input_reference)):
+        row = raw_row if isinstance(raw_row, dict) else {}
+        question_text = flatten_text(row.get("question"))
+
+        if not question_text and isinstance(row.get("paragraphs"), list):
+            article_title = flatten_text(row.get("title")) or f"DuReader Robust Article {row_index}"
+            for paragraph_index, paragraph in enumerate(row.get("paragraphs") or []):
+                if not isinstance(paragraph, dict):
+                    continue
+                context = flatten_text(paragraph.get("context"))
+                qas = paragraph.get("qas") if isinstance(paragraph.get("qas"), list) else []
+                if not context or not qas:
+                    continue
+
+                paragraph_identifier = f"{row_index}-{paragraph_index}"
+                if limit_documents is not None and len(documents) >= limit_documents:
+                    break
+
+                file_name = slugify_filename(f"dureader-{paragraph_identifier}", suffix=".md")
+                source_document_path = source_dir / file_name
+                paragraph_title = article_title if article_title else f"DuReader Robust Paragraph {paragraph_identifier}"
+                source_document_path.write_text(
+                    build_dureader_robust_document_content(title=paragraph_title, context=context),
+                    encoding="utf-8",
+                )
+                documents.append(
+                    {
+                        "dataset": "dureader",
+                        "source_document_id": paragraph_identifier,
+                        "file_name": file_name,
+                        "title": paragraph_title,
+                        "source_path": str(source_document_path.resolve()),
+                        "content_type": "text/markdown",
+                        "created_at": now_iso(),
+                    }
+                )
+
+                for qa_index, qa in enumerate(qas):
+                    if limit_items is not None and len(items) >= limit_items:
+                        break
+                    if not isinstance(qa, dict):
+                        continue
+                    qa_question_text = flatten_text(qa.get("question"))
+                    answer_selection = build_dureader_answer_list_text(
+                        answers=qa.get("answers") if isinstance(qa.get("answers"), list) else [],
+                        context=context,
+                    )
+                    if not qa_question_text or answer_selection is None:
+                        continue
+                    answer_text, answer_start = answer_selection
+                    evidence_text = build_dureader_evidence_window(
+                        paragraph_text=context,
+                        answer_text=answer_text,
+                    )
+                    items.append(
+                        {
+                            "item_id": stable_uuid(
+                                f"dureader::robust::{paragraph_identifier}::{qa.get('id') or qa_index}"
+                            ),
+                            "dataset": "dureader",
+                            "source_document_id": paragraph_identifier,
+                            "file_name": file_name,
+                            "query_text": qa_question_text,
+                            "language": "zh-TW",
+                            "query_type": "fact_lookup",
+                            "answer_text": answer_text,
+                            "evidence_texts": [evidence_text] if evidence_text else [answer_text],
+                            "answer_type": "short_answer",
+                            "source_question_index": qa_index,
+                            "source_metadata": {
+                                "question_id": flatten_text(qa.get("id")) or paragraph_identifier,
+                                "schema_variant": "robust",
+                                "source_split": source_split,
+                                "title": paragraph_title,
+                                "paragraph_index": paragraph_index,
+                                "answer_start": answer_start,
+                            },
+                            "created_at": now_iso(),
+                        }
+                    )
+                if limit_items is not None and len(items) >= limit_items:
+                    break
+            if limit_documents is not None and len(documents) >= limit_documents:
+                break
+            if limit_items is not None and len(items) >= limit_items:
+                break
+            continue
+
+        if not question_text:
+            continue
+
+        if isinstance(row.get("answers"), dict) and flatten_text(row.get("context")):
+            answer_selection = build_dureader_robust_answer_text(
+                row.get("answers") if isinstance(row.get("answers"), dict) else {},
+                context=flatten_text(row.get("context")),
+            )
+            if answer_selection is None:
+                continue
+            if limit_documents is not None and len(documents) >= limit_documents:
+                break
+            if limit_items is not None and len(items) >= limit_items:
+                break
+
+            source_document_id = flatten_text(row.get("id")) or f"dureader-robust-{row_index}"
+            title = flatten_text(row.get("title")) or f"DuReader Robust {source_document_id}"
+            context = flatten_text(row.get("context"))
+            answer_text, answer_start = answer_selection
+            evidence_text = build_dureader_evidence_window(
+                paragraph_text=context,
+                answer_text=answer_text,
+            )
+
+            file_name = slugify_filename(f"dureader-{source_document_id}", suffix=".md")
+            source_document_path = source_dir / file_name
+            source_document_path.write_text(
+                build_dureader_robust_document_content(title=title, context=context),
+                encoding="utf-8",
+            )
+            documents.append(
+                {
+                    "dataset": "dureader",
+                    "source_document_id": source_document_id,
+                    "file_name": file_name,
+                    "title": title,
+                    "source_path": str(source_document_path.resolve()),
+                    "content_type": "text/markdown",
+                    "created_at": now_iso(),
+                }
+            )
+            items.append(
+                {
+                    "item_id": stable_uuid(f"dureader::robust::{source_document_id}::{question_text}"),
+                    "dataset": "dureader",
+                    "source_document_id": source_document_id,
+                    "file_name": file_name,
+                    "query_text": question_text,
+                    "language": "zh-TW",
+                    "query_type": "fact_lookup",
+                    "answer_text": answer_text,
+                    "evidence_texts": [evidence_text] if evidence_text else [answer_text],
+                    "answer_type": "short_answer",
+                    "source_question_index": row_index,
+                    "source_metadata": {
+                        "question_id": source_document_id,
+                        "schema_variant": "robust",
+                        "source_split": source_split,
+                        "title": title,
+                        "answer_start": answer_start,
+                    },
+                    "created_at": now_iso(),
+                }
+            )
+            continue
+
+        fact_or_opinion = flatten_text(row.get("fact_or_opinion")).upper()
+        if fact_or_opinion and fact_or_opinion != "FACT":
+            continue
+        yesno_answers = [
+            flatten_text(answer)
+            for answer in normalize_nested_sequence(row.get("yesno_answers"))
+            if flatten_text(answer)
+        ]
+        if yesno_answers:
+            continue
+
+        raw_documents = row.get("documents") if isinstance(row.get("documents"), list) else []
+        documents_payload = [document for document in raw_documents if isinstance(document, dict)]
+        if not documents_payload:
+            continue
+
+        answer_doc_indexes = [
+            answer_doc
+            for answer_doc in normalize_nested_sequence(row.get("answer_docs"))
+            if isinstance(answer_doc, int)
+        ]
+        selected_documents = select_dureader_documents(
+            documents=documents_payload,
+            answer_doc_indexes=answer_doc_indexes,
+        )
+        if not selected_documents:
+            continue
+
+        answer_bundle = build_dureader_answer_bundle(
+            row=row,
+            selected_documents=selected_documents,
+        )
+        if not answer_bundle["answer_text"] and not answer_bundle["evidence_texts"]:
+            continue
+
+        if limit_documents is not None and len(documents) >= limit_documents:
+            break
+        if limit_items is not None and len(items) >= limit_items:
+            break
+
+        question_id = flatten_text(row.get("question_id")) or f"dureader-question-{row_index}"
+        file_name = slugify_filename(f"dureader-{question_id}", suffix=".md")
+        source_document_path = source_dir / file_name
+        source_document_path.write_text(
+            build_dureader_document_content(question_id=question_id, documents=selected_documents),
+            encoding="utf-8",
+        )
+
+        documents.append(
+            {
+                "dataset": "dureader",
+                "source_document_id": question_id,
+                "file_name": file_name,
+                "title": f"DuReader Bundle {question_id}",
+                "source_path": str(source_document_path.resolve()),
+                "content_type": "text/markdown",
+                "created_at": now_iso(),
+            }
+        )
+        items.append(
+            {
+                "item_id": stable_uuid(f"dureader::{question_id}::{question_text}"),
+                "dataset": "dureader",
+                "source_document_id": question_id,
+                "file_name": file_name,
+                "query_text": question_text,
+                "language": "zh-TW",
+                "query_type": "fact_lookup",
+                "answer_text": answer_bundle["answer_text"],
+                "evidence_texts": answer_bundle["evidence_texts"],
+                "answer_type": answer_bundle["answer_type"],
+                "source_question_index": row_index,
+                "source_metadata": {
+                    "question_id": question_id,
+                    "question_type": flatten_text(row.get("question_type")),
+                    "schema_variant": "search_bundle",
+                    "fact_or_opinion": fact_or_opinion or "UNKNOWN",
+                    "source_split": source_split,
+                    "selected_document_count": len(selected_documents),
+                    "answer_doc_count": len(answer_doc_indexes),
+                },
+                "created_at": now_iso(),
+            }
+        )
+
+    write_jsonl(workspace_dir / PREPARED_DOCUMENTS_FILE, documents)
+    write_jsonl(workspace_dir / PREPARED_ITEMS_FILE, items)
+    return {
+        "dataset": "dureader",
+        "document_count": len(documents),
+        "item_count": len(items),
+        "workspace_dir": str(workspace_dir),
+    }
+
+
+def build_drcd_answer_text(answers: list[dict[str, Any]]) -> tuple[str, int] | None:
+    """從 DRCD 單題答案列表挑出最適合 benchmark 的答案與 offset。
+
+    參數：
+    - `answers`：DRCD `qas.answers` 陣列。
+
+    回傳：
+    - `tuple[str, int] | None`：`(answer_text, answer_start)`；若沒有有效答案則回傳空值。
+    """
+
+    candidates: list[tuple[str, int]] = []
+    counter: Counter[tuple[str, int]] = Counter()
+
+    for answer in answers:
+        if not isinstance(answer, dict):
+            continue
+        answer_text = flatten_text(answer.get("text"))
+        answer_start = answer.get("answer_start")
+        if not answer_text or not isinstance(answer_start, int) or answer_start < 0:
+            continue
+        candidate = (answer_text, answer_start)
+        candidates.append(candidate)
+        counter[candidate] += 1
+
+    if not candidates:
+        return None
+
+    candidates.sort(key=lambda candidate: (-counter[candidate], candidate[1], len(candidate[0])))
+    return candidates[0]
+
+
+def build_drcd_evidence_text(*, context: str, answer_text: str, answer_start: int) -> str:
+    """從 DRCD paragraph context 擷取可對齊的 evidence 視窗。
+
+    參數：
+    - `context`：DRCD paragraph 全文。
+    - `answer_text`：核准的答案文字。
+    - `answer_start`：答案在 paragraph 內的起始 offset。
+
+    回傳：
+    - `str`：包含答案附近上下文的 evidence 文字。
+    """
+
+    if not context or not answer_text:
+        return ""
+
+    answer_end = min(len(context), answer_start + len(answer_text))
+    if answer_start < 0 or answer_start >= len(context) or answer_end <= answer_start:
+        return answer_text
+
+    context_start = max(0, answer_start - DRCD_EVIDENCE_CONTEXT_WINDOW_CHARS)
+    context_end = min(len(context), answer_end + DRCD_EVIDENCE_CONTEXT_WINDOW_CHARS)
+    return context[context_start:context_end].strip()
+
+
+def build_drcd_document_content(*, title: str, paragraphs: list[dict[str, Any]]) -> str:
+    """將 DRCD article row 轉成可上傳的 Markdown 文件。
+
+    參數：
+    - `title`：文章標題。
+    - `paragraphs`：文章段落列表。
+
+    回傳：
+    - `str`：可寫入 repo 的 Markdown 內容。
+    """
+
+    blocks = [f"# {title}"]
+    for index, paragraph in enumerate(paragraphs, start=1):
+        if not isinstance(paragraph, dict):
+            continue
+        context = flatten_text(paragraph.get("context"))
+        if not context:
+            continue
+        blocks.extend(["", f"## Paragraph {index}", "", context])
+    return normalize_newlines("\n".join(blocks)) + "\n"
+
+
+def prepare_drcd_source(
+    *,
+    input_reference: Path | str,
+    workspace_dir: Path,
+    limit_documents: int | None,
+    limit_items: int | None,
+) -> dict[str, Any]:
+    """將 DRCD article rows 轉成中間格式與 source documents。
+
+    參數：
+    - `input_reference`：本機檔案路徑或 `hf://` dataset 參照。
+    - `workspace_dir`：benchmark 工作目錄。
+    - `limit_documents`：最多處理幾份文件。
+    - `limit_items`：最多輸出幾題。
+
+    回傳：
+    - `dict[str, Any]`：prepare 摘要。
+    """
+
+    source_dir = workspace_dir / SOURCE_DOCUMENTS_DIRNAME
+    documents: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
+
+    for row_index, raw_row in enumerate(resolve_prepare_source_rows(input_reference)):
+        row = raw_row if isinstance(raw_row, dict) else {}
+        title = flatten_text(row.get("title")) or f"DRCD Article {row_index}"
+        source_document_id = flatten_text(row.get("id")) or f"drcd-article-{row_index}"
+        paragraphs = row.get("paragraphs") if isinstance(row.get("paragraphs"), list) else []
+
+        if limit_documents is not None and len(documents) >= limit_documents:
+            break
+
+        file_name = slugify_filename(f"drcd-{source_document_id}", suffix=".md")
+        source_document_path = source_dir / file_name
+        source_document_path.write_text(
+            build_drcd_document_content(title=title, paragraphs=paragraphs),
+            encoding="utf-8",
+        )
+        documents.append(
+            {
+                "dataset": "drcd",
+                "source_document_id": source_document_id,
+                "file_name": file_name,
+                "title": title,
+                "source_path": str(source_document_path.resolve()),
+                "content_type": "text/markdown",
+                "created_at": now_iso(),
+            }
+        )
+
+        for paragraph_index, paragraph in enumerate(paragraphs):
+            if not isinstance(paragraph, dict):
+                continue
+            context = flatten_text(paragraph.get("context"))
+            paragraph_id = flatten_text(paragraph.get("id")) or f"{source_document_id}-paragraph-{paragraph_index}"
+            qas = paragraph.get("qas") if isinstance(paragraph.get("qas"), list) else []
+            for question_index, qa in enumerate(qas):
+                if limit_items is not None and len(items) >= limit_items:
+                    break
+                if not isinstance(qa, dict):
+                    continue
+                question_text = flatten_text(qa.get("question"))
+                answer_selection = build_drcd_answer_text(
+                    qa.get("answers") if isinstance(qa.get("answers"), list) else []
+                )
+                if not question_text or answer_selection is None:
+                    continue
+                answer_text, answer_start = answer_selection
+                evidence_text = build_drcd_evidence_text(
+                    context=context,
+                    answer_text=answer_text,
+                    answer_start=answer_start,
+                )
+                items.append(
+                    {
+                        "item_id": stable_uuid(f"drcd::{source_document_id}::{paragraph_id}::{qa.get('id') or question_index}"),
+                        "dataset": "drcd",
+                        "source_document_id": source_document_id,
+                        "file_name": file_name,
+                        "query_text": question_text,
+                        "language": "zh-TW",
+                        "query_type": "fact_lookup",
+                        "answer_text": answer_text,
+                        "evidence_texts": [evidence_text] if evidence_text else [answer_text],
+                        "answer_type": "short_answer",
+                        "source_question_index": question_index,
+                        "source_metadata": {
+                            "article_id": source_document_id,
+                            "paragraph_id": paragraph_id,
+                            "qa_id": flatten_text(qa.get("id")),
+                            "answer_start": answer_start,
+                            "title": title,
+                        },
+                        "created_at": now_iso(),
+                    }
+                )
+            if limit_items is not None and len(items) >= limit_items:
+                break
+        if limit_items is not None and len(items) >= limit_items:
+            break
+
+    write_jsonl(workspace_dir / PREPARED_DOCUMENTS_FILE, documents)
+    write_jsonl(workspace_dir / PREPARED_ITEMS_FILE, items)
+    return {
+        "dataset": "drcd",
+        "document_count": len(documents),
+        "item_count": len(items),
+        "workspace_dir": str(workspace_dir),
+    }
+
+
 def prepare_uda_source(*, input_path: Path, workspace_dir: Path, limit_documents: int | None, limit_items: int | None) -> dict[str, Any]:
     """將 UDA 類表格資料轉成中間格式與 source documents。
 
@@ -982,6 +2206,27 @@ def prepare_source(
             limit_documents=limit_documents,
             limit_items=limit_items,
         )
+    if dataset == "nq":
+        return prepare_nq_source(
+            input_reference=input_path,
+            workspace_dir=workspace_dir,
+            limit_documents=limit_documents,
+            limit_items=limit_items,
+        )
+    if dataset == "dureader":
+        return prepare_dureader_source(
+            input_reference=input_path,
+            workspace_dir=workspace_dir,
+            limit_documents=limit_documents,
+            limit_items=limit_items,
+        )
+    if dataset == "drcd":
+        return prepare_drcd_source(
+            input_reference=input_path,
+            workspace_dir=workspace_dir,
+            limit_documents=limit_documents,
+            limit_items=limit_items,
+        )
     raise ValueError(f"不支援的 dataset：{dataset}")
 
 
@@ -1032,6 +2277,12 @@ def filter_item(item: dict[str, Any]) -> tuple[bool, str]:
         return False, "qasper_requires_evidence"
     if dataset == "uda" and not evidence_texts and not answer_text:
         return False, "uda_requires_short_answer"
+    if dataset == "nq" and not evidence_texts:
+        return False, "nq_requires_evidence"
+    if dataset == "dureader" and not evidence_texts:
+        return False, "dureader_requires_evidence"
+    if dataset == "drcd" and not evidence_texts:
+        return False, "drcd_requires_evidence"
     return True, "kept"
 
 

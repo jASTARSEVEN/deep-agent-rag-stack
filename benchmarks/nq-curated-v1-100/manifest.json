@@ -1,0 +1,29 @@
+{
+  "benchmark_name": "nq-curated-v1-100",
+  "dataset": {
+    "dataset_id": "c1fef25a-7f8a-59d0-8974-f44ace477600",
+    "query_type": "fact_lookup",
+    "generated_at": "2026-04-05T09:47:11.666498+00:00"
+  },
+  "reference": {
+    "evaluation_profile": "production_like_v1"
+  },
+  "source_dataset_breakdown": {
+    "nq": 100
+  },
+  "snapshot_files": [
+    "manifest.json",
+    "documents.jsonl",
+    "questions.jsonl",
+    "gold_spans.jsonl",
+    "alignment_candidates.jsonl",
+    "alignment_review_queue.jsonl",
+    "filter_report.json"
+  ],
+  "stats": {
+    "question_count": 100,
+    "question_with_gold_span_count": 100,
+    "span_count": 100,
+    "document_count": 100
+  }
+}
