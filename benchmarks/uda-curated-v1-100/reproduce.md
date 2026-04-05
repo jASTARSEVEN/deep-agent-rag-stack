@@ -21,7 +21,7 @@
 - Area ID：`2edabc25-1a54-43ab-b987-efd4e040114f`
 - Dataset 名稱：`uda-curated-v1-100`
 - Dataset ID：`3cca653e-ffd5-5ab8-8464-27aaac194bb4`
-- Reference run ID：`0274c530-8171-4f0f-bd86-bce82c15f5d7`
+- Reference run ID：`821345d6-9a4d-48ea-8fb4-fb36f2af182e`
 
 ## 步驟 1：啟動服務
 
@@ -196,5 +196,5 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
 | 階段 | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | recall | 0.4544 | 0.6500 | 0.3956 | 0.0660 | 1.0000 |
-| rerank | 0.6802 | 0.8200 | 0.6347 | 0.0820 | 1.0000 |
-| assembled | 0.6816 | 0.8300 | 0.6336 | 0.0830 | 1.0000 |
+| rerank | 0.6805 | 0.8200 | 0.6350 | 0.0820 | 1.0000 |
+| assembled | 0.6818 | 0.8300 | 0.6340 | 0.0830 | 1.0000 |

@@ -35,7 +35,7 @@ This package exists to let another engineer reproduce the same pilot benchmark f
 - Dataset ID: `3d779672-b561-5d64-aa76-035d37d4e0b4`
 - Area name used during creation: `uda-pilot`
 - Area ID: `58afaf23-423d-4526-b90d-43ea19711eaf`
-- Reference run ID: `593638b8-a3c7-4471-ba56-7d242a8e65fa`
+- Reference run ID: `e57393cc-c9a3-4ceb-a36c-7af416b6ba66`
 - Evaluation profile: `production_like_v1`
 - Item count: `26`
 - Auto-matched ratio during curation: `0.346154`
@@ -46,15 +46,15 @@ This package exists to let another engineer reproduce the same pilot benchmark f
 
 | Stage | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.3127 | 0.5000 | 0.2483 | 0.0577 | 0.7308 |
-| rerank | 0.7353 | 0.8462 | 0.7083 | 0.0885 | 0.9615 |
-| assembled | 0.5288 | 0.6538 | 0.4968 | 0.0692 | 0.9615 |
+| recall | 0.2849 | 0.4615 | 0.2215 | 0.0538 | 0.6923 |
+| rerank | 0.7333 | 0.8462 | 0.7051 | 0.0885 | 0.9615 |
+| assembled | 0.7333 | 0.8462 | 0.7051 | 0.0885 | 0.9615 |
 
 ## BGE Core Profiles
 
 | Profile | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `production_like_v1` | 0.6538 | 0.5288 | 0.4968 |
+| `production_like_v1` | 0.8462 | 0.7333 | 0.7051 |
 | `generic_guarded_assembler_v2_bge` | 0.6538 | 0.5288 | 0.4968 |
 | `generic_guarded_evidence_synopsis_v2_bge` | 0.6538 | 0.5264 | 0.4936 |
 | `generic_guarded_evidence_synopsis_v3_bge` | 0.6538 | 0.5288 | 0.4968 |

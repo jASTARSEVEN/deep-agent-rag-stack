@@ -134,7 +134,7 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_payload["run"]["evaluation_profile"] == "production_like_v1"
     assert run_payload["run"]["config_snapshot"]["top_k"] == 5
     assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] == app_settings.rerank_top_n
-    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is True
+    assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is False
     assert "recall" in run_payload["summary_metrics"]
     assert run_payload["per_query"][0]["query_focus"]["applied"] is False
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1

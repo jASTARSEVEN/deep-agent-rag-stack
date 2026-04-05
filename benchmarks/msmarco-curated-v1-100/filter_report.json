@@ -1,0 +1,12 @@
+{
+  "prepared_item_count": 180,
+  "kept_item_count": 154,
+  "drop_item_count": 26,
+  "reason_counts": {
+    "answer_too_long": 13,
+    "kept": 154,
+    "layout_dependent": 2,
+    "yes_no_answer": 11
+  },
+  "generated_at": "2026-04-05T02:55:32.536432+00:00"
+}

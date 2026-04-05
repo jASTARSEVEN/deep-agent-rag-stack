@@ -112,6 +112,89 @@ def test_prepare_qasper_source_and_filter(tmp_path: Path) -> None:
     assert filtered_rows[0]["query_text"] == "What sentence is important?"
 
 
+def test_prepare_msmarco_source_from_jsonl(tmp_path: Path) -> None:
+    """MS MARCO prepare-source 應能從 row contract 產出 markdown 文件與題目。
+
+    參數：
+    - `tmp_path`：pytest 暫存目錄。
+
+    回傳：
+    - `None`：以斷言驗證輸出。
+    """
+
+    workspace_dir = tmp_path / "msmarco-workspace"
+    input_path = tmp_path / "msmarco.jsonl"
+    input_rows = [
+        {
+            "query_id": 1001,
+            "query": "what is the boiling point of water",
+            "query_type": "description",
+            "answers": ["100 °C at 1 atmosphere."],
+            "wellFormedAnswers": ["100 degrees Celsius at 1 atmosphere."],
+            "passages": {
+                "is_selected": [1, 0],
+                "passage_text": [
+                    "At standard atmospheric pressure, water boils at 100 degrees Celsius.",
+                    "Water can also boil at lower temperatures when pressure drops.",
+                ],
+                "url": [
+                    "https://example.com/boiling-point",
+                    "https://example.com/pressure",
+                ],
+            },
+        },
+        {
+            "query_id": 1002,
+            "query": "question without selected passage",
+            "query_type": "description",
+            "answers": ["This row should be skipped."],
+            "wellFormedAnswers": [],
+            "passages": {
+                "is_selected": [0],
+                "passage_text": ["Only context passage."],
+                "url": ["https://example.com/context"],
+            },
+        },
+    ]
+    input_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in input_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    prepare_summary = prepare_source(
+        dataset="msmarco",
+        input_path=input_path,
+        workspace_dir=workspace_dir,
+        limit_documents=None,
+        limit_items=None,
+    )
+
+    assert prepare_summary["document_count"] == 1
+    assert prepare_summary["item_count"] == 1
+
+    prepared_documents = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_DOCUMENTS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    prepared_items = [
+        json.loads(line)
+        for line in (workspace_dir / PREPARED_ITEMS_FILE).read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+    assert prepared_documents[0]["dataset"] == "msmarco"
+    assert prepared_documents[0]["file_name"] == "msmarco-1001.md"
+    assert prepared_items[0]["answer_text"] == "100 degrees Celsius at 1 atmosphere."
+    assert prepared_items[0]["source_metadata"]["query_id"] == "1001"
+    assert prepared_items[0]["source_metadata"]["selected_passage_count"] == 1
+    assert prepared_items[0]["source_metadata"]["context_passage_count"] == 1
+    document_text = (workspace_dir / "source_documents" / "msmarco-1001.md").read_text(encoding="utf-8")
+    assert "Selected Passage 1" in document_text
+    assert "Context Passage 1" in document_text
+    assert "what is the boiling point of water" not in document_text
+
+
 def test_align_build_snapshot_and_import_round_trip(app, db_session, app_settings, tmp_path: Path, monkeypatch) -> None:
     """alignment/build-snapshot 應可產出現有 import snapshot 可接受的 package。
 

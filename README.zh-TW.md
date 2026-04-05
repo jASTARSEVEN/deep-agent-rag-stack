@@ -75,41 +75,41 @@
 
 ## Evaluation Benchmark
 
-本專案已於 `2026-04-05` 重新用 `production_like_v1` 對目前 Compose benchmark 環境內已載入的每一個資料集重新實跑。
+本專案已於 `2026-04-05` 重新用 `production_like_v1` 對目前 Compose benchmark 環境內已載入的每一個資料集重新實跑，現在也包含新加入的 `msmarco-curated-v1-100`。
 
-這次新 artifact 顯示的 `production_like_v1` 真實設定快照為：
+這次 fresh rerun artifact 顯示的 `production_like_v1` 真實設定快照為：
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
 - `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=10`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
+- `ASSEMBLER_MAX_CONTEXTS=9`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
 最新重跑快照（`production_like_v1`，assembled 指標）：
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
-| `qasper-curated-v1-pilot` | `0.8148` | `0.5353` | `0.4467` |
-| `uda-curated-v1-pilot` | `0.8462` | `0.7357` | `0.7083` |
-| `qasper-curated-v1-100` | `0.6200` | `0.3903` | `0.3183` |
-| `uda-curated-v1-100` | `0.8600` | `0.6972` | `0.6447` |
-| `pilot 三資料集平均` | `0.8425` | `0.6664` | `0.6125` |
-| `external 100Q 平均` | `0.7400` | `0.5437` | `0.4815` |
+| `msmarco-curated-v1-100` | `1.0000` | `0.9674` | `0.9550` |
+| `uda-curated-v1-pilot` | `0.8462` | `0.7333` | `0.7051` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7254` | `0.6792` |
+| `uda-curated-v1-100` | `0.8300` | `0.6818` | `0.6340` |
+| `qasper-curated-v1-pilot` | `0.7778` | `0.5507` | `0.4844` |
+| `qasper-curated-v1-100` | `0.5900` | `0.3797` | `0.3142` |
 
 補充說明：
 
-- 這一節現在以目前實際 `production_like_v1` run artifact 為準，不再沿用舊的 `generic_field_focus_v1 + 9x3000` 敘述。
-- 這 5 次 run 的 run id 依序為 `a5cc80a1-fab0-4184-94da-02bbac6eb428`、`c7bd9111-ce84-4fda-b799-826e70173db2`、`d137f59b-a372-4c6a-bcc2-ba9e1e226cd2`、`653032cb-9694-4878-915a-d73ebddd006d`、`986c130d-6ccf-45b8-a47f-a07e15753ec0`。
+- 這一節現在是一套同一條 current `production_like_v1` snapshot 下、且 `query_focus=false` 的六資料集重跑結果。
+- 這 6 次 run 的 run id 依序為 `5e9de20b-4781-4711-a69e-03157e61d68a`、`e57393cc-c9a3-4ceb-a36c-7af416b6ba66`、`c8e2ab5a-e193-4147-ac0c-491fb06189c5`、`821345d6-9a4d-48ea-8fb4-fb36f2af182e`、`a1885718-c3ee-4465-aca5-35354a80457d`、`6c4636ce-85da-456c-a8b3-059b4650b1ae`。
 - 若要看策略脈絡與最新判讀，請直接參考 [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md)。
-- external `100Q` 的詳細 miss 題目與原因歸類，請參考 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md)。
+- [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍是舊的 `QASPER 100 + UDA 100` 詳細 miss 紀錄；新的 `MS MARCO 100` rerun 目前 `assembled miss = 0`。
 - 這些數值屬於專案 benchmark，不應包裝成通用公開 leaderboard 成績。
 
 ## 目前尚未完成

@@ -71,41 +71,41 @@ The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration 
 
 ## Evaluation Benchmark
 
-The repository was re-tested on `2026-04-05` by rerunning `production_like_v1` against every benchmark dataset currently loaded in the Compose-backed benchmark environment.
+The repository was re-tested on `2026-04-05` by rerunning `production_like_v1` against every benchmark dataset currently loaded in the Compose-backed benchmark environment, now including `msmarco-curated-v1-100`.
 
-Current `production_like_v1` snapshot from the new run artifacts:
+Current `production_like_v1` snapshot from the fresh rerun artifacts:
 
 - `RERANK_PROVIDER=easypinex-host`
 - `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
 - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=qasper_v3`
 - `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
+- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
 - `RETRIEVAL_VECTOR_TOP_K=30`
 - `RETRIEVAL_FTS_TOP_K=30`
 - `RETRIEVAL_MAX_CANDIDATES=30`
 - `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=10`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3600`
+- `ASSEMBLER_MAX_CONTEXTS=9`
+- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
 - `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
 
 Latest rerun snapshot (`production_like_v1`, assembled metrics):
 
 | Dataset | Recall@10 | nDCG@10 | MRR@10 |
 | --- | ---: | ---: | ---: |
-| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7283` | `0.6825` |
-| `qasper-curated-v1-pilot` | `0.8148` | `0.5353` | `0.4467` |
-| `uda-curated-v1-pilot` | `0.8462` | `0.7357` | `0.7083` |
-| `qasper-curated-v1-100` | `0.6200` | `0.3903` | `0.3183` |
-| `uda-curated-v1-100` | `0.8600` | `0.6972` | `0.6447` |
-| `pilot trio average` | `0.8425` | `0.6664` | `0.6125` |
-| `external 100Q average` | `0.7400` | `0.5437` | `0.4815` |
+| `msmarco-curated-v1-100` | `1.0000` | `0.9674` | `0.9550` |
+| `uda-curated-v1-pilot` | `0.8462` | `0.7333` | `0.7051` |
+| `tw-insurance-rag-benchmark-v1` | `0.8667` | `0.7254` | `0.6792` |
+| `uda-curated-v1-100` | `0.8300` | `0.6818` | `0.6340` |
+| `qasper-curated-v1-pilot` | `0.7778` | `0.5507` | `0.4844` |
+| `qasper-curated-v1-100` | `0.5900` | `0.3797` | `0.3142` |
 
 Notes:
 
-- This section now reflects the actual current `production_like_v1` run artifacts; it no longer assumes the older `generic_field_focus_v1 + 9x3000` snapshot.
-- The five run reports were produced on `2026-04-05` with run ids `a5cc80a1-fab0-4184-94da-02bbac6eb428`, `c7bd9111-ce84-4fda-b799-826e70173db2`, `d137f59b-a372-4c6a-bcc2-ba9e1e226cd2`, `653032cb-9694-4878-915a-d73ebddd006d`, and `986c130d-6ccf-45b8-a47f-a07e15753ec0`.
-- Strategy history and current interpretation are tracked in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
-- Detailed external `100Q` miss lists are tracked in [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) (Traditional Chinese).
+- This section now reflects a consistent six-dataset rerun under the same current `production_like_v1` snapshot with `query_focus=false`.
+- The six run reports were produced on `2026-04-05` with run ids `5e9de20b-4781-4711-a69e-03157e61d68a`, `e57393cc-c9a3-4ceb-a36c-7af416b6ba66`, `c8e2ab5a-e193-4147-ac0c-491fb06189c5`, `821345d6-9a4d-48ea-8fb4-fb36f2af182e`, `a1885718-c3ee-4465-aca5-35354a80457d`, and `6c4636ce-85da-456c-a8b3-059b4650b1ae`.
+- Strategy history and the current interpretation are tracked in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
+- [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) remains a legacy detailed miss log for the older `QASPER 100 + UDA 100` pair; the new `MS MARCO 100` rerun currently has `0` assembled misses.
 - These numbers are project benchmark results, not a generic public leaderboard claim.
 
 ## Not Yet Implemented

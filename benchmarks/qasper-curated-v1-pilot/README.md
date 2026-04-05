@@ -30,7 +30,7 @@ This package exists to let another engineer reproduce the same pilot benchmark f
 - Dataset: `qasper-curated-v1-pilot`
 - Dataset ID: `db6d581c-2feb-5914-afb8-b4f1fa2092e2`
 - Area name used during creation: `qasper-pilot`
-- Reference run ID: `6f1150df-1343-4905-a417-7334ea87c9d6`
+- Reference run ID: `a1885718-c3ee-4465-aca5-35354a80457d`
 - Evaluation profile: `production_like_v1`
 - Item count: `27`
 - Auto-matched ratio during curation: `0.931034`
@@ -39,9 +39,9 @@ This package exists to let another engineer reproduce the same pilot benchmark f
 
 | Stage | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.2920 | 0.5556 | 0.2062 | 0.0630 | 0.9630 |
-| rerank | 0.4590 | 0.5556 | 0.4228 | 0.0593 | 0.9630 |
-| assembled | 0.4489 | 0.5556 | 0.4105 | 0.0593 | 0.9630 |
+| recall | 0.2687 | 0.4815 | 0.2019 | 0.0519 | 0.9259 |
+| rerank | 0.5507 | 0.7778 | 0.4844 | 0.0815 | 1.0000 |
+| assembled | 0.5507 | 0.7778 | 0.4844 | 0.0815 | 1.0000 |
 
 ## Notes
 

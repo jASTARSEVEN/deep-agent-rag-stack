@@ -33,7 +33,7 @@ This package exists so another engineer can reproduce the same `QASPER 100` cura
 - Dataset ID: `e836874e-5183-5f09-8241-eddb155adab1`
 - Area name used during creation: `qasper-100`
 - Area ID: `204b0f87-bbbd-4549-ae3b-8064e535b453`
-- Reference run ID: `54c297d7-260b-40eb-88cf-999026ca9d6d`
+- Reference run ID: `6c4636ce-85da-456c-a8b3-059b4650b1ae`
 - Evaluation profile: `production_like_v1`
 - Item count: `100`
 - Final document count: `42`
@@ -45,9 +45,9 @@ This package exists so another engineer can reproduce the same `QASPER 100` cura
 
 | Stage | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.1883 | 0.3600 | 0.1390 | 0.0390 | 0.7300 |
-| rerank | 0.3498 | 0.5400 | 0.2905 | 0.0590 | 0.8300 |
-| assembled | 0.3812 | 0.5900 | 0.3153 | 0.0640 | 0.8100 |
+| recall | 0.1901 | 0.3600 | 0.1413 | 0.0390 | 0.7300 |
+| rerank | 0.3533 | 0.5300 | 0.2983 | 0.0580 | 0.8300 |
+| assembled | 0.3797 | 0.5900 | 0.3142 | 0.0640 | 0.8200 |
 
 ## Notes
 

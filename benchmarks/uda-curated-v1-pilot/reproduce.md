@@ -21,7 +21,7 @@
 - Area ID：`58afaf23-423d-4526-b90d-43ea19711eaf`
 - Dataset 名稱：`uda-curated-v1-pilot`
 - Dataset ID：`3d779672-b561-5d64-aa76-035d37d4e0b4`
-- Reference run ID：`593638b8-a3c7-4471-ba56-7d242a8e65fa`
+- Reference run ID：`e57393cc-c9a3-4ceb-a36c-7af416b6ba66`
 
 ## 步驟 1：啟動服務
 
@@ -335,9 +335,9 @@ PYTHONPATH=src python -m app.scripts.run_retrieval_eval run \
 
 | 階段 | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.3127 | 0.5000 | 0.2483 | 0.0577 | 0.7308 |
-| rerank | 0.7353 | 0.8462 | 0.7083 | 0.0885 | 0.9615 |
-| assembled | 0.5288 | 0.6538 | 0.4968 | 0.0692 | 0.9615 |
+| recall | 0.2849 | 0.4615 | 0.2215 | 0.0538 | 0.6923 |
+| rerank | 0.7333 | 0.8462 | 0.7051 | 0.0885 | 0.9615 |
+| assembled | 0.7333 | 0.8462 | 0.7051 | 0.0885 | 0.9615 |
 
 ## BGE Core Profile 對照
 

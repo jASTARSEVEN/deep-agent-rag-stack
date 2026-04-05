@@ -191,7 +191,12 @@ def _query_focus_budget_sweep_overrides(
 
 # evaluation profile registry；新增策略時優先在此處新增資料定義，而非分散到多處 if/else。
 EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
-    PRODUCTION_LIKE_V1: EvaluationProfileSpec(name=PRODUCTION_LIKE_V1),
+    PRODUCTION_LIKE_V1: EvaluationProfileSpec(
+        name=PRODUCTION_LIKE_V1,
+        overrides={
+            "retrieval_query_focus_enabled": False,
+        },
+    ),
     DETERMINISTIC_GATE_V1: EvaluationProfileSpec(
         name=DETERMINISTIC_GATE_V1,
         overrides={},
@@ -341,8 +346,6 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
     if evaluation_profile not in EVALUATION_PROFILE_SPECS:
         raise ValueError(f"不支援的 evaluation profile：{evaluation_profile}")
 
-    if evaluation_profile == PRODUCTION_LIKE_V1:
-        return {}
     if evaluation_profile == DETERMINISTIC_GATE_V1:
         return _deterministic_gate_overrides(settings=settings)
     if evaluation_profile == GENERIC_GUARDED_ASSEMBLER_V1:

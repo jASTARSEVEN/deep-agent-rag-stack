@@ -7,6 +7,8 @@ import csv
 import json
 import re
 import shutil
+import urllib.parse
+import urllib.request
 import unicodedata
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -60,6 +62,21 @@ FUZZY_ACCEPT_SCORE = 0.92
 # fuzzy 第一名與第二名至少要拉開的分數差距。
 FUZZY_ACCEPT_MARGIN = 0.05
 
+# Hugging Face dataset server 的 rows API。
+HF_DATASET_ROWS_API = "https://datasets-server.huggingface.co/rows"
+
+# `prepare-source --input-path` 可接受的 Hugging Face pseudo path scheme。
+HF_DATASET_REF_SCHEME = "hf://"
+
+# MS MARCO 建檔時最多保留多少非 selected passages 作為噪音上下文。
+MSMARCO_MAX_CONTEXT_PASSAGES = 3
+
+# MS MARCO 官方 QA dataset 用來表示無答案的字串。
+MSMARCO_NO_ANSWER = "No Answer Present."
+
+# 向 dataset server 取 rows 時每批拉取的大小。
+MSMARCO_ROWS_BATCH_SIZE = 100
+
 
 @dataclass(slots=True)
 class NormalizedText:
@@ -83,8 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     prepare_parser = subparsers.add_parser("prepare-source")
-    prepare_parser.add_argument("--dataset", choices=["qasper", "uda"], required=True)
-    prepare_parser.add_argument("--input-path", required=True, help="外部資料集檔案或目錄。")
+    prepare_parser.add_argument("--dataset", choices=["qasper", "uda", "msmarco"], required=True)
+    prepare_parser.add_argument(
+        "--input-path",
+        required=True,
+        help="外部資料集檔案、目錄，或 `hf://microsoft/ms_marco/v1.1/validation` 這類 Hugging Face dataset 參照。",
+    )
     prepare_parser.add_argument("--workspace-dir", required=True, help="中間產物輸出目錄。")
     prepare_parser.add_argument("--limit-documents", type=int, default=None)
     prepare_parser.add_argument("--limit-items", type=int, default=None)
@@ -145,6 +166,20 @@ def read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def read_json_from_url(url: str) -> dict[str, Any]:
+    """從 URL 讀取 JSON payload。
+
+    參數：
+    - `url`：可直接 GET 的 JSON URL。
+
+    回傳：
+    - `dict[str, Any]`：解析後的 JSON 物件。
+    """
+
+    with urllib.request.urlopen(url) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
     """讀取 JSONL 檔案。
 
@@ -193,6 +228,32 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as file:
         for row in rows:
             file.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def parse_hf_dataset_reference(input_reference: str) -> tuple[str, str, str] | None:
+    """解析 `hf://dataset/config/split` 形式的 Hugging Face dataset 參照。
+
+    參數：
+    - `input_reference`：CLI 傳入的 input 參照。
+
+    回傳：
+    - `tuple[str, str, str] | None`：回傳 `(dataset_name, config_name, split_name)`；若不是 `hf://` 參照則回傳空值。
+    """
+
+    if not input_reference.startswith(HF_DATASET_REF_SCHEME):
+        return None
+
+    raw_path = input_reference[len(HF_DATASET_REF_SCHEME) :].strip("/")
+    parts = [part for part in raw_path.split("/") if part]
+    if len(parts) < 4:
+        raise ValueError("Hugging Face dataset 參照必須是 `hf://<namespace>/<dataset>/<config>/<split>`。")
+
+    dataset_name = "/".join(parts[:-2])
+    config_name = parts[-2]
+    split_name = parts[-1]
+    if not dataset_name or not config_name or not split_name:
+        raise ValueError("Hugging Face dataset 參照缺少 dataset/config/split。")
+    return dataset_name, config_name, split_name
 
 
 def slugify_filename(value: str, *, suffix: str) -> str:
@@ -259,6 +320,32 @@ def flatten_text(value: Any) -> str:
                 return flatten_text(value[candidate_key])
         return ""
     return str(value).strip()
+
+
+def normalize_nested_sequence(value: Any) -> list[Any]:
+    """將 list-like / numpy-like 結構轉成 Python list。
+
+    參數：
+    - `value`：原始欄位值。
+
+    回傳：
+    - `list[Any]`：正規化後的 list。
+    """
+
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    to_list = getattr(value, "tolist", None)
+    if callable(to_list):
+        converted = to_list()
+        if isinstance(converted, list):
+            return converted
+        if isinstance(converted, tuple):
+            return list(converted)
+    return [value]
 
 
 def normalize_newlines(text: str) -> str:
@@ -468,6 +555,66 @@ def read_table_like_rows(input_path: Path) -> list[dict[str, Any]]:
     raise ValueError("UDA input 只支援 .json / .jsonl / .csv / .tsv。")
 
 
+def iter_hf_dataset_rows(*, dataset_name: str, config_name: str, split_name: str) -> Any:
+    """逐批讀取 Hugging Face dataset server rows。
+
+    參數：
+    - `dataset_name`：資料集名稱。
+    - `config_name`：config 名稱。
+    - `split_name`：split 名稱。
+
+    回傳：
+    - `Any`：可迭代的 row dict 產生器。
+    """
+
+    offset = 0
+    while True:
+        query_string = urllib.parse.urlencode(
+            {
+                "dataset": dataset_name,
+                "config": config_name,
+                "split": split_name,
+                "offset": offset,
+                "length": MSMARCO_ROWS_BATCH_SIZE,
+            }
+        )
+        payload = read_json_from_url(f"{HF_DATASET_ROWS_API}?{query_string}")
+        rows = payload.get("rows", [])
+        if not rows:
+            break
+        for row_wrapper in rows:
+            if isinstance(row_wrapper, dict) and isinstance(row_wrapper.get("row"), dict):
+                yield row_wrapper["row"]
+            elif isinstance(row_wrapper, dict):
+                yield row_wrapper
+        offset += len(rows)
+
+
+def resolve_prepare_source_rows(input_reference: Path | str) -> Any:
+    """依輸入參照回傳可供 `prepare-source` 使用的列資料。
+
+    參數：
+    - `input_reference`：本機檔案路徑或 `hf://` 參照。
+
+    回傳：
+    - `Any`：可迭代的 row dict 序列。
+    """
+
+    if isinstance(input_reference, str):
+        hf_reference = parse_hf_dataset_reference(input_reference)
+        if hf_reference is not None:
+            dataset_name, config_name, split_name = hf_reference
+            return iter_hf_dataset_rows(
+                dataset_name=dataset_name,
+                config_name=config_name,
+                split_name=split_name,
+            )
+        input_path = Path(input_reference).resolve()
+    else:
+        input_path = input_reference
+    return read_table_like_rows(input_path)
+
+
 def first_present(row: dict[str, Any], keys: tuple[str, ...]) -> str:
     """依序取出第一個存在且非空的欄位。
 
@@ -508,6 +655,193 @@ def build_uda_document_content(row: dict[str, Any]) -> str:
             "document_content",
         ),
     )
+
+
+def extract_msmarco_answer(row: dict[str, Any]) -> tuple[str, str]:
+    """從 MS MARCO row 挑出最適合 benchmark 的答案文字。
+
+    參數：
+    - `row`：MS MARCO 單列資料。
+
+    回傳：
+    - `tuple[str, str]`：`(answer_text, answer_type)`；若沒有可用答案則 `answer_text` 會是空字串。
+    """
+
+    well_formed_answers = [
+        answer.strip()
+        for answer in normalize_nested_sequence(row.get("wellFormedAnswers"))
+        if isinstance(answer, str) and answer.strip() and answer.strip() != "[]"
+    ]
+    if well_formed_answers:
+        return well_formed_answers[0], "well_formed_answer"
+
+    answers = [
+        answer.strip()
+        for answer in normalize_nested_sequence(row.get("answers"))
+        if isinstance(answer, str) and answer.strip() and answer.strip() != MSMARCO_NO_ANSWER
+    ]
+    if answers:
+        return answers[0], "short_answer"
+    return "", "missing"
+
+
+def extract_msmarco_passages(row: dict[str, Any], *, selected_only: bool) -> list[dict[str, str]]:
+    """從 MS MARCO row 抽出 selected 或 context passages。
+
+    參數：
+    - `row`：MS MARCO 單列資料。
+    - `selected_only`：是否只保留官方 `is_selected=1` 的 passages。
+
+    回傳：
+    - `list[dict[str, str]]`：包含 `text` 與 `url` 的 passages 列表。
+    """
+
+    passages = row.get("passages") if isinstance(row.get("passages"), dict) else {}
+    selected_flags = normalize_nested_sequence(passages.get("is_selected"))
+    passage_texts = normalize_nested_sequence(passages.get("passage_text"))
+    passage_urls = normalize_nested_sequence(passages.get("url"))
+
+    results: list[dict[str, str]] = []
+    for index, passage_text in enumerate(passage_texts):
+        if not isinstance(passage_text, str) or not passage_text.strip():
+            continue
+        is_selected = int(selected_flags[index]) == 1 if index < len(selected_flags) else False
+        if selected_only != is_selected:
+            continue
+        url = passage_urls[index].strip() if index < len(passage_urls) and isinstance(passage_urls[index], str) else ""
+        results.append(
+            {
+                "text": passage_text.strip(),
+                "url": url,
+            }
+        )
+    return results
+
+
+def build_msmarco_document_content(*, query_id: str, selected_passages: list[dict[str, str]], context_passages: list[dict[str, str]]) -> str:
+    """將 MS MARCO row 轉成可上傳的 Markdown 文件。
+
+    參數：
+    - `query_id`：原始 query id。
+    - `selected_passages`：官方標記為 selected 的 passages。
+    - `context_passages`：額外保留的非 selected passages。
+
+    回傳：
+    - `str`：可寫入 repo 的 Markdown 內容。
+    """
+
+    blocks = [f"# MS MARCO Snippet Bundle {query_id}"]
+
+    for index, passage in enumerate(selected_passages, start=1):
+        blocks.extend(["", f"## Selected Passage {index}"])
+        if passage["url"]:
+            blocks.extend(["", f"Source URL: {passage['url']}"])
+        blocks.extend(["", passage["text"]])
+
+    for index, passage in enumerate(context_passages[:MSMARCO_MAX_CONTEXT_PASSAGES], start=1):
+        blocks.extend(["", f"## Context Passage {index}"])
+        if passage["url"]:
+            blocks.extend(["", f"Source URL: {passage['url']}"])
+        blocks.extend(["", passage["text"]])
+
+    return normalize_newlines("\n".join(blocks)) + "\n"
+
+
+def prepare_msmarco_source(
+    *,
+    input_reference: Path | str,
+    workspace_dir: Path,
+    limit_documents: int | None,
+    limit_items: int | None,
+) -> dict[str, Any]:
+    """將 MS MARCO QA rows 轉成中間格式與 source documents。
+
+    參數：
+    - `input_reference`：本機檔案路徑或 `hf://` dataset 參照。
+    - `workspace_dir`：benchmark 工作目錄。
+    - `limit_documents`：最多處理幾份文件。
+    - `limit_items`：最多輸出幾題。
+
+    回傳：
+    - `dict[str, Any]`：prepare 摘要。
+    """
+
+    source_dir = workspace_dir / SOURCE_DOCUMENTS_DIRNAME
+    documents: list[dict[str, Any]] = []
+    items: list[dict[str, Any]] = []
+
+    for row_index, raw_row in enumerate(resolve_prepare_source_rows(input_reference)):
+        row = raw_row if isinstance(raw_row, dict) else {}
+        query_text = first_present(row, ("query", "question"))
+        if not query_text:
+            continue
+
+        answer_text, answer_type = extract_msmarco_answer(row)
+        selected_passages = extract_msmarco_passages(row, selected_only=True)
+        if not answer_text or not selected_passages:
+            continue
+
+        if limit_documents is not None and len(documents) >= limit_documents:
+            break
+        if limit_items is not None and len(items) >= limit_items:
+            break
+
+        query_id = first_present(row, ("query_id", "id")) or f"msmarco-query-{row_index}"
+        file_name = slugify_filename(f"msmarco-{query_id}", suffix=".md")
+        source_document_path = source_dir / file_name
+        context_passages = extract_msmarco_passages(row, selected_only=False)
+        source_document_path.write_text(
+            build_msmarco_document_content(
+                query_id=query_id,
+                selected_passages=selected_passages,
+                context_passages=context_passages,
+            ),
+            encoding="utf-8",
+        )
+
+        documents.append(
+            {
+                "dataset": "msmarco",
+                "source_document_id": query_id,
+                "file_name": file_name,
+                "title": f"MS MARCO Snippet Bundle {query_id}",
+                "source_path": str(source_document_path.resolve()),
+                "content_type": "text/markdown",
+                "created_at": now_iso(),
+            }
+        )
+        items.append(
+            {
+                "item_id": stable_uuid(f"msmarco::{query_id}::{query_text}"),
+                "dataset": "msmarco",
+                "source_document_id": query_id,
+                "file_name": file_name,
+                "query_text": query_text,
+                "language": "en",
+                "query_type": "fact_lookup",
+                "answer_text": answer_text,
+                "evidence_texts": [answer_text],
+                "answer_type": answer_type,
+                "source_question_index": row_index,
+                "source_metadata": {
+                    "query_id": query_id,
+                    "original_query_type": first_present(row, ("query_type",)),
+                    "selected_passage_count": len(selected_passages),
+                    "context_passage_count": len(context_passages[:MSMARCO_MAX_CONTEXT_PASSAGES]),
+                    "selected_urls": [passage["url"] for passage in selected_passages if passage["url"]],
+                },
+                "created_at": now_iso(),
+            }
+        )
+
+    write_jsonl(workspace_dir / PREPARED_DOCUMENTS_FILE, documents)
+    write_jsonl(workspace_dir / PREPARED_ITEMS_FILE, items)
+    return {
+        "dataset": "msmarco",
+        "document_count": len(documents),
+        "item_count": len(items),
+        "workspace_dir": str(workspace_dir),
+    }
 
 
 def prepare_uda_source(*, input_path: Path, workspace_dir: Path, limit_documents: int | None, limit_items: int | None) -> dict[str, Any]:
@@ -605,7 +939,14 @@ def prepare_uda_source(*, input_path: Path, workspace_dir: Path, limit_documents
     }
 
 
-def prepare_source(*, dataset: str, input_path: Path, workspace_dir: Path, limit_documents: int | None, limit_items: int | None) -> dict[str, Any]:
+def prepare_source(
+    *,
+    dataset: str,
+    input_path: Path | str,
+    workspace_dir: Path,
+    limit_documents: int | None,
+    limit_items: int | None,
+) -> dict[str, Any]:
     """依資料集型別執行 source preparation。
 
     參數：
@@ -630,6 +971,13 @@ def prepare_source(*, dataset: str, input_path: Path, workspace_dir: Path, limit
     if dataset == "uda":
         return prepare_uda_source(
             input_path=input_path,
+            workspace_dir=workspace_dir,
+            limit_documents=limit_documents,
+            limit_items=limit_items,
+        )
+    if dataset == "msmarco":
+        return prepare_msmarco_source(
+            input_reference=input_path,
             workspace_dir=workspace_dir,
             limit_documents=limit_documents,
             limit_items=limit_items,
@@ -1356,9 +1704,14 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     if args.command == "prepare-source":
+        input_path: Path | str
+        if args.input_path.startswith(HF_DATASET_REF_SCHEME):
+            input_path = args.input_path
+        else:
+            input_path = Path(args.input_path).resolve()
         summary = prepare_source(
             dataset=args.dataset,
-            input_path=Path(args.input_path).resolve(),
+            input_path=input_path,
             workspace_dir=Path(args.workspace_dir).resolve(),
             limit_documents=args.limit_documents,
             limit_items=args.limit_items,

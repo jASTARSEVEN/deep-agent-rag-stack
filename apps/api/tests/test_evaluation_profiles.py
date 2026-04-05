@@ -37,6 +37,19 @@ def test_profile_registry_exposes_supported_profiles() -> None:
     assert GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000 in SUPPORTED_EVALUATION_PROFILES
 
 
+def test_production_like_profile_disables_query_focus_for_stable_baseline() -> None:
+    """production_like_v1 應固定關閉 query focus，避免 baseline 漂移。"""
+
+    settings = AppSettings()
+
+    overrides = get_evaluation_profile_overrides(
+        settings=settings,
+        evaluation_profile="production_like_v1",
+    )
+
+    assert overrides["retrieval_query_focus_enabled"] is False
+
+
 def test_gate_profile_inherits_live_profile_overrides() -> None:
     """gate profile 應繼承 live profile 並額外改成 deterministic rerank。"""
 

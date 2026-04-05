@@ -1,9 +1,9 @@
-# QASPER 100 重現指南
+# MS MARCO 100 重現指南
 
 ## 目的
 
-此文件說明如何在目前 repo 內重現 `qasper-curated-v1-100` 的建立流程與 `production_like_v1` reference run。  
-重現目標是取得與本 package 相同 contract、相同 profile 的 `100` 題 benchmark 分數，而不是重跑原始 `QASPER` 論文 leaderboard。
+此文件說明如何在目前 repo 內重現 `msmarco-curated-v1-100` 的建立流程與 `production_like_v1` reference run。  
+重現目標是取得與本 package 相同 contract、相同 profile 的 `100` 題 benchmark 分數，而不是重跑原始 `MS MARCO` leaderboard。
 
 ## 先備條件
 
@@ -13,15 +13,15 @@
   - `http://localhost/auth`
   - `http://localhost/api`
   - `postgresql://postgres:postgres@localhost:15432/deep_agent_rag`
-- `OPENAI_API_KEY` 可用，供 queue-only review 使用
+- `OPENAI_API_KEY` 可用，供 review queue 補齊 gold spans
 
 ## 本次 reference run 身分
 
-- Area 名稱：`qasper-100`
-- Area ID：`204b0f87-bbbd-4549-ae3b-8064e535b453`
-- Dataset 名稱：`qasper-curated-v1-100`
-- Dataset ID：`e836874e-5183-5f09-8241-eddb155adab1`
-- Reference run ID：`6c4636ce-85da-456c-a8b3-059b4650b1ae`
+- Area 名稱：`msmarco-100`
+- Area ID：`4a7a8c05-4aa2-403f-b101-d24ff28d1308`
+- Dataset 名稱：`msmarco-curated-v1-100`
+- Dataset ID：`4669417e-6276-54ae-89b3-95fcb7652096`
+- Reference run ID：`5e9de20b-4781-4711-a69e-03157e61d68a`
 
 ## 步驟 1：啟動服務
 
@@ -32,52 +32,33 @@
 ./scripts/compose.sh exec api python -m app.db.migration_runner
 ```
 
-## 步驟 2：下載 QASPER 原始資料
+## 步驟 2：建立 oversampled workspace
+
+`MS MARCO` 這條流程不需要手動先下載 parquet；直接透過 `prepare_external_benchmark` 內建的 `hf://` 參照向 Hugging Face dataset-server 取 row。
 
 ```bash
-mkdir -p /tmp/qasper-100
-cd /tmp/qasper-100
-
-python - <<'PY'
-import tarfile
-import urllib.request
-from pathlib import Path
-
-url = "https://qasper-dataset.s3.us-west-2.amazonaws.com/qasper-train-dev-v0.3.tgz"
-archive = Path("qasper-train-dev-v0.3.tgz")
-if not archive.exists():
-    urllib.request.urlretrieve(url, archive)
-with tarfile.open(archive) as tf:
-    tf.extract("qasper-train-v0.3.json", path=".")
-print(Path("qasper-train-v0.3.json").resolve())
-PY
-```
-
-## 步驟 3：建立 oversampled workspace
-
-```bash
-rm -rf /tmp/qasper-100-workspace
+rm -rf /tmp/msmarco-100-workspace
 
 cd /Users/pin/Desktop/workspace/deep-agent-rag-stack
 
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchmark prepare-source \
-  --dataset qasper \
-  --input-path /tmp/qasper-100/qasper-train-v0.3.json \
-  --workspace-dir /tmp/qasper-100-workspace \
-  --limit-documents 50 \
-  --limit-items 400
+  --dataset msmarco \
+  --input-path hf://microsoft/ms_marco/v1.1/validation \
+  --workspace-dir /tmp/msmarco-100-workspace \
+  --limit-documents 180 \
+  --limit-items 180
 
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchmark filter-items \
-  --workspace-dir /tmp/qasper-100-workspace
+  --workspace-dir /tmp/msmarco-100-workspace
 ```
 
 預期：
 
-- `document_count = 50`
-- `prepared_item_count = 196`
-- `kept_item_count = 132`
+- `prepared_item_count = 180`
+- `kept_item_count = 154`
+- drop reason 主要來自 `answer_too_long`、`yes_no_answer` 與少量 `layout_dependent`
 
-## 步驟 4：建立 area 並上傳文件
+## 步驟 3：建立 area 並上傳文件
 
 先取得 `carol` token：
 
@@ -99,16 +80,16 @@ TOKEN=$(
 curl -sS \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name":"qasper-100","description":"QASPER 100 benchmark"}' \
+  -d '{"name":"msmarco-100","description":"MS MARCO 100 benchmark"}' \
   http://localhost/api/areas
 ```
 
 將回傳中的 `id` 記成 `AREA_ID`。
 
-上傳 markdown papers：
+上傳 markdown snippet bundles：
 
 ```bash
-for f in /tmp/qasper-100-workspace/source_documents/*.md; do
+find /tmp/msmarco-100-workspace/source_documents -type f -name "*.md" | sort | while read -r f; do
   curl -sS \
     -H "Authorization: Bearer $TOKEN" \
     -F "file=@$f" \
@@ -118,52 +99,55 @@ done
 
 等到所有文件都進入 `ready`。
 
-## 步驟 5：對齊 evidence 與 queue-only review
+## 步驟 4：對齊 evidence 與 review queue
 
 ```bash
 cd /Users/pin/Desktop/workspace/deep-agent-rag-stack
 
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchmark align-spans \
-  --workspace-dir /tmp/qasper-100-workspace \
+  --workspace-dir /tmp/msmarco-100-workspace \
   --area-id "$AREA_ID"
 
-DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchmark report \
-  --workspace-dir /tmp/qasper-100-workspace
+  --workspace-dir /tmp/msmarco-100-workspace
 ```
 
 本次 reference package 的 deterministic 對齊結果為：
 
-- `filtered_item_count = 132`
-- `auto_matched = 122`
-- `needs_review = 4`
-- `rejected = 6`
+- `filtered_item_count = 154`
+- `auto_matched = 103`
+- `needs_review = 7`
+- `rejected = 44`
 
-只對 `alignment_review_queue` 跑 `OpenAI` review：
+## 步驟 5：對 review queue 跑 `OpenAI` review
+
+`MS MARCO` 這條流程會先以答案字串對齊；若答案本身是 paraphrase 或多處可命中，才交給 `OpenAI` 從候選視窗回貼逐字 quote。
 
 ```bash
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 OPENAI_API_KEY="$OPENAI_API_KEY" \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.review_external_benchmark_with_openai \
-  --workspace-dir /tmp/qasper-100-workspace \
+  --workspace-dir /tmp/msmarco-100-workspace \
   --area-id "$AREA_ID" \
   --model gpt-4.1-mini \
   --replace \
   --review-source alignment_review_queue
 ```
 
-本次 reference package 的 queue-only review 結果為：
+本次 reference package 的 review 結果為：
 
-- `approved_override_count = 2`
+- `review_item_count = 51`
+- `approved_override_count = 47`
+- `rejected_count = 4`
 
 ## 步驟 6：建立正式 snapshot
 
 ```bash
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchmark build-snapshot \
-  --workspace-dir /tmp/qasper-100-workspace \
-  --output-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-curated-v1-100 \
-  --benchmark-name qasper-curated-v1-100 \
+  --workspace-dir /tmp/msmarco-100-workspace \
+  --output-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/msmarco-curated-v1-100 \
+  --benchmark-name msmarco-curated-v1-100 \
   --target-question-count 100 \
   --reference-evaluation-profile production_like_v1
 ```
@@ -172,24 +156,24 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.prepare_external_benchma
 
 - `question_count = 100`
 - `question_with_gold_span_count = 100`
-- `span_count = 164`
-- `document_count = 42`
+- `span_count = 114`
+- `document_count = 100`
 
 ## 步驟 7：匯入 snapshot
 
 ```bash
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.import_benchmark_snapshot \
-  --snapshot-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-curated-v1-100 \
+  --snapshot-dir /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/msmarco-curated-v1-100 \
   --area-id "$AREA_ID" \
-  --dataset-name qasper-curated-v1-100 \
+  --dataset-name msmarco-curated-v1-100 \
   --replace
 ```
 
 預期 dataset id：
 
 ```text
-e836874e-5183-5f09-8241-eddb155adab1
+4669417e-6276-54ae-89b3-95fcb7652096
 ```
 
 ## 步驟 8：執行 reference run
@@ -197,7 +181,7 @@ e836874e-5183-5f09-8241-eddb155adab1
 ```bash
 DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
-  --dataset-id e836874e-5183-5f09-8241-eddb155adab1 \
+  --dataset-id 4669417e-6276-54ae-89b3-95fcb7652096 \
   --top-k 10 \
   --evaluation-profile production_like_v1 \
   --actor-sub ea33183f-1e9f-458f-a405-bb365b8266c0
@@ -207,6 +191,6 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
 
 | 階段 | nDCG@10 | Recall@10 | MRR@10 | Precision@10 | Doc Coverage@10 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| recall | 0.1901 | 0.3600 | 0.1413 | 0.0390 | 0.7300 |
-| rerank | 0.3533 | 0.5300 | 0.2983 | 0.0580 | 0.8300 |
-| assembled | 0.3797 | 0.5900 | 0.3142 | 0.0640 | 0.8200 |
+| recall | 0.7825 | 0.9900 | 0.7092 | 0.1110 | 1.0000 |
+| rerank | 0.9674 | 1.0000 | 0.9550 | 0.1050 | 1.0000 |
+| assembled | 0.9674 | 1.0000 | 0.9550 | 0.1050 | 1.0000 |

@@ -61,15 +61,19 @@
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
 - benchmark 治理已同步改為 generic-first：guarded query-focus lane 使用 `generic_guarded_query_focus_v1`，不再保留舊的 benchmark-specific profile naming
 - retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷
-- 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 generic-first query-focus lane：相對 `generic_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平，三資料集平均 `nDCG@10 +0.0194`
+- 已以 `Docker Compose` fresh rebuild + 三個 benchmark package 實測 generic-first query-focus lane：相對 `generic_guarded_evidence_synopsis_v3`，self `nDCG@10 +0.0197`、UDA `+0.0385`、QASPER 持平
 - 已將 `benchmarks/uda-curated-v1-pilot` 擴充為 `26` 題版：透過 `OpenAI API` review 與少量 deterministic span override，把官方 `UDA-Benchmark` sample artifacts 映射到現有 retrieval benchmark contract，最終覆蓋 `12` 份文件、`26` 題、`38` 個 gold spans
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
 - 已新增 `apps/api/src/app/scripts/prepare_uda_full_source.py`，可將官方 `UDA-Benchmark` `extended_qa_info_bench` 與 full-source docs 正規化為現有 `prepare_external_benchmark --dataset uda` 可直接使用的 JSONL row contract
-- 已新增兩份正式外部 `100` 題 package，且 reference run 統一使用 `production_like_v1`：
-  - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最終 `100` 題 / `42` 份文件 / `164` 個 gold spans，assembled `Recall@10=0.5900`、`nDCG@10=0.3812`、`MRR@10=0.3153`
-  - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最終 `100` 題 / `45` 份文件 / `100` 個 gold spans，assembled `Recall@10=0.8300`、`nDCG@10=0.6816`、`MRR@10=0.6336`
-- `docs/retrieval-benchmark-strategy-analysis.md` 已新增 `External 100Q Baseline` 區塊，固定以 `production_like_v1` 呈現 `QASPER 100`、`UDA 100` 與 `self excluded` macro average 分數
-- 已完成 `QASPER 100` 與 `UDA 100` 的完整 miss 重分析，並新增 `docs/external-100q-miss-analysis-2026-04-04.md`：`QASPER` `41` 題 miss 中 `33` 題集中在英文 generic evidence-field semantic gap（`dataset / baseline / experiment / metric / annotation`），`UDA` `17` 題 miss 中 `15` 題集中在 same-document locality / list-table answer localization；下一輪唯一主假設已收斂為 `english_field_focus_v2`
+- 已將 `apps/api/src/app/scripts/prepare_external_benchmark.py` 擴充為支援 `msmarco`，可直接吃 `hf://microsoft/ms_marco/v1.1/validation` 這類 Hugging Face dataset-server 參照，並沿用既有 `filter -> align -> OpenAI review -> build snapshot` 流程
+- 已新增三份正式 external `100Q` package，且目前共同 baseline 以 `2026-04-05` 重跑的 `production_like_v1` 為準：
+  - `benchmarks/msmarco-curated-v1-100`：官方 `MS MARCO v1.1` validation QA rows、`180` prepared items、`154` filtered items、`103` auto-matched、`47` 個 `OpenAI` review overrides，最終 `100` 題 / `100` 份 snippet-bundle 文件 / `114` 個 gold spans，最新 rerun assembled `Recall@10=1.0000`、`nDCG@10=0.9674`、`MRR@10=0.9550`
+  - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最新 rerun assembled `Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
+  - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
+- 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `qasper_v3 + query_focus off + 9x3000`
+- 已於 `2026-04-05` 以同一條 current `production_like_v1`（`qasper_v3 + query_focus off + 9x3000`）重跑六個 benchmark dataset，並依難度由簡單到困難排序更新長期文件：`MS MARCO 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
+- `docs/retrieval-benchmark-strategy-analysis.md` 已更新為六資料集 rerun 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100` 與 `MS MARCO 100`
+- 已完成 `QASPER 100`、`UDA 100` 與 `MS MARCO 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單
 - `UDA` pilot 這一輪的 benchmark governance 結果為：`9` 題 auto-matched、`21` 題由 `OpenAI` review 核准、再補 `4` 題 deterministic span override；reference run assembled 指標提升到 `Recall@10=0.6538`、`nDCG@10=0.5288`、`MRR@10=0.4968`
 - `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
 - 目前最佳 deterministic gate 已更新為 `generic_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
