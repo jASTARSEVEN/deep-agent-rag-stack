@@ -11,6 +11,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
+  - If you plan to use local Hugging Face embeddings, install `pip install -e .[dev,local-huggingface]`
   - `PDF_PARSER_PROVIDER=opendataloader` is the default path and requires `Java 11+`
   - This repository follows the official OpenDataLoader `json,markdown` recommendation and keeps AI safety filters enabled
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
@@ -104,10 +105,12 @@ This module contains the project's Celery worker. It currently provides the mini
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the storage schema expects `1536` dimensions.
+- `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the worker downloads the model on first use when needed, reuses the local Hugging Face cache afterwards, and zero-pads the model's `1024`-dim output into the current `1536`-dim schema.
 - The optional self-hosted path uses `POST /v1/embeddings` with Bearer auth and dedicated `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.
 - The mainline embedding model now matches the schema width directly, so the worker no longer depends on the `4096`-dimension padding workaround.
 - OpenAI embeddings are now sent in batches controlled by `EMBEDDING_MAX_BATCH_TEXTS`; if a batch is still rejected for request-size overflow, the worker recursively splits that batch and retries with smaller requests.
 - OpenAI embeddings now retry only transient failures such as `429`, `5xx`, and connection/timeout errors with bounded backoff. Permanent `400`-class request errors become controlled failed jobs instead of unexpected task crashes.
+- If the worker runs in Docker Compose with local Hugging Face embeddings, set `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface` before rebuilding the image so the default container path does not install `torch` / `transformers` unnecessarily.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - File types outside the implemented parser set still move into controlled `failed` status.
 - Public retrieval APIs, rerank, and chat orchestration remain outside this module.

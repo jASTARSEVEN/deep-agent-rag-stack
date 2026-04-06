@@ -1,4 +1,4 @@
-"""API 使用的 rerank provider abstraction 與 BGE / Qwen / Cohere / self-hosted / deterministic 實作。"""
+"""API 使用的 rerank provider abstraction 與 Hugging Face / Cohere / self-hosted / deterministic 實作。"""
 
 from __future__ import annotations
 
@@ -10,26 +10,34 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from app.core.settings import AppSettings
 
 LOGGER = logging.getLogger(__name__)
-# BGE reranker 依官方範例預設使用 512 token 輸入長度。
-_BGE_RERANK_MAX_LENGTH = 512
-# Qwen reranker 預設 instruction；依官方 model card 建議使用英文 instruction。
-_QWEN_RERANK_DEFAULT_INSTRUCTION = "Given a web search query, retrieve relevant passages that answer the query"
-# Qwen reranker 依官方範例預設使用 8192 token 上限。
-_QWEN_RERANK_MAX_LENGTH = 8192
-# Qwen reranker system prefix；限制輸出只能為 yes / no。
-_QWEN_RERANK_SYSTEM_PREFIX = (
+# Hugging Face cross-encoder reranker 預設使用 512 token 輸入長度。
+_HUGGINGFACE_SEQUENCE_RERANK_MAX_LENGTH = 512
+# Hugging Face Qwen reranker 預設 instruction；依官方 model card 建議使用英文 instruction。
+_HUGGINGFACE_QWEN_RERANK_DEFAULT_INSTRUCTION = "Given a web search query, retrieve relevant passages that answer the query"
+# Hugging Face Qwen reranker 依官方範例預設使用 8192 token 上限。
+_HUGGINGFACE_QWEN_RERANK_MAX_LENGTH = 8192
+# Hugging Face Qwen reranker system prefix；限制輸出只能為 yes / no。
+_HUGGINGFACE_QWEN_RERANK_SYSTEM_PREFIX = (
     '<|im_start|>system\nJudge whether the Document meets the requirements based on the Query and the '
     'Instruct provided. Note that the answer can only be "yes" or "no".<|im_end|>\n<|im_start|>user\n'
 )
-# Qwen reranker assistant suffix；與官方範例一致。
-_QWEN_RERANK_ASSISTANT_SUFFIX = '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
+# Hugging Face Qwen reranker assistant suffix；與官方範例一致。
+_HUGGINGFACE_QWEN_RERANK_ASSISTANT_SUFFIX = '<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n'
+
+
+@dataclass(frozen=True, slots=True)
+class _HuggingFaceRerankProfile:
+    """Hugging Face reranker model 的推論設定。"""
+
+    # 推論模式；`sequence_classification` 對應 cross-encoder，`causal_lm_yes_no` 對應 Qwen reranker。
+    runtime_kind: Literal["sequence_classification", "causal_lm_yes_no"]
 
 
 @dataclass(slots=True)
@@ -98,11 +106,11 @@ class DeterministicRerankProvider(RerankProvider):
         )[:top_n]
 
 
-class BGERerankProvider(RerankProvider):
-    """使用 `BAAI/bge-reranker-v2-m3` 類 cross-encoder 的 provider。"""
+class HuggingFaceRerankProvider(RerankProvider):
+    """使用 Hugging Face 本機模型做 rerank 的 provider。"""
 
     def __init__(self, *, model: str) -> None:
-        """初始化 BGE rerank provider。
+        """初始化 Hugging Face rerank provider。
 
         參數：
         - `model`：Hugging Face model id 或本機模型路徑。
@@ -114,7 +122,7 @@ class BGERerankProvider(RerankProvider):
         self._model = model
 
     def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
-        """使用 BGE cross-encoder 對候選文件重排。
+        """使用 Hugging Face 本機 reranker 對候選文件重排。
 
         參數：
         - `query`：使用者查詢文字。
@@ -122,13 +130,14 @@ class BGERerankProvider(RerankProvider):
         - `top_n`：最多回傳前幾名結果。
 
         回傳：
-        - `list[RerankScore]`：依 BGE relevance score 排序後的結果。
+        - `list[RerankScore]`：依 Hugging Face relevance score 排序後的結果。
 
         風險：
-        - 此方法依賴本機 `torch + transformers` 與模型權重；首次載入可能有額外延遲與記憶體成本。
+        - 此方法依賴本機 `torch + transformers` 與模型權重；首次載入可能有額外延遲與記憶體成本，
+          並直接消耗當前 API 行程可用的 CPU / GPU 資源。
         """
 
-        return _score_with_bge_reranker(
+        return _score_with_huggingface_reranker(
             query=query,
             documents=documents,
             top_n=top_n,
@@ -136,42 +145,11 @@ class BGERerankProvider(RerankProvider):
         )
 
 
-class QwenRerankProvider(RerankProvider):
-    """使用 `Qwen3-Reranker-0.6B` 類 instruction-aware reranker 的 provider。"""
+class BGERerankProvider(HuggingFaceRerankProvider):
+    """向後相容的 BGE provider alias，內部實作已收斂為 Hugging Face rerank provider。"""
 
-    def __init__(self, *, model: str) -> None:
-        """初始化 Qwen rerank provider。
-
-        參數：
-        - `model`：Hugging Face model id 或本機模型路徑。
-
-        回傳：
-        - `None`：此建構子只負責保存設定。
-        """
-
-        self._model = model
-
-    def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
-        """使用 Qwen reranker 對候選文件重排。
-
-        參數：
-        - `query`：使用者查詢文字。
-        - `documents`：要送進 rerank 的候選文件。
-        - `top_n`：最多回傳前幾名結果。
-
-        回傳：
-        - `list[RerankScore]`：依 Qwen relevance score 排序後的結果。
-
-        風險：
-        - 此方法依賴本機 `torch + transformers` 與模型權重；首次載入可能有額外延遲與記憶體成本。
-        """
-
-        return _score_with_qwen_reranker(
-            query=query,
-            documents=documents,
-            top_n=top_n,
-            model_name=self._model,
-        )
+class QwenRerankProvider(HuggingFaceRerankProvider):
+    """向後相容的 Qwen provider alias，內部實作已收斂為 Hugging Face rerank provider。"""
 
 
 class CohereRerankProvider(RerankProvider):
@@ -416,14 +394,10 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
     provider = settings.rerank_provider.strip().lower()
     if provider == "deterministic":
         return DeterministicRerankProvider()
-    if provider == "bge":
+    if provider in {"huggingface", "bge", "qwen"}:
         if not settings.rerank_model.strip():
-            raise ValueError("使用 BGE rerank 前必須提供 RERANK_MODEL。")
-        return BGERerankProvider(model=settings.rerank_model)
-    if provider == "qwen":
-        if not settings.rerank_model.strip():
-            raise ValueError("使用 Qwen rerank 前必須提供 RERANK_MODEL。")
-        return QwenRerankProvider(model=settings.rerank_model)
+            raise ValueError("使用 Hugging Face rerank 前必須提供 RERANK_MODEL。")
+        return HuggingFaceRerankProvider(model=settings.rerank_model)
     if provider == "cohere":
         if not settings.cohere_api_key:
             raise ValueError("使用 Cohere rerank 前必須提供 COHERE_API_KEY。")
@@ -450,14 +424,14 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
     raise ValueError(f"不支援的 rerank provider：{settings.rerank_provider}")
 
 
-def _score_with_bge_reranker(
+def _score_with_huggingface_reranker(
     *,
     query: str,
     documents: list[RerankInputDocument],
     top_n: int,
     model_name: str,
 ) -> list[RerankScore]:
-    """使用 BGE reranker 對 query/document pairs 計分。
+    """使用 Hugging Face 本機 reranker 對 query/document pairs 計分。
 
     參數：
     - `query`：使用者查詢文字。
@@ -469,6 +443,129 @@ def _score_with_bge_reranker(
     - `list[RerankScore]`：依分數由高到低排序的 rerank 結果。
     """
 
+    profile = _resolve_huggingface_rerank_profile(model_name=model_name)
+    if profile.runtime_kind == "sequence_classification":
+        return _score_with_huggingface_sequence_classification_reranker(
+            query=query,
+            documents=documents,
+            top_n=top_n,
+            model_name=model_name,
+        )
+    return _score_with_huggingface_causal_lm_reranker(
+        query=query,
+        documents=documents,
+        top_n=top_n,
+        model_name=model_name,
+    )
+
+
+def _score_with_huggingface_sequence_classification_reranker(
+    *,
+    query: str,
+    documents: list[RerankInputDocument],
+    top_n: int,
+    model_name: str,
+) -> list[RerankScore]:
+    """使用 Hugging Face sequence-classification reranker 對 pairs 計分。"""
+
+    if top_n <= 0 or not documents:
+        return []
+
+    tokenizer, model, device, torch_module = _load_huggingface_sequence_classification_reranker_runtime(
+        model_name=model_name
+    )
+    pairs = [[query, document.text] for document in documents]
+    tokenized_inputs = tokenizer(
+        pairs,
+        padding=True,
+        truncation=True,
+        return_tensors="pt",
+        max_length=_HUGGINGFACE_SEQUENCE_RERANK_MAX_LENGTH,
+    )
+    model_inputs = _move_tokenized_inputs_to_device(tokenized_inputs=tokenized_inputs, device=device)
+
+    with torch_module.no_grad():
+        raw_scores = model(**model_inputs, return_dict=True).logits.view(-1)
+        normalized_scores = torch_module.sigmoid(raw_scores)
+
+    score_values = _tensor_to_float_list(tensor_like=normalized_scores)
+    scored_documents = [
+        RerankScore(candidate_id=document.candidate_id, score=score_values[index])
+        for index, document in enumerate(documents)
+    ]
+    return sorted(scored_documents, key=lambda item: (-item.score, item.candidate_id))[:top_n]
+
+
+def _score_with_huggingface_causal_lm_reranker(
+    *,
+    query: str,
+    documents: list[RerankInputDocument],
+    top_n: int,
+    model_name: str,
+) -> list[RerankScore]:
+    """使用 Hugging Face causal-LM reranker 對 pairs 計分。"""
+
+    if top_n <= 0 or not documents:
+        return []
+
+    (
+        tokenizer,
+        model,
+        device,
+        torch_module,
+        prefix_tokens,
+        suffix_tokens,
+        token_false_id,
+        token_true_id,
+    ) = _load_huggingface_causal_lm_reranker_runtime(model_name=model_name)
+    formatted_pairs = [
+        _format_huggingface_qwen_reranker_input(
+            instruction=_HUGGINGFACE_QWEN_RERANK_DEFAULT_INSTRUCTION,
+            query=query,
+            document=document.text,
+        )
+        for document in documents
+    ]
+    tokenized_inputs = tokenizer(
+        formatted_pairs,
+        padding=False,
+        truncation="longest_first",
+        return_attention_mask=False,
+        max_length=_HUGGINGFACE_QWEN_RERANK_MAX_LENGTH - len(prefix_tokens) - len(suffix_tokens),
+    )
+    for index, input_ids in enumerate(tokenized_inputs["input_ids"]):
+        tokenized_inputs["input_ids"][index] = prefix_tokens + input_ids + suffix_tokens
+    padded_inputs = tokenizer.pad(
+        tokenized_inputs,
+        padding=True,
+        return_tensors="pt",
+    )
+    model_inputs = _move_tokenized_inputs_to_device(tokenized_inputs=padded_inputs, device=device)
+
+    with torch_module.no_grad():
+        logits = model(**model_inputs).logits[:, -1, :]
+        false_scores = logits[:, token_false_id]
+        true_scores = logits[:, token_true_id]
+        pair_scores = torch_module.stack([false_scores, true_scores], dim=1)
+        normalized_scores = torch_module.nn.functional.log_softmax(pair_scores, dim=1)[:, 1].exp()
+
+    score_values = _tensor_to_float_list(tensor_like=normalized_scores)
+    scored_documents = [
+        RerankScore(candidate_id=document.candidate_id, score=score_values[index])
+        for index, document in enumerate(documents)
+    ]
+    return sorted(scored_documents, key=lambda item: (-item.score, item.candidate_id))[:top_n]
+
+
+def _score_with_bge_reranker(
+    *,
+    query: str,
+    documents: list[RerankInputDocument],
+    top_n: int,
+    model_name: str,
+) -> list[RerankScore]:
+    """向後相容的 BGE helper；保留原本 monkeypatch 與測試介面。"""
+
     if top_n <= 0 or not documents:
         return []
 
@@ -479,7 +576,7 @@ def _score_with_bge_reranker(
         padding=True,
         truncation=True,
         return_tensors="pt",
-        max_length=_BGE_RERANK_MAX_LENGTH,
+        max_length=_HUGGINGFACE_SEQUENCE_RERANK_MAX_LENGTH,
     )
     model_inputs = _move_tokenized_inputs_to_device(tokenized_inputs=tokenized_inputs, device=device)
 
@@ -502,17 +599,7 @@ def _score_with_qwen_reranker(
     top_n: int,
     model_name: str,
 ) -> list[RerankScore]:
-    """使用 Qwen reranker 對 query/document pairs 計分。
-
-    參數：
-    - `query`：使用者查詢文字。
-    - `documents`：要送進 rerank 的候選文件。
-    - `top_n`：最多回傳前幾名結果。
-    - `model_name`：Hugging Face model id 或本機模型路徑。
-
-    回傳：
-    - `list[RerankScore]`：依分數由高到低排序的 rerank 結果。
-    """
+    """向後相容的 Qwen helper；保留原本 monkeypatch 與測試介面。"""
 
     if top_n <= 0 or not documents:
         return []
@@ -529,7 +616,7 @@ def _score_with_qwen_reranker(
     ) = _load_qwen_reranker_runtime(model_name=model_name)
     formatted_pairs = [
         _format_qwen_reranker_input(
-            instruction=_QWEN_RERANK_DEFAULT_INSTRUCTION,
+            instruction=_HUGGINGFACE_QWEN_RERANK_DEFAULT_INSTRUCTION,
             query=query,
             document=document.text,
         )
@@ -540,7 +627,7 @@ def _score_with_qwen_reranker(
         padding=False,
         truncation="longest_first",
         return_attention_mask=False,
-        max_length=_QWEN_RERANK_MAX_LENGTH - len(prefix_tokens) - len(suffix_tokens),
+        max_length=_HUGGINGFACE_QWEN_RERANK_MAX_LENGTH - len(prefix_tokens) - len(suffix_tokens),
     )
     for index, input_ids in enumerate(tokenized_inputs["input_ids"]):
         tokenized_inputs["input_ids"][index] = prefix_tokens + input_ids + suffix_tokens
@@ -567,8 +654,8 @@ def _score_with_qwen_reranker(
 
 
 @lru_cache(maxsize=4)
-def _load_bge_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any]:
-    """載入並快取 BGE reranker runtime。
+def _load_huggingface_sequence_classification_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any]:
+    """載入並快取 Hugging Face sequence-classification reranker runtime。
 
     參數：
     - `model_name`：Hugging Face model id 或本機模型路徑。
@@ -581,7 +668,7 @@ def _load_bge_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any]:
         import torch
         from transformers import AutoModelForSequenceClassification, AutoTokenizer
     except ImportError as exc:  # pragma: no cover - 依安裝環境而定。
-        raise RuntimeError("使用 BGE rerank 前必須安裝 torch 與 transformers。") from exc
+        raise RuntimeError("使用 Hugging Face rerank 前必須安裝 torch 與 transformers。") from exc
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if device == "cuda" else torch.float32
@@ -593,8 +680,10 @@ def _load_bge_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any]:
 
 
 @lru_cache(maxsize=4)
-def _load_qwen_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any, list[int], list[int], int, int]:
-    """載入並快取 Qwen reranker runtime。
+def _load_huggingface_causal_lm_reranker_runtime(
+    model_name: str,
+) -> tuple[Any, Any, Any, Any, list[int], list[int], int, int]:
+    """載入並快取 Hugging Face causal-LM reranker runtime。
 
     參數：
     - `model_name`：Hugging Face model id 或本機模型路徑。
@@ -608,7 +697,7 @@ def _load_qwen_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any, li
         import torch
         from transformers import AutoModelForCausalLM, AutoTokenizer
     except ImportError as exc:  # pragma: no cover - 依安裝環境而定。
-        raise RuntimeError("使用 Qwen rerank 前必須安裝 torch 與 transformers>=4.51.0。") from exc
+        raise RuntimeError("使用 Hugging Face Qwen rerank 前必須安裝 torch 與 transformers>=4.51.0。") from exc
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch_dtype = torch.float16 if device == "cuda" else torch.float32
@@ -618,15 +707,36 @@ def _load_qwen_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any, li
     model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch_dtype)
     model = model.to(device)
     model.eval()
-    prefix_tokens = tokenizer.encode(_QWEN_RERANK_SYSTEM_PREFIX, add_special_tokens=False)
-    suffix_tokens = tokenizer.encode(_QWEN_RERANK_ASSISTANT_SUFFIX, add_special_tokens=False)
+    prefix_tokens = tokenizer.encode(_HUGGINGFACE_QWEN_RERANK_SYSTEM_PREFIX, add_special_tokens=False)
+    suffix_tokens = tokenizer.encode(_HUGGINGFACE_QWEN_RERANK_ASSISTANT_SUFFIX, add_special_tokens=False)
     token_false_id = tokenizer.convert_tokens_to_ids("no")
     token_true_id = tokenizer.convert_tokens_to_ids("yes")
     return tokenizer, model, device, torch, prefix_tokens, suffix_tokens, token_false_id, token_true_id
 
 
-def _format_qwen_reranker_input(*, instruction: str, query: str, document: str) -> str:
-    """建立 Qwen reranker 單筆輸入文字。
+def _resolve_huggingface_rerank_profile(*, model_name: str) -> _HuggingFaceRerankProfile:
+    """解析 Hugging Face reranker model 對應的推論設定。
+
+    參數：
+    - `model_name`：Hugging Face model id 或本機模型目錄路徑。
+
+    回傳：
+    - `_HuggingFaceRerankProfile`：對應模型所需的 runtime 類型設定。
+    """
+
+    normalized_model_name = model_name.strip().lower()
+    if "bge-reranker" in normalized_model_name:
+        return _HuggingFaceRerankProfile(runtime_kind="sequence_classification")
+    if "qwen3-reranker" in normalized_model_name:
+        return _HuggingFaceRerankProfile(runtime_kind="causal_lm_yes_no")
+    raise ValueError(
+        "目前 Hugging Face rerank 僅支援 BGE Reranker 與 Qwen3 Reranker 系列模型；"
+        f"收到不支援的 RERANK_MODEL={model_name!r}。"
+    )
+
+
+def _format_huggingface_qwen_reranker_input(*, instruction: str, query: str, document: str) -> str:
+    """建立 Hugging Face Qwen reranker 單筆輸入文字。
 
     參數：
     - `instruction`：Qwen reranker 使用的 task instruction。
@@ -638,6 +748,28 @@ def _format_qwen_reranker_input(*, instruction: str, query: str, document: str) 
     """
 
     return "<Instruct>: {instruction}\n<Query>: {query}\n<Document>: {document}".format(
+        instruction=instruction,
+        query=query,
+        document=document,
+    )
+
+
+def _load_bge_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any]:
+    """向後相容的 BGE runtime loader alias。"""
+
+    return _load_huggingface_sequence_classification_reranker_runtime(model_name)
+
+
+def _load_qwen_reranker_runtime(model_name: str) -> tuple[Any, Any, Any, Any, list[int], list[int], int, int]:
+    """向後相容的 Qwen runtime loader alias。"""
+
+    return _load_huggingface_causal_lm_reranker_runtime(model_name)
+
+
+def _format_qwen_reranker_input(*, instruction: str, query: str, document: str) -> str:
+    """向後相容的 Qwen 輸入格式化 alias。"""
+
+    return _format_huggingface_qwen_reranker_input(
         instruction=instruction,
         query=query,
         document=document,

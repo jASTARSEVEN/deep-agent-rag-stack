@@ -13,6 +13,7 @@
   - `cp .env.example .env`
   - 本機開發請保留預設 `PUBLIC_HOST=localhost`
   - 對外部署時再設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL`、`TLS_ACME_EMAIL`
+  - 若要啟用本機 Hugging Face provider，請先設定 `API_INSTALL_OPTIONAL_GROUPS=local-huggingface`；若 worker embeddings 也改用 Hugging Face，則再加上 `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface`
   - 對外部署時再將 `PUBLIC_HOST` 的 DNS 指向部署主機
   - 對外部署時再將外部 `80` 與 `443` 轉發到 Docker 主機
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
@@ -42,6 +43,8 @@
 - `LLAMAPARSE_*`
 - `CELERY_*`
 - `NVIDIA_*`
+- `API_INSTALL_OPTIONAL_GROUPS`
+- `WORKER_INSTALL_OPTIONAL_GROUPS`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -84,5 +87,6 @@
 - `KEYCLOAK_EXPOSE_ADMIN=false` 會在 proxy 層封鎖 `/auth/admin*`；只有在你確定需要遠端管理主控台時，才應改成 `true`。
 - compose stack 已不再公開舊的 `13000/18000/18080`，因此直接從 host 連 web / API / Keycloak 失敗是預期行為。
 - 若你需要 GPU 加速，請先依實際執行環境明確加入 Docker GPU runtime 設定；預設 Compose 路徑刻意不再主動要求 GPU 裝置。
+- 預設 API / worker image 不會安裝本機 Hugging Face optional 依賴。若切成 `EMBEDDING_PROVIDER=huggingface` 或 `RERANK_PROVIDER=huggingface`，請在重建前設定 `API_INSTALL_OPTIONAL_GROUPS=local-huggingface`；若 worker embeddings 也走 Hugging Face，請再加上 `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface`。
 - `supabase-db` 使用 `supabase/postgres` 映像，內建 PGroonga 支援繁體中文檢索。
 - Compose health check 目前只驗證服務就緒，不代表完整業務正確性。

@@ -11,6 +11,7 @@
 - 本機 Python 執行：
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
+  - 若要使用本機 Hugging Face embeddings，請改裝 `pip install -e .[dev,local-huggingface]`
   - `PDF_PARSER_PROVIDER=opendataloader` 已是預設路徑，執行 worker 的主機必須先安裝 `Java 11+`
   - 本 repo 依 OpenDataLoader 官方建議採用 `json,markdown` 雙輸出，並維持 AI safety filters 開啟
   - `celery -A worker.celery_app.celery_app worker --loglevel=INFO`
@@ -104,10 +105,12 @@
 - `ready` 現在代表 chunking 與 embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
 - 目前預設 embedding 路徑仍為 `EMBEDDING_PROVIDER=openai` 與 `EMBEDDING_MODEL=text-embedding-3-small`，而儲存 schema 固定使用 `1536` 維。
+- `EMBEDDING_PROVIDER=huggingface` 可作為本機 / 自架 embedding 路徑，建議模型為 `Qwen/Qwen3-Embedding-0.6B`；worker 會在首次使用時視需要下載模型，之後重用本機 Hugging Face cache，並將模型原生 `1024` 維向量零補齊到目前 `1536` 維 schema。
 - 可選的 self-hosted 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 `SELF_HOSTED_EMBEDDING_*` 設定；建議模型為 `Qwen/Qwen3-Embedding-0.6B`。
 - 目前主線 embedding 模型與 schema 維度一致，因此 worker 不再依賴先前 `4096` 維路徑的零補齊 workaround。
 - OpenAI embeddings 現在會依 `EMBEDDING_MAX_BATCH_TEXTS` 分批送出；若單批仍因 request size 超限被拒絕，worker 會自動再將該批二分後重送。
 - OpenAI embeddings 目前只會對暫時性失敗（例如 `429`、`5xx`、連線/timeout）做有限次 backoff retry；`400` 這類永久性錯誤會直接轉成受控 failed，避免 task 以 unexpected exception 結束。
+- 若 worker 跑在 Docker Compose，且要啟用本機 Hugging Face embeddings，請在重建 image 前設定 `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface`，避免預設容器路徑額外安裝 `torch` / `transformers`。
 - 本模組目前只啟用 LlamaParse 的標準 Markdown 轉換路徑，未來才會再評估 agentic mode。
 - 尚未實作的檔案型別仍維持受控 `failed`。
 - retrieval API、rerank 與 chat orchestration 不在此模組內實作。

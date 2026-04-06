@@ -21,8 +21,9 @@ RUN apt-get update && \
 
 # 僅讓依賴層受 pyproject 變動影響，避免 README 或程式碼修改打破快取。
 COPY apps/worker/pyproject.toml /app/
+ARG INSTALL_OPTIONAL_GROUPS=""
 RUN pip install --upgrade pip && \
-    python -c "import tomllib; f = open('pyproject.toml', 'rb'); data = tomllib.load(f); deps = data['project'].get('dependencies', []); print('\n'.join(deps))" > requirements.txt && \
+    INSTALL_OPTIONAL_GROUPS="${INSTALL_OPTIONAL_GROUPS}" python -c "import os, tomllib; f = open('pyproject.toml', 'rb'); data = tomllib.load(f); deps = list(data['project'].get('dependencies', [])); optional = data['project'].get('optional-dependencies', {}); groups = [item.strip() for item in os.environ.get('INSTALL_OPTIONAL_GROUPS', '').split(',') if item.strip()]; [deps.extend(optional.get(group, [])) for group in groups]; print('\n'.join(dict.fromkeys(deps)))" > requirements.txt && \
     pip install -r requirements.txt
 
 # OpenDataLoader 透過 Python 套件安裝執行期依賴；目前 compose 路徑要求 Java 11+。

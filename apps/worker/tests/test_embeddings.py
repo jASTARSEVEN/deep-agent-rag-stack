@@ -5,7 +5,12 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
-from worker.embeddings import OpenAIEmbeddingProvider, OpenRouterEmbeddingProvider, SelfHostedEmbeddingProvider
+from worker.embeddings import (
+    HuggingFaceEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    OpenRouterEmbeddingProvider,
+    SelfHostedEmbeddingProvider,
+)
 
 
 class _FakeTooLargeError(Exception):
@@ -336,3 +341,46 @@ def test_self_hosted_embedding_provider_uses_http_contract(monkeypatch) -> None:
     assert captured_request["headers"]["Authorization"] == "Bearer embed-key"
     assert '"model": "Qwen/Qwen3-Embedding-0.6B"' in captured_request["body"]
     assert embeddings == [[1.0, 1.0, 1.0] + [0.0] * 1021]
+
+
+def test_huggingface_embedding_provider_uses_local_runtime_helper(monkeypatch) -> None:
+    """Hugging Face embedding provider 應委派到本機模型 helper。"""
+
+    captured_calls: list[dict[str, object]] = []
+
+    def fake_embed_with_huggingface_model(*, model_name, texts, target_dimensions, input_kind):  # noqa: ANN001
+        captured_calls.append(
+            {
+                "model_name": model_name,
+                "texts": list(texts),
+                "target_dimensions": target_dimensions,
+                "input_kind": input_kind,
+            }
+        )
+        return [[0.2] * target_dimensions for _ in texts]
+
+    monkeypatch.setattr("worker.embeddings._embed_with_huggingface_model", fake_embed_with_huggingface_model)
+
+    provider = HuggingFaceEmbeddingProvider(
+        model="Qwen/Qwen3-Embedding-0.6B",
+        dimensions=1024,
+        max_batch_texts=2,
+    )
+
+    embeddings = provider.embed_texts(["alpha", "beta", "gamma"])
+
+    assert captured_calls == [
+        {
+            "model_name": "Qwen/Qwen3-Embedding-0.6B",
+            "texts": ["alpha", "beta"],
+            "target_dimensions": 1024,
+            "input_kind": "document",
+        },
+        {
+            "model_name": "Qwen/Qwen3-Embedding-0.6B",
+            "texts": ["gamma"],
+            "target_dimensions": 1024,
+            "input_kind": "document",
+        },
+    ]
+    assert embeddings == [[0.2] * 1024, [0.2] * 1024, [0.2] * 1024]

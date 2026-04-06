@@ -35,7 +35,7 @@
 - 檢索與流程編排：`LangChain loaders`、`LangChain text splitters`、`LangGraph`
 - PDF 解析：`OpenDataLoader PDF`、`Unstructured partition_pdf`、`LlamaParse SaaS (optional)`
 - Office 文件解析：`Unstructured partition_docx`、`partition_pptx`、`partition_xlsx`
-- LLM / rerank / embedding：`OpenAI`、自架 `BAAI/bge-reranker-v2-m3`、自架 `Qwen/Qwen3-Embedding-0.6B`、`Qwen3-Reranker-0.6B (optional)`、`Cohere Rerank v4 (optional)`、OpenAI-compatible self-hosted `/v1/rerank` / `/v1/embeddings` provider
+- LLM / rerank / embedding：`OpenAI`、本機 `Hugging Face Rerank`（建議 `BAAI/bge-reranker-v2-m3` / `Qwen/Qwen3-Reranker-0.6B`）、本機 `Hugging Face Embedding`（建議 `Qwen/Qwen3-Embedding-0.6B`）、`Cohere Rerank v4 (optional)`、OpenAI-compatible self-hosted `/v1/rerank` / `/v1/embeddings` provider
 - 本機編排：`Docker Compose`
 - 對外入口：`Caddy reverse proxy + automatic TLS`
 - 資料庫升級：`Alembic + migration runner`
@@ -90,7 +90,7 @@
 1. 先做 SQL gate
 2. 再做 vector recall 與 / 或 FTS recall
 3. 視策略需要做候選合併（目前常見為 `RRF`）
-4. 視策略需要做 rerank（自架預設選項為 `BAAI/bge-reranker-v2-m3`，可選 `Qwen3-Reranker-0.6B`、`Cohere Rerank v4` 與 OpenAI-compatible self-hosted `/v1/rerank` provider）
+4. 視策略需要做 rerank（自架本機預設選項為 `Hugging Face Rerank / BAAI/bge-reranker-v2-m3`，可選 `Qwen/Qwen3-Reranker-0.6B`、`Cohere Rerank v4` 與 OpenAI-compatible self-hosted `/v1/rerank` provider）
 5. 將候選內容交給 LLM 生成回答與 citations
 
 補充約束：
@@ -166,7 +166,7 @@
 8. 先建立 parent sections，再依內容型別切分 child chunks
 9. `text` child 使用 `LangChain RecursiveCharacterTextSplitter`
 10. `table` child 優先保留整表，超大表格才依 row groups 切分
-11. 產生 embedding（預設 `OpenAI text-embedding-3-small`；自架選項為 `Qwen/Qwen3-Embedding-0.6B`）
+11. 產生 embedding（預設 `OpenAI text-embedding-3-small`；本機自架選項為 `Hugging Face Embedding / Qwen/Qwen3-Embedding-0.6B`）
 12. PGroonga 直接使用 content 欄位索引，不需產生 `tsvector`
 13. 寫入 `document_chunks`
 14. 更新文件狀態

@@ -22,6 +22,7 @@ This module contains the project's FastAPI service. It currently provides:
 - Local Python run:
   - `python -m venv .venv && source .venv/bin/activate`
   - `pip install -e .[dev]`
+  - If you plan to use local Hugging Face rerank or embeddings, install `pip install -e .[dev,local-huggingface]`
   - (Note: Alembic is the single schema migration source of truth. Run `python -m app.db.migration_runner` before starting the API against a fresh or existing PostgreSQL database.)
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Run tests locally:
@@ -114,16 +115,13 @@ This module contains the project's FastAPI service. It currently provides:
 
 ## Rerank Provider Support Modes
 
-The internal retrieval service now supports five rerank providers behind the same `RerankProvider` contract:
+The internal retrieval service now supports four main rerank provider modes behind the same `RerankProvider` contract:
 
-- `bge`
-  - optional local cross-encoder provider
-  - default model: `BAAI/bge-reranker-v2-m3`
+- `huggingface`
+  - optional local-model provider
+  - recommended models: `BAAI/bge-reranker-v2-m3`, `Qwen/Qwen3-Reranker-0.6B`
   - implemented with local `torch + transformers` inference
-- `qwen`
-  - optional instruction-aware provider
-  - recommended model: `Qwen/Qwen3-Reranker-0.6B`
-  - requires `transformers>=4.51.0`
+  - downloads weights on first use unless the model is already cached locally, then runs on the current API process CPU / GPU
 - `cohere`
   - optional hosted provider
   - requires `COHERE_API_KEY`
@@ -137,8 +135,8 @@ The internal retrieval service now supports five rerank providers behind the sam
 
 Notes:
 - `self-hosted` is the default runtime choice after this change.
-- `qwen` is supported but is not the default runtime choice.
-- Both local-model providers may download weights on first use unless the model is already cached locally.
+- `huggingface` is the recommended local/self-hosted provider name; legacy `bge` and `qwen` values still map to the same local implementation.
+- Local Hugging Face dependencies are intentionally optional, not part of the default install path.
 
 ## Main Directory Structure
 
@@ -186,15 +184,17 @@ Notes:
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the retrieval schema expects `1536` dimensions.
+- `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the provider applies the official query instruction format for query embeddings, zero-pads the model's `1024`-dim output into the current `1536`-dim schema, and uses the current process CPU / GPU resources.
 - The optional self-hosted embedding path uses `POST /v1/embeddings` with Bearer auth and the `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.
 - The `1536`-dimension schema still fits pgvector `hnsw`, so the mainline vector recall path can keep ANN indexing enabled.
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests.
 - The default compose/runtime rerank path is `RERANK_PROVIDER=self-hosted` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
-- `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
+- `RERANK_PROVIDER=huggingface` is available for local/self-hosted rerank with `BAAI/bge-reranker-v2-m3` or `Qwen/Qwen3-Reranker-0.6B`; legacy `bge` / `qwen` values still work as aliases.
 - `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
 - `RERANK_PROVIDER=self-hosted` is available for self-hosted rerank services that expose `POST /v1/rerank`; configure `SELF_HOSTED_RERANK_BASE_URL`, `SELF_HOSTED_RERANK_API_KEY`, `SELF_HOSTED_RERANK_TIMEOUT_SECONDS`, and use `BAAI/bge-reranker-v2-m3` as the recommended self-hosted rerank model.
+- If you run the API in Docker Compose with local Hugging Face providers, set `API_INSTALL_OPTIONAL_GROUPS=local-huggingface` before rebuilding the image so the default container path does not pull `torch` / `transformers` unnecessarily.
 - To fold `QASPER` / `UDA` / `MS MARCO` / `Natural Questions`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.

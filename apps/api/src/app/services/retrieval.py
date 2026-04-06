@@ -272,7 +272,7 @@ def _run_postgres_candidate_generation(
     """
 
     provider = build_embedding_provider(settings)
-    query_embedding = provider.embed_texts([query])[0]
+    query_embedding = provider.embed_query(query)
     rpc_stmt = _build_match_chunks_rpc_statement()
     rows = session.execute(
         rpc_stmt,
@@ -310,7 +310,7 @@ def _run_sqlite_candidate_generation(
     """SQLite 本機測試專用的 candidate generation 路徑。"""
 
     provider = build_embedding_provider(settings)
-    query_embedding = provider.embed_texts([query])[0]
+    query_embedding = provider.embed_query(query)
     chunks = session.scalars(
         select(DocumentChunk)
         .join(Document, Document.id == DocumentChunk.document_id)

@@ -13,6 +13,7 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
   - `cp .env.example .env`
   - For local development, keep the default `PUBLIC_HOST=localhost`
   - For public deployment, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, and `TLS_ACME_EMAIL`
+  - If you enable local Hugging Face providers, set `API_INSTALL_OPTIONAL_GROUPS=local-huggingface`; when worker embeddings also use Hugging Face, set `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface`
   - For public deployment, point DNS for `PUBLIC_HOST` at the deployment machine
   - For public deployment, forward external `80` and `443` to the Docker host
   - `docker compose --env-file .env -f infra/docker-compose.yml up --build`
@@ -42,6 +43,8 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `LLAMAPARSE_*`
 - `CELERY_*`
 - `NVIDIA_*`
+- `API_INSTALL_OPTIONAL_GROUPS`
+- `WORKER_INSTALL_OPTIONAL_GROUPS`
 - `EMBEDDING_*`
 - `OPENAI_API_KEY`
 - `RERANK_*`
@@ -84,5 +87,6 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the proxy. Set it to `true` only when you intentionally need remote admin console access.
 - The compose stack no longer publishes the previous `13000/18000/18080` host ports, so direct host access to web / API / Keycloak is expected to fail.
 - If you need GPU acceleration, add Docker GPU runtime settings explicitly for your environment before starting the worker. The default Compose path intentionally avoids requesting GPU devices.
+- The default API / worker images do not install optional local Hugging Face dependencies. If you switch to `EMBEDDING_PROVIDER=huggingface` or `RERANK_PROVIDER=huggingface`, rebuild with `API_INSTALL_OPTIONAL_GROUPS=local-huggingface` and, for worker-side embeddings, `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface`.
 - `supabase-db` uses the `supabase/postgres` image with built-in PGroonga for Traditional Chinese search.
 - Compose health checks only verify service readiness, not complete business correctness.

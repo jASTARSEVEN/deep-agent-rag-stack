@@ -6,7 +6,12 @@ import sys
 from types import SimpleNamespace
 
 from app.core.settings import AppSettings
-from app.services.embeddings import OpenAIEmbeddingProvider, SelfHostedEmbeddingProvider, build_embedding_provider
+from app.services.embeddings import (
+    HuggingFaceEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    SelfHostedEmbeddingProvider,
+    build_embedding_provider,
+)
 
 
 def _build_response(batch: list[str], *, dimensions: int):
@@ -182,3 +187,37 @@ def test_build_embedding_provider_self_hosted_uses_http_contract(monkeypatch) ->
     assert captured_request["headers"]["Authorization"] == "Bearer embed-key"
     assert '"model": "Qwen/Qwen3-Embedding-0.6B"' in captured_request["body"]
     assert embeddings == [[1.0, 1.0, 1.0] + [0.0] * 1533]
+
+
+def test_build_embedding_provider_huggingface_uses_local_runtime_helper(monkeypatch) -> None:
+    """Hugging Face embedding provider 應委派到本機模型 helper。"""
+
+    captured_call: dict[str, object] = {}
+
+    def fake_embed_with_huggingface_model(*, model_name, texts, target_dimensions, input_kind):  # noqa: ANN001
+        captured_call["model_name"] = model_name
+        captured_call["texts"] = list(texts)
+        captured_call["target_dimensions"] = target_dimensions
+        captured_call["input_kind"] = input_kind
+        return [[0.1] * target_dimensions]
+
+    monkeypatch.setattr("app.services.embeddings._embed_with_huggingface_model", fake_embed_with_huggingface_model)
+
+    settings = AppSettings(
+        _env_file=None,
+        EMBEDDING_PROVIDER="huggingface",
+        EMBEDDING_MODEL="Qwen/Qwen3-Embedding-0.6B",
+        EMBEDDING_DIMENSIONS=1536,
+    )
+
+    provider = build_embedding_provider(settings)
+    embedding = provider.embed_query("alpha question")
+
+    assert isinstance(provider, HuggingFaceEmbeddingProvider)
+    assert captured_call == {
+        "model_name": "Qwen/Qwen3-Embedding-0.6B",
+        "texts": ["alpha question"],
+        "target_dimensions": 1536,
+        "input_kind": "query",
+    }
+    assert embedding == [0.1] * 1536

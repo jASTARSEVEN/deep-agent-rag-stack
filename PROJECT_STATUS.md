@@ -13,10 +13,10 @@
 - React + Tailwind
 - LangChain + LangGraph
 - OpenAI
-- BAAI BGE-Rerank-v2-m3
-- Qwen3-Reranker-0.6B (optional)
+- Hugging Face Rerank (`BAAI/bge-reranker-v2-m3`, `Qwen/Qwen3-Reranker-0.6B`)
+- Hugging Face Embedding (`Qwen/Qwen3-Embedding-0.6B`)
 - Cohere Rerank v4 (optional)
-- Easypinex-host `/v1/rerank` hosted provider (optional)
+- OpenAI-compatible self-hosted `/v1/rerank` / `/v1/embeddings` provider (optional)
 - Docker Compose
 
 ## 目前狀態
@@ -44,9 +44,11 @@
 - 專案已具備 ready-only 的 internal retrieval foundation，涵蓋 SQL gate、vector recall、FTS recall 與 RRF merge
 - 專案目前 embedding 主線預設仍為 `openai / text-embedding-3-small`，retrieval schema 與 `match_chunks` RPC 固定使用 `1536` 維
 - 專案已新增 `self-hosted` embedding provider，走 `POST /v1/embeddings` 與 Bearer auth；建議模型為 `Qwen/Qwen3-Embedding-0.6B`，較短向量會在寫入前補齊到 `1536` 維 schema
+- 專案已新增本機 `Hugging Face Embedding` provider，建議模型為 `Qwen/Qwen3-Embedding-0.6B`；query 端會套用官方 instruction prompt，並使用目前 API / worker 行程的本機 CPU 或 GPU 資源推論
 - `1536` 維主線仍位於 `pgvector` `hnsw` 可支援範圍，因此向量召回維持 ANN 路徑
-- 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 BGE / Qwen / Cohere / `self-hosted` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
-- 專案已新增本機 Hugging Face rerank provider 支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，並將 runtime 預設切到 `self-hosted / BAAI/bge-reranker-v2-m3`
+- 專案已具備 internal-only 的 parent-level rerank 路徑，涵蓋 `Hugging Face` / Cohere / `self-hosted` / deterministic rerank provider、`Header:` / `Content:` 組裝、retrieval trace metadata 與 fail-open fallback
+- 專案已將本機 rerank 命名收斂為通用 `Hugging Face Rerank` provider，支援 `BAAI/bge-reranker-v2-m3` 與 `Qwen/Qwen3-Reranker-0.6B`，並保留舊的 `bge` / `qwen` 設定值作為相容 alias
+- 由於 runtime 預設仍以 `openai embedding + self-hosted/cohere rerank` 為主，`torch` / `transformers` 已改為 optional 依賴；只有在啟用本機 Hugging Face provider 時才需要安裝
 - 專案已具備 internal-only 的 table-aware retrieval assembler，將 rerank 後 child chunks 組裝為 chat-ready contexts 與 citation-ready metadata
 - assembler 已升級為 precision-first materializer：小 parent 直接回完整 parent，大 parent 以命中 child 為中心做 budget-aware expansion；table hit 會優先補齊完整表格與前後說明文字
 - 專案已開始將 retrieval/assembler 收斂為單一 retrieval tool，供 LangGraph chat runtime 使用
@@ -190,7 +192,7 @@
 ### Phase 4.1 — 已完成的 retrieval foundation
 - 已在 `document_chunks` 新增 retrieval-ready 的 `embedding` SQL-first 欄位，並透過 PGroonga 對 `content` 進行索引
 - 已補 worker indexing 流程，將文件處理改為 `parse -> chunk -> index -> ready`
-- 已導入 embedding provider abstraction，現支援 `self-hosted`、`openrouter`、`openai` 與 `deterministic`，其中主線預設為 `openai / text-embedding-3-small`
+- 已導入 embedding provider abstraction，現支援 `huggingface`、`self-hosted`、`openrouter`、`openai` 與 `deterministic`，其中主線預設為 `openai / text-embedding-3-small`
 - 已將 child chunk embedding 輸入調整為 `heading + content` 的自然拼接文字，改善 chunk 被切碎時的主題召回
 - 已導入 ready-only 的 internal retrieval service，涵蓋 SQL gate、vector recall、FTS recall (PGroonga) 與 `RRF` merge
 - 已完成遷移至 Supabase 樣式的 schema，並使用 PGroonga 替代 pg_jieba
@@ -198,8 +200,8 @@
 - API 與 worker 測試已補 embeddings、retrieval same-404 與 hybrid recall (PGroonga) 驗證
 
 ### Phase 4.2 — 已完成的 minimal rerank slice
-- 已在 API 端加入 rerank provider abstraction，現支援 `deterministic`、`bge`、`qwen`、`cohere` 與 `self-hosted`
-- 已將 production 預設 rerank provider 改為 `self-hosted`，預設 model 為 `BAAI/bge-reranker-v2-m3`；`Qwen/Qwen3-Reranker-0.6B` 與本機 `BAAI/bge-reranker-v2-m3` 則作為可選 provider
+- 已在 API 端加入 rerank provider abstraction，現支援 `deterministic`、`huggingface`、`cohere` 與 `self-hosted`；舊的 `bge` / `qwen` 值會映射到 `huggingface`
+- 已將 production 預設 rerank provider 改為 `self-hosted`，預設 model 為 `BAAI/bge-reranker-v2-m3`；本機 `Hugging Face Rerank` 可選 `BAAI/bge-reranker-v2-m3` 或 `Qwen/Qwen3-Reranker-0.6B`
 - 已在 internal retrieval service 將流程擴充為 SQL gate -> vector recall / FTS recall -> `RRF` -> rerank
 - 已為 retrieval candidates 補上 `rrf_rank`、`rerank_rank`、`rerank_score` 與 `rerank_applied`
 - 已新增 in-memory retrieval trace metadata，保留 query、top-k 設定與每筆 candidate 的 ranking trace

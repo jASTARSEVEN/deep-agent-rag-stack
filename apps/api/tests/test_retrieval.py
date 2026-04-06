@@ -12,10 +12,9 @@ from app.auth.verifier import CurrentPrincipal
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.reranking import (
-    BGERerankProvider,
     CohereRerankProvider,
     DeterministicRerankProvider,
-    QwenRerankProvider,
+    HuggingFaceRerankProvider,
     RerankInputDocument,
     RerankScore,
     SelfHostedRerankProvider,
@@ -39,15 +38,18 @@ def _uuid() -> str:
     return str(uuid4())
 
 
-def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_self_hosted(app_settings) -> None:
-    """rerank provider factory 應支援 deterministic、BGE、Qwen、Cohere 與 self-hosted。"""
+def test_build_rerank_provider_supports_deterministic_huggingface_cohere_and_self_hosted(app_settings) -> None:
+    """rerank provider factory 應支援 deterministic、Hugging Face、Cohere 與 self-hosted。"""
 
     deterministic_settings = app_settings.model_copy(update={"rerank_provider": "deterministic"})
-    bge_settings = app_settings.model_copy(
+    huggingface_bge_settings = app_settings.model_copy(
         update={"rerank_provider": "bge", "rerank_model": "BAAI/bge-reranker-v2-m3"}
     )
-    qwen_settings = app_settings.model_copy(
+    huggingface_qwen_settings = app_settings.model_copy(
         update={"rerank_provider": "qwen", "rerank_model": "Qwen/Qwen3-Reranker-0.6B"}
+    )
+    huggingface_generic_settings = app_settings.model_copy(
+        update={"rerank_provider": "huggingface", "rerank_model": "BAAI/bge-reranker-v2-m3"}
     )
     cohere_settings = app_settings.model_copy(
         update={"rerank_provider": "cohere", "cohere_api_key": "test-key", "rerank_model": "rerank-v3.5"}
@@ -62,14 +64,16 @@ def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_self_h
     )
 
     deterministic_provider = build_rerank_provider(deterministic_settings)
-    bge_provider = build_rerank_provider(bge_settings)
-    qwen_provider = build_rerank_provider(qwen_settings)
+    huggingface_bge_provider = build_rerank_provider(huggingface_bge_settings)
+    huggingface_qwen_provider = build_rerank_provider(huggingface_qwen_settings)
+    huggingface_generic_provider = build_rerank_provider(huggingface_generic_settings)
     cohere_provider = build_rerank_provider(cohere_settings)
     self_hosted_provider = build_rerank_provider(self_hosted_settings)
 
     assert isinstance(deterministic_provider, DeterministicRerankProvider)
-    assert isinstance(bge_provider, BGERerankProvider)
-    assert isinstance(qwen_provider, QwenRerankProvider)
+    assert isinstance(huggingface_bge_provider, HuggingFaceRerankProvider)
+    assert isinstance(huggingface_qwen_provider, HuggingFaceRerankProvider)
+    assert isinstance(huggingface_generic_provider, HuggingFaceRerankProvider)
     assert isinstance(cohere_provider, CohereRerankProvider)
     assert isinstance(self_hosted_provider, SelfHostedRerankProvider)
 
@@ -296,12 +300,12 @@ def test_self_hosted_rerank_provider_posts_contract_and_parses_scores(monkeypatc
     )
 
 
-def test_bge_rerank_provider_delegates_to_bge_runtime(monkeypatch) -> None:
-    """BGE rerank provider 應委派給 BGE runtime helper 並回傳排序結果。"""
+def test_huggingface_rerank_provider_delegates_to_runtime_helper(monkeypatch) -> None:
+    """Hugging Face rerank provider 應委派給通用 runtime helper 並回傳排序結果。"""
 
     captured_arguments: dict[str, object] = {}
 
-    def fake_score_with_bge_reranker(*, query, documents, top_n, model_name):  # noqa: ANN001
+    def fake_score_with_huggingface_reranker(*, query, documents, top_n, model_name):  # noqa: ANN001
         captured_arguments["query"] = query
         captured_arguments["documents"] = documents
         captured_arguments["top_n"] = top_n
@@ -311,9 +315,9 @@ def test_bge_rerank_provider_delegates_to_bge_runtime(monkeypatch) -> None:
             RerankScore(candidate_id="doc-1", score=0.4),
         ]
 
-    monkeypatch.setattr("app.services.reranking._score_with_bge_reranker", fake_score_with_bge_reranker)
+    monkeypatch.setattr("app.services.reranking._score_with_huggingface_reranker", fake_score_with_huggingface_reranker)
 
-    provider = BGERerankProvider(model="BAAI/bge-reranker-v2-m3")
+    provider = HuggingFaceRerankProvider(model="BAAI/bge-reranker-v2-m3")
     results = provider.rerank(
         query="what is panda",
         documents=[
@@ -325,38 +329,6 @@ def test_bge_rerank_provider_delegates_to_bge_runtime(monkeypatch) -> None:
 
     assert [item.candidate_id for item in results] == ["doc-2", "doc-1"]
     assert captured_arguments["model_name"] == "BAAI/bge-reranker-v2-m3"
-    assert captured_arguments["top_n"] == 2
-
-
-def test_qwen_rerank_provider_delegates_to_qwen_runtime(monkeypatch) -> None:
-    """Qwen rerank provider 應委派給 Qwen runtime helper 並回傳排序結果。"""
-
-    captured_arguments: dict[str, object] = {}
-
-    def fake_score_with_qwen_reranker(*, query, documents, top_n, model_name):  # noqa: ANN001
-        captured_arguments["query"] = query
-        captured_arguments["documents"] = documents
-        captured_arguments["top_n"] = top_n
-        captured_arguments["model_name"] = model_name
-        return [
-            RerankScore(candidate_id="doc-2", score=0.8),
-            RerankScore(candidate_id="doc-1", score=0.3),
-        ]
-
-    monkeypatch.setattr("app.services.reranking._score_with_qwen_reranker", fake_score_with_qwen_reranker)
-
-    provider = QwenRerankProvider(model="Qwen/Qwen3-Reranker-0.6B")
-    results = provider.rerank(
-        query="which document",
-        documents=[
-            RerankInputDocument(candidate_id="doc-1", text="alpha"),
-            RerankInputDocument(candidate_id="doc-2", text="beta"),
-        ],
-        top_n=2,
-    )
-
-    assert [item.candidate_id for item in results] == ["doc-2", "doc-1"]
-    assert captured_arguments["model_name"] == "Qwen/Qwen3-Reranker-0.6B"
     assert captured_arguments["top_n"] == 2
 
 

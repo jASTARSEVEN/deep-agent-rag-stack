@@ -60,7 +60,7 @@ The reranker is an active ranking layer in production-like evaluation, not just 
 
 - parent-level aggregation reduces child-level fragmentation before ranking
 - rerank text is normalized into `Header:` and `Content:` fields
-- providers are swappable: `self-hosted`, local `BGE`, local `Qwen`, `Cohere`, and `deterministic`
+- providers are swappable: `self-hosted`, local `huggingface` rerank, `Cohere`, and `deterministic`
 - cost is bounded by `RERANK_TOP_N` and `RERANK_MAX_CHARS_PER_DOC`
 - failures are handled with fail-open fallback so auth and ready-only boundaries do not regress
 
@@ -126,6 +126,10 @@ For the full benchmark analysis, see [`docs/retrieval-benchmark-strategy-analysi
   - `SELF_HOSTED_EMBEDDING_API_KEY`, or
   - `OPENAI_API_KEY`, or
   - `OPENROUTER_API_KEY`, or
+- If you want local Hugging Face models instead of hosted embeddings / rerank:
+  - set `EMBEDDING_PROVIDER=huggingface` for local `Qwen/Qwen3-Embedding-0.6B`
+  - set `RERANK_PROVIDER=huggingface` for local `BAAI/bge-reranker-v2-m3`
+  - install optional dependencies with `pip install -e .[dev,local-huggingface]`, or set `API_INSTALL_OPTIONAL_GROUPS=local-huggingface` and `WORKER_INSTALL_OPTIONAL_GROUPS=local-huggingface` before `docker compose build`
 - A rerank provider credential when the configured rerank provider needs one:
   - `SELF_HOSTED_RERANK_API_KEY`, or
   - `COHERE_API_KEY`, or
@@ -143,6 +147,7 @@ cp .env.example .env
 
 - Keep the default `localhost` URLs for local development.
 - Fill the provider keys that match your chosen embedding and rerank providers.
+- If you use local Hugging Face models, also enable the optional dependency groups before rebuilding Compose images.
 - If you want public HTTPS instead of local `localhost`, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `WEB_PUBLIC_URL`, `API_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, and `TLS_ACME_EMAIL`.
 
 3. Start the full stack.
@@ -226,6 +231,7 @@ Long-lived project documents:
 ```
 
 - If answers are empty or poor, verify that your embedding and rerank provider keys match the configured providers in `.env`.
+- If `EMBEDDING_PROVIDER=huggingface` or `RERANK_PROVIDER=huggingface` fails during startup, verify the optional `local-huggingface` dependencies were installed and the model can be downloaded or read from a local path.
 
 ## Contact
 

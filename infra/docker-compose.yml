@@ -126,6 +126,8 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/api/Dockerfile
+      args:
+        INSTALL_OPTIONAL_GROUPS: ${API_INSTALL_OPTIONAL_GROUPS:-}
     environment:
       API_SERVICE_NAME: ${API_SERVICE_NAME:-deep-agent-api}
       API_VERSION: ${API_VERSION:-0.1.0}
@@ -212,6 +214,8 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/worker/Dockerfile
+      args:
+        INSTALL_OPTIONAL_GROUPS: ${WORKER_INSTALL_OPTIONAL_GROUPS:-}
     # gpus: ${WORKER_GPUS:-all}
     environment:
       WORKER_SERVICE_NAME: ${WORKER_SERVICE_NAME:-deep-agent-worker}
