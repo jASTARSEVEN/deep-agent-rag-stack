@@ -2,213 +2,202 @@
 
 ![Actual Dashboard Live](actual-dashboard-live.png)
 ![Access Modal Test](access-modal-test.png)
-![Chunk Aware](chunk-aware.png)
+![Chunk-Aware Preview](chunk-aware.png)
 
-An enterprise knowledge assistant prototype with OAuth2-based authentication, RBAC, and multi-strategy retrieval.
+A self-hosted, NotebookLM-style document QA platform built for enterprise constraints first.
 
 [繁體中文版本](README.zh-TW.md)
 
 ## Purpose
 
-This repository is an engineering implementation project built around a self-hosted, NotebookLM-style enterprise knowledge chat application, and also serves as an experimental prototype for a multi-agent collaborative development workflow. The development process adopts multi-agent collaboration for task decomposition and implementation. The project focuses on real enterprise problems such as document upload and background processing, multi-strategy `RAG` retrieval, `Keycloak` OAuth2 integration, group-based `RBAC`, and `deny-by-default` access control for knowledge areas and documents.
+Deep Agent RAG Stack is an MVP for a self-hosted knowledge assistant. The product flow is intentionally focused:
 
-The "multi-agent" part refers to the development process: task decomposition, role specialization, and collaborative implementation. It is not a user-facing product feature. The goal is not just to build a chat UI, but to validate an end-to-end knowledge system architecture that can scale toward enterprise use cases across auth, data boundaries, background jobs, and retrieval strategy.
+1. Sign in
+2. Create a Knowledge Area
+3. Upload documents
+4. Run background indexing
+5. Ask questions with citations inside area-scoped access boundaries
 
-## Why This Project
+This repository is not a "chat demo first" project. It is an engineering validation of a full enterprise-ready path across authentication, authorization, document lifecycle, retrieval quality, and local reproducibility.
 
-The hard part of enterprise knowledge chat is rarely just plugging in an LLM. The real challenge is organizing, authorizing, indexing, and retrieving internal documents safely while keeping quality and cost under control. This project focuses on those operational constraints to validate a knowledge system prototype that is closer to real enterprise adoption requirements.
+## Background
 
-## Future Direction
+Most internal RAG systems fail on the operational details, not on the LLM call itself. The hard parts are:
 
-This project is not intended to stop at document Q&A. The longer-term direction is to evolve from "answering questions" into a real assistant that can understand context, call tools, and execute tasks through `Deep Agents`. The next-stage vision includes integrating `MCP`, reusable `Skill` modules, multi-step task orchestration, and external system operations so the knowledge system can participate in enterprise workflows instead of only returning information.
+- enforcing authorization before retrieval results return
+- preventing non-ready data from leaking into chat
+- combining vector recall and keyword recall without losing control of cost
+- keeping the full system runnable by one team on local infrastructure
 
-## What Makes This Project Different
+This project exists to validate those constraints in one stack: `FastAPI`, `React`, `Celery`, `PostgreSQL + pgvector + PGroonga`, `MinIO`, `Keycloak`, `LangGraph`, and `Docker Compose`.
 
-Unlike many RAG demos that focus only on a chat interface or a single vector retrieval path, this project treats enterprise constraints as first-class design requirements from the start. That includes `Keycloak` group-based authorization, `deny-by-default`, `ready-only` document lifecycle controls, and a planned `SQL gate + vector recall + FTS recall + RRF + rerank` retrieval flow. The target is not just a system that can answer questions, but a knowledge assistant foundation that is closer to enterprise production expectations.
+## Project Highlights
 
-## Engineering Highlights
-
-- Merges direct roles and `Keycloak groups` to compute an effective area-level `RBAC` role
-- Enforces `deny-by-default` at the data access layer and uses consistent unauthorized `404` responses to avoid resource existence leaks
-- Models the document lifecycle as `uploaded -> processing -> ready|failed` so incomplete data never enters retrieval
-- Implements `SQL gate + vector recall + FTS recall + RRF + rerank + assembled-context citations` as the chat retrieval foundation
-- Uses `Deep Agents` as the formal chat core and `LangGraph Server` built-in `thread/run` as the runtime and streaming layer
-- Builds a locally reproducible vertical slice with `FastAPI + PostgreSQL + Celery + Redis + MinIO + React`
-
-## What I Personally Owned
-
-- Project scoping, module boundaries, and phase-by-phase implementation planning
-- Authentication and authorization design, including JWT claims, group-based access, and area access management
-- Local integration across API, worker, web, and Docker Compose
-- Document upload and ingest state transitions, test strategy, and E2E testing foundations
-- Project documentation, architecture notes, and long-term repo governance docs
+- Security-first retrieval boundaries with `deny-by-default`, same-`404`, `JWT sub/groups`, effective-role merging, and SQL gate enforcement
+- Ready-only document lifecycle: only `status=ready` documents are allowed into retrieval and chat
+- Hybrid retrieval path: `SQL gate + vector recall + PGroonga FTS + RRF + rerank + assembled-context citations`
+- Table-aware ingestion and retrieval for `PDF`, `DOCX`, `PPTX`, `XLSX`, `TXT/MD`, and `HTML`
+- One-page dashboard UX with area navigation, streaming chat, document drawer, access modal, and chunk-aware preview
+- LangGraph + Deep Agents runtime with observable retrieval traces and tool-call visibility
+- Benchmark-driven retrieval governance with a fixed baseline and explicit anti-domain-overfit rules
 
 ## Current Status
 
-The deployment entrypoint is now designed around a single HTTPS origin behind `Caddy`, with automatic TLS issuance and renewal for `easypinex.duckdns.org`. Public traffic is expected to use:
+The latest completed milestone is `Phase 7 — Retrieval Correctness Evaluation v1`.
 
-- `https://easypinex.duckdns.org/` for the web app
-- `https://easypinex.duckdns.org/api/*` for the API
-- `https://easypinex.duckdns.org/auth/*` for Keycloak
+The current MVP already includes:
 
-The latest completed milestone is `Phase 6.1 — Public HTTPS Entry & Migration Bootstrap Hardening`. The repository now includes a single public HTTPS entrypoint behind `Caddy`, a `/auth`-prefixed Keycloak deployment model, and a unified API-side migration runner based on Alembic.
+- area management with Keycloak group-based access control
+- document upload, delete, reindex, and ingest progress tracking
+- chunk-aware document preview and citation navigation
+- LangGraph-based chat runtime backed by Deep Agents
+- retrieval evaluation datasets, reviewer UI, CLI runner, and baseline compare
+- a single public entry model behind `Caddy` with `/`, `/api/*`, and `/auth/*`
 
-- Monorepo structure, Docker Compose, and the local development stack
-- Basic wiring across the `FastAPI` API, `Celery` worker, and `React + Tailwind` web app
-- `Keycloak` OAuth2 login flow, JWT claim parsing, and auth context verification
-- Area-level `RBAC` based on merged user roles and group roles
-- `deny-by-default` protection for area and document access with consistent `404` behavior
-- **User-friendly Access Management**: Integrated `@` mentions for users and groups with autocomplete, consistently using `username` for identification and display.
-- Knowledge Area create/list/detail/access-management MVP
-- Document upload, object storage, ingest job creation, and `uploaded -> processing -> ready|failed` transitions
-- SQL-first `parent -> child` chunk tree generation with `structure_kind=text|table`, covering `TXT`, `Markdown`, and table-aware `HTML`
-- Hybrid chunking: custom parent sectioning plus LangChain-based text child splitting, with dedicated table preserve / row-group split rules
-- Ready-only retrieval foundation with SQL gate, vector recall, FTS recall, `RRF`, rerank, and table-aware context assembly
-- Modernized One-Page Dashboard: A unified workspace featuring fixed sidebar navigation for Knowledge Areas, a full-height center chat as the primary workspace, and a slide-out drawer for non-interruptive file management.
-- `Deep Agents` main agent plus single `retrieve_area_contexts` tool for formal chat execution
-- `LangGraph Server` built-in `thread/run` runtime, custom auth injection, and streaming to the web app
-- Real-time chat features including assembled-context references, tool-call tracking, and interactive debug views
+## Benchmark Snapshot
 
-## Evaluation Benchmark
+Current benchmark scores are important to this project because retrieval quality is treated as a first-class engineering outcome, not as an afterthought.
 
-The repository benchmark table was updated again on `2026-04-05` after adding the new `dureader-robust-curated-v1-100` package and running its `production_like_v1` reference benchmark under the same current config snapshot already used by the earlier eight-dataset baseline on `2026-04-05`.
+The fixed current baseline is the `production_like_v1` snapshot from `2026-04-05`.
 
-Current `production_like_v1` snapshot from the fresh rerun artifacts:
+| Dataset | Lang | Recall@10 | nDCG@10 | MRR@10 | Role |
+| --- | --- | ---: | ---: | ---: | --- |
+| `dureader-robust-curated-v1-100` | `zh-TW` | `1.0000` | `0.9677` | `0.9570` | Near-ceiling Chinese sanity check |
+| `msmarco-curated-v1-100` | `en` | `1.0000` | `0.9674` | `0.9550` | Near-ceiling passage matching sanity check |
+| `drcd-curated-v1-100` | `zh-TW` | `0.9700` | `0.8650` | `0.8308` | Traditional Chinese rerank sentinel |
+| `nq-curated-v1-100` | `en` | `0.7500` | `0.7443` | `0.7425` | Assembler pressure-test lane |
+| `uda-curated-v1-pilot` | `en` | `0.8462` | `0.7333` | `0.7051` | Pilot stability set |
+| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `0.8667` | `0.7254` | `0.6792` | Internal domain benchmark |
+| `uda-curated-v1-100` | `en` | `0.8300` | `0.6818` | `0.6340` | Same-document localization lane |
+| `qasper-curated-v1-pilot` | `en` | `0.7778` | `0.5507` | `0.4844` | Pilot hard set |
+| `qasper-curated-v1-100` | `en` | `0.5900` | `0.3797` | `0.3142` | Main hard external lane |
 
-- `RERANK_PROVIDER=easypinex-host`
-- `RERANK_MODEL=BAAI/bge-reranker-v2-m3`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=generic_v1`
-- `RETRIEVAL_QUERY_FOCUS_ENABLED=false`
-- `RETRIEVAL_QUERY_FOCUS_VARIANT=generic_field_focus_v1`
-- `RETRIEVAL_VECTOR_TOP_K=30`
-- `RETRIEVAL_FTS_TOP_K=30`
-- `RETRIEVAL_MAX_CANDIDATES=30`
-- `RERANK_TOP_N=30`
-- `ASSEMBLER_MAX_CONTEXTS=9`
-- `ASSEMBLER_MAX_CHARS_PER_CONTEXT=3000`
-- `ASSEMBLER_MAX_CHILDREN_PER_PARENT=7`
+Current benchmark interpretation at the README level:
 
-Current benchmark overview table (`production_like_v1`, assembled metrics + corpus profile):
+- `QASPER 100` is still the main hard external retrieval lane
+- `NQ 100` is the assembler pressure-test lane
+- `DRCD 100` is the Traditional Chinese rerank sentinel
+- `DuReader-robust 100` and `MS MARCO 100` are near-ceiling sanity checks
 
-| Dataset | Lang | Q | Docs | Gold Spans | Avg Spans / Q | Multi-Span Q | Recall@10 | nDCG@10 | MRR@10 | Difficulty |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `dureader-robust-curated-v1-100` | `zh-TW` | `100` | `100` | `100` | `1.00` | `0%` | `1.0000` | `0.9677` | `0.9570` | `1/5` |
-| `msmarco-curated-v1-100` | `en` | `100` | `100` | `114` | `1.14` | `11%` | `1.0000` | `0.9674` | `0.9550` | `1/5` |
-| `drcd-curated-v1-100` | `zh-TW` | `100` | `6` | `100` | `1.00` | `0%` | `0.9700` | `0.8650` | `0.8308` | `2/5` |
-| `nq-curated-v1-100` | `en` | `100` | `100` | `100` | `1.00` | `0%` | `0.7500` | `0.7443` | `0.7425` | `3/5` |
-| `uda-curated-v1-pilot` | `en` | `26` | `12` | `38` | `1.46` | `38%` | `0.8462` | `0.7333` | `0.7051` | `3/5` |
-| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `30` | `4` | `30` | `1.00` | `0%` | `0.8667` | `0.7254` | `0.6792` | `3/5` |
-| `uda-curated-v1-100` | `en` | `100` | `45` | `100` | `1.00` | `0%` | `0.8300` | `0.6818` | `0.6340` | `3/5` |
-| `qasper-curated-v1-pilot` | `en` | `27` | `7` | `34` | `1.26` | `19%` | `0.7778` | `0.5507` | `0.4844` | `4/5` |
-| `qasper-curated-v1-100` | `en` | `100` | `42` | `164` | `1.64` | `30%` | `0.5900` | `0.3797` | `0.3142` | `5/5` |
+For the full benchmark analysis, see [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md).
 
-Notes:
+## How To Start
 
-- This section reflects nine benchmark datasets under the same current `production_like_v1` snapshot with `query_focus=false`.
-- `Lang`, `Q`, `Docs`, and `Gold Spans` come directly from each package snapshot. `Avg Spans / Q` and `Multi-Span Q` are derived from `gold_spans.jsonl` grouped by question.
-- `Difficulty` is a repo-local heuristic from the current assembled baseline: `1/5` if `Recall@10 >= 0.95` and `nDCG@10 >= 0.90`, `2/5` if `>= 0.90` and `>= 0.80`, `3/5` if `>= 0.75` and `>= 0.65`, `4/5` if `>= 0.65` and `>= 0.45`, otherwise `5/5`.
-- `dureader-robust-curated-v1-100` comes from the official `DuReader-robust` `dev.json` wrapper, keeps the deterministic first `100` approved items from `220` prepared questions, and required `0` `OpenAI` review overrides because `needs_review = 0`.
-- The root README intentionally keeps only the intuitive profile. Run ids, curation counts, and detailed interpretation live in the per-package READMEs and [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md).
-- Strategy history and the current interpretation are tracked in [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md) (Traditional Chinese).
-- [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) remains a legacy detailed miss log for the older `QASPER 100 + UDA 100` pair; the new `MS MARCO 100` rerun currently has `0` assembled misses.
-- These numbers are project benchmark results, not a generic public leaderboard claim.
+### Prerequisites
 
-## Not Yet Implemented
+- Docker and Docker Compose
+- Java `11+` if you keep the default `PDF_PARSER_PROVIDER=opendataloader`
+- At least one embedding provider credential for real ingest and retrieval:
+  - `OPENAI_API_KEY`, or
+  - `OPENROUTER_API_KEY`, or
+  - `EASYPINEX_HOST_EMBEDDING_API_KEY`
+- A rerank provider credential when the configured rerank provider needs one:
+  - `COHERE_API_KEY`, or
+  - `EASYPINEX_HOST_RERANK_API_KEY`
+- For public HTTPS deployment, a reachable `PUBLIC_HOST` and `TLS_ACME_EMAIL`
 
-- Broader compose smoke coverage for real `Keycloak + LangGraph + Deep Agents` runtime behavior
-- More end-to-end coverage for tool failure, no-context answers, and streaming edge cases
-- Broader regression coverage for area-management interactions across access, documents, and chat state transitions
-- Future `Deep Agents` expansion points such as sub-agents, `MCP`, and reusable `Skill` modules
+### Quick Start
 
-## TODO / Future Additions
+1. Copy the environment template.
 
-- Add a system architecture diagram showing the relationships among web, API, worker, DB, MinIO, Keycloak, and retrieval flow
-- Add an E2E demo that shows the main flow from login to upload, processing, and access validation
-- Add a testing coverage summary for authorization, state transitions, API boundaries, and E2E scope
-- Add explicit permission boundary examples for different roles and groups across area / document / chat access
-- Add failure-handling flow documentation for upload, ingest, unsupported file types, and authorization failures
+```bash
+cp .env.example .env
+```
 
-## License
+2. Edit `.env`.
 
-This project is licensed under `Apache-2.0`. See the root `LICENSE` file for the full text.
+- Keep the default `localhost` URLs for local development.
+- Fill the provider keys that match your chosen embedding and rerank providers.
+- If you want public HTTPS instead of local `localhost`, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `WEB_PUBLIC_URL`, `API_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, and `TLS_ACME_EMAIL`.
 
-## Contact
+3. Start the full stack.
 
-- Maintainer: Pin-Chih Cho
-- Email: `easypinex@gmail.com`
+```bash
+./scripts/compose.sh up --build
+```
 
-## Repository Structure
+4. Open the local services.
 
-- `apps/api`: FastAPI API, JWT auth, RBAC, internal retrieval services, `app/chat` Deep Agents domain, and LangGraph loader/runtime glue
-- `apps/worker`: Celery background jobs for ingest and status transitions
-- `apps/web`: React + Tailwind frontend, modernized one-page dashboard (integrated area navigation, chat center, and file management drawers)
-- `infra`: Docker Compose assets and container build definitions
-- `packages/shared`: Reserved space for shared types and configuration
+- Web: `http://localhost`
+- API health: `http://localhost/api/health`
+- Keycloak: `http://localhost/auth`
+- MinIO API: `http://localhost:19000`
+- MinIO Console: `http://localhost:19001`
 
-## How to Start
+5. Verify the main flow.
 
-1. Copy the environment file:
-   - `cp .env.example .env`
-2. Optionally install local Python dependencies:
-   - `python -m venv .venv && source .venv/bin/activate`
-   - `pip install -e ./apps/api -e ./apps/worker`
-   - Shared workspace sync: `uv sync`
-   - `PDF_PARSER_PROVIDER=opendataloader` is now the default path and requires `Java 11+` on the machine running the worker.
-   - OpenDataLoader follows the official `json,markdown` recommendation in this repository. The worker persists `opendataloader.json` and `opendataloader.cleaned.md`, keeps AI safety filters enabled, and enables `use_struct_tree=true` with automatic fallback when tags are missing.
-3. Build and start the local stack:
-   - `./scripts/compose.sh up --build`
-   - The wrapper always uses the repository root `.env` and `infra/docker-compose.yml`, which prevents secrets such as `OPENAI_API_KEY` from silently becoming empty when the command is run from a different working directory.
-   - The Compose project name is pinned to `deep-agent-rag-stack`, so container names stay stable and do not drift to fallback names such as `infra-*`.
-4. Point `PUBLIC_HOST` DNS to the deployment host and forward external `80/443` to the Docker machine.
-5. Open the public services:
-   - Web: `https://easypinex.duckdns.org`
-   - API health: `https://easypinex.duckdns.org/api/health`
-   - Keycloak OIDC base: `https://easypinex.duckdns.org/auth`
-   - MinIO API: `http://localhost:19000`
-   - MinIO Console: `http://localhost:19001`
+- sign in from the web app
+- create a Knowledge Area
+- upload a supported document
+- wait until the document becomes `ready`
+- ask a question and confirm citations appear
 
-## Public Access Model
+6. Stop the stack when finished.
 
-- Customers use a single public service port: `443`.
-- Port `80` is reserved for ACME validation and HTTP-to-HTTPS redirect.
-- Compose no longer publishes `13000`, `18000`, and `18080` to the host.
-- `Caddy` terminates TLS, renews certificates automatically, and reverse proxies to `web`, `api`, and `keycloak` over the internal Docker network.
-- `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the reverse proxy while keeping the login and OIDC endpoints reachable.
+```bash
+./scripts/compose.sh down
+```
 
-## Database Init and Upgrade
-
-- The repository uses Alembic as the single schema migration source of truth.
-- The compose stack upgrades both fresh and existing databases through `python -m app.db.migration_runner`.
-- If you need to rerun the upgrade path manually in an existing environment, use:
-  - `./scripts/compose.sh exec api python -m app.db.migration_runner`
-- If retrieval SQL or PostgreSQL RPCs change, make sure the change is represented in Alembic revisions before shipping the code change.
-- After an upgrade, verify the API and retrieval path before assuming the environment is healthy.
+The local Keycloak development realm is imported automatically by the Compose stack.
 
 ## Environment Variables
 
-See `.env.example` for the full local default configuration. The template is grouped by variable category and includes bilingual comments.
+Review these groups first:
 
-## Verification
+- Public routing: `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `WEB_PUBLIC_URL`, `API_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, `TLS_ACME_EMAIL`
+- Auth: `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, `KEYCLOAK_GROUPS_CLAIM`
+- Storage and infra: `POSTGRES_*`, `REDIS_URL`, `MINIO_*`, `STORAGE_BACKEND`
+- Ingestion: `PDF_PARSER_PROVIDER`, `LLAMAPARSE_API_KEY`
+- Retrieval: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `RERANK_PROVIDER`, `RERANK_MODEL`
+- Chat and observability: `CHAT_PROVIDER`, `CHAT_MODEL`, `LANGSMITH_TRACING`
 
-- API health:
-  - `curl https://easypinex.duckdns.org/api/health`
-- Auth context:
-  - `curl -H "Authorization: Bearer <access-token>" https://easypinex.duckdns.org/api/auth/context`
-- LangGraph chat runtime:
-  - `cd apps/api && langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
-- Worker ping task:
-  - `./scripts/compose.sh exec worker python -m worker.scripts.healthcheck`
-- Web / Areas / Files / Chat:
-  - Open `https://easypinex.duckdns.org`, sign in, and verify area listing, file upload, document status, and area-scoped chat behavior
-- Phase 1 auth verification guide:
-  - `docs/phase1-auth-verification.md`
+Use [`.env.example`](.env.example) as the full source of truth.
+
+## Main Directory Structure
+
+- `apps/api`: FastAPI app, auth, RBAC, retrieval, evaluation, and LangGraph runtime glue
+- `apps/worker`: Celery ingestion, parsing, chunking, embeddings, and indexing
+- `apps/web`: React + Tailwind dashboard, auth flow, chat UI, files UI, and evaluation UI
+- `infra`: Dockerfiles, Compose stack, Caddy, and Keycloak bootstrap
+- `benchmarks`: benchmark packages and evaluation assets
+- `packages/shared`: shared types and settings when needed
+
+## Public Interfaces
+
+Main user-facing interfaces in the current MVP:
+
+- Web dashboard at `/`
+- API health and auth context at `/api/health` and `/api/auth/context`
+- Area, document, access, and evaluation APIs under `/api/*`
+- Keycloak login and OIDC endpoints under `/auth/*`
+- LangGraph-backed chat runtime consumed by the web app through the API service
+
+Long-lived project documents:
+
+- Product scope: [`Summary.md`](Summary.md)
+- Current implementation status: [`PROJECT_STATUS.md`](PROJECT_STATUS.md)
+- Milestones and sequencing: [`ROADMAP.md`](ROADMAP.md)
+- System design: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ## Troubleshooting
 
-- If Docker image builds fail, confirm Docker Desktop is running and can reach package registries.
-- If Keycloak starts slowly, wait until the `keycloak` health check passes before opening the UI.
-- If the web app cannot reach the API, verify `VITE_API_BASE_URL` in `.env`.
-- If the API starts but Deep Agents retrieval fails only on an existing database, rerun `python -m app.db.migration_runner` inside the API container and verify that the PostgreSQL schema and RPCs reached the latest Alembic head.
-- If the hybrid worker runs with `PDF_PARSER_PROVIDER=opendataloader`, confirm `java -version` resolves to Java 11 or newer before starting Celery.
-- Windows local worker entrypoint is available at `scripts/start-worker-marker.ps1` for compatibility. Use `-Mode compose` to start the container worker, or `-Mode hybrid` to keep infra in Compose and run Celery from the project root `.venv`. The worker now shares the same virtual environment as the main project.
+- If `./scripts/compose.sh` fails immediately, make sure `.env` exists at the repository root.
+- If PDF parsing fails with `opendataloader`, verify `java -version` reports Java `11+`.
+- If login fails, re-check `KEYCLOAK_PUBLIC_URL`, `VITE_KEYCLOAK_URL`, and `PUBLIC_BASE_URL`.
+- If retrieval fails on an existing database, rerun:
+
+```bash
+./scripts/compose.sh exec api python -m app.db.migration_runner
+```
+
+- If answers are empty or poor, verify that your embedding and rerank provider keys match the configured providers in `.env`.
+
+## Contact
+
+- Author: Pin-Zhi Zhuo
+- Email: `easypinex@gmail.com`
+- GitHub: [easypinex/deep-agent-rag-stack](https://github.com/easypinex/deep-agent-rag-stack)
+
+## License
+
+Licensed under `Apache-2.0`. See [LICENSE](LICENSE).
