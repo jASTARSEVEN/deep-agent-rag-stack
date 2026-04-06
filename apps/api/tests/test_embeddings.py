@@ -6,7 +6,7 @@ import sys
 from types import SimpleNamespace
 
 from app.core.settings import AppSettings
-from app.services.embeddings import EasypinexHostEmbeddingProvider, OpenAIEmbeddingProvider, build_embedding_provider
+from app.services.embeddings import OpenAIEmbeddingProvider, SelfHostedEmbeddingProvider, build_embedding_provider
 
 
 def _build_response(batch: list[str], *, dimensions: int):
@@ -98,7 +98,7 @@ def test_build_embedding_provider_openrouter_uses_openrouter_client_options(monk
         _env_file=None,
         EMBEDDING_PROVIDER="openrouter",
         EMBEDDING_MODEL="qwen/qwen3-embedding-0.6b",
-        EMBEDDING_DIMENSIONS=1024,
+        EMBEDDING_DIMENSIONS=1536,
         OPENROUTER_API_KEY="openrouter-key",
         OPENROUTER_HTTP_REFERER="https://example.com",
         OPENROUTER_TITLE="Deep Agent",
@@ -121,21 +121,21 @@ def test_build_embedding_provider_openrouter_uses_openrouter_client_options(monk
         {
             "model": "qwen/qwen3-embedding-0.6b",
             "input": ["alpha"],
-            "dimensions": 1024,
+            "dimensions": 1536,
             "encoding_format": "float",
         }
     ]
-    assert len(embeddings[0]) == 1024
+    assert len(embeddings[0]) == 1536
 
 
-def test_build_embedding_provider_easypinex_host_uses_http_contract(monkeypatch) -> None:
-    """easypinex-host embedding provider 應使用 `/v1/embeddings` contract。
+def test_build_embedding_provider_self_hosted_uses_http_contract(monkeypatch) -> None:
+    """self-hosted embedding provider 應使用 `/v1/embeddings` contract。
 
     參數：
     - `monkeypatch`：pytest 提供的 monkeypatch fixture。
 
     回傳：
-    - `None`：以斷言驗證 easypinex-host request 與回應解析。
+    - `None`：以斷言驗證 self-hosted request 與回應解析。
     """
 
     captured_request: dict[str, object] = {}
@@ -165,20 +165,20 @@ def test_build_embedding_provider_easypinex_host_uses_http_contract(monkeypatch)
 
     settings = AppSettings(
         _env_file=None,
-        EMBEDDING_PROVIDER="easypinex-host",
+        EMBEDDING_PROVIDER="self-hosted",
         EMBEDDING_MODEL="Qwen/Qwen3-Embedding-0.6B",
-        EMBEDDING_DIMENSIONS=1024,
-        EASYPINEX_HOST_EMBEDDING_BASE_URL="http://helper.local:8000",
-        EASYPINEX_HOST_EMBEDDING_API_KEY="embed-key",
-        EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS=12.0,
+        EMBEDDING_DIMENSIONS=1536,
+        SELF_HOSTED_EMBEDDING_BASE_URL="http://helper.local:8000",
+        SELF_HOSTED_EMBEDDING_API_KEY="embed-key",
+        SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS=12.0,
     )
 
     provider = build_embedding_provider(settings)
     embeddings = provider.embed_texts(["alpha"])
 
-    assert isinstance(provider, EasypinexHostEmbeddingProvider)
+    assert isinstance(provider, SelfHostedEmbeddingProvider)
     assert captured_request["url"] == "http://helper.local:8000/v1/embeddings"
     assert captured_request["timeout"] == 12.0
     assert captured_request["headers"]["Authorization"] == "Bearer embed-key"
     assert '"model": "Qwen/Qwen3-Embedding-0.6B"' in captured_request["body"]
-    assert embeddings == [[1.0, 1.0, 1.0] + [0.0] * 1021]
+    assert embeddings == [[1.0, 1.0, 1.0] + [0.0] * 1533]

@@ -7,6 +7,7 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     """空字串環境變數應回退為 worker 設定預設值。"""
 
     settings = WorkerSettings(
+        _env_file=None,
         MINIO_SECURE="",
         CELERY_WORKER_POOL="",
         CELERY_WORKER_CONCURRENCY="",
@@ -24,11 +25,11 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         EMBEDDING_MAX_BATCH_TEXTS="",
         EMBEDDING_RETRY_MAX_ATTEMPTS="",
         EMBEDDING_RETRY_BASE_DELAY_SECONDS="",
+        SELF_HOSTED_EMBEDDING_BASE_URL="",
+        SELF_HOSTED_EMBEDDING_API_KEY="",
+        SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
-        EASYPINEX_HOST_EMBEDDING_BASE_URL="",
-        EASYPINEX_HOST_EMBEDDING_API_KEY="",
-        EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS="",
         OPENDATALOADER_USE_STRUCT_TREE="",
         OPENDATALOADER_QUIET="",
         LLAMAPARSE_DO_NOT_CACHE="",
@@ -52,11 +53,14 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.embedding_max_batch_texts == 64
     assert settings.embedding_retry_max_attempts == 3
     assert settings.embedding_retry_base_delay_seconds == 2.0
+    assert settings.embedding_provider == "openai"
+    assert settings.embedding_model == "text-embedding-3-small"
+    assert settings.embedding_dimensions == 1536
     assert settings.openrouter_http_referer is None
     assert settings.openrouter_title is None
-    assert settings.easypinex_host_embedding_base_url is None
-    assert settings.easypinex_host_embedding_api_key is None
-    assert settings.easypinex_host_embedding_timeout_seconds == 60.0
+    assert settings.self_hosted_embedding_base_url is None
+    assert settings.self_hosted_embedding_api_key is None
+    assert settings.self_hosted_embedding_timeout_seconds == 60.0
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True

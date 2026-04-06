@@ -15,10 +15,10 @@ from app.services.reranking import (
     BGERerankProvider,
     CohereRerankProvider,
     DeterministicRerankProvider,
-    EasypinexHostRerankProvider,
     QwenRerankProvider,
     RerankInputDocument,
     RerankScore,
+    SelfHostedRerankProvider,
     _score_with_bge_reranker,
     _score_with_qwen_reranker,
     build_rerank_provider,
@@ -39,8 +39,8 @@ def _uuid() -> str:
     return str(uuid4())
 
 
-def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_easypinex_host(app_settings) -> None:
-    """rerank provider factory 應支援 deterministic、BGE、Qwen、Cohere 與 easypinex-host。"""
+def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_self_hosted(app_settings) -> None:
+    """rerank provider factory 應支援 deterministic、BGE、Qwen、Cohere 與 self-hosted。"""
 
     deterministic_settings = app_settings.model_copy(update={"rerank_provider": "deterministic"})
     bge_settings = app_settings.model_copy(
@@ -52,11 +52,11 @@ def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_easypi
     cohere_settings = app_settings.model_copy(
         update={"rerank_provider": "cohere", "cohere_api_key": "test-key", "rerank_model": "rerank-v3.5"}
     )
-    easypinex_host_settings = app_settings.model_copy(
+    self_hosted_settings = app_settings.model_copy(
         update={
-            "rerank_provider": "easypinex-host",
-            "easypinex_host_rerank_base_url": "http://helper.local:8000",
-            "easypinex_host_rerank_api_key": "helper-key",
+            "rerank_provider": "self-hosted",
+            "self_hosted_rerank_base_url": "http://helper.local:8000",
+            "self_hosted_rerank_api_key": "helper-key",
             "rerank_model": "BAAI/bge-reranker-v2-m3",
         }
     )
@@ -65,13 +65,13 @@ def test_build_rerank_provider_supports_deterministic_bge_qwen_cohere_and_easypi
     bge_provider = build_rerank_provider(bge_settings)
     qwen_provider = build_rerank_provider(qwen_settings)
     cohere_provider = build_rerank_provider(cohere_settings)
-    easypinex_host_provider = build_rerank_provider(easypinex_host_settings)
+    self_hosted_provider = build_rerank_provider(self_hosted_settings)
 
     assert isinstance(deterministic_provider, DeterministicRerankProvider)
     assert isinstance(bge_provider, BGERerankProvider)
     assert isinstance(qwen_provider, QwenRerankProvider)
     assert isinstance(cohere_provider, CohereRerankProvider)
-    assert isinstance(easypinex_host_provider, EasypinexHostRerankProvider)
+    assert isinstance(self_hosted_provider, SelfHostedRerankProvider)
 
 
 def test_cohere_rerank_retries_only_on_http_429(monkeypatch) -> None:
@@ -203,46 +203,46 @@ def test_build_rerank_provider_requires_cohere_api_key(app_settings) -> None:
         raise AssertionError("預期缺少 COHERE_API_KEY 時應拋出 ValueError。")
 
 
-def test_build_rerank_provider_requires_easypinex_host_base_url_and_api_key(app_settings) -> None:
-    """使用 easypinex-host rerank 前必須同時提供 base URL 與 API key。"""
+def test_build_rerank_provider_requires_self_hosted_base_url_and_api_key(app_settings) -> None:
+    """使用 self-hosted rerank 前必須同時提供 base URL 與 API key。"""
 
     missing_base_url_settings = app_settings.model_copy(
         update={
-            "rerank_provider": "easypinex-host",
-            "easypinex_host_rerank_base_url": None,
-            "easypinex_host_rerank_api_key": "helper-key",
+            "rerank_provider": "self-hosted",
+            "self_hosted_rerank_base_url": None,
+            "self_hosted_rerank_api_key": "helper-key",
         }
     )
     missing_api_key_settings = app_settings.model_copy(
         update={
-            "rerank_provider": "easypinex-host",
-            "easypinex_host_rerank_base_url": "http://helper.local:8000",
-            "easypinex_host_rerank_api_key": None,
+            "rerank_provider": "self-hosted",
+            "self_hosted_rerank_base_url": "http://helper.local:8000",
+            "self_hosted_rerank_api_key": None,
         }
     )
 
     try:
         build_rerank_provider(missing_base_url_settings)
     except ValueError as exc:
-        assert "EASYPINEX_HOST_RERANK_BASE_URL" in str(exc)
+        assert "SELF_HOSTED_RERANK_BASE_URL" in str(exc)
     else:  # pragma: no cover - 失敗時才會進來。
-        raise AssertionError("預期缺少 EASYPINEX_HOST_RERANK_BASE_URL 時應拋出 ValueError。")
+        raise AssertionError("預期缺少 SELF_HOSTED_RERANK_BASE_URL 時應拋出 ValueError。")
 
     try:
         build_rerank_provider(missing_api_key_settings)
     except ValueError as exc:
-        assert "EASYPINEX_HOST_RERANK_API_KEY" in str(exc)
+        assert "SELF_HOSTED_RERANK_API_KEY" in str(exc)
     else:  # pragma: no cover - 失敗時才會進來。
-        raise AssertionError("預期缺少 EASYPINEX_HOST_RERANK_API_KEY 時應拋出 ValueError。")
+        raise AssertionError("預期缺少 SELF_HOSTED_RERANK_API_KEY 時應拋出 ValueError。")
 
 
-def test_easypinex_host_rerank_provider_posts_contract_and_parses_scores(monkeypatch) -> None:
-    """easypinex-host rerank provider 應使用 `/v1/rerank` contract 並解析 `score` 欄位。"""
+def test_self_hosted_rerank_provider_posts_contract_and_parses_scores(monkeypatch) -> None:
+    """self-hosted rerank provider 應使用 `/v1/rerank` contract 並解析 `score` 欄位。"""
 
     captured_request: dict[str, object] = {}
 
     def fake_urlopen(request, timeout):  # noqa: ANN001
-        """記錄 easypinex-host request 並回傳最小成功 payload。"""
+        """記錄 self-hosted request 並回傳最小成功 payload。"""
 
         headers = {key.lower(): value for key, value in request.header_items()}
         captured_request["timeout"] = timeout
@@ -269,7 +269,7 @@ def test_easypinex_host_rerank_provider_posts_contract_and_parses_scores(monkeyp
 
     monkeypatch.setattr("app.services.reranking.urlopen", fake_urlopen)
 
-    provider = EasypinexHostRerankProvider(
+    provider = SelfHostedRerankProvider(
         base_url="http://helper.local:8000/",
         api_key="helper-key",
         model="BAAI/bge-reranker-v2-m3",

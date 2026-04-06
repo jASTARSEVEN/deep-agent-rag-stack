@@ -1,4 +1,4 @@
-"""API 使用的 embedding provider abstraction 與 hosted embedding 實作。"""
+"""API 使用的 embedding provider abstraction 與 hosted / self-hosted embedding 實作。"""
 
 from __future__ import annotations
 
@@ -204,15 +204,15 @@ class OpenRouterEmbeddingProvider(HostedEmbeddingProvider):
         )
 
 
-class EasypinexHostEmbeddingProvider(EmbeddingProvider):
-    """使用 easypinex-host `/v1/embeddings` HTTP API 的 provider。"""
+class SelfHostedEmbeddingProvider(EmbeddingProvider):
+    """使用自架 `/v1/embeddings` HTTP API 的 provider。"""
 
     def __init__(self, *, base_url: str, api_key: str, model: str, dimensions: int, timeout_seconds: float = 60.0) -> None:
-        """初始化 easypinex-host embedding provider。
+        """初始化自架 embedding provider。
 
         參數：
-        - `base_url`：easypinex-host service 的 base URL，例如 `http://host:8000`。
-        - `api_key`：easypinex-host service 使用的 Bearer API key。
+        - `base_url`：自架 service 的 base URL，例如 `http://host:8000`。
+        - `api_key`：自架 service 使用的 Bearer API key。
         - `model`：要使用的 embedding model 名稱。
         - `dimensions`：預期輸出向量維度。
         - `timeout_seconds`：每次 HTTP request 的 timeout 秒數。
@@ -229,7 +229,7 @@ class EasypinexHostEmbeddingProvider(EmbeddingProvider):
         self._timeout_seconds = max(1.0, timeout_seconds)
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        """呼叫 easypinex-host HTTP API 產生 embeddings。
+        """呼叫自架 HTTP API 產生 embeddings。
 
         參數：
         - `texts`：要嵌入的文字清單。
@@ -258,9 +258,9 @@ class EasypinexHostEmbeddingProvider(EmbeddingProvider):
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            raise ValueError(f"Easypinex-host embeddings 失敗：{exc}") from exc
+            raise ValueError(f"Self-hosted embeddings 失敗：{exc}") from exc
         except (URLError, TimeoutError) as exc:
-            raise RuntimeError("Easypinex-host embeddings API 呼叫失敗。") from exc
+            raise RuntimeError("Self-hosted embeddings API 呼叫失敗。") from exc
 
         raw_data = response_payload.get("data", [])
         embeddings: list[list[float]] = []
@@ -272,10 +272,26 @@ class EasypinexHostEmbeddingProvider(EmbeddingProvider):
             _normalize_embedding_dimensions(
                 embedding=embedding,
                 target_dimensions=self._dimensions,
-                provider_name="Easypinex-host",
+                provider_name="Self-hosted",
             )
             for embedding in embeddings
         ]
+
+
+def _resolve_self_hosted_embedding_config(settings: AppSettings) -> tuple[str | None, str | None, float]:
+    """解析自架 embedding provider 的設定。
+
+    參數：
+    - `settings`：API 執行期設定。
+
+    回傳：
+    - `tuple[str | None, str | None, float]`：依序為 base URL、API key 與 timeout 秒數。
+    """
+
+    base_url = settings.self_hosted_embedding_base_url or settings.self_hosted_rerank_base_url
+    api_key = settings.self_hosted_embedding_api_key or settings.self_hosted_rerank_api_key
+    timeout_seconds = settings.self_hosted_embedding_timeout_seconds or settings.self_hosted_rerank_timeout_seconds or 60.0
+    return base_url, api_key, timeout_seconds
 
 
 def build_embedding_provider(settings: AppSettings) -> EmbeddingProvider:
@@ -315,15 +331,13 @@ def build_embedding_provider(settings: AppSettings) -> EmbeddingProvider:
             http_referer=settings.openrouter_http_referer,
             title=settings.openrouter_title,
         )
-    if provider == "easypinex-host":
-        base_url = settings.easypinex_host_embedding_base_url or settings.easypinex_host_rerank_base_url
-        api_key = settings.easypinex_host_embedding_api_key or settings.easypinex_host_rerank_api_key
-        timeout_seconds = settings.easypinex_host_embedding_timeout_seconds or settings.easypinex_host_rerank_timeout_seconds
+    if provider == "self-hosted":
+        base_url, api_key, timeout_seconds = _resolve_self_hosted_embedding_config(settings)
         if not base_url:
-            raise ValueError("使用 easypinex-host embeddings 前必須提供 EASYPINEX_HOST_EMBEDDING_BASE_URL 或 EASYPINEX_HOST_RERANK_BASE_URL。")
+            raise ValueError("使用 self-hosted embeddings 前必須提供 SELF_HOSTED_EMBEDDING_BASE_URL 或 SELF_HOSTED_RERANK_BASE_URL。")
         if not api_key:
-            raise ValueError("使用 easypinex-host embeddings 前必須提供 EASYPINEX_HOST_EMBEDDING_API_KEY 或 EASYPINEX_HOST_RERANK_API_KEY。")
-        return EasypinexHostEmbeddingProvider(
+            raise ValueError("使用 self-hosted embeddings 前必須提供 SELF_HOSTED_EMBEDDING_API_KEY 或 SELF_HOSTED_RERANK_API_KEY。")
+        return SelfHostedEmbeddingProvider(
             base_url=base_url,
             api_key=api_key,
             model=settings.embedding_model,

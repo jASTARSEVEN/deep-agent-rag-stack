@@ -58,6 +58,9 @@ This module contains the project's Celery worker. It currently provides the mini
 - `EMBEDDING_RETRY_MAX_ATTEMPTS`
 - `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
+- `SELF_HOSTED_EMBEDDING_BASE_URL`
+- `SELF_HOSTED_EMBEDDING_API_KEY`
+- `SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS`
 - `OPENAI_API_KEY`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_HTTP_REFERER`
@@ -100,8 +103,8 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` enables an optional evidence-centric child refinement path for fact-heavy headings such as `dataset`, `experimental setup`, and `evaluation metrics`; this path exists in the repo but is not part of the current benchmark baseline by default.
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
-- The default embedding path is now `EMBEDDING_PROVIDER=easypinex-host` with `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`, and the storage schema expects `1024` dimensions.
-- The easypinex-host path uses `POST /v1/embeddings` with Bearer auth and dedicated embedding base URL / API key settings.
+- The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the storage schema expects `1536` dimensions.
+- The optional self-hosted path uses `POST /v1/embeddings` with Bearer auth and dedicated `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.
 - The mainline embedding model now matches the schema width directly, so the worker no longer depends on the `4096`-dimension padding workaround.
 - OpenAI embeddings are now sent in batches controlled by `EMBEDDING_MAX_BATCH_TEXTS`; if a batch is still rejected for request-size overflow, the worker recursively splits that batch and retries with smaller requests.
 - OpenAI embeddings now retry only transient failures such as `429`, `5xx`, and connection/timeout errors with bounded backoff. Permanent `400`-class request errors become controlled failed jobs instead of unexpected task crashes.

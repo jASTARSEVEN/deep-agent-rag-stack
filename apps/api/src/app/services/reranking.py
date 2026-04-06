@@ -1,4 +1,4 @@
-"""API 使用的 rerank provider abstraction 與 BGE / Qwen / Cohere / easypinex-host / deterministic 實作。"""
+"""API 使用的 rerank provider abstraction 與 BGE / Qwen / Cohere / self-hosted / deterministic 實作。"""
 
 from __future__ import annotations
 
@@ -308,15 +308,15 @@ class CohereRerankProvider(RerankProvider):
         raise RuntimeError("Cohere rerank API 呼叫失敗。")
 
 
-class EasypinexHostRerankProvider(RerankProvider):
-    """使用 easypinex-host `/v1/rerank` HTTP API 的 provider。"""
+class SelfHostedRerankProvider(RerankProvider):
+    """使用自架 `/v1/rerank` HTTP API 的 provider。"""
 
     def __init__(self, *, base_url: str, api_key: str, model: str, timeout_seconds: float = 10.0) -> None:
-        """初始化 easypinex-host rerank provider。
+        """初始化自架 rerank provider。
 
         參數：
-        - `base_url`：easypinex-host service 的 base URL，例如 `http://host:8000`。
-        - `api_key`：easypinex-host service 使用的 Bearer API key。
+        - `base_url`：自架 service 的 base URL，例如 `http://host:8000`。
+        - `api_key`：自架 service 使用的 Bearer API key。
         - `model`：要使用的 rerank model 名稱。
         - `timeout_seconds`：每次 HTTP request 的 timeout 秒數。
 
@@ -331,7 +331,7 @@ class EasypinexHostRerankProvider(RerankProvider):
         self._timeout_seconds = max(1.0, timeout_seconds)
 
     def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list[RerankScore]:
-        """呼叫 easypinex-host HTTP API 產生 rerank 結果。
+        """呼叫自架 HTTP API 產生 rerank 結果。
 
         參數：
         - `query`：使用者查詢文字。
@@ -339,7 +339,7 @@ class EasypinexHostRerankProvider(RerankProvider):
         - `top_n`：最多回傳前幾名結果。
 
         回傳：
-        - `list[RerankScore]`：依 easypinex-host relevance score 排序後的結果。
+        - `list[RerankScore]`：依 self-hosted relevance score 排序後的結果。
 
         風險：
         - 此方法會呼叫外部 API，timeout、5xx 或網路中斷需由上層以 fail-open fallback 處理。
@@ -370,9 +370,9 @@ class EasypinexHostRerankProvider(RerankProvider):
             with urlopen(request, timeout=self._timeout_seconds) as response:
                 response_payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
-            raise RuntimeError("Easypinex-host rerank API 呼叫失敗。") from exc
+            raise RuntimeError("Self-hosted rerank API 呼叫失敗。") from exc
         except (URLError, TimeoutError) as exc:
-            raise RuntimeError("Easypinex-host rerank API 呼叫失敗。") from exc
+            raise RuntimeError("Self-hosted rerank API 呼叫失敗。") from exc
 
         raw_results = response_payload.get("results", [])
         rerank_scores: list[RerankScore] = []
@@ -385,6 +385,22 @@ class EasypinexHostRerankProvider(RerankProvider):
                 continue
             rerank_scores.append(RerankScore(candidate_id=documents[index].candidate_id, score=float(score)))
         return rerank_scores
+
+
+def _resolve_self_hosted_rerank_config(settings: AppSettings) -> tuple[str | None, str | None, float]:
+    """解析自架 rerank provider 的設定。
+
+    參數：
+    - `settings`：API 執行期設定。
+
+    回傳：
+    - `tuple[str | None, str | None, float]`：依序為 base URL、API key 與 timeout 秒數。
+    """
+
+    base_url = settings.self_hosted_rerank_base_url
+    api_key = settings.self_hosted_rerank_api_key
+    timeout_seconds = settings.self_hosted_rerank_timeout_seconds
+    return base_url, api_key, timeout_seconds
 
 
 def build_rerank_provider(settings: AppSettings) -> RerankProvider:
@@ -417,18 +433,19 @@ def build_rerank_provider(settings: AppSettings) -> RerankProvider:
             retry_on_429_attempts=settings.rerank_retry_on_429_attempts,
             retry_on_429_backoff_seconds=settings.rerank_retry_on_429_backoff_seconds,
         )
-    if provider == "easypinex-host":
-        if not settings.easypinex_host_rerank_base_url:
-            raise ValueError("使用 easypinex-host rerank 前必須提供 EASYPINEX_HOST_RERANK_BASE_URL。")
-        if not settings.easypinex_host_rerank_api_key:
-            raise ValueError("使用 easypinex-host rerank 前必須提供 EASYPINEX_HOST_RERANK_API_KEY。")
+    if provider == "self-hosted":
+        base_url, api_key, timeout_seconds = _resolve_self_hosted_rerank_config(settings)
+        if not base_url:
+            raise ValueError("使用 self-hosted rerank 前必須提供 SELF_HOSTED_RERANK_BASE_URL。")
+        if not api_key:
+            raise ValueError("使用 self-hosted rerank 前必須提供 SELF_HOSTED_RERANK_API_KEY。")
         if not settings.rerank_model.strip():
-            raise ValueError("使用 easypinex-host rerank 前必須提供 RERANK_MODEL。")
-        return EasypinexHostRerankProvider(
-            base_url=settings.easypinex_host_rerank_base_url,
-            api_key=settings.easypinex_host_rerank_api_key,
+            raise ValueError("使用 self-hosted rerank 前必須提供 RERANK_MODEL。")
+        return SelfHostedRerankProvider(
+            base_url=base_url,
+            api_key=api_key,
             model=settings.rerank_model,
-            timeout_seconds=settings.easypinex_host_rerank_timeout_seconds,
+            timeout_seconds=timeout_seconds,
         )
     raise ValueError(f"不支援的 rerank provider：{settings.rerank_provider}")
 

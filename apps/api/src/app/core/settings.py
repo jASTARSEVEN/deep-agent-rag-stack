@@ -25,6 +25,12 @@ EMPTY_STRING_ENV_KEYS = {
     "EMBEDDING_DIMENSIONS",
     "OPENROUTER_HTTP_REFERER",
     "OPENROUTER_TITLE",
+    "SELF_HOSTED_RERANK_BASE_URL",
+    "SELF_HOSTED_RERANK_API_KEY",
+    "SELF_HOSTED_RERANK_TIMEOUT_SECONDS",
+    "SELF_HOSTED_EMBEDDING_BASE_URL",
+    "SELF_HOSTED_EMBEDDING_API_KEY",
+    "SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS",
     "RETRIEVAL_VECTOR_TOP_K",
     "RETRIEVAL_FTS_TOP_K",
     "RETRIEVAL_MAX_CANDIDATES",
@@ -39,12 +45,6 @@ EMPTY_STRING_ENV_KEYS = {
     "RERANK_MAX_CHARS_PER_DOC",
     "RERANK_RETRY_ON_429_ATTEMPTS",
     "RERANK_RETRY_ON_429_BACKOFF_SECONDS",
-    "EASYPINEX_HOST_RERANK_BASE_URL",
-    "EASYPINEX_HOST_RERANK_API_KEY",
-    "EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS",
-    "EASYPINEX_HOST_EMBEDDING_BASE_URL",
-    "EASYPINEX_HOST_EMBEDDING_API_KEY",
-    "EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS",
     "ASSEMBLER_MAX_CONTEXTS",
     "ASSEMBLER_MAX_CHARS_PER_CONTEXT",
     "ASSEMBLER_MAX_CHILDREN_PER_PARENT",
@@ -131,10 +131,10 @@ class AppSettings(BaseSettings):
     openrouter_api_key: Annotated[str | None, Field(alias="OPENROUTER_API_KEY")] = None
     openrouter_http_referer: Annotated[str | None, Field(alias="OPENROUTER_HTTP_REFERER")] = None
     openrouter_title: Annotated[str | None, Field(alias="OPENROUTER_TITLE")] = None
-    easypinex_host_embedding_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_BASE_URL")] = None
-    easypinex_host_embedding_api_key: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_API_KEY")] = None
-    easypinex_host_embedding_timeout_seconds: Annotated[
-        float | None, Field(alias="EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS")
+    self_hosted_embedding_base_url: Annotated[str | None, Field(alias="SELF_HOSTED_EMBEDDING_BASE_URL")] = None
+    self_hosted_embedding_api_key: Annotated[str | None, Field(alias="SELF_HOSTED_EMBEDDING_API_KEY")] = None
+    self_hosted_embedding_timeout_seconds: Annotated[
+        float | None, Field(alias="SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS")
     ] = 60.0
     retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 30
     retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 30
@@ -146,12 +146,14 @@ class AppSettings(BaseSettings):
     retrieval_query_focus_confidence_threshold: Annotated[float, Field(alias="RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD")] = 0.7
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
-    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "easypinex-host"
+    rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "self-hosted"
     rerank_model: Annotated[str, Field(alias="RERANK_MODEL")] = "BAAI/bge-reranker-v2-m3"
     cohere_api_key: Annotated[str | None, Field(alias="COHERE_API_KEY")] = None
-    easypinex_host_rerank_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_RERANK_BASE_URL")] = "http://easypinex.duckdns.org:8000"
-    easypinex_host_rerank_api_key: Annotated[str | None, Field(alias="EASYPINEX_HOST_RERANK_API_KEY")] = None
-    easypinex_host_rerank_timeout_seconds: Annotated[float, Field(alias="EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS")] = 60.0
+    self_hosted_rerank_base_url: Annotated[str | None, Field(alias="SELF_HOSTED_RERANK_BASE_URL")] = (
+        "http://easypinex.duckdns.org:8000"
+    )
+    self_hosted_rerank_api_key: Annotated[str | None, Field(alias="SELF_HOSTED_RERANK_API_KEY")] = None
+    self_hosted_rerank_timeout_seconds: Annotated[float, Field(alias="SELF_HOSTED_RERANK_TIMEOUT_SECONDS")] = 60.0
     rerank_top_n: Annotated[int, Field(alias="RERANK_TOP_N")] = 30
     rerank_max_chars_per_doc: Annotated[int, Field(alias="RERANK_MAX_CHARS_PER_DOC")] = 2000
     rerank_retry_on_429_attempts: Annotated[int, Field(alias="RERANK_RETRY_ON_429_ATTEMPTS")] = 4

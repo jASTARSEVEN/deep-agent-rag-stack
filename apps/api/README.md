@@ -59,9 +59,12 @@ This module contains the project's FastAPI service. It currently provides:
 - `RERANK_PROVIDER`
 - `RERANK_MODEL`
 - `COHERE_API_KEY`
-- `EASYPINEX_HOST_RERANK_BASE_URL`
-- `EASYPINEX_HOST_RERANK_API_KEY`
-- `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS`
+- `SELF_HOSTED_EMBEDDING_BASE_URL`
+- `SELF_HOSTED_EMBEDDING_API_KEY`
+- `SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS`
+- `SELF_HOSTED_RERANK_BASE_URL`
+- `SELF_HOSTED_RERANK_API_KEY`
+- `SELF_HOSTED_RERANK_TIMEOUT_SECONDS`
 - `RERANK_TOP_N`
 - `RERANK_MAX_CHARS_PER_DOC`
 - `ASSEMBLER_MAX_CONTEXTS`
@@ -124,16 +127,16 @@ The internal retrieval service now supports five rerank providers behind the sam
 - `cohere`
   - optional hosted provider
   - requires `COHERE_API_KEY`
-- `easypinex-host`
-  - default runtime provider for the Easypinex-host `/v1/rerank` service
+- `self-hosted`
+  - default runtime provider for a self-hosted `/v1/rerank` service
   - default model: `BAAI/bge-reranker-v2-m3`
-  - requires `EASYPINEX_HOST_RERANK_BASE_URL` and `EASYPINEX_HOST_RERANK_API_KEY`
-  - uses `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS` to control HTTP timeout; the default is `60s`
+  - requires `SELF_HOSTED_RERANK_BASE_URL` and `SELF_HOSTED_RERANK_API_KEY`
+  - uses `SELF_HOSTED_RERANK_TIMEOUT_SECONDS` to control HTTP timeout; the default is `60s`
 - `deterministic`
   - offline test / fallback-friendly provider for local regression tests
 
 Notes:
-- `easypinex-host` is the default runtime choice after this change.
+- `self-hosted` is the default runtime choice after this change.
 - `qwen` is supported but is not the default runtime choice.
 - Both local-model providers may download weights on first use unless the model is already cached locally.
 
@@ -182,16 +185,16 @@ Notes:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
-- The default embedding path is now `EMBEDDING_PROVIDER=easypinex-host` with `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`, and the retrieval schema expects `1024` dimensions.
-- The easypinex-host path uses `POST /v1/embeddings` with Bearer auth and falls back to the existing Easypinex-host base URL / API key settings when dedicated embedding settings are not provided.
-- The `1024`-dimension schema fits pgvector `hnsw`, so the mainline vector recall path can keep ANN indexing enabled.
+- The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the retrieval schema expects `1536` dimensions.
+- The optional self-hosted embedding path uses `POST /v1/embeddings` with Bearer auth and the `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.
+- The `1536`-dimension schema still fits pgvector `hnsw`, so the mainline vector recall path can keep ANN indexing enabled.
 - This module now includes an internal retrieval foundation with SQL gate, vector recall, PGroonga FTS recall, Python-layer `RRF`, minimal rerank, and a table-aware retrieval assembler, but it is not exposed as a public HTTP route yet.
 - The assembler turns reranked child chunks into chat-ready contexts and citation-ready metadata with explicit budget guardrails.
 - Use `RERANK_PROVIDER=deterministic` for offline tests.
-- The default compose/runtime rerank path is `RERANK_PROVIDER=easypinex-host` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
+- The default compose/runtime rerank path is `RERANK_PROVIDER=self-hosted` with `RERANK_MODEL=BAAI/bge-reranker-v2-m3`.
 - `RERANK_PROVIDER=qwen` is also supported for `Qwen/Qwen3-Reranker-0.6B`, but it requires more memory and `transformers>=4.51.0`.
 - `RERANK_PROVIDER=cohere` remains available as an optional hosted provider when `COHERE_API_KEY` is configured.
-- `RERANK_PROVIDER=easypinex-host` is available for Easypinex-host rerank services that expose `POST /v1/rerank`; configure `EASYPINEX_HOST_RERANK_BASE_URL`, `EASYPINEX_HOST_RERANK_API_KEY`, `EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS`, and use a supported model such as `BAAI/bge-reranker-v2-m3` or `Qwen/Qwen3-Reranker-0.6B`.
+- `RERANK_PROVIDER=self-hosted` is available for self-hosted rerank services that expose `POST /v1/rerank`; configure `SELF_HOSTED_RERANK_BASE_URL`, `SELF_HOSTED_RERANK_API_KEY`, `SELF_HOSTED_RERANK_TIMEOUT_SECONDS`, and use `BAAI/bge-reranker-v2-m3` as the recommended self-hosted rerank model.
 - To fold `QASPER` / `UDA` / `MS MARCO` / `Natural Questions`-style datasets into the existing benchmark contract, use `python -m app.scripts.prepare_external_benchmark` and run `prepare-source`, `filter-items`, `align-spans`, `build-snapshot`, and `report` in sequence.
 - Agentic LlamaParse modes are not enabled in this module yet; only the standard Markdown conversion path is implemented.
 - Unsupported formats still move into controlled `failed`.

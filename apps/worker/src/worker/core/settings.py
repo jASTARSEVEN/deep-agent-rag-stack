@@ -34,9 +34,9 @@ EMPTY_STRING_ENV_KEYS = {
     "EMBEDDING_DIMENSIONS",
     "OPENROUTER_HTTP_REFERER",
     "OPENROUTER_TITLE",
-    "EASYPINEX_HOST_EMBEDDING_BASE_URL",
-    "EASYPINEX_HOST_EMBEDDING_API_KEY",
-    "EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS",
+    "SELF_HOSTED_EMBEDDING_BASE_URL",
+    "SELF_HOSTED_EMBEDDING_API_KEY",
+    "SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS",
     "OPENDATALOADER_USE_STRUCT_TREE",
     "OPENDATALOADER_QUIET",
     "LLAMAPARSE_DO_NOT_CACHE",
@@ -112,10 +112,10 @@ class WorkerSettings(BaseSettings):
     openrouter_api_key: Annotated[str | None, Field(alias="OPENROUTER_API_KEY")] = None
     openrouter_http_referer: Annotated[str | None, Field(alias="OPENROUTER_HTTP_REFERER")] = None
     openrouter_title: Annotated[str | None, Field(alias="OPENROUTER_TITLE")] = None
-    easypinex_host_embedding_base_url: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_BASE_URL")] = None
-    easypinex_host_embedding_api_key: Annotated[str | None, Field(alias="EASYPINEX_HOST_EMBEDDING_API_KEY")] = None
-    easypinex_host_embedding_timeout_seconds: Annotated[
-        float | None, Field(alias="EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS")
+    self_hosted_embedding_base_url: Annotated[str | None, Field(alias="SELF_HOSTED_EMBEDDING_BASE_URL")] = None
+    self_hosted_embedding_api_key: Annotated[str | None, Field(alias="SELF_HOSTED_EMBEDDING_API_KEY")] = None
+    self_hosted_embedding_timeout_seconds: Annotated[
+        float | None, Field(alias="SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS")
     ] = 60.0
 
     @model_validator(mode="before")

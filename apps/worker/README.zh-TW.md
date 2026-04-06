@@ -58,6 +58,9 @@
 - `EMBEDDING_RETRY_MAX_ATTEMPTS`
 - `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
+- `SELF_HOSTED_EMBEDDING_BASE_URL`
+- `SELF_HOSTED_EMBEDDING_API_KEY`
+- `SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS`
 - `OPENAI_API_KEY`
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_HTTP_REFERER`
@@ -100,8 +103,8 @@
 - `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` 可啟用針對 `dataset`、`experimental setup`、`evaluation metrics` 這類 fact-heavy heading 的 evidence-centric child refinement；此路徑目前仍存在於 repo，但預設不屬於 current benchmark baseline。
 - `ready` 現在代表 chunking 與 embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
-- 目前預設 embedding 路徑已改為 `EMBEDDING_PROVIDER=easypinex-host` 與 `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`，而儲存 schema 固定使用 `1024` 維。
-- easypinex-host 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 embedding base URL / API key 設定。
+- 目前預設 embedding 路徑仍為 `EMBEDDING_PROVIDER=openai` 與 `EMBEDDING_MODEL=text-embedding-3-small`，而儲存 schema 固定使用 `1536` 維。
+- 可選的 self-hosted 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 `SELF_HOSTED_EMBEDDING_*` 設定；建議模型為 `Qwen/Qwen3-Embedding-0.6B`。
 - 目前主線 embedding 模型與 schema 維度一致，因此 worker 不再依賴先前 `4096` 維路徑的零補齊 workaround。
 - OpenAI embeddings 現在會依 `EMBEDDING_MAX_BATCH_TEXTS` 分批送出；若單批仍因 request size 超限被拒絕，worker 會自動再將該批二分後重送。
 - OpenAI embeddings 目前只會對暫時性失敗（例如 `429`、`5xx`、連線/timeout）做有限次 backoff retry；`400` 這類永久性錯誤會直接轉成受控 failed，避免 task 以 unexpected exception 結束。

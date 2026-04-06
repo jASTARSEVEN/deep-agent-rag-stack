@@ -104,8 +104,8 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         LLAMAPARSE_DO_NOT_CACHE=True,
         LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
         EMBEDDING_PROVIDER="deterministic",
-        EMBEDDING_MODEL="qwen/qwen3-embedding-0.6b",
-        EMBEDDING_DIMENSIONS=1024,
+        EMBEDDING_MODEL="text-embedding-3-small",
+        EMBEDDING_DIMENSIONS=1536,
     )
 
 

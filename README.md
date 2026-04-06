@@ -60,7 +60,7 @@ The reranker is an active ranking layer in production-like evaluation, not just 
 
 - parent-level aggregation reduces child-level fragmentation before ranking
 - rerank text is normalized into `Header:` and `Content:` fields
-- providers are swappable: `easypinex-host`, local `BGE`, local `Qwen`, `Cohere`, and `deterministic`
+- providers are swappable: `self-hosted`, local `BGE`, local `Qwen`, `Cohere`, and `deterministic`
 - cost is bounded by `RERANK_TOP_N` and `RERANK_MAX_CHARS_PER_DOC`
 - failures are handled with fail-open fallback so auth and ready-only boundaries do not regress
 
@@ -123,12 +123,12 @@ For the full benchmark analysis, see [`docs/retrieval-benchmark-strategy-analysi
 - Docker and Docker Compose
 - Java `11+` if you keep the default `PDF_PARSER_PROVIDER=opendataloader`
 - At least one embedding provider credential for real ingest and retrieval:
+  - `SELF_HOSTED_EMBEDDING_API_KEY`, or
   - `OPENAI_API_KEY`, or
   - `OPENROUTER_API_KEY`, or
-  - `EASYPINEX_HOST_EMBEDDING_API_KEY`
 - A rerank provider credential when the configured rerank provider needs one:
+  - `SELF_HOSTED_RERANK_API_KEY`, or
   - `COHERE_API_KEY`, or
-  - `EASYPINEX_HOST_RERANK_API_KEY`
 - For public HTTPS deployment, a reachable `PUBLIC_HOST` and `TLS_ACME_EMAIL`
 
 ### Quick Start

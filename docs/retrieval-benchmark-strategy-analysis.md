@@ -38,7 +38,7 @@
 
 這九個 run 的 `config_snapshot` 目前一致，代表 current HEAD 下 `production_like_v1` 的實際 baseline 為：
 
-- rerank provider：`easypinex-host`
+- rerank provider：`self-hosted`
 - rerank model：`BAAI/bge-reranker-v2-m3`
 - rerank top N：`30`
 - rerank max chars per doc：`2000`

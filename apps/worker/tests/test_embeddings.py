@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from types import SimpleNamespace
 
-from worker.embeddings import EasypinexHostEmbeddingProvider, OpenAIEmbeddingProvider, OpenRouterEmbeddingProvider
+from worker.embeddings import OpenAIEmbeddingProvider, OpenRouterEmbeddingProvider, SelfHostedEmbeddingProvider
 
 
 class _FakeTooLargeError(Exception):
@@ -283,14 +283,14 @@ def test_openrouter_embedding_provider_uses_openrouter_client_options(monkeypatc
     assert len(embeddings[0]) == 1024
 
 
-def test_easypinex_host_embedding_provider_uses_http_contract(monkeypatch) -> None:
-    """easypinex-host embedding provider 應使用 `/v1/embeddings` contract。
+def test_self_hosted_embedding_provider_uses_http_contract(monkeypatch) -> None:
+    """self-hosted embedding provider 應使用 `/v1/embeddings` contract。
 
     參數：
     - `monkeypatch`：pytest 提供的 monkeypatch fixture。
 
     回傳：
-    - `None`：以斷言驗證 easypinex-host request 與回應解析。
+    - `None`：以斷言驗證 self-hosted request 與回應解析。
     """
 
     captured_request: dict[str, object] = {}
@@ -318,7 +318,7 @@ def test_easypinex_host_embedding_provider_uses_http_contract(monkeypatch) -> No
 
     monkeypatch.setattr("worker.embeddings.urlopen", fake_urlopen)
 
-    provider = EasypinexHostEmbeddingProvider(
+    provider = SelfHostedEmbeddingProvider(
         base_url="http://helper.local:8000",
         api_key="embed-key",
         model="Qwen/Qwen3-Embedding-0.6B",

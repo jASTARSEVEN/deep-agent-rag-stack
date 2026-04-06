@@ -22,17 +22,17 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         CHUNK_TABLE_MAX_ROWS_PER_CHILD="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
-        EASYPINEX_HOST_EMBEDDING_BASE_URL="",
-        EASYPINEX_HOST_EMBEDDING_API_KEY="",
-        EASYPINEX_HOST_EMBEDDING_TIMEOUT_SECONDS="",
+        SELF_HOSTED_EMBEDDING_BASE_URL="",
+        SELF_HOSTED_EMBEDDING_API_KEY="",
+        SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
         RETRIEVAL_QUERY_FOCUS_ENABLED="",
         RETRIEVAL_QUERY_FOCUS_VARIANT="",
         RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD="",
-        EASYPINEX_HOST_RERANK_BASE_URL="",
-        EASYPINEX_HOST_RERANK_API_KEY="",
-        EASYPINEX_HOST_RERANK_TIMEOUT_SECONDS="",
+        SELF_HOSTED_RERANK_BASE_URL="",
+        SELF_HOSTED_RERANK_API_KEY="",
+        SELF_HOSTED_RERANK_TIMEOUT_SECONDS="",
         RERANK_TOP_N="",
         RERANK_MAX_CHARS_PER_DOC="",
         ASSEMBLER_MAX_CONTEXTS="",
@@ -51,19 +51,22 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.chunk_table_max_rows_per_child == 20
     assert settings.openrouter_http_referer is None
     assert settings.openrouter_title is None
-    assert settings.easypinex_host_embedding_base_url is None
-    assert settings.easypinex_host_embedding_api_key is None
-    assert settings.easypinex_host_embedding_timeout_seconds == 60.0
+    assert settings.embedding_provider == "openai"
+    assert settings.embedding_model == "text-embedding-3-small"
+    assert settings.embedding_dimensions == 1536
+    assert settings.self_hosted_embedding_base_url is None
+    assert settings.self_hosted_embedding_api_key is None
+    assert settings.self_hosted_embedding_timeout_seconds == 60.0
     assert settings.retrieval_evidence_synopsis_enabled is True
     assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
     assert settings.retrieval_query_focus_enabled is True
     assert settings.retrieval_query_focus_variant == "generic_field_focus_v1"
     assert settings.retrieval_query_focus_confidence_threshold == 0.7
-    assert settings.rerank_provider == "easypinex-host"
+    assert settings.rerank_provider == "self-hosted"
     assert settings.rerank_model == "BAAI/bge-reranker-v2-m3"
-    assert settings.easypinex_host_rerank_base_url == "http://easypinex.duckdns.org:8000"
-    assert settings.easypinex_host_rerank_api_key is None
-    assert settings.easypinex_host_rerank_timeout_seconds == 60.0
+    assert settings.self_hosted_rerank_base_url == "http://easypinex.duckdns.org:8000"
+    assert settings.self_hosted_rerank_api_key is None
+    assert settings.self_hosted_rerank_timeout_seconds == 60.0
     assert settings.rerank_top_n == 30
     assert settings.rerank_max_chars_per_doc == 2000
     assert settings.assembler_max_contexts == 9

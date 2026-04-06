@@ -46,7 +46,8 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `OPENAI_API_KEY`
 - `RERANK_*`
 - `COHERE_API_KEY`
-- `EASYPINEX_HOST_RERANK_*`
+- `SELF_HOSTED_EMBEDDING_*`
+- `SELF_HOSTED_RERANK_*`
 - `LANGSMITH_*`
 - `RETRIEVAL_*`
 - `VITE_*`
