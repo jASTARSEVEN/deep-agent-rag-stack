@@ -236,10 +236,11 @@
 
 ## 近期建議順序
 
-1. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證
-2. 驗證既有 Supabase volume 經 `migration_runner` 升級後的 retrieval / chat 穩定性
-3. 補強 area management 與 access / documents / chat 狀態切換交界的回歸驗證
-4. 規劃文件級摘要 / 比較能力的 retrieval 與 synthesis phase，避免 chat 只依賴固定 top-n chunk assemble
+1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + query_focus off + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
+2. 進入 `Phase 8.1 — Query-Aware Retrieval Profiles` 規劃與最小切片，先把 `fact_lookup` 的 query intent / profile trace metadata 顯式化，再逐步擴到 `document_summary` 與 `cross_document_compare`
+3. benchmark 驅動優化先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
+4. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
+5. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## Phase 7 — Retrieval Correctness Evaluation
 
@@ -303,27 +304,31 @@
 - 單機自測：`api + worker + web` 本機啟動，SQLite + filesystem + deterministic providers，可直接執行 Playwright E2E reviewer flow
 
 目前 benchmark 現況：
-- 最新一輪以真實 provider 執行的 benchmark，已觀察到 `recall -> rerank` 有明顯提升，代表 rerank 對 ranking 品質有實質幫助：
-  - `recall`：`nDCG@k 0.644`、`Recall@k 0.897`、`MRR@k 0.570`
-  - `rerank`：`nDCG@k 0.834`、`Recall@k 0.897`、`MRR@k 0.814`
-  - `assembled`：`nDCG@k 0.824`、`Recall@k 0.862`、`MRR@k 0.810`
-- `Doc Coverage@k = 1.000` 代表正確文件基本都有進入候選集合；目前主要缺口已不在文件級 coverage，而在最後 evidence materialization。
-- `assembled` 指標仍略低於 `rerank`，表示少數題目雖已在 rerank 前段命中，但進入最終 context 時仍有 evidence 流失。
-- 對外 benchmark（例如 QASPER）的持續優化，應先以目前主線設定實際跑分建立 baseline，再對單一主假設做最小實作與重跑驗證。
-- 若新策略造成 benchmark 指標退化，除分析文件外其餘改動應一律回退；若提升，則應在保留改動的前提下重新分析最新 miss 題與目前查到的 chunks，再決定下一輪策略。
+- 目前長期 benchmark 已擴充為九個 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + query_focus off + assembler 9x3000`，舊的 query-focus-on 分數只保留歷史參考價值，不再作為 current mainline baseline。
+- external `100Q` 六資料集的最新 assembled 指標如下：
+  - `DuReader-robust 100`：`Recall@10=1.0000`、`nDCG@10=0.9677`、`MRR@10=0.9570`
+  - `MS MARCO 100`：`Recall@10=1.0000`、`nDCG@10=0.9674`、`MRR@10=0.9550`
+  - `DRCD 100`：`Recall@10=0.9700`、`nDCG@10=0.8650`、`MRR@10=0.8308`
+  - `NQ 100`：`Recall@10=0.7500`、`nDCG@10=0.7443`、`MRR@10=0.7425`
+  - `UDA 100`：`Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
+  - `QASPER 100`：`Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
+- 目前依 assembled 指標來看，`DuReader-robust 100` 與 `MS MARCO 100` 已接近 ceiling，較適合作為 sanity check；真正仍在拉低 external hard lane 的主因仍是 `QASPER 100`。
+- `NQ 100` 已補出一條與 `QASPER` 不同的壓力測試 lane：`rerank` 幾乎接近 ceiling，但 `assembled` 仍顯著掉分，代表 wiki 長段落 evidence 的 materialization / budget 仍需特別關注。
+- `DRCD 100` 目前更適合作為繁體中文 rerank regression 哨兵，而不是下一輪主優化目標；`DuReader-robust 100` 則應維持近 ceiling 中文 sanity check 角色，不應拿來主導策略方向。
+- 後續所有 benchmark-driven 調整都必須先在目前 baseline 上建立 before / after；若新策略造成退化，除分析文件外其餘改動一律回退；若提升，則需重新分析最新 miss 題與當前 chunks，再決定下一輪假設。
 
 後續改善重點：
-- 以 `rerank hit / assembled miss` 題目為主，檢查 assembler 的 `max_contexts`、`max_chars_per_context`、`max_children_per_parent` 與 materialization 策略，避免 evidence 在最後一層被裁掉。
-- 針對 table-heavy 題目持續補強 row-aware retrieval / row-header-aware rerank text，優先處理「章節有命中、表格列沒命中」的案例。
-- benchmark 主流程預設只顯示最新 completed run，但資料庫仍保留歷史 run 以供回歸比較與異常追查。
-- 若要做穩定 regression gate，應補一條 deterministic evaluation profile，避免真實 provider rate limit 與暫時性外部失敗污染品質判讀。
-- 依 `docs/retrieval-benchmark-strategy-analysis.md` 的目前分析，下一個最值得投入的方向應是 `evidence-centric child refinement`，而不是繼續放大 recall pool 或 assembled budget。
+- 主優先方向仍是以 generic-first 方式處理 `QASPER 100` 的 `recall_only` semantic-gap miss，例如在 `Phase 8.1` 內驗證更強但仍通用的英文 field-focus lane，而不是回到 benchmark-specific wording。
+- 第二優先觀測點是 `NQ 100` 的 `rerank_hit_but_assembled_miss` 與 `assembled_only` 題目，用來驗證 assembler 是否在高品質 rerank 命中的 wiki 長段落上過度裁切。
+- 第三優先觀測點是 `DRCD 100` 的中文 rerank regression；任何新 lane 若讓近乎到頂的 lexical candidate set 反而掉分，應直接視為失敗。
+- `DuReader-robust 100` 與 `MS MARCO 100` 應維持為近 ceiling sanity check，不作為下一輪優化方向的主依據。
+- benchmark 主流程預設只顯示最新 completed run，但資料庫仍保留歷史 run 以供回歸比較與異常追查；若要做穩定 regression gate，仍應補一條 deterministic evaluation profile，避免真實 provider rate limit 與暫時性外部失敗污染品質判讀。
 
 ## Phase 8.1 — Query-Aware Retrieval Profiles
 
 目標：
 - 讓 retrieval 不再只依賴單一固定 `top_n -> rerank -> assemble` 路徑，而能依問題型態切換不同策略。
-- 先補齊「事實查詢 vs 文件摘要 vs 跨文件比較」三類主要問答場景的最小能力。
+- 先以 benchmark 驅動方式收斂 `fact_lookup` 的 generic-first profile lane，再逐步補齊「事實查詢 vs 文件摘要 vs 跨文件比較」三類主要問答場景的最小能力。
 - 本 phase 的 query-aware retrieval 必須同時支援台灣繁體中文與英文，不可只以單一語言調參後視為完成。
 
 內容：
@@ -333,7 +338,8 @@
   - `cross_document_compare`
 - query intent classification、retrieval profile 與 trace metadata 必須可覆蓋繁體中文 query、英文 query，以及中英混合關鍵詞的真實使用情境。
 - 依 query type 套用不同 retrieval profile，而不是共用同一組固定參數。
-- `fact_lookup` 維持現有 precision-first 路線。
+- rollout 順序以 `fact_lookup` 優先；在 `fact_lookup` lane 穩定前，不擴大 summary / compare 的 runtime 複雜度。
+- `fact_lookup` 維持現有 precision-first 路線，但需把 generic-first 的 candidate lane registry 顯式化，讓像 `english_field_focus_v2` 這類假設可在不污染主線 default 的前提下受控比較。
 - `document_summary` 提高 recall coverage，允許較大的候選集與較寬鬆的 assembled context budget。
 - `cross_document_compare` 強制保留跨文件 coverage，避免 rerank 後的 top hits 被單一文件壟斷。
 - 將 profile 相關參數顯式設定化，例如：
@@ -341,10 +347,11 @@
   - rerank top-n
   - assembler contexts 上限
   - 每文件可採信 parent 數上限
-- retrieval trace metadata 補上 query type 與所套用 profile，便於觀測與回歸測試。
+- 每個新 profile lane 都必須直接對 current baseline 比較，且至少同時觀測 `QASPER 100`、`NQ 100` 與 `DRCD 100`；若造成 assembler 或中文 rerank 哨兵退化，應回退。
+- retrieval trace metadata 需補上 query type、所套用 profile、`query_focus_applied`、focus query 與 rerank query，便於觀測與回歸測試。
 
 狀態：
-- `未開始`
+- `規劃中（benchmark 驅動優先 lane 已明確）`
 
 ## Phase 8.2 — Diversified Selection Before Assembly
 
