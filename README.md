@@ -42,6 +42,38 @@ This project exists to validate those constraints in one stack: `FastAPI`, `Reac
 - LangGraph + Deep Agents runtime with observable retrieval traces and tool-call visibility
 - Benchmark-driven retrieval governance with a fixed baseline and explicit anti-domain-overfit rules
 
+## Retrieval And Evaluation Flow
+
+### Hybrid Search
+
+The current retrieval path is not "vector search only". The mainline flow is:
+
+1. apply SQL gate and ready-only filtering
+2. run vector recall and PGroonga full-text recall
+3. merge candidates with `RRF`
+4. pass merged parent-level candidates into rerank
+5. assemble final contexts and citations for chat
+
+### Reranker
+
+The reranker is an active ranking layer in production-like evaluation, not just a future placeholder.
+
+- parent-level aggregation reduces child-level fragmentation before ranking
+- rerank text is normalized into `Header:` and `Content:` fields
+- providers are swappable: `easypinex-host`, local `BGE`, local `Qwen`, `Cohere`, and `deterministic`
+- cost is bounded by `RERANK_TOP_N` and `RERANK_MAX_CHARS_PER_DOC`
+- failures are handled with fail-open fallback so auth and ready-only boundaries do not regress
+
+### Evaluation Pipeline
+
+Retrieval quality is measured through an internal evaluation pipeline instead of relying only on subjective answer demos.
+
+1. build area-scoped datasets and gold source spans
+2. preview `recall`, `rerank`, and `assembled` candidates
+3. run benchmark profiles through the same retrieval pipeline used by the product
+4. compare new runs against the fixed baseline
+5. keep only improvements that survive anti-domain-overfit checks
+
 ## Current Status
 
 The latest completed milestone is `Phase 7 — Retrieval Correctness Evaluation v1`.
