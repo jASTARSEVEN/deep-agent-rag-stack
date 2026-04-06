@@ -51,6 +51,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CHUNK_TABLE_PRESERVE_MAX_CHARS`
 - `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED`
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`
 - `EMBEDDING_MAX_BATCH_TEXTS`
@@ -96,6 +97,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - Fresh ingest runs clear the document-scoped `artifacts/` prefix before writing new parse artifacts.
 - `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
+- `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` enables an optional evidence-centric child refinement path for fact-heavy headings such as `dataset`, `experimental setup`, and `evaluation metrics`; this path exists in the repo but is not part of the current benchmark baseline by default.
 - `ready` now means chunking and embeddings have been completed.
 - The worker is now responsible for child-chunk embeddings.
 - The default embedding path is now `EMBEDDING_PROVIDER=easypinex-host` with `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`, and the storage schema expects `1024` dimensions.

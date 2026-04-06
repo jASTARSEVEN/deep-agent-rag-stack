@@ -167,6 +167,7 @@
 - 已新增 `document_chunks` SQL-first schema，採固定 `parent -> child` 兩層結構
 - 已為 `TXT/MD` 實作真正的 chunk tree 建立流程，並將 `document.status=ready` 與 chunking 成功綁定
 - 已採 hybrid chunking 策略：保留 custom parent section builder，child chunk 改用 `LangChain RecursiveCharacterTextSplitter`
+- repo 內仍保留一條可選的 fact-heavy evidence-centric child refinement 路徑，會針對 `dataset / setup / metrics` 類 heading 改用句界 windows 切分；此能力目前預設關閉，且未納入 current benchmark baseline
 - 已擴充 `documents` 與 `ingest_jobs` observability，提供 chunk counts、stage 與 last indexed time
 - 已實作 `POST /documents/{document_id}/reindex` 與 `DELETE /documents/{document_id}`
 - 已落實 reindex replace-all 語意：重建前清除舊 chunks，不保留殘留資料

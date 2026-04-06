@@ -36,6 +36,7 @@ This project exists to validate those constraints in one stack: `FastAPI`, `Reac
 - Security-first retrieval boundaries with `deny-by-default`, same-`404`, `JWT sub/groups`, effective-role merging, and SQL gate enforcement
 - Ready-only document lifecycle: only `status=ready` documents are allowed into retrieval and chat
 - Hybrid retrieval path: `SQL gate + vector recall + PGroonga FTS + RRF + rerank + assembled-context citations`
+- Rerank optimization with parent-level candidate aggregation, `Header/Content` formatting, provider abstraction, bounded `RERANK_TOP_N`, bounded per-document chars, and fail-open fallback
 - Table-aware ingestion and retrieval for `PDF`, `DOCX`, `PPTX`, `XLSX`, `TXT/MD`, and `HTML`
 - One-page dashboard UX with area navigation, streaming chat, document drawer, access modal, and chunk-aware preview
 - LangGraph + Deep Agents runtime with observable retrieval traces and tool-call visibility
@@ -50,6 +51,7 @@ The current MVP already includes:
 - area management with Keycloak group-based access control
 - document upload, delete, reindex, and ingest progress tracking
 - chunk-aware document preview and citation navigation
+- an optional fact-heavy evidence-centric child refinement path in worker chunking, currently kept off by default and excluded from the current baseline
 - LangGraph-based chat runtime backed by Deep Agents
 - retrieval evaluation datasets, reviewer UI, CLI runner, and baseline compare
 - a single public entry model behind `Caddy` with `/`, `/api/*`, and `/auth/*`
@@ -74,6 +76,7 @@ The fixed current baseline is the `production_like_v1` snapshot from `2026-04-05
 
 Current benchmark interpretation at the README level:
 
+- rerank is already a real optimization layer in the current stack, not just a planned box in the pipeline; the system uses parent-level rerank with cost guardrails and traceable fallback behavior
 - `QASPER 100` is still the main hard external retrieval lane
 - `NQ 100` is the assembler pressure-test lane
 - `DRCD 100` is the Traditional Chinese rerank sentinel

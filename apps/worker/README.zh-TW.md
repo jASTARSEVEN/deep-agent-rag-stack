@@ -51,6 +51,7 @@
 - `CHUNK_TXT_PARENT_GROUP_SIZE`
 - `CHUNK_TABLE_PRESERVE_MAX_CHARS`
 - `CHUNK_TABLE_MAX_ROWS_PER_CHILD`
+- `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED`
 - `EMBEDDING_PROVIDER`
 - `EMBEDDING_MODEL`
 - `EMBEDDING_MAX_BATCH_TEXTS`
@@ -96,6 +97,7 @@
 - 每次新的 ingest 執行前都會先清理文件範圍內的 `artifacts/` 前綴，避免殘留舊 parse 產物。
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
+- `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` 可啟用針對 `dataset`、`experimental setup`、`evaluation metrics` 這類 fact-heavy heading 的 evidence-centric child refinement；此路徑目前仍存在於 repo，但預設不屬於 current benchmark baseline。
 - `ready` 現在代表 chunking 與 embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
 - 目前預設 embedding 路徑已改為 `EMBEDDING_PROVIDER=easypinex-host` 與 `EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B`，而儲存 schema 固定使用 `1024` 維。
