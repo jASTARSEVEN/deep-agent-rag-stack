@@ -3,8 +3,11 @@
 import type { ChatAnswerBlock, ChatContextReference, ChatDisplayCitation } from "../../../lib/types";
 
 
-/** 回答中的 citation marker，例如 `[[C1]]` 或 `[[C1,C2]]`。 */
-const CITATION_MARKER_PATTERN = /\[\[(?<labels>C\d+(?:\s*,\s*C\d+)*)\]\]/g;
+/** 回答中的 citation marker，例如 `[[C1]]`、`[[C1,C2]]` 或 `[[C1],[C2]]`。 */
+const CITATION_MARKER_PATTERN = /\[\[(?<labels>[\s\S]*?)\]\]/g;
+
+/** citation label 的最小合法格式。 */
+const CITATION_LABEL_PATTERN = /C\d+/g;
 
 /** 判斷文字中是否已出現 citation marker 的起始語法。 */
 export function containsCitationMarkerPrefix(answer: string): boolean {
@@ -33,7 +36,12 @@ function buildCitationLookup(citations: ChatContextReference[]): Map<string, Cha
   );
 }
 
-/** 依 citation label 建立暫時顯示用的 fallback citation。 */
+/**
+ * 依 citation label 建立暫時顯示用的 fallback citation。
+ *
+ * @param label citation 穩定顯示 label。
+ * @returns 對應的 fallback citation；若 label 非法則回傳 `null`。
+ */
 function buildFallbackDisplayCitation(label: string): ChatDisplayCitation | null {
   const match = /^C(?<index>\d+)$/.exec(label);
   if (!match?.groups?.index) {
@@ -52,6 +60,16 @@ function buildFallbackDisplayCitation(label: string): ChatDisplayCitation | null
     page_start: null,
     page_end: null,
   };
+}
+
+/**
+ * 從 marker 內文擷取所有合法 citation labels。
+ *
+ * @param labelsGroup marker 內部原始字串。
+ * @returns 去重後的 citation labels。
+ */
+function extractCitationLabels(labelsGroup: string): string[] {
+  return Array.from(new Set(labelsGroup.match(CITATION_LABEL_PATTERN) ?? []));
 }
 
 
@@ -78,16 +96,16 @@ export function deriveAnswerBlocksFromText(
   rawBlocks.forEach((rawBlock) => {
     const labels: string[] = [];
     const cleanedText = rawBlock
-      .replace(CITATION_MARKER_PATTERN, (_, labelsGroup: string) => {
-        labelsGroup
-          .split(",")
-          .map((label) => label.trim())
-          .filter(Boolean)
-          .forEach((label) => {
-            if (!labels.includes(label)) {
-              labels.push(label);
-            }
-          });
+      .replace(CITATION_MARKER_PATTERN, (fullMatch, labelsGroup: string) => {
+        const extractedLabels = extractCitationLabels(labelsGroup);
+        if (extractedLabels.length === 0) {
+          return fullMatch;
+        }
+        extractedLabels.forEach((label) => {
+          if (!labels.includes(label)) {
+            labels.push(label);
+          }
+        });
         return "";
       })
       .replace(/[ \t]{2,}/g, " ")
