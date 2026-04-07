@@ -166,6 +166,16 @@ services:
       LANGSMITH_PROJECT: ${LANGSMITH_PROJECT:-deep-agent-rag-stack}
       LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-}
       LANGSMITH_WORKSPACE_ID: ${LANGSMITH_WORKSPACE_ID:-}
+      # 這是用來繞過目前 LangGraph local-dev 啟動順序 bug 的 workaround。
+      # 以 `langgraph-cli 0.4.19` / `langgraph-api 0.7.98` 實測可重現：
+      # `langgraph dev` 會在把 `langgraph.json` 內的 `LANGGRAPH_AUTH` /
+      # `LANGGRAPH_HTTP` 注入環境前，就先 import `langgraph_api.config`，
+      # 導致 custom auth 與 custom FastAPI routes 靜默退回 noop auth /
+      # 僅保留內建 routes。若未來 LangGraph 升版後修正此啟動順序，
+      # 請重新驗證移除這兩個 env var 後 `/api/auth/context` 與 `/api/areas`
+      # 是否仍正常，再決定是否刪除此 workaround，避免保留多餘設定。
+      LANGGRAPH_AUTH: '{"path":"./langgraph_auth.py:auth"}'
+      LANGGRAPH_HTTP: '{"app":"./langgraph_http_app.py:app","enable_custom_route_auth":true,"middleware_order":"auth_first"}'
       RETRIEVAL_VECTOR_TOP_K: ${RETRIEVAL_VECTOR_TOP_K:-}
       RETRIEVAL_FTS_TOP_K: ${RETRIEVAL_FTS_TOP_K:-}
       RETRIEVAL_MAX_CANDIDATES: ${RETRIEVAL_MAX_CANDIDATES:-}
