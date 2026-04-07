@@ -62,7 +62,7 @@
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 改為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1` + `retrieval_query_focus_enabled=true` + `retrieval_query_focus_variant=generic_field_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 收斂為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1` + `retrieval_query_focus_enabled=false` + `retrieval_query_focus_variant=generic_field_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
 - benchmark 治理已同步改為 generic-first：guarded query-focus lane 使用 `generic_guarded_query_focus_v1`，不再保留舊的 benchmark-specific profile naming
 - retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷

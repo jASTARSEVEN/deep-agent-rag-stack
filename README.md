@@ -180,6 +180,86 @@ cp .env.example .env
 
 The local Keycloak development realm is imported automatically by the Compose stack.
 
+## Quick Start For Humans
+
+If you only want to boot the app and try the main flow, use this section instead of reading the architecture first.
+
+### Default Local Accounts
+
+The local Compose stack imports a fixed Keycloak development realm on first startup.
+
+| Username | Password | Groups | Recommended use |
+| --- | --- | --- | --- |
+| `alice` | `alice123` | `/dept/hr` | First interactive demo user |
+| `bob` | `bob123` | `/dept/finance` | Cross-group access check |
+| `carol` | `carol123` | `/dept/rd` | Another normal user |
+| `dave` | `dave123` | none | `deny-by-default` check |
+| `erin` | `erin123` | `/dept/hr`, `/dept/rd` | Multi-group effective-role check |
+| `frank` | `frank123` | `/platform/knowledge-admins` | Platform admin-style demo user |
+
+Notes:
+
+- Keycloak realm: `deep-agent-dev`
+- Keycloak client: `deep-agent-web`
+- These users come from [`infra/keycloak/deep-agent-dev-realm.json`](infra/keycloak/deep-agent-dev-realm.json).
+- If you already started Keycloak once and later changed the realm import, you must reset Keycloak persistent data before the new users take effect.
+
+### What You Usually Do In The App
+
+The intended happy path is:
+
+1. Open `http://localhost`
+2. Click `Use Keycloak Login`
+3. Sign in with one of the accounts above
+4. Open `/areas`
+5. Create a new Knowledge Area if this is your first time
+6. Upload a document into that area
+7. Wait until the document status becomes `ready`
+8. Ask a question in the chat panel and inspect the citations
+
+What to expect after first login:
+
+- On a fresh system, you may see no accessible areas yet. That is normal.
+- The simplest first action is to create your own area.
+- The creator of an area becomes that area's `admin`.
+- Access to an existing area depends on area-level user or group mappings, not just on being able to log in.
+
+### 5-Minute Demo Flow
+
+Use `alice / alice123` for the shortest demo:
+
+1. Start the stack with `./scripts/compose.sh up --build`
+2. Open `http://localhost`
+3. Log in as `alice`
+4. Create an area such as `HR Policies`
+5. Upload one `PDF`, `DOCX`, `TXT/MD`, `PPTX`, `HTML`, or `XLSX` file
+6. Wait for the file to move from `uploaded` or `processing` to `ready`
+7. Ask a concrete question that should be answerable from the file
+8. Click the returned citations to inspect the source text in the preview pane
+
+### Simple Access-Control Demo
+
+If you want to understand the authorization model quickly:
+
+1. Log in as `alice` and create an area
+2. In the access settings, grant `/dept/hr` as `reader`
+3. Log out and log in again as `bob`
+4. `bob` should not see that area because `bob` belongs to `/dept/finance`
+5. Log in as `dave`
+6. `dave` should also be blocked because `dave` has no groups
+
+This shows two important product rules:
+
+- access is `deny-by-default`
+- area access is controlled by direct user roles and Keycloak group-path mappings
+
+### Which Account Should I Use?
+
+- Use `alice` if you just want to try the app end to end.
+- Use `frank` if you want a platform-admin-flavored test identity.
+- Use `erin` if you want to test a user with multiple groups.
+- Use `dave` if you want to verify that group-less users do not automatically gain access to protected data.
+
 ## Environment Variables
 
 Review these groups first:

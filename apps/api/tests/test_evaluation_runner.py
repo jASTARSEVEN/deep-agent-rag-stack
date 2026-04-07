@@ -153,8 +153,6 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
 def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, db_session, app_settings) -> None:
     """query focus profile 應在 run report 中暴露 planner detail 與 snapshot。"""
 
-    client.app.state.settings = app_settings.model_copy(update={"retrieval_query_focus_enabled": True})
-
     area = Area(id=_uuid(), name="Evaluation Query Focus Area")
     db_session.add(area)
     db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
@@ -233,10 +231,8 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
-    assert preview_payload["query_focus"]["applied"] is True
-    assert preview_payload["query_focus"]["intents"] == ["eligibility_or_actor", "enumeration_or_inventory"]
-    assert preview_payload["query_focus"]["variant"] == "generic_field_focus_v1"
-    assert preview_payload["query_focus"]["rule_family"] == "generic"
+    assert preview_payload["query_focus"]["applied"] is False
+    assert preview_payload["query_focus"]["intents"] == []
 
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",

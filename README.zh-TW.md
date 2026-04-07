@@ -180,6 +180,86 @@ cp .env.example .env
 
 本機 Compose 會自動匯入開發用的 Keycloak realm。
 
+## 直接操作的快速入口
+
+如果你現在只是想把系統跑起來並實際玩一次，只看此章節即可。
+
+### 本機預設帳號
+
+本機 Compose stack 在第一次啟動時，會自動匯入固定的 Keycloak 開發 realm。
+
+| 帳號 | 密碼 | groups | 建議用途 |
+| --- | --- | --- | --- |
+| `alice` | `alice123` | `/dept/hr` | 第一次互動示範最推薦 |
+| `bob` | `bob123` | `/dept/finance` | 驗證跨群組權限 |
+| `carol` | `carol123` | `/dept/rd` | 一般使用者示範 |
+| `dave` | `dave123` | 無 | 驗證 `deny-by-default` |
+| `erin` | `erin123` | `/dept/hr`, `/dept/rd` | 驗證 multi-group effective role |
+| `frank` | `frank123` | `/platform/knowledge-admins` | 平台管理型測試身份 |
+
+補充：
+
+- Keycloak realm：`deep-agent-dev`
+- Keycloak client：`deep-agent-web`
+- 這些帳號來自 [`infra/keycloak/deep-agent-dev-realm.json`](infra/keycloak/deep-agent-dev-realm.json)。
+- 如果你不是第一次啟動 Keycloak，之後才去改 realm import，單純重啟 container 不會套用新帳號，必須先重置 Keycloak 持久化資料。
+
+### 怎麼使用這個應用？ 
+
+最標準的操作路徑就是：
+
+1. 開 `http://localhost`
+2. 點 `使用 Keycloak 登入`
+3. 用上表任一帳號登入
+4. 進入 `/areas`
+5. 如果是第一次使用，就先建立一個 Knowledge Area
+6. 在該 area 上傳文件
+7. 等文件狀態變成 `ready`
+8. 在 chat 面板提問，並查看 citations
+
+第一次登入後常見情況：
+
+- 在全新系統裡，你可能會先看到沒有任何可存取 area，這是正常的。
+- 最簡單的第一步就是自己建立一個 area。
+- area 建立者會自動成為該 area 的 `admin`。
+- 能不能看到既有 area，不只取決於是否登入成功，還取決於該 area 的 user/group access mapping。
+
+### 5 分鐘試玩流程
+
+如果你只想最短路徑跑一次，直接用 `alice / alice123`：
+
+1. 用 `./scripts/compose.sh up --build` 啟動整套服務
+2. 開 `http://localhost`
+3. 用 `alice` 登入
+4. 建立一個 area，例如 `HR Policies`
+5. 上傳一個 `PDF`、`DOCX`、`TXT/MD`、`PPTX`、`HTML` 或 `XLSX` 檔案
+6. 等文件從 `uploaded` 或 `processing` 變成 `ready`
+7. 問一個可以直接從該文件回答的具體問題
+8. 點 citations，確認右側預覽欄能對到來源內容
+
+### 最簡單的權限驗證流程
+
+如果你想快速理解授權模型，可以這樣操作：
+
+1. 先用 `alice` 登入並建立一個 area
+2. 在 access settings 把 `/dept/hr` 加成 `reader`
+3. 登出後改用 `bob` 登入
+4. `bob` 不應該看得到該 area，因為 `bob` 屬於 `/dept/finance`
+5. 再改用 `dave` 登入
+6. `dave` 也應該被擋下，因為 `dave` 沒有任何 group
+
+這能直接看見兩個核心規則：
+
+- 授權採 `deny-by-default`
+- area 存取是靠 direct user role 與 Keycloak group path mapping 決定
+
+### 我應該先用哪個帳號？
+
+- 只想從頭到尾跑一次主流程：用 `alice`
+- 想測平台管理型身份：用 `frank`
+- 想測多群組使用者：用 `erin`
+- 想驗證無群組使用者不會自動取得權限：用 `dave`
+
 ## Environment Variables
 
 建議先優先檢查這幾組：
