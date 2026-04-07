@@ -15,6 +15,7 @@ class CreateEvaluationDatasetRequest(BaseModel):
     """建立 retrieval evaluation dataset 的請求 payload。"""
 
     name: str = Field(min_length=1, max_length=255)
+    query_type: EvaluationQueryType = EvaluationQueryType.fact_lookup
 
     @field_validator("name")
     @classmethod
@@ -39,7 +40,7 @@ class CreateEvaluationItemRequest(BaseModel):
 
     query_text: str = Field(min_length=1)
     language: EvaluationLanguage
-    query_type: EvaluationQueryType = EvaluationQueryType.fact_lookup
+    query_type: EvaluationQueryType | None = None
     notes: str | None = None
 
     @field_validator("query_text")
@@ -233,11 +234,24 @@ class EvaluationQueryFocusDetail(BaseModel):
     rerank_query: str
 
 
+class EvaluationQueryRoutingDetail(BaseModel):
+    """單題 query routing 明細。"""
+
+    query_type: EvaluationQueryType
+    language: str
+    confidence: float
+    source: str
+    matched_rules: list[str]
+    selected_profile: str
+    resolved_settings: dict[str, object]
+
+
 class EvaluationCandidatePreviewResponse(BaseModel):
     """人工複核用 candidate preview 回應。"""
 
     dataset: EvaluationDatasetSummary
     item: EvaluationItemSummary
+    query_routing: EvaluationQueryRoutingDetail
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
     rerank: EvaluationCandidateStageResponse
@@ -294,6 +308,7 @@ class EvaluationPerQueryDetail(BaseModel):
     language: EvaluationLanguage
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
+    query_routing: EvaluationQueryRoutingDetail
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail
     rerank: EvaluationPerQueryStageDetail

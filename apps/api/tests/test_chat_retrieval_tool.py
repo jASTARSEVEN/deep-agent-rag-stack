@@ -146,6 +146,84 @@ def test_retrieve_area_contexts_tool_returns_context_level_contract(db_session, 
     assert result.trace["assembler"]["contexts"][0]["truncated"] is False
 
 
+def test_retrieve_area_contexts_tool_uses_summary_profile_budget_for_assembler(db_session, app_settings) -> None:
+    """summary query 應讓 chat tool 的 assembler 使用 summary profile 的 context budget。
+
+    參數：
+    - `db_session`：測試資料庫 session fixture。
+    - `app_settings`：測試設定 fixture。
+
+    回傳：
+    - `None`：以斷言驗證 chat tool 不可回退到原始 assembler budget。
+    """
+
+    settings = app_settings.model_copy(update={"assembler_max_contexts": 2})
+    area = Area(id=_uuid(), name="Summary Budget Tool Contract")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    parent_ids: list[str] = []
+    for index in range(4):
+        document = Document(
+            id=_uuid(),
+            area_id=area.id,
+            file_name=f"summary-{index}.md",
+            content_type="text/markdown",
+            file_size=100,
+            storage_key=f"area/summary-{index}.md",
+            status=DocumentStatus.ready,
+        )
+        parent = DocumentChunk(
+            id=_uuid(),
+            document_id=document.id,
+            parent_chunk_id=None,
+            chunk_type=ChunkType.parent,
+            structure_kind=ChunkStructureKind.text,
+            position=index * 2,
+            section_index=index,
+            child_index=None,
+            heading=f"Summary Section {index}",
+            content=f"總結 文件 {index}",
+            content_preview=f"總結 文件 {index}",
+            char_count=len(f"總結 文件 {index}"),
+            start_offset=0,
+            end_offset=len(f"總結 文件 {index}"),
+        )
+        child = DocumentChunk(
+            id=_uuid(),
+            document_id=document.id,
+            parent_chunk_id=parent.id,
+            chunk_type=ChunkType.child,
+            structure_kind=ChunkStructureKind.text,
+            position=(index * 2) + 1,
+            section_index=index,
+            child_index=0,
+            heading=f"Summary Section {index}",
+            content=f"總結 文件 {index}",
+            content_preview=f"總結 文件 {index}",
+            char_count=len(f"總結 文件 {index}"),
+            start_offset=0,
+            end_offset=len(f"總結 文件 {index}"),
+            embedding=[0.1] * settings.embedding_dimensions,
+        )
+        parent_ids.append(parent.id)
+        db_session.add_all([document, parent, child])
+    db_session.commit()
+
+    result = retrieve_area_contexts_tool(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        question="總結這些文件",
+    )
+
+    assert result.trace["retrieval"]["selected_profile"] == "document_summary_skeleton_v1"
+    assert result.trace["assembler"]["max_contexts"] == 12
+    assert len(result.assembled_contexts) == 4
+    assert len(result.citations) == 4
+
+
 def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app_settings) -> None:
     """payload helper 應輸出 runtime 與 debug UI 需要的固定欄位。
 
@@ -257,6 +335,23 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
     assert summary_payload == {
         "contexts_count": 1,
         "citations_count": 1,
+        "query_type": "fact_lookup",
+        "query_type_language": "en",
+        "query_type_source": "fallback",
+        "query_type_confidence": 0.0,
+        "query_type_matched_rules": [],
+        "selected_profile": "fact_lookup_precision_v1",
+        "query_focus_applied": False,
+        "profile_settings": {
+            "vector_top_k": settings.retrieval_vector_top_k,
+            "fts_top_k": settings.retrieval_fts_top_k,
+            "max_candidates": settings.retrieval_max_candidates,
+            "rerank_top_n": settings.rerank_top_n,
+            "assembler_max_contexts": settings.assembler_max_contexts,
+            "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
+            "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
+            "query_focus_enabled": False,
+        },
         "contexts": [
             {
                 "context_index": 0,
@@ -265,14 +360,14 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
                 "document_name": "tool-payload.md",
                 "parent_chunk_id": parent.id,
                 "child_chunk_ids": [child.id],
-                    "heading": "Payload Section",
-                    "structure_kind": "text",
-                    "source": "hybrid",
-                    "truncated": True,
-                    "excerpt": "alpha intr",
-                }
-            ],
-        }
+                "heading": "Payload Section",
+                "structure_kind": "text",
+                "source": "hybrid",
+                "truncated": True,
+                "excerpt": "alpha intr",
+            }
+        ],
+    }
 
 
 def test_retrieval_tool_payload_builders_accept_none() -> None:
@@ -290,6 +385,14 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
     assert build_tool_call_output_summary(None, None) == {
         "contexts_count": 0,
         "citations_count": 0,
+        "query_type": None,
+        "query_type_language": None,
+        "query_type_source": None,
+        "query_type_confidence": None,
+        "query_type_matched_rules": [],
+        "selected_profile": None,
+        "query_focus_applied": None,
+        "profile_settings": {},
         "contexts": [],
     }
 

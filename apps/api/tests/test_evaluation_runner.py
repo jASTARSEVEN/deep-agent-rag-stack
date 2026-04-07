@@ -84,7 +84,7 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     dataset_response = client.post(
         f"/areas/{area.id}/evaluation/datasets",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"name": "Phase 7 Dataset"},
+        json={"name": "Phase 7 Dataset", "query_type": "fact_lookup"},
     )
     assert dataset_response.status_code == 201
     dataset_id = dataset_response.json()["id"]
@@ -117,6 +117,8 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     )
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
+    assert preview_payload["query_routing"]["query_type"] == "fact_lookup"
+    assert preview_payload["query_routing"]["selected_profile"] == "fact_lookup_precision_v1"
     assert preview_payload["query_focus"]["applied"] is False
     assert preview_payload["query_focus"]["focus_query"] == "zh-TW facts"
     assert preview_payload["recall"]["items"]
@@ -133,9 +135,12 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_payload["run"]["status"] == "completed"
     assert run_payload["run"]["evaluation_profile"] == "production_like_v1"
     assert run_payload["run"]["config_snapshot"]["top_k"] == 5
+    assert run_payload["run"]["config_snapshot"]["query_routing"]["query_type"] == "fact_lookup"
+    assert run_payload["run"]["config_snapshot"]["query_routing"]["selected_profile"] == "fact_lookup_precision_v1"
     assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] == app_settings.rerank_top_n
     assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is False
     assert "recall" in run_payload["summary_metrics"]
+    assert run_payload["per_query"][0]["query_routing"]["query_type"] == "fact_lookup"
     assert run_payload["per_query"][0]["query_focus"]["applied"] is False
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]
@@ -150,8 +155,8 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert persisted_report["per_query"][0]["item_id"] == item_id
 
 
-def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, db_session, app_settings) -> None:
-    """query focus profile 應在 run report 中暴露 planner detail 與 snapshot。"""
+def test_evaluation_run_query_focus_profile_respects_env_toggle(client, db_session, app_settings) -> None:
+    """query focus 是否實際套用，應由 env settings 控制。"""
 
     area = Area(id=_uuid(), name="Evaluation Query Focus Area")
     db_session.add(area)
@@ -234,6 +239,8 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
     assert preview_payload["query_focus"]["applied"] is False
     assert preview_payload["query_focus"]["intents"] == []
 
+    client.app.state.settings = app_settings.model_copy(update={"retrieval_query_focus_enabled": True})
+
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",
         headers={"Authorization": ADMIN_TOKEN},
@@ -245,6 +252,40 @@ def test_evaluation_run_query_focus_profile_exposes_query_focus_detail(client, d
     assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_variant"] == "generic_field_focus_v1"
     assert run_payload["per_query"][0]["query_focus"]["applied"] is True
     assert run_payload["per_query"][0]["query_focus"]["intents"] == ["eligibility_or_actor", "enumeration_or_inventory"]
+
+
+def test_evaluation_dataset_query_type_controls_item_query_type(client, db_session) -> None:
+    """dataset query_type 應成為 item 的正式 query_type，且拒絕不一致 payload。"""
+
+    area = Area(id=_uuid(), name="Evaluation Query Type Dataset")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    db_session.commit()
+
+    dataset_response = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Summary Dataset", "query_type": "document_summary"},
+    )
+    assert dataset_response.status_code == 201
+    dataset_payload = dataset_response.json()
+    assert dataset_payload["query_type"] == "document_summary"
+
+    item_response = client.post(
+        f"/evaluation/datasets/{dataset_payload['id']}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "請摘要這份文件", "language": "zh-TW"},
+    )
+    assert item_response.status_code == 201
+    assert item_response.json()["query_type"] == "document_summary"
+
+    mismatch_response = client.post(
+        f"/evaluation/datasets/{dataset_payload['id']}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "compare this", "language": "en", "query_type": "cross_document_compare"},
+    )
+    assert mismatch_response.status_code == 400
+    assert "dataset query_type" in mismatch_response.json()["detail"]
 
 
 def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_session, app_settings) -> None:

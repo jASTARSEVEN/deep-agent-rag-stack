@@ -113,7 +113,7 @@
 
 ### Retrieval evaluation reviewer 流程
 1. 只有 area `admin` 與 `maintainer` 可開啟 `EvaluationDrawer`；`reader` 與無權限者不得看到入口，API 端仍維持 deny-by-default / same-404。
-2. reviewer 透過 `POST /areas/{area_id}/evaluation/datasets` 建立 area-scoped dataset；目前 query type 固定為 `fact_lookup`，language 固定支援 `zh-TW | en | mixed`。
+2. reviewer 透過 `POST /areas/{area_id}/evaluation/datasets` 建立 area-scoped dataset；dataset 與 item 都正式支援 `fact_lookup | document_summary | cross_document_compare`，language 固定支援 `zh-TW | en | mixed`。
 3. reviewer 透過 `POST /evaluation/datasets/{dataset_id}/items` 建立題目後，前端呼叫 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview` 取得 `recall / rerank / assembled` 三階段候選與文件內搜尋結果。
 4. reviewer 一律透過既有 `GET /documents/{document_id}/preview` 的 `display_text + offsets` contract 檢視全文，再以 `POST /evaluation/datasets/{dataset_id}/items/{item_id}/spans` 標註 `document_id + start_offset + end_offset + relevance_grade`，或以 `mark-miss` 標記 `retrieval_miss`。
 5. benchmark 由 `POST /evaluation/datasets/{dataset_id}/runs` 或 `python -m app.scripts.run_retrieval_eval` 觸發；所有 runner 都必須維持 SQL gate、deny-by-default 與 ready-only 邊界，但不再要求所有策略都必須綁死同一條 retrieval stage 組合。
@@ -216,7 +216,9 @@
 16. `table` chunks 在 assembler 與 parent-level rerank 文字組裝內都維持 Markdown table 文字；同一 context 內多個 row-group child 合併時只保留一次表頭
 17. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限，而 `ASSEMBLER_MAX_CHARS_PER_CONTEXT` 同時決定 full-parent 與 expanded-window 的 materialization budget
 18. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意；此約束同樣適用於 Cohere 與 Easypinex-host hosted provider
-19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，供 chat debug 與 evaluation reviewer 逐題分析
+19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_type`、routing source/confidence、selected profile、resolved settings，以及相容保留的 `query_focus` 欄位，供 chat debug 與 evaluation reviewer 逐題分析
+19.5. `Phase 8.1` 只建立 query-aware routing skeleton；`document_summary` 與 `cross_document_compare` 在此階段仍只使用既有 parent/child assembled contexts，不取得 document-level synopsis。document synopsis 的取得、持久化與 document-level recall 留到 `Phase 8.3`
+19.6. `query_focus` 是否實際套用，仍以 `AppSettings` / 環境變數開關為主；query-aware routing profile 不得自行覆寫此總開關，只能在開啟時補充 variant / threshold 等相容 knobs
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
 22. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流

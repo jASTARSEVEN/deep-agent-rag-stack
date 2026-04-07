@@ -20,6 +20,7 @@ import type {
   EvaluationItemSummary,
   EvaluationProfile,
   EvaluationPreviewDebugPayload,
+  EvaluationQueryType,
   EvaluationRunReportPayload,
 } from "./types";
 
@@ -310,7 +311,10 @@ export async function fetchEvaluationDatasets(areaId: string): Promise<{ items: 
  * @param payload 建立 payload。
  * @returns 新建立的 dataset。
  */
-export async function createEvaluationDataset(areaId: string, payload: { name: string }): Promise<EvaluationDatasetSummary> {
+export async function createEvaluationDataset(
+  areaId: string,
+  payload: { name: string; query_type: EvaluationQueryType },
+): Promise<EvaluationDatasetSummary> {
   const response = await fetchProtected(`/areas/${areaId}/evaluation/datasets`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -356,7 +360,12 @@ export async function deleteEvaluationDataset(datasetId: string): Promise<void> 
  */
 export async function createEvaluationItem(
   datasetId: string,
-  payload: { query_text: string; language: "zh-TW" | "en" | "mixed"; query_type?: "fact_lookup"; notes?: string | null },
+  payload: {
+    query_text: string;
+    language: "zh-TW" | "en" | "mixed";
+    query_type?: EvaluationQueryType;
+    notes?: string | null;
+  },
 ): Promise<EvaluationItemSummary> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items`, {
     method: "POST",

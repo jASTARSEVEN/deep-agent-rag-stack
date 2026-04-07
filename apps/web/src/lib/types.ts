@@ -375,7 +375,7 @@ export interface DocumentPreviewPayload {
 }
 
 /** Evaluation 支援的查詢類型。 */
-export type EvaluationQueryType = "fact_lookup";
+export type EvaluationQueryType = "fact_lookup" | "document_summary" | "cross_document_compare";
 
 /** Evaluation 語言維度。 */
 export type EvaluationLanguage = "zh-TW" | "en" | "mixed";
@@ -465,6 +465,8 @@ export interface EvaluationDocumentSearchHit {
 export interface EvaluationCandidatePreviewPayload {
   dataset: EvaluationDatasetSummary;
   item: EvaluationItemSummary;
+  query_routing: EvaluationQueryRoutingDetail;
+  query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationCandidateStage;
   rerank: EvaluationCandidateStage;
   assembled: EvaluationCandidateStage;
@@ -499,6 +501,30 @@ export interface EvaluationSummaryByDimension {
 /** Evaluation benchmark profile。 */
 export type EvaluationProfile = "production_like_v1" | "deterministic_gate_v1";
 
+/** 單題 query routing 明細。 */
+export interface EvaluationQueryRoutingDetail {
+  query_type: EvaluationQueryType;
+  language: EvaluationLanguage;
+  confidence: number;
+  source: "explicit" | "classified" | "fallback";
+  matched_rules: string[];
+  selected_profile: string;
+  resolved_settings: Record<string, unknown>;
+}
+
+/** 單題 query focus 明細。 */
+export interface EvaluationQueryFocusDetail {
+  applied: boolean;
+  language: string;
+  confidence: number;
+  intents: string[];
+  slots: Record<string, string>;
+  variant: string;
+  rule_family: string;
+  focus_query: string;
+  rerank_query: string;
+}
+
 /** 單題單階段明細。 */
 export interface EvaluationPerQueryStageDetail {
   first_hit_rank: number | null;
@@ -515,6 +541,8 @@ export interface EvaluationPerQueryDetail {
   language: EvaluationLanguage;
   retrieval_miss: boolean;
   gold_spans: EvaluationItemSpan[];
+  query_routing: EvaluationQueryRoutingDetail;
+  query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationPerQueryStageDetail;
   rerank: EvaluationPerQueryStageDetail;
   assembled: EvaluationPerQueryStageDetail;

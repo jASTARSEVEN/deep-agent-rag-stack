@@ -16,7 +16,7 @@ from app.services.evaluation_dataset import (
 )
 from app.services.evaluation_profiles import SUPPORTED_EVALUATION_PROFILES
 from app.schemas.evaluation import CreateEvaluationItemRequest
-from app.db.models import EvaluationLanguage
+from app.db.models import EvaluationLanguage, EvaluationQueryType
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
     prepare_parser.add_argument("--name", required=True)
     prepare_parser.add_argument("--query-text", required=True)
     prepare_parser.add_argument("--language", choices=["zh-TW", "en", "mixed"], required=True)
+    prepare_parser.add_argument(
+        "--query-type",
+        choices=[query_type.value for query_type in EvaluationQueryType],
+        default=EvaluationQueryType.fact_lookup.value,
+    )
     prepare_parser.add_argument("--actor-sub", default="cli-evaluator")
 
     run_parser = subparsers.add_parser("run")
@@ -75,6 +80,7 @@ def main() -> None:
                 principal=principal,
                 area_id=args.area_id,
                 name=args.name,
+                query_type=EvaluationQueryType(args.query_type),
             )
             item = create_evaluation_item(
                 session=session,
@@ -83,6 +89,7 @@ def main() -> None:
                 payload=CreateEvaluationItemRequest(
                     query_text=args.query_text,
                     language=EvaluationLanguage(args.language),
+                    query_type=EvaluationQueryType(args.query_type),
                 ),
             )
             print(json.dumps({"dataset": dataset.model_dump(mode="json"), "item": item.model_dump(mode="json")}, ensure_ascii=False))

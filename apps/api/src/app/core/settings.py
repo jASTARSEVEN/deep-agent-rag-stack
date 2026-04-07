@@ -93,7 +93,7 @@ class AppSettings(BaseSettings):
     host: Annotated[str, Field(alias="API_HOST")] = "0.0.0.0"
     port: Annotated[int, Field(alias="API_PORT")] = 8000
     cors_origins: Annotated[str, Field(alias="API_CORS_ORIGINS")] = "http://localhost:3000,http://localhost:13000"
-    database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://app:app@postgres:5432/deep_agent_rag"
+    database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://postgres:postgres@postgres:5432/deep_agent_rag"
     database_echo: Annotated[bool, Field(alias="DATABASE_ECHO")] = False
     redis_url: Annotated[str, Field(alias="REDIS_URL")] = "redis://redis:6379/0"
     storage_backend: Annotated[str, Field(alias="STORAGE_BACKEND")] = "minio"

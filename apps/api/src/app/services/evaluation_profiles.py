@@ -155,11 +155,17 @@ def _generic_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) ->
 
 
 def _generic_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_query_focus_v1` 的覆寫欄位。"""
+    """建立 `generic_guarded_query_focus_v1` 的覆寫欄位。
+
+    參數：
+    - `settings`：目前應用程式設定。
+
+    回傳：
+    - `dict[str, int | str | bool]`：在不改變 env toggle 的前提下覆寫 query focus knobs。
+    """
 
     return {
         **_generic_guarded_evidence_synopsis_v3_overrides(settings=settings),
-        "retrieval_query_focus_enabled": True,
         "retrieval_query_focus_variant": QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
         "retrieval_query_focus_confidence_threshold": 0.7,
     }
@@ -193,9 +199,7 @@ def _query_focus_budget_sweep_overrides(
 EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     PRODUCTION_LIKE_V1: EvaluationProfileSpec(
         name=PRODUCTION_LIKE_V1,
-        overrides={
-            "retrieval_query_focus_enabled": False,
-        },
+        overrides={},
     ),
     DETERMINISTIC_GATE_V1: EvaluationProfileSpec(
         name=DETERMINISTIC_GATE_V1,

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus
+from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, EvaluationQueryType
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
@@ -22,6 +22,7 @@ from app.services.retrieval_query import (
     extract_query_tokens,
     get_query_focus_boost_terms,
 )
+from app.services.retrieval_routing import build_query_routing_decision
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
 
@@ -77,6 +78,13 @@ class RetrievalTrace:
     max_candidates: int
     rerank_top_n: int
     candidates: list[RetrievalTraceEntry]
+    query_type: str = EvaluationQueryType.fact_lookup.value
+    query_type_language: str = "en"
+    query_type_source: str = "fallback"
+    query_type_confidence: float = 0.0
+    query_type_matched_rules: list[str] | None = None
+    selected_profile: str = ""
+    profile_settings: dict[str, object] | None = None
     query_focus_applied: bool = False
     query_focus_language: str = "en"
     query_focus_intents: list[str] | None = None
@@ -153,6 +161,7 @@ def retrieve_area_candidates(
     settings: AppSettings,
     area_id: str,
     query: str,
+    query_type: EvaluationQueryType | None = None,
 ) -> RetrievalResult:
     """在指定 area 內取得 hybrid recall、Python RRF 與 rerank candidates。
 
@@ -162,6 +171,7 @@ def retrieve_area_candidates(
     - `settings`：API 執行期設定。
     - `area_id`：要檢索的 area 識別碼。
     - `query`：使用者查詢文字。
+    - `query_type`：若已由上層明確指定的 query type；否則由 classifier 自動判定。
 
     回傳：
     - `RetrievalResult`：已完成 recall、RRF、ranking hook 與 rerank 的候選集合。
@@ -169,25 +179,31 @@ def retrieve_area_candidates(
 
     require_area_access(session=session, principal=principal, area_id=area_id)
 
-    query_focus_plan = build_query_focus_plan_from_settings(settings=settings, query=query)
+    routing_decision = build_query_routing_decision(
+        settings=settings,
+        query=query,
+        explicit_query_type=query_type,
+    )
+    effective_settings = routing_decision.effective_settings
+    query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=query)
     recalled_matches = _recall_ranked_candidates(
         session=session,
-        settings=settings,
+        settings=effective_settings,
         area_id=area_id,
         query=query_focus_plan.focus_query if query_focus_plan.applied else query,
     )
-    rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=settings)
+    rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
     ranked_matches = _apply_ranking_policy(
         matches=rrf_matches,
         query=query,
-        settings=settings,
+        settings=effective_settings,
         focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
         query_focus_plan=query_focus_plan,
     )
     reranked_matches = _apply_rerank(
         matches=ranked_matches,
         query=query_focus_plan.rerank_query if query_focus_plan.applied else query,
-        settings=settings,
+        settings=effective_settings,
     )
     candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
 
@@ -195,17 +211,24 @@ def retrieve_area_candidates(
         candidates=candidates,
         trace=RetrievalTrace(
             query=query,
-            vector_top_k=settings.retrieval_vector_top_k,
-            fts_top_k=settings.retrieval_fts_top_k,
-            max_candidates=settings.retrieval_max_candidates,
-            rerank_top_n=min(settings.rerank_top_n, len(reranked_matches)),
+            vector_top_k=effective_settings.retrieval_vector_top_k,
+            fts_top_k=effective_settings.retrieval_fts_top_k,
+            max_candidates=effective_settings.retrieval_max_candidates,
+            rerank_top_n=min(effective_settings.rerank_top_n, len(reranked_matches)),
+            query_type=routing_decision.query_type.value,
+            query_type_language=routing_decision.language,
+            query_type_source=routing_decision.source,
+            query_type_confidence=routing_decision.confidence,
+            query_type_matched_rules=list(routing_decision.matched_rules),
+            selected_profile=routing_decision.selected_profile,
+            profile_settings=routing_decision.resolved_settings,
             query_focus_applied=query_focus_plan.applied,
             query_focus_language=query_focus_plan.language,
             query_focus_intents=list(query_focus_plan.intents),
             query_focus_slots=dict(query_focus_plan.slots),
             query_focus_variant=query_focus_plan.variant,
             query_focus_rule_family=query_focus_plan.rule_family,
-            evidence_synopsis_variant=settings.retrieval_evidence_synopsis_variant,
+            evidence_synopsis_variant=effective_settings.retrieval_evidence_synopsis_variant,
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
             candidates=[

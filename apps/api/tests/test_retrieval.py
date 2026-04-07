@@ -1442,10 +1442,7 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
     """query focus 啟用時，rerank query 與 trace 應帶入 planner 結果。"""
 
     settings = app_settings.model_copy(
-        update={
-            "retrieval_query_focus_enabled": True,
-            "retrieval_evidence_synopsis_variant": "generic_v1",
-        }
+        update={"retrieval_query_focus_enabled": True, "retrieval_evidence_synopsis_variant": "generic_v1"}
     )
     area = Area(id=_uuid(), name="Retrieval Query Focus")
     db_session.add(area)
@@ -1529,6 +1526,9 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
     assert captured_queries
     assert captured_queries[0].startswith("文件申請資格有哪些？\nNeed:")
     assert result.trace.query_focus_applied is True
+    assert result.trace.query_type == "fact_lookup"
+    assert result.trace.query_type_source == "fallback"
+    assert result.trace.selected_profile == "fact_lookup_precision_v1"
     assert result.trace.query_focus_language == "zh-TW"
     assert result.trace.query_focus_intents == ["eligibility_or_actor", "enumeration_or_inventory"]
     assert result.trace.query_focus_slots["target_field"] == "資格或責任對象 / 項目清單或列舉內容"

@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 7 — Retrieval Correctness Evaluation v1 (Completed)`
+當前主階段：`Phase 8.1 — Query-Aware Retrieval Profiles (Routing Skeleton Completed)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -37,6 +37,7 @@
 - `Phase 6` Supabase & PGroonga Migration 已完成
 - `Phase 6.1` Public HTTPS Entry & Migration Bootstrap Hardening 已完成
 - `Phase 7` Retrieval Correctness Evaluation v1 已完成
+- `Phase 8.1` Query-Aware Retrieval Profiles routing skeleton 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -79,6 +80,11 @@
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最新 rerun assembled `Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
 - 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
+- 已新增 rule-based bilingual query-type classifier，正式支援 `fact_lookup | document_summary | cross_document_compare`
+- 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
+- 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
+- `query_focus` 是否實際套用仍由環境變數 / settings 控制；本輪保留相容欄位與 profile knobs，但不再由 routing skeleton 強制覆寫總開關
+- `document_summary` 與 `cross_document_compare` 目前僅具備 routing/profile skeleton，仍使用既有 parent/child assembled contexts；document-level synopsis 明確延後到 `Phase 8.3`
 - 已於 `2026-04-05` 將長期 benchmark 文件擴充為九個 dataset：原先八資料集 current 基線再加上新加入的 `DuReader-robust 100` reference run；目前依 assembled `nDCG@10` 由相對簡單到困難，可近似看成 `DuReader-robust 100 -> MS MARCO 100 -> DRCD 100 -> NQ 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為九資料集 current 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling、`NQ` 補出一條「rerank 幾乎到頂、assembled 仍顯著掉分」的 assembler 壓力測試 lane、`DRCD` 補出「中文 lexical recall 近乎到頂，但 rerank 會輕微退化排序」的繁體中文 rerank 哨兵 lane，而 `DuReader-robust` 則補出「中文 paragraph-level extractive QA 已接近 ceiling」的 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單
@@ -285,7 +291,7 @@
 ## 目前階段重點
 
 ### Current Focus
-- 規劃 `Phase 8.1 — Query-Aware Retrieval Profiles`，將 `fact_lookup / document_summary / cross_document_compare` 收斂為顯式 profile
+- 進入 `Phase 8.3 — Document-Level Representations` 規劃與最小切片，明定 document synopsis 的生成、持久化與 reindex 語意
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 持續依 `docs/retrieval-benchmark-strategy-analysis.md` 的最新 miss 題，挑選單一主假設做實跑驗證與深度分析
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
@@ -294,12 +300,12 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 進入 `Phase 8.1 — Query-Aware Retrieval Profiles`，補上 query intent classification 與 profile trace metadata
+1. 進入 `Phase 8.3 — Document-Level Representations`，定義 document synopsis 的 schema、worker 生成時機與 reindex 一致性
 2. 依最新 miss 題與當前 chunks，優先處理 `recall_only / rerank_only` 類 semantic-gap 問題
-2. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
-3. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-5. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+3. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
+4. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
+5. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+6. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## 尚未開始的功能
 

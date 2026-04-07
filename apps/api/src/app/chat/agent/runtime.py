@@ -331,14 +331,22 @@ class DeepAgentsChatRuntime:
 
         @tool
         def retrieve_area_contexts(focus_query: str | None = None) -> str:
-            """回傳目前 area 與問題的 assembled contexts、references 與 trace。"""
+            """回傳目前 area 與問題的 assembled contexts、references 與 trace。
+
+            參數：
+            - `focus_query`：保留相容的可選參數；本階段固定忽略，不允許改寫原始 query。
+
+            回傳：
+            - `str`：序列化後的 assembled context payload。
+            """
+            del focus_query
 
             nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload
 
             if retrieval_result is None:
                 tool_input = {
                     "area_id": area_id,
-                    "question": focus_query.strip() if isinstance(focus_query, str) and focus_query.strip() else question,
+                    "question": question,
                 }
                 emit_phase(phase="tool_calling", status="started", message="正在呼叫知識庫工具")
                 emit_phase(phase="searching", status="started", message="正在搜尋知識庫內容")

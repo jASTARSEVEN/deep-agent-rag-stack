@@ -77,7 +77,13 @@ def create_evaluation_dataset_route(
     - `EvaluationDatasetSummary`：新 dataset。
     """
 
-    return create_area_evaluation_dataset(session=session, principal=principal, area_id=area_id, name=payload.name)
+    return create_area_evaluation_dataset(
+        session=session,
+        principal=principal,
+        area_id=area_id,
+        name=payload.name,
+        query_type=payload.query_type,
+    )
 
 
 @router.get("/evaluation/datasets/{dataset_id}", response_model=EvaluationDatasetDetailResponse)

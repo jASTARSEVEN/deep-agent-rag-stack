@@ -318,7 +318,7 @@
 - 後續所有 benchmark-driven 調整都必須先在目前 baseline 上建立 before / after；若新策略造成退化，除分析文件外其餘改動一律回退；若提升，則需重新分析最新 miss 題與當前 chunks，再決定下一輪假設。
 
 後續改善重點：
-- 主優先方向仍是以 generic-first 方式處理 `QASPER 100` 的 `recall_only` semantic-gap miss，例如在 `Phase 8.1` 內驗證更強但仍通用的英文 field-focus lane，而不是回到 benchmark-specific wording。
+- 主優先方向仍是以 generic-first 方式處理 `QASPER 100` 的 `recall_only` semantic-gap miss，但應先以 `Phase 8.1` 的 routing/profile skeleton 為基礎觀測 regression，再決定是否需要新的 generic-first candidate lane。
 - 第二優先觀測點是 `NQ 100` 的 `rerank_hit_but_assembled_miss` 與 `assembled_only` 題目，用來驗證 assembler 是否在高品質 rerank 命中的 wiki 長段落上過度裁切。
 - 第三優先觀測點是 `DRCD 100` 的中文 rerank regression；任何新 lane 若讓近乎到頂的 lexical candidate set 反而掉分，應直接視為失敗。
 - `DuReader-robust 100` 與 `MS MARCO 100` 應維持為近 ceiling sanity check，不作為下一輪優化方向的主依據。
@@ -338,20 +338,20 @@
   - `cross_document_compare`
 - query intent classification、retrieval profile 與 trace metadata 必須可覆蓋繁體中文 query、英文 query，以及中英混合關鍵詞的真實使用情境。
 - 依 query type 套用不同 retrieval profile，而不是共用同一組固定參數。
+- 本 phase 僅建立 routing/profile/trace skeleton，不取得 document-level synopsis，也不宣稱已完成 summary / compare 的文件級語意表示。
 - rollout 順序以 `fact_lookup` 優先；在 `fact_lookup` lane 穩定前，不擴大 summary / compare 的 runtime 複雜度。
-- `fact_lookup` 維持現有 precision-first 路線，但需把 generic-first 的 candidate lane registry 顯式化，讓像 `english_field_focus_v2` 這類假設可在不污染主線 default 的前提下受控比較。
+- `fact_lookup` 維持現有 precision-first 路線，但需把 generic-first 的 candidate lane registry 顯式化。
 - `document_summary` 提高 recall coverage，允許較大的候選集與較寬鬆的 assembled context budget。
-- `cross_document_compare` 強制保留跨文件 coverage，避免 rerank 後的 top hits 被單一文件壟斷。
+- `cross_document_compare` 在本 phase 只提供 skeleton profile，不在此階段保證跨文件 coverage；真正的 diversity guardrail 留給 `Phase 8.2`。
 - 將 profile 相關參數顯式設定化，例如：
   - recall candidate 上限
   - rerank top-n
   - assembler contexts 上限
-  - 每文件可採信 parent 數上限
 - 每個新 profile lane 都必須直接對 current baseline 比較，且至少同時觀測 `QASPER 100`、`NQ 100` 與 `DRCD 100`；若造成 assembler 或中文 rerank 哨兵退化，應回退。
-- retrieval trace metadata 需補上 query type、所套用 profile、`query_focus_applied`、focus query 與 rerank query，便於觀測與回歸測試。
+- retrieval trace metadata 需補上 query type、routing source/confidence、所套用 profile，以及相容保留的 `query_focus` 欄位；`query_focus` 是否實際套用仍由環境變數 / settings 控制。
 
 狀態：
-- `規劃中（benchmark 驅動優先 lane 已明確）`
+- `已完成（routing/profile/trace skeleton）`
 
 ## Phase 8.2 — Diversified Selection Before Assembly
 
@@ -384,6 +384,7 @@
 
 內容：
 - 在 ingest pipeline 為每份 `ready` 文件建立 document-level synopsis。
+- document-level synopsis 的正式取得時機固定為 upload ingest 與 reindex pipeline 內，而不是在 query 當下臨時生成。
 - 本 phase 明確不做 section-level synopsis，避免在尚未驗證 document-level 路徑前過早擴張索引與成本。
 - document synopsis 需保持 SQL-first 可查詢與可觀測，不可只存在暫時記憶體。
 - retrieval 新增兩階段策略：

@@ -23,6 +23,7 @@ import type {
   EvaluationDatasetSummary,
   EvaluationLanguage,
   EvaluationProfile,
+  EvaluationQueryType,
   EvaluationPreviewDebugPayload,
   EvaluationRunReportPayload,
 } from "../../../lib/types";
@@ -38,6 +39,11 @@ interface EvaluationDrawerProps {
 
 
 const LANGUAGE_OPTIONS: EvaluationLanguage[] = ["zh-TW", "en", "mixed"];
+const QUERY_TYPE_OPTIONS: Array<{ value: EvaluationQueryType; label: string }> = [
+  { value: "fact_lookup", label: "Fact Lookup" },
+  { value: "document_summary", label: "Document Summary" },
+  { value: "cross_document_compare", label: "Cross-Document Compare" },
+];
 const EVALUATION_PROFILE_OPTIONS: Array<{ value: EvaluationProfile; label: string }> = [
   { value: "production_like_v1", label: "production_like_v1" },
   { value: "deterministic_gate_v1", label: "deterministic_gate_v1" },
@@ -75,6 +81,12 @@ function ParameterHint({ description }: { description: string }): JSX.Element {
   );
 }
 
+/** 將 query type 轉成 UI 顯示文字。 */
+function formatQueryTypeLabel(queryType: EvaluationQueryType): string {
+  const matchedOption = QUERY_TYPE_OPTIONS.find((option) => option.value === queryType);
+  return matchedOption?.label ?? queryType;
+}
+
 
 export function EvaluationDrawer({
   isOpen,
@@ -92,6 +104,7 @@ export function EvaluationDrawer({
   const [previewDocument, setPreviewDocument] = useState<DocumentPreviewPayload | null>(null);
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
   const [datasetName, setDatasetName] = useState("");
+  const [datasetQueryType, setDatasetQueryType] = useState<EvaluationQueryType>("fact_lookup");
   const [queryText, setQueryText] = useState("");
   const [language, setLanguage] = useState<EvaluationLanguage>("zh-TW");
   const [evaluationProfile, setEvaluationProfile] = useState<EvaluationProfile>("production_like_v1");
@@ -143,6 +156,7 @@ export function EvaluationDrawer({
       setEndOffset(0);
       setSelectedText("");
       setPreviewMode("raw");
+      setDatasetQueryType("fact_lookup");
       setEvaluationProfile("production_like_v1");
       setPreviewVectorTopK(30);
       setPreviewFtsTopK(30);
@@ -314,8 +328,9 @@ export function EvaluationDrawer({
     setError(null);
     setNotice(null);
     try {
-      const created = await createEvaluationDataset(areaId, { name: datasetName });
+      const created = await createEvaluationDataset(areaId, { name: datasetName, query_type: datasetQueryType });
       setDatasetName("");
+      setDatasetQueryType("fact_lookup");
       setNotice(`已建立評測 dataset：${created.name}`);
       await loadDatasets(created.id);
     } catch (err) {
@@ -337,10 +352,10 @@ export function EvaluationDrawer({
       const created = await createEvaluationItem(selectedDatasetId, {
         query_text: queryText,
         language,
-        query_type: "fact_lookup",
+        query_type: selectedDataset?.query_type,
       });
       setQueryText("");
-      setNotice("已建立 fact_lookup 題目。");
+      setNotice(`已建立 ${formatQueryTypeLabel(created.query_type)} 題目。`);
       await loadDatasetDetail(selectedDatasetId, created.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "建立題目失敗。");
@@ -630,6 +645,18 @@ export function EvaluationDrawer({
                     value={datasetName}
                     onChange={(event) => setDatasetName(event.target.value)}
                   />
+                  <select
+                    data-testid="evaluation-dataset-query-type"
+                    className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                    value={datasetQueryType}
+                    onChange={(event) => setDatasetQueryType(event.target.value as EvaluationQueryType)}
+                  >
+                    {QUERY_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     data-testid="evaluation-create-dataset"
                     type="submit"
@@ -653,7 +680,9 @@ export function EvaluationDrawer({
                           onClick={() => void loadDatasetDetail(dataset.id)}
                         >
                           <div className="text-sm font-semibold text-stone-900">{dataset.name}</div>
-                          <div className="mt-1 text-xs text-stone-500">{dataset.item_count} items</div>
+                          <div className="mt-1 text-xs text-stone-500">
+                            {formatQueryTypeLabel(dataset.query_type)} / {dataset.item_count} items
+                          </div>
                         </button>
                         <button
                           type="button"
@@ -671,11 +700,16 @@ export function EvaluationDrawer({
 
                 {selectedDataset ? (
                   <form onSubmit={handleCreateItem} className="mt-6 space-y-3 border-t border-stone-200 pt-6">
-                    <h4 className="text-sm font-bold text-stone-900">新增 Fact Lookup 題目</h4>
+                    <h4 className="text-sm font-bold text-stone-900">
+                      新增 {formatQueryTypeLabel(selectedDataset.query_type)} 題目
+                    </h4>
+                    <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-600">
+                      Dataset Query Type: {formatQueryTypeLabel(selectedDataset.query_type)}
+                    </div>
                     <textarea
                       data-testid="evaluation-item-query"
                       className="h-24 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                      placeholder="請輸入 fact_lookup query"
+                      placeholder={`請輸入 ${formatQueryTypeLabel(selectedDataset.query_type)} query`}
                       value={queryText}
                       onChange={(event) => setQueryText(event.target.value)}
                     />
@@ -715,7 +749,9 @@ export function EvaluationDrawer({
                             onClick={() => void handleSelectItem(item.id)}
                           >
                             <div className="text-sm font-semibold text-stone-900">{item.query_text}</div>
-                            <div className="mt-1 text-xs text-stone-500">{item.language} / spans {item.spans.length}</div>
+                            <div className="mt-1 text-xs text-stone-500">
+                              {formatQueryTypeLabel(item.query_type)} / {item.language} / spans {item.spans.length}
+                            </div>
                           </button>
                           <button
                             type="button"
@@ -764,7 +800,18 @@ export function EvaluationDrawer({
                   <div className="space-y-6">
                     <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50 p-4" data-testid="evaluation-item-detail">
                       <div className="text-sm font-semibold text-stone-900">{candidatePreview.item.query_text}</div>
-                      <div className="mt-1 text-xs text-stone-500">{candidatePreview.item.language}</div>
+                      <div className="mt-1 text-xs text-stone-500">
+                        {formatQueryTypeLabel(candidatePreview.item.query_type)} / {candidatePreview.item.language}
+                      </div>
+                      <div className="mt-3 rounded-xl border border-stone-200 bg-white px-3 py-3 text-xs text-stone-600" data-testid="evaluation-query-routing">
+                        <div>Query Type: {formatQueryTypeLabel(candidatePreview.query_routing.query_type)}</div>
+                        <div>Routing Source: {candidatePreview.query_routing.source}</div>
+                        <div>Routing Confidence: {candidatePreview.query_routing.confidence.toFixed(2)}</div>
+                        <div>Selected Profile: {candidatePreview.query_routing.selected_profile}</div>
+                        <div>
+                          Query Focus: {candidatePreview.query_focus?.applied ? "enabled" : "disabled"}
+                        </div>
+                      </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {candidatePreview.item.spans.map((span) => (
                           <span key={span.id} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-900">
@@ -831,6 +878,31 @@ export function EvaluationDrawer({
                     })}
 
                     <div className="rounded-xl border border-stone-200 bg-white p-4" data-testid="evaluation-document-search-hits">
+                      <h4 className="text-sm font-bold text-stone-900">文件內搜尋命中</h4>
+                      <div className="mt-1 text-xs text-stone-500">依目前題目文字搜尋 area 內 ready 文件，方便快速定位 span。</div>
+                      <div className="mt-3 space-y-2">
+                        {candidatePreview.document_search_hits.length > 0 ? (
+                          candidatePreview.document_search_hits.map((hit, index) => (
+                            <button
+                              key={`${hit.document_id}-${hit.chunk_id}-${index}`}
+                              type="button"
+                              className="w-full rounded-xl border border-stone-200 px-3 py-3 text-left hover:bg-stone-50"
+                              onClick={() => void openDocumentPreview(hit.document_id, hit.start_offset, hit.end_offset)}
+                            >
+                              <div className="text-sm font-semibold text-stone-900">{hit.document_name}</div>
+                              <div className="mt-1 text-xs text-stone-500">{hit.heading ?? "No heading"}</div>
+                              <div className="mt-2 text-xs text-stone-600">{hit.excerpt}</div>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-stone-300 px-3 py-4 text-xs text-stone-500">
+                            目前沒有文件內搜尋命中。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-stone-200 bg-white p-4" data-testid="evaluation-preview-debug">
                       <h4 className="text-sm font-bold text-stone-900">調參 / Debug</h4>
                       <div className="mt-1 text-xs text-stone-500">使用下列參數覆跑 preview，觀察 Recall、RRF 與 Rerank 名次變化。</div>
                       <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -1146,6 +1218,12 @@ export function EvaluationDrawer({
                             <div data-testid="evaluation-run-id">Run ID: {runReport.run.id}</div>
                             <div>Run Status: {runReport.run.status}</div>
                             <div>Profile: {runReport.run.evaluation_profile}</div>
+                            <div>
+                              Query Type: {formatQueryTypeLabel(runReport.dataset.query_type)}
+                            </div>
+                            <div>
+                              Routed Profile: {String((runReport.run.config_snapshot.query_routing as Record<string, unknown> | undefined)?.selected_profile ?? "-")}
+                            </div>
                           </div>
                         </div>
                         <div className="text-right text-[11px] text-stone-500">
@@ -1189,7 +1267,15 @@ export function EvaluationDrawer({
                         {runReport.per_query.map((item) => (
                           <div key={item.item_id} className="rounded-xl border border-stone-100 bg-stone-50 p-3">
                             <div className="text-sm font-semibold text-stone-900">{item.query_text}</div>
-                            <div className="mt-1 text-xs text-stone-500">{item.language}</div>
+                            <div className="mt-1 text-xs text-stone-500">
+                              {formatQueryTypeLabel(item.query_routing.query_type)} / {item.language}
+                            </div>
+                            <div className="mt-2 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs text-stone-600">
+                              <div>Routing Source: {item.query_routing.source}</div>
+                              <div>Routing Confidence: {item.query_routing.confidence.toFixed(2)}</div>
+                              <div>Selected Profile: {item.query_routing.selected_profile}</div>
+                              <div>Query Focus: {item.query_focus?.applied ? "enabled" : "disabled"}</div>
+                            </div>
                             <div className="mt-2 grid gap-2 md:grid-cols-3 text-xs text-stone-700">
                               <div>Recall first hit: {item.recall.first_hit_rank ?? "miss"}</div>
                               <div>Rerank first hit: {item.rerank.first_hit_rank ?? "miss"}</div>

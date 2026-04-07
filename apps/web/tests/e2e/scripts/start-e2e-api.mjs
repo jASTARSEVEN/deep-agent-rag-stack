@@ -98,7 +98,7 @@ const workerProcess = spawn(
 /** API server 啟動用子行程。 */
 const apiProcess = spawn(
   "python",
-  ["-m", "uvicorn", "app.chat.runtime.langgraph_http_app:app", "--app-dir", "src", "--host", "127.0.0.1", "--port", "18001"],
+  ["-m", "uvicorn", "app.chat.runtime.langgraph_http_postgres:postgres", "--app-dir", "src", "--host", "127.0.0.1", "--port", "18001"],
   {
     cwd: apiRoot,
     stdio: "inherit",

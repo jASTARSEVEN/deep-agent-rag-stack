@@ -39,6 +39,7 @@ from app.services.evaluation_metrics import (
 )
 from app.services.evaluation_dataset import build_dataset_summary, evaluate_item_stage_outputs
 from app.services.evaluation_profiles import resolve_evaluation_settings
+from app.services.retrieval_routing import build_query_routing_decision
 
 
 def run_evaluation_dataset(
@@ -74,8 +75,21 @@ def run_evaluation_dataset(
         minimum_role=build_required_role(),
     )
 
-    effective_settings = resolve_evaluation_settings(settings=settings, evaluation_profile=evaluation_profile)
-    config_snapshot = _build_evaluation_config_snapshot(settings=effective_settings, top_k=top_k)
+    routing_decision = build_query_routing_decision(
+        settings=settings,
+        query=dataset.query_type.value,
+        explicit_query_type=dataset.query_type,
+    )
+    effective_settings = resolve_evaluation_settings(
+        settings=routing_decision.effective_settings,
+        evaluation_profile=evaluation_profile,
+    )
+    config_snapshot = _build_evaluation_config_snapshot(
+        settings=effective_settings,
+        top_k=top_k,
+        query_type=dataset.query_type.value,
+        selected_profile=routing_decision.selected_profile,
+    )
 
     run = RetrievalEvalRun(
         dataset_id=dataset.id,
@@ -158,12 +172,22 @@ def build_run_summary(run: RetrievalEvalRun) -> EvaluationRunSummary:
     return EvaluationRunSummary.model_validate(payload)
 
 
-def _build_evaluation_config_snapshot(*, settings: AppSettings, top_k: int) -> dict[str, object]:
+def _build_evaluation_config_snapshot(
+    *,
+    settings: AppSettings,
+    top_k: int,
+    query_type: str,
+    selected_profile: str,
+) -> dict[str, object]:
     """建立 benchmark run 的設定快照。"""
 
     return deepcopy(
         {
             "top_k": top_k,
+            "query_routing": {
+                "query_type": query_type,
+                "selected_profile": selected_profile,
+            },
             "retrieval": {
                 "vector_top_k": settings.retrieval_vector_top_k,
                 "fts_top_k": settings.retrieval_fts_top_k,
@@ -335,6 +359,7 @@ def _evaluate_single_item(
         "language": item.language.value,
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
+        "query_routing": stage_result.query_routing.model_dump(mode="json"),
         "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
         "rerank": _build_stage_detail(

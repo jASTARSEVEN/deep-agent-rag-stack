@@ -71,6 +71,8 @@ class EvaluationQueryType(str, Enum):
     """Retrieval evaluation 題型。"""
 
     fact_lookup = "fact_lookup"
+    document_summary = "document_summary"
+    cross_document_compare = "cross_document_compare"
 
 
 class EvaluationLanguage(str, Enum):
@@ -293,7 +295,7 @@ class RetrievalEvalDataset(Base):
     area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
     # Dataset 顯示名稱。
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    # 第一版固定為 fact_lookup。
+    # Dataset 對應的 query type。
     query_type: Mapped[EvaluationQueryType] = mapped_column(
         SqlEnum(EvaluationQueryType, native_enum=False),
         nullable=False,
@@ -313,7 +315,7 @@ class RetrievalEvalDataset(Base):
 
 
 class RetrievalEvalItem(Base):
-    """Dataset 內單一 fact lookup 題目。"""
+    """Dataset 內單一 retrieval evaluation 題目。"""
 
     __tablename__ = "retrieval_eval_items"
 
@@ -321,7 +323,7 @@ class RetrievalEvalItem(Base):
     id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
     # 題目所屬 dataset。
     dataset_id: Mapped[str] = mapped_column(ForeignKey("retrieval_eval_datasets.id", ondelete="CASCADE"), nullable=False)
-    # 第一版固定為 fact_lookup。
+    # 題目對應的 query type。
     query_type: Mapped[EvaluationQueryType] = mapped_column(
         SqlEnum(EvaluationQueryType, native_enum=False),
         nullable=False,
@@ -340,7 +342,7 @@ class RetrievalEvalItem(Base):
 
 
 class RetrievalEvalItemSpan(Base):
-    """Fact lookup 題目的 gold source span。"""
+    """Retrieval evaluation 題目的 gold source span。"""
 
     __tablename__ = "retrieval_eval_item_spans"
     __table_args__ = (

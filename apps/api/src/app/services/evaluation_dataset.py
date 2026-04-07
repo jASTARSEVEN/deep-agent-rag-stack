@@ -17,6 +17,7 @@ from app.db.models import (
     Document,
     DocumentChunk,
     DocumentStatus,
+    EvaluationQueryType,
     RetrievalEvalDataset,
     RetrievalEvalItem,
     RetrievalEvalItemSpan,
@@ -37,6 +38,7 @@ from app.schemas.evaluation import (
     EvaluationItemSummary,
     EvaluationPreviewDebugRequest,
     EvaluationQueryFocusDetail,
+    EvaluationQueryRoutingDetail,
     EvaluationRunReportResponse,
     EvaluationRunSummary,
     EvaluationStageCandidate,
@@ -44,6 +46,7 @@ from app.schemas.evaluation import (
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
 from app.services.retrieval_query import QueryFocusPlan, build_query_focus_plan_from_settings
+from app.services.retrieval_routing import QueryRoutingDecision, build_query_routing_decision
 from app.services.retrieval import (
     RetrievalResult,
     _apply_python_rrf,
@@ -61,6 +64,7 @@ class ItemStageEvaluationResult:
 
     item: RetrievalEvalItem
     gold_spans: list[GoldSpan]
+    query_routing: EvaluationQueryRoutingDetail
     query_focus: EvaluationQueryFocusDetail
     recall_stage: EvaluationCandidateStageResponse
     rerank_stage: EvaluationCandidateStageResponse
@@ -99,6 +103,7 @@ def create_area_evaluation_dataset(
     principal: CurrentPrincipal,
     area_id: str,
     name: str,
+    query_type: EvaluationQueryType,
 ) -> EvaluationDatasetSummary:
     """建立新的 evaluation dataset。
 
@@ -107,13 +112,14 @@ def create_area_evaluation_dataset(
     - `principal`：目前已驗證使用者。
     - `area_id`：目標 area。
     - `name`：dataset 名稱。
+    - `query_type`：dataset 題型。
 
     回傳：
     - `EvaluationDatasetSummary`：新建立的 dataset。
     """
 
     require_minimum_area_role(session=session, principal=principal, area_id=area_id, minimum_role=Role.maintainer)
-    dataset = RetrievalEvalDataset(area_id=area_id, name=name, created_by_sub=principal.sub)
+    dataset = RetrievalEvalDataset(area_id=area_id, name=name, query_type=query_type, created_by_sub=principal.sub)
     session.add(dataset)
     session.commit()
     session.refresh(dataset)
@@ -194,9 +200,14 @@ def create_evaluation_item(
     """
 
     dataset = _get_authorized_dataset(session=session, principal=principal, dataset_id=dataset_id)
+    if payload.query_type is not None and payload.query_type != dataset.query_type:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="item query_type 必須與 dataset query_type 一致。",
+        )
     item = RetrievalEvalItem(
         dataset_id=dataset.id,
-        query_type=payload.query_type,
+        query_type=dataset.query_type,
         query_text=payload.query_text,
         language=payload.language,
         notes=payload.notes,
@@ -370,6 +381,7 @@ def preview_evaluation_candidates(
     return EvaluationCandidatePreviewResponse(
         dataset=build_dataset_summary(session=session, dataset=dataset),
         item=build_item_summary(item=item, spans=spans),
+        query_routing=stage_result.query_routing,
         query_focus=stage_result.query_focus,
         recall=stage_result.recall_stage,
         rerank=stage_result.rerank_stage,
@@ -407,31 +419,42 @@ def evaluate_item_stage_outputs(
     - `ItemStageEvaluationResult`：可供 preview 與 benchmark 共用的 stage 結果。
     """
 
-    query_focus_plan = build_query_focus_plan_from_settings(settings=settings, query=item.query_text)
-    retrieval_query = query_focus_plan.focus_query if query_focus_plan.applied else item.query_text
-    rerank_query = query_focus_plan.rerank_query if query_focus_plan.applied else item.query_text
+    routing_decision = build_query_routing_decision(
+        settings=settings,
+        query=item.query_text,
+        explicit_query_type=item.query_type,
+    )
+    effective_settings = routing_decision.effective_settings
+    query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=item.query_text)
+    retrieval_query = item.query_text
+    rerank_query = item.query_text
 
     recall_matches = _apply_ranking_policy(
         matches=_apply_python_rrf(
-            matches=_recall_ranked_candidates(session=session, settings=settings, area_id=area_id, query=retrieval_query),
-            settings=settings,
+            matches=_recall_ranked_candidates(session=session, settings=effective_settings, area_id=area_id, query=retrieval_query),
+            settings=effective_settings,
         ),
         query=item.query_text,
-        settings=settings,
+        settings=effective_settings,
         focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
         query_focus_plan=query_focus_plan,
     )
-    rerank_matches = _apply_rerank(matches=recall_matches, query=rerank_query, settings=settings) if apply_rerank else recall_matches
+    rerank_matches = (
+        _apply_rerank(matches=recall_matches, query=rerank_query, settings=effective_settings)
+        if apply_rerank
+        else recall_matches
+    )
     retrieval_result = RetrievalResult(
         candidates=[_build_retrieval_candidate(match) for match in rerank_matches],
         trace=_build_empty_trace(
             query=item.query_text,
-            settings=settings,
+            settings=effective_settings,
             total_candidates=len(rerank_matches),
+            routing_decision=routing_decision,
             query_focus_plan=query_focus_plan,
         ),
     )
-    assembled_result = assemble_retrieval_result(session=session, settings=settings, retrieval_result=retrieval_result)
+    assembled_result = assemble_retrieval_result(session=session, settings=effective_settings, retrieval_result=retrieval_result)
     gold_spans = [
         GoldSpan(
             document_id=span.document_id,
@@ -446,6 +469,7 @@ def evaluate_item_stage_outputs(
     return ItemStageEvaluationResult(
         item=item,
         gold_spans=gold_spans,
+        query_routing=_build_query_routing_detail(routing_decision=routing_decision),
         query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
         recall_stage=_build_recall_stage(
             matches=recall_matches,
@@ -781,6 +805,7 @@ def _build_empty_trace(
     query: str,
     settings: AppSettings,
     total_candidates: int,
+    routing_decision: QueryRoutingDecision,
     query_focus_plan: QueryFocusPlan,
 ) -> dict[str, object]:
     """建立 assembler 需要的最小 trace 物件。
@@ -789,6 +814,7 @@ def _build_empty_trace(
     - `query`：題目 query。
     - `settings`：應用程式設定。
     - `total_candidates`：候選總數。
+    - `routing_decision`：本次 query routing 決策。
     - `query_focus_plan`：本次 query focus planner 輸出。
 
     回傳：
@@ -801,6 +827,12 @@ def _build_empty_trace(
         "fts_top_k": settings.retrieval_fts_top_k,
         "max_candidates": settings.retrieval_max_candidates,
         "rerank_top_n": min(settings.rerank_top_n, total_candidates),
+        "query_type": routing_decision.query_type.value,
+        "query_type_source": routing_decision.source,
+        "query_type_confidence": routing_decision.confidence,
+        "query_type_matched_rules": list(routing_decision.matched_rules),
+        "selected_profile": routing_decision.selected_profile,
+        "profile_settings": routing_decision.resolved_settings,
         "query_focus_applied": query_focus_plan.applied,
         "query_focus_language": query_focus_plan.language,
         "query_focus_intents": list(query_focus_plan.intents),
@@ -812,6 +844,29 @@ def _build_empty_trace(
         "rerank_query": query_focus_plan.rerank_query,
         "candidates": [],
     }
+
+
+def _build_query_routing_detail(
+    *,
+    routing_decision: QueryRoutingDecision,
+) -> EvaluationQueryRoutingDetail:
+    """將 query routing 決策轉為 evaluation API detail。
+
+    參數：
+    - `routing_decision`：本次 query routing 決策。
+    回傳：
+    - `EvaluationQueryRoutingDetail`：preview 與 benchmark 共用的 routing detail。
+    """
+
+    return EvaluationQueryRoutingDetail(
+        query_type=routing_decision.query_type,
+        language=routing_decision.language,
+        confidence=routing_decision.confidence,
+        source=routing_decision.source,
+        matched_rules=list(routing_decision.matched_rules),
+        selected_profile=routing_decision.selected_profile,
+        resolved_settings=routing_decision.resolved_settings,
+    )
 
 
 def _build_query_focus_detail(*, query_focus_plan: QueryFocusPlan) -> EvaluationQueryFocusDetail:

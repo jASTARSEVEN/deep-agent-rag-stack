@@ -38,7 +38,7 @@ def test_profile_registry_exposes_supported_profiles() -> None:
 
 
 def test_production_like_profile_disables_query_focus_for_stable_baseline() -> None:
-    """production_like_v1 應固定關閉 query focus，避免 baseline 漂移。"""
+    """production_like_v1 不應覆寫 query focus env toggle。"""
 
     settings = AppSettings()
 
@@ -47,7 +47,7 @@ def test_production_like_profile_disables_query_focus_for_stable_baseline() -> N
         evaluation_profile="production_like_v1",
     )
 
-    assert overrides["retrieval_query_focus_enabled"] is False
+    assert "retrieval_query_focus_enabled" not in overrides
 
 
 def test_gate_profile_inherits_live_profile_overrides() -> None:
@@ -92,7 +92,7 @@ def test_v3_profile_keeps_generic_variant_with_sweet_spot_budget() -> None:
 
 
 def test_query_focus_profile_extends_generic_v3_with_query_focus_knobs() -> None:
-    """query focus profile 應在 generic v3 基礎上開啟 query focus knobs。"""
+    """query focus profile 應在 generic v3 基礎上覆寫 query focus knobs，但不直接控制 env 開關。"""
 
     settings = AppSettings()
 
@@ -106,13 +106,12 @@ def test_query_focus_profile_extends_generic_v3_with_query_focus_knobs() -> None
     )
 
     assert overrides["retrieval_evidence_synopsis_variant"] == "generic_v1"
-    assert overrides["retrieval_query_focus_enabled"] is True
     assert overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
     assert overrides["retrieval_query_focus_confidence_threshold"] == 0.7
     assert overrides["assembler_max_contexts"] == 9
     assert overrides["assembler_max_chars_per_context"] == 3000
     assert gate_overrides["rerank_provider"] == "deterministic"
-    assert gate_overrides["retrieval_query_focus_enabled"] is True
+    assert gate_overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
 
 
 def test_strategy_lane_registry_provides_profile_sequence_and_rollback_target() -> None:
@@ -145,8 +144,8 @@ def test_query_focus_budget_profiles_only_tighten_assembler_budget() -> None:
         evaluation_profile=GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
     )
 
-    assert overrides["retrieval_query_focus_enabled"] is True
     assert overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
+    assert overrides["retrieval_query_focus_confidence_threshold"] == 0.7
     assert overrides["retrieval_evidence_synopsis_variant"] == "generic_v1"
     assert overrides["assembler_max_contexts"] == 6
     assert overrides["assembler_max_chars_per_context"] == 3000

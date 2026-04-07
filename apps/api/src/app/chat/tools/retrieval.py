@@ -9,8 +9,9 @@ from sqlalchemy import select
 from app.auth.verifier import CurrentPrincipal
 from app.chat.contracts.types import ChatCitation, ChatCitationRegion
 from app.core.settings import AppSettings
-from app.db.models import Document
+from app.db.models import Document, EvaluationQueryType
 from app.services.retrieval import retrieve_area_candidates
+from app.services.retrieval_routing import build_query_routing_decision
 from app.services.retrieval_assembler import AssembledContext, AssembledRetrievalResult, assemble_retrieval_result
 
 
@@ -57,9 +58,14 @@ def retrieve_area_contexts_tool(
         area_id=area_id,
         query=question,
     )
+    effective_settings = build_query_routing_decision(
+        settings=settings,
+        query=question,
+        explicit_query_type=EvaluationQueryType(retrieval_result.trace.query_type),
+    ).effective_settings
     assembled_result = assemble_retrieval_result(
         session=session,
-        settings=settings,
+        settings=effective_settings,
         retrieval_result=retrieval_result,
     )
     return RetrievalToolResult(
@@ -67,7 +73,7 @@ def retrieve_area_contexts_tool(
         citations=build_chat_citations(
             session=session,
             assembled_result=assembled_result,
-            max_items=settings.assembler_max_contexts,
+            max_items=effective_settings.assembler_max_contexts,
         ),
         trace={
             "retrieval": asdict(assembled_result.trace.retrieval),
@@ -188,9 +194,18 @@ def build_tool_call_output_summary(
     """
 
     assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
+    retrieval_trace = retrieval_result.trace["retrieval"] if retrieval_result is not None else {}
     return {
         "contexts_count": len(assembled_contexts_payload),
         "citations_count": len(retrieval_result.citations) if retrieval_result is not None else 0,
+        "query_type": retrieval_trace.get("query_type"),
+        "query_type_language": retrieval_trace.get("query_type_language"),
+        "query_type_source": retrieval_trace.get("query_type_source"),
+        "query_type_confidence": retrieval_trace.get("query_type_confidence"),
+        "query_type_matched_rules": retrieval_trace.get("query_type_matched_rules", []),
+        "selected_profile": retrieval_trace.get("selected_profile"),
+        "profile_settings": retrieval_trace.get("profile_settings", {}),
+        "query_focus_applied": retrieval_trace.get("query_focus_applied"),
         "contexts": [
             {
                 "context_index": item["context_index"],

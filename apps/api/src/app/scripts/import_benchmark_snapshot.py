@@ -139,9 +139,14 @@ def parse_query_type(value: str) -> EvaluationQueryType:
     - `EvaluationQueryType`：標準化後的題型 enum。
     """
 
-    if value != "fact_lookup":
+    normalized = {
+        "fact_lookup": EvaluationQueryType.fact_lookup,
+        "document_summary": EvaluationQueryType.document_summary,
+        "cross_document_compare": EvaluationQueryType.cross_document_compare,
+    }.get(value)
+    if normalized is None:
         raise ValueError(f"不支援的 query_type：{value}")
-    return EvaluationQueryType.fact_lookup
+    return normalized
 
 
 def load_ready_documents_by_name(*, session_factory: Any, area_id: str) -> dict[str, Document]:

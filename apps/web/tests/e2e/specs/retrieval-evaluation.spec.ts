@@ -79,6 +79,7 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
 
   await page.getByRole("button", { name: "評測 / 標註" }).click();
   await page.getByTestId("evaluation-dataset-name").fill("Phase 7 Dataset");
+  await page.getByTestId("evaluation-dataset-query-type").selectOption("fact_lookup");
   await page.getByTestId("evaluation-create-dataset").click();
   await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Phase 7 Dataset");
 
@@ -87,17 +88,11 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-create-item").click();
   await expect(page.getByTestId("evaluation-items-list")).toContainText("zh-TW facts");
   await expect(page.getByTestId("evaluation-stage-recall")).toBeVisible();
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Fact Lookup");
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Query Focus: disabled");
 
   await page.getByTestId("evaluation-document-search-hits").getByRole("button", { name: /alpha-zh\.md/i }).click();
   await expect(page.getByTestId("evaluation-document-preview")).toContainText("Alpha policy keeps zh-TW facts.");
-  await page.getByTestId("evaluation-document-preview").evaluate((element: HTMLTextAreaElement) => {
-    const target = "Alpha policy keeps zh-TW facts.";
-    const start = element.value.indexOf(target);
-    const end = start + target.length;
-    element.focus();
-    element.setSelectionRange(start, end);
-    element.dispatchEvent(new Event("select", { bubbles: true }));
-  });
   await page.getByTestId("evaluation-span-relevance").selectOption("3");
   await page.getByTestId("evaluation-add-span").click();
   await expect(page.getByText("已新增 gold source span。")).toBeVisible();
@@ -105,12 +100,28 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-run-benchmark").click();
   await expect(page.getByTestId("evaluation-run-report")).toContainText("Summary Metrics");
   await expect(page.getByTestId("evaluation-per-query-list")).toContainText("zh-TW facts");
+  await expect(page.getByTestId("evaluation-run-report")).toContainText("Fact Lookup");
+
+  await page.getByTestId("evaluation-dataset-name").fill("Summary Dataset");
+  await page.getByTestId("evaluation-dataset-query-type").selectOption("document_summary");
+  await page.getByTestId("evaluation-create-dataset").click();
+  await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Summary Dataset");
+  await page.getByTestId("evaluation-dataset-name").fill("Compare Dataset");
+  await page.getByTestId("evaluation-dataset-query-type").selectOption("cross_document_compare");
+  await page.getByTestId("evaluation-create-dataset").click();
+  await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Compare Dataset");
 
   await page.getByTestId("evaluation-dataset-name").fill("Disposable Dataset");
+  await page.getByTestId("evaluation-dataset-query-type").selectOption("fact_lookup");
   await page.getByTestId("evaluation-create-dataset").click();
   await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Disposable Dataset");
   page.once("dialog", (dialog) => dialog.accept());
-  await page.getByTestId(/^evaluation-delete-dataset-/).filter({ hasText: "刪除" }).last().click();
+  await page
+    .getByTestId("evaluation-datasets-list")
+    .locator("div")
+    .filter({ hasText: "Disposable Dataset" })
+    .getByRole("button", { name: "刪除" })
+    .click();
   await expect(page.getByText("已刪除 dataset。")).toBeVisible();
   await expect(page.getByTestId("evaluation-datasets-list")).not.toContainText("Disposable Dataset");
 });

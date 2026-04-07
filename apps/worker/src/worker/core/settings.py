@@ -71,7 +71,7 @@ class WorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE_NAME, env_file_encoding="utf-8", extra="ignore")
 
     service_name: Annotated[str, Field(alias="WORKER_SERVICE_NAME")] = "deep-agent-worker"
-    database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://app:app@postgres:5432/deep_agent_rag"
+    database_url: Annotated[str, Field(alias="DATABASE_URL")] = "postgresql://postgres:postgres@postgres:5432/deep_agent_rag"
     broker_url: Annotated[str, Field(alias="CELERY_BROKER_URL")] = "redis://redis:6379/0"
     result_backend: Annotated[str, Field(alias="CELERY_RESULT_BACKEND")] = "redis://redis:6379/1"
     broker_path: Annotated[Path, Field(alias="CELERY_BROKER_PATH")] = Path(".celery-broker")
