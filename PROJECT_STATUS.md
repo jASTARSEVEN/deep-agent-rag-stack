@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8.1 — Query-Aware Retrieval Profiles (Routing Skeleton Completed)`
+當前主階段：`Phase 8.2 — Diversified Selection Before Assembly (Completed)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -38,6 +38,7 @@
 - `Phase 6.1` Public HTTPS Entry & Migration Bootstrap Hardening 已完成
 - `Phase 7` Retrieval Correctness Evaluation v1 已完成
 - `Phase 8.1` Query-Aware Retrieval Profiles routing skeleton 已完成
+- `Phase 8.2` Diversified Selection Before Assembly 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -84,7 +85,10 @@
 - 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
 - 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
 - `query_focus` 是否實際套用仍由環境變數 / settings 控制；本輪保留相容欄位與 profile knobs，但不再由 routing skeleton 強制覆寫總開關
-- `document_summary` 與 `cross_document_compare` 目前僅具備 routing/profile skeleton，仍使用既有 parent/child assembled contexts；document-level synopsis 明確延後到 `Phase 8.3`
+- 已為 `document_summary` 新增 `single_document | multi_document` 第二層 routing，透過 `documents.file_name` 的 deterministic mention resolver 解析單文件摘要與多文件摘要 scope，且只在已授權 `ready` 文件集合內運作
+- 已在 `rerank -> assembler` 間新增 scope-aware diversified selection layer：`fact_lookup` 維持 bypass，`document_summary` 採 coverage-first + fill 策略，`cross_document_compare` 採雙輪 coverage pass 後再依 rerank 補位
+- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
+- document-level synopsis 與 document recall 仍明確延後到 `Phase 8.3`
 - 已於 `2026-04-05` 將長期 benchmark 文件擴充為九個 dataset：原先八資料集 current 基線再加上新加入的 `DuReader-robust 100` reference run；目前依 assembled `nDCG@10` 由相對簡單到困難，可近似看成 `DuReader-robust 100 -> MS MARCO 100 -> DRCD 100 -> NQ 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為九資料集 current 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling、`NQ` 補出一條「rerank 幾乎到頂、assembled 仍顯著掉分」的 assembler 壓力測試 lane、`DRCD` 補出「中文 lexical recall 近乎到頂，但 rerank 會輕微退化排序」的繁體中文 rerank 哨兵 lane，而 `DuReader-robust` 則補出「中文 paragraph-level extractive QA 已接近 ceiling」的 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單

@@ -119,7 +119,11 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     preview_payload = preview_response.json()
     assert preview_payload["query_routing"]["query_type"] == "fact_lookup"
     assert preview_payload["query_routing"]["selected_profile"] == "fact_lookup_precision_v1"
+    assert preview_payload["query_routing"]["summary_scope"] is None
+    assert preview_payload["query_routing"]["resolved_document_ids"] == []
     assert preview_payload["query_focus"]["applied"] is False
+    assert preview_payload["selection"]["applied"] is False
+    assert preview_payload["selection"]["strategy"] == "disabled"
     assert preview_payload["query_focus"]["focus_query"] == "zh-TW facts"
     assert preview_payload["recall"]["items"]
     assert preview_payload["rerank"]["items"]
@@ -137,10 +141,12 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert run_payload["run"]["config_snapshot"]["top_k"] == 5
     assert run_payload["run"]["config_snapshot"]["query_routing"]["query_type"] == "fact_lookup"
     assert run_payload["run"]["config_snapshot"]["query_routing"]["selected_profile"] == "fact_lookup_precision_v1"
+    assert run_payload["run"]["config_snapshot"]["query_routing"]["summary_scope"] is None
     assert run_payload["run"]["config_snapshot"]["rerank"]["top_n"] == app_settings.rerank_top_n
     assert run_payload["run"]["config_snapshot"]["retrieval"]["query_focus_enabled"] is False
     assert "recall" in run_payload["summary_metrics"]
     assert run_payload["per_query"][0]["query_routing"]["query_type"] == "fact_lookup"
+    assert run_payload["per_query"][0]["selection"]["applied"] is False
     assert run_payload["per_query"][0]["query_focus"]["applied"] is False
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
     assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == preview_payload["recall"]["first_hit_rank"]

@@ -106,10 +106,21 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-dataset-query-type").selectOption("document_summary");
   await page.getByTestId("evaluation-create-dataset").click();
   await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Summary Dataset");
+  await page.getByTestId("evaluation-item-query").fill("請摘要 alpha-zh 和 beta-en");
+  await page.getByTestId("evaluation-item-language").selectOption("mixed");
+  await page.getByTestId("evaluation-create-item").click();
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Document Summary");
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("document_summary_multi_document_diversified_v1");
+
   await page.getByTestId("evaluation-dataset-name").fill("Compare Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("cross_document_compare");
   await page.getByTestId("evaluation-create-dataset").click();
   await expect(page.getByTestId("evaluation-datasets-list")).toContainText("Compare Dataset");
+  await page.getByTestId("evaluation-item-query").fill("比較 alpha-zh 和 beta-en");
+  await page.getByTestId("evaluation-item-language").selectOption("mixed");
+  await page.getByTestId("evaluation-create-item").click();
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Cross-Document Compare");
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("cross_document_compare_diversified_v1");
 
   await page.getByTestId("evaluation-dataset-name").fill("Disposable Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("fact_lookup");

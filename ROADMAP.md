@@ -237,7 +237,7 @@
 ## 近期建議順序
 
 1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + query_focus off + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
-2. 進入 `Phase 8.1 — Query-Aware Retrieval Profiles` 規劃與最小切片，先把 `fact_lookup` 的 query intent / profile trace metadata 顯式化，再逐步擴到 `document_summary` 與 `cross_document_compare`
+2. 先完成 `Phase 8.1` 的 query-aware routing/profile skeleton，再接著實作 `Phase 8.2 — Diversified Selection Before Assembly`，把 `document_summary` 的 scope 判定與 summary/compare 的多文件 coverage guardrail 落進正式 runtime
 3. benchmark 驅動優化先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
 4. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
 5. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
@@ -361,20 +361,21 @@
 
 內容：
 - 在 RRF / rerank 之後、assembler 之前，新增 diversified selection layer。
-- selection policy 不再只按分數排序，還要納入：
-  - 文件分散度
-  - parent 分散度
-  - 每份文件的代表片段數上限
-- 比較型問題優先保留「每份入選文件至少一個代表 parent」。
-- 摘要型問題優先保留「多文件代表片段」，而不是同文件相鄰高相似片段連續佔滿 budget。
-- assembler trace 補上：
+- `document_summary` 在本 phase 先新增第二層 routing：`single_document | multi_document`；scope 由 area-scoped、ready-only 的 deterministic document mention resolver 解析，不依賴 UI/runtime hint，也不讓 deep-agent 直接提供 `document_id`
+- `document_summary_single_document_diversified_v1` 先將候選限縮到唯一高信心命中的文件，再在單一文件內做 parent-level diversity
+- `document_summary_multi_document_diversified_v1` 採 `coverage pass + fill pass`：先保留多文件代表 parent，再依 rerank 排名補位；在所有入選文件都尚未拿到第二個 parent 前，不讓單一文件先拿第三個 parent
+- `cross_document_compare_diversified_v1` 採 `coverage pass #1 -> coverage pass #2 -> score-first fill pass`；先保證每文件至少有代表 parent，再依 rerank 排名補位，不設「兩文件最多 4 parents」的硬上限
+- selection trace 補上：
+  - `summary_scope`
+  - `resolved_document_ids`
+  - document mention source / confidence / candidates
   - 被保留的文件數
   - 每文件採信的 parent 數
   - 因 diversity guardrail 被淘汰的候選
 - 測試補齊多文件 coverage 與單文件壟斷退化案例。
 
 狀態：
-- `未開始`
+- `已完成`
 
 ## Phase 8.3 — Document-Level Representations
 

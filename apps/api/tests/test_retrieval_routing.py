@@ -79,7 +79,8 @@ def test_build_query_routing_decision_respects_explicit_query_type() -> None:
 
     assert decision.query_type == EvaluationQueryType.cross_document_compare
     assert decision.source == "explicit"
-    assert decision.selected_profile == "cross_document_compare_skeleton_v1"
+    assert decision.selected_profile == "cross_document_compare_diversified_v1"
+    assert decision.summary_scope is None
     assert decision.effective_settings.retrieval_query_focus_enabled is False
     assert decision.resolved_settings["query_focus_enabled"] is False
 
@@ -95,5 +96,7 @@ def test_build_query_routing_decision_keeps_query_focus_env_toggle() -> None:
     )
 
     assert decision.query_type == EvaluationQueryType.document_summary
+    assert decision.summary_scope == "multi_document"
+    assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
     assert decision.effective_settings.retrieval_query_focus_enabled is True
     assert decision.resolved_settings["query_focus_enabled"] is True

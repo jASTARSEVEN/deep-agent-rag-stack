@@ -41,12 +41,14 @@ from app.schemas.evaluation import (
     EvaluationQueryRoutingDetail,
     EvaluationRunReportResponse,
     EvaluationRunSummary,
+    EvaluationSelectionDetail,
     EvaluationStageCandidate,
 )
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
 from app.services.retrieval_query import QueryFocusPlan, build_query_focus_plan_from_settings
 from app.services.retrieval_routing import QueryRoutingDecision, build_query_routing_decision
+from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
 from app.services.retrieval import (
     RetrievalResult,
     _apply_python_rrf,
@@ -65,6 +67,7 @@ class ItemStageEvaluationResult:
     item: RetrievalEvalItem
     gold_spans: list[GoldSpan]
     query_routing: EvaluationQueryRoutingDetail
+    selection: EvaluationSelectionDetail
     query_focus: EvaluationQueryFocusDetail
     recall_stage: EvaluationCandidateStageResponse
     rerank_stage: EvaluationCandidateStageResponse
@@ -371,6 +374,7 @@ def preview_evaluation_candidates(
     spans = _load_spans_by_item_id(session=session, item_ids=[item.id]).get(item.id, [])
     stage_result = evaluate_item_stage_outputs(
         session=session,
+        principal=principal,
         settings=_apply_preview_debug_overrides(settings=settings, payload=payload),
         area_id=dataset.area_id,
         item=item,
@@ -382,6 +386,7 @@ def preview_evaluation_candidates(
         dataset=build_dataset_summary(session=session, dataset=dataset),
         item=build_item_summary(item=item, spans=spans),
         query_routing=stage_result.query_routing,
+        selection=stage_result.selection,
         query_focus=stage_result.query_focus,
         recall=stage_result.recall_stage,
         rerank=stage_result.rerank_stage,
@@ -398,6 +403,7 @@ def preview_evaluation_candidates(
 def evaluate_item_stage_outputs(
     *,
     session: Session,
+    principal: CurrentPrincipal,
     settings: AppSettings,
     area_id: str,
     item: RetrievalEvalItem,
@@ -409,6 +415,7 @@ def evaluate_item_stage_outputs(
 
     參數：
     - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
     - `settings`：應用程式設定。
     - `area_id`：目標 area。
     - `item`：目前題目。
@@ -423,6 +430,9 @@ def evaluate_item_stage_outputs(
         settings=settings,
         query=item.query_text,
         explicit_query_type=item.query_type,
+        session=session,
+        principal=principal,
+        area_id=area_id,
     )
     effective_settings = routing_decision.effective_settings
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=item.query_text)
@@ -444,14 +454,22 @@ def evaluate_item_stage_outputs(
         if apply_rerank
         else recall_matches
     )
+    reranked_candidates = [_build_retrieval_candidate(match) for match in rerank_matches]
+    selection_result = apply_scope_aware_selection(
+        candidates=reranked_candidates,
+        selected_profile=routing_decision.selected_profile,
+        resolved_document_ids=routing_decision.resolved_document_ids,
+        max_contexts=effective_settings.assembler_max_contexts,
+    )
     retrieval_result = RetrievalResult(
-        candidates=[_build_retrieval_candidate(match) for match in rerank_matches],
+        candidates=selection_result.candidates,
         trace=_build_empty_trace(
             query=item.query_text,
             settings=effective_settings,
             total_candidates=len(rerank_matches),
             routing_decision=routing_decision,
             query_focus_plan=query_focus_plan,
+            selection_result=selection_result,
         ),
     )
     assembled_result = assemble_retrieval_result(session=session, settings=effective_settings, retrieval_result=retrieval_result)
@@ -470,6 +488,7 @@ def evaluate_item_stage_outputs(
         item=item,
         gold_spans=gold_spans,
         query_routing=_build_query_routing_detail(routing_decision=routing_decision),
+        selection=_build_selection_detail(selection_result=selection_result),
         query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
         recall_stage=_build_recall_stage(
             matches=recall_matches,
@@ -807,6 +826,7 @@ def _build_empty_trace(
     total_candidates: int,
     routing_decision: QueryRoutingDecision,
     query_focus_plan: QueryFocusPlan,
+    selection_result: RetrievalSelectionResult,
 ) -> dict[str, object]:
     """建立 assembler 需要的最小 trace 物件。
 
@@ -816,6 +836,7 @@ def _build_empty_trace(
     - `total_candidates`：候選總數。
     - `routing_decision`：本次 query routing 決策。
     - `query_focus_plan`：本次 query focus planner 輸出。
+    - `selection_result`：本次 diversified selection 結果。
 
     回傳：
     - `dict[str, object]`：最小 trace payload。
@@ -828,11 +849,32 @@ def _build_empty_trace(
         "max_candidates": settings.retrieval_max_candidates,
         "rerank_top_n": min(settings.rerank_top_n, total_candidates),
         "query_type": routing_decision.query_type.value,
+        "query_type_language": routing_decision.language,
         "query_type_source": routing_decision.source,
         "query_type_confidence": routing_decision.confidence,
         "query_type_matched_rules": list(routing_decision.matched_rules),
+        "summary_scope": routing_decision.summary_scope,
+        "resolved_document_ids": list(routing_decision.resolved_document_ids),
+        "document_mention_source": routing_decision.document_mention_source,
+        "document_mention_confidence": routing_decision.document_mention_confidence,
+        "document_mention_candidates": [dict(candidate) for candidate in routing_decision.document_mention_candidates],
         "selected_profile": routing_decision.selected_profile,
         "profile_settings": routing_decision.resolved_settings,
+        "selection_applied": selection_result.applied,
+        "selection_strategy": selection_result.strategy,
+        "selected_document_count": len(selection_result.selected_document_ids),
+        "selected_parent_count": len(selection_result.selected_parent_ids),
+        "selected_document_ids": list(selection_result.selected_document_ids),
+        "selected_parent_ids": list(selection_result.selected_parent_ids),
+        "dropped_by_diversity": [
+            {
+                "document_id": entry.document_id,
+                "parent_chunk_id": entry.parent_chunk_id,
+                "chunk_id": entry.chunk_id,
+                "drop_reason": entry.drop_reason,
+            }
+            for entry in selection_result.dropped_by_diversity
+        ],
         "query_focus_applied": query_focus_plan.applied,
         "query_focus_language": query_focus_plan.language,
         "query_focus_intents": list(query_focus_plan.intents),
@@ -864,6 +906,11 @@ def _build_query_routing_detail(
         confidence=routing_decision.confidence,
         source=routing_decision.source,
         matched_rules=list(routing_decision.matched_rules),
+        summary_scope=routing_decision.summary_scope,
+        resolved_document_ids=list(routing_decision.resolved_document_ids),
+        document_mention_source=routing_decision.document_mention_source,
+        document_mention_confidence=routing_decision.document_mention_confidence,
+        document_mention_candidates=[dict(candidate) for candidate in routing_decision.document_mention_candidates],
         selected_profile=routing_decision.selected_profile,
         resolved_settings=routing_decision.resolved_settings,
     )
@@ -889,6 +936,35 @@ def _build_query_focus_detail(*, query_focus_plan: QueryFocusPlan) -> Evaluation
         rule_family=query_focus_plan.rule_family,
         focus_query=query_focus_plan.focus_query,
         rerank_query=query_focus_plan.rerank_query,
+    )
+
+
+def _build_selection_detail(*, selection_result: RetrievalSelectionResult) -> EvaluationSelectionDetail:
+    """將 selection 結果轉為 evaluation API detail。
+
+    參數：
+    - `selection_result`：本次 diversified selection 結果。
+
+    回傳：
+    - `EvaluationSelectionDetail`：preview 與 benchmark 共用的 selection detail。
+    """
+
+    return EvaluationSelectionDetail(
+        applied=selection_result.applied,
+        strategy=selection_result.strategy,
+        selected_document_count=len(selection_result.selected_document_ids),
+        selected_parent_count=len(selection_result.selected_parent_ids),
+        selected_document_ids=list(selection_result.selected_document_ids),
+        selected_parent_ids=list(selection_result.selected_parent_ids),
+        dropped_by_diversity=[
+            {
+                "document_id": entry.document_id,
+                "parent_chunk_id": entry.parent_chunk_id,
+                "chunk_id": entry.chunk_id,
+                "drop_reason": entry.drop_reason,
+            }
+            for entry in selection_result.dropped_by_diversity
+        ],
     )
 
 

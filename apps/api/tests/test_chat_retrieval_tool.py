@@ -218,7 +218,10 @@ def test_retrieve_area_contexts_tool_uses_summary_profile_budget_for_assembler(d
         question="總結這些文件",
     )
 
-    assert result.trace["retrieval"]["selected_profile"] == "document_summary_skeleton_v1"
+    assert result.trace["retrieval"]["selected_profile"] == "document_summary_multi_document_diversified_v1"
+    assert result.trace["retrieval"]["summary_scope"] == "multi_document"
+    assert result.trace["retrieval"]["selection_applied"] is True
+    assert result.trace["retrieval"]["selected_document_count"] == 4
     assert result.trace["assembler"]["max_contexts"] == 12
     assert len(result.assembled_contexts) == 4
     assert len(result.citations) == 4
@@ -340,13 +343,26 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
         "query_type_source": "fallback",
         "query_type_confidence": 0.0,
         "query_type_matched_rules": [],
+        "summary_scope": None,
+        "resolved_document_ids": [],
+        "document_mention_source": "none",
+        "document_mention_confidence": 0.0,
+        "document_mention_candidates": [],
         "selected_profile": "fact_lookup_precision_v1",
+        "selection_applied": False,
+        "selection_strategy": "disabled",
+        "selected_document_count": 1,
+        "selected_parent_count": 1,
+        "selected_document_ids": [document.id],
+        "selected_parent_ids": [parent.id],
+        "dropped_by_diversity": [],
         "query_focus_applied": False,
         "profile_settings": {
             "vector_top_k": settings.retrieval_vector_top_k,
             "fts_top_k": settings.retrieval_fts_top_k,
             "max_candidates": settings.retrieval_max_candidates,
             "rerank_top_n": settings.rerank_top_n,
+            "selection_max_contexts": settings.assembler_max_contexts,
             "assembler_max_contexts": settings.assembler_max_contexts,
             "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
             "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
@@ -390,7 +406,19 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
         "query_type_source": None,
         "query_type_confidence": None,
         "query_type_matched_rules": [],
+        "summary_scope": None,
+        "resolved_document_ids": [],
+        "document_mention_source": None,
+        "document_mention_confidence": None,
+        "document_mention_candidates": [],
         "selected_profile": None,
+        "selection_applied": None,
+        "selection_strategy": None,
+        "selected_document_count": None,
+        "selected_parent_count": None,
+        "selected_document_ids": [],
+        "selected_parent_ids": [],
+        "dropped_by_diversity": [],
         "query_focus_applied": None,
         "profile_settings": {},
         "contexts": [],

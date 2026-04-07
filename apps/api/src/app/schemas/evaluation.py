@@ -242,8 +242,25 @@ class EvaluationQueryRoutingDetail(BaseModel):
     confidence: float
     source: str
     matched_rules: list[str]
+    summary_scope: str | None = None
+    resolved_document_ids: list[str]
+    document_mention_source: str
+    document_mention_confidence: float
+    document_mention_candidates: list[dict[str, object]]
     selected_profile: str
     resolved_settings: dict[str, object]
+
+
+class EvaluationSelectionDetail(BaseModel):
+    """單題 diversified selection 明細。"""
+
+    applied: bool
+    strategy: str
+    selected_document_count: int
+    selected_parent_count: int
+    selected_document_ids: list[str]
+    selected_parent_ids: list[str]
+    dropped_by_diversity: list[dict[str, object]]
 
 
 class EvaluationCandidatePreviewResponse(BaseModel):
@@ -252,6 +269,7 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     dataset: EvaluationDatasetSummary
     item: EvaluationItemSummary
     query_routing: EvaluationQueryRoutingDetail
+    selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
     rerank: EvaluationCandidateStageResponse
@@ -309,6 +327,7 @@ class EvaluationPerQueryDetail(BaseModel):
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
     query_routing: EvaluationQueryRoutingDetail
+    selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail
     rerank: EvaluationPerQueryStageDetail

@@ -108,6 +108,7 @@ def run_evaluation_dataset(
     try:
         report_payload = _build_run_report_payload(
             session=session,
+            principal=principal,
             settings=effective_settings,
             dataset=dataset,
             items=items,
@@ -187,6 +188,8 @@ def _build_evaluation_config_snapshot(
             "query_routing": {
                 "query_type": query_type,
                 "selected_profile": selected_profile,
+                "summary_scope": None,
+                "resolved_document_ids": [],
             },
             "retrieval": {
                 "vector_top_k": settings.retrieval_vector_top_k,
@@ -233,6 +236,7 @@ def build_required_role():
 def _build_run_report_payload(
     *,
     session: Session,
+    principal: CurrentPrincipal,
     settings: AppSettings,
     dataset: RetrievalEvalDataset,
     items: list[RetrievalEvalItem],
@@ -243,6 +247,7 @@ def _build_run_report_payload(
 
     參數：
     - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
     - `settings`：應用程式設定。
     - `dataset`：要執行的 dataset。
     - `items`：dataset 內題目列表。
@@ -261,6 +266,7 @@ def _build_run_report_payload(
         spans = spans_by_item_id.get(item.id, [])
         detail = _evaluate_single_item(
             session=session,
+            principal=principal,
             settings=settings,
             area_id=dataset.area_id,
             item=item,
@@ -300,6 +306,7 @@ def _build_run_report_payload(
 def _evaluate_single_item(
     *,
     session: Session,
+    principal: CurrentPrincipal,
     settings: AppSettings,
     area_id: str,
     item: RetrievalEvalItem,
@@ -310,6 +317,7 @@ def _evaluate_single_item(
 
     參數：
     - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
     - `settings`：應用程式設定。
     - `area_id`：dataset 所屬 area。
     - `item`：評估題目。
@@ -322,6 +330,7 @@ def _evaluate_single_item(
 
     stage_result = evaluate_item_stage_outputs(
         session=session,
+        principal=principal,
         settings=settings,
         area_id=area_id,
         item=item,
@@ -360,6 +369,7 @@ def _evaluate_single_item(
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
         "query_routing": stage_result.query_routing.model_dump(mode="json"),
+        "selection": stage_result.selection.model_dump(mode="json"),
         "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
         "rerank": _build_stage_detail(

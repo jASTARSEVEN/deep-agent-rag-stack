@@ -478,10 +478,30 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
     ]
     assert [event["status"] for event in tool_events] == ["started", "completed"]
     assert tool_events[0]["name"] == "retrieve_area_contexts"
-    assert tool_events[0]["input"] == {"area_id": "area-1", "question": "reader policy"}
+    assert tool_events[0]["input"] == {"area_id": "area-1", "question": "請根據文件回答 reader policy"}
     assert tool_events[1]["output"] == {
         "contexts_count": 0,
         "citations_count": 0,
+        "query_type": None,
+        "query_type_language": None,
+        "query_type_source": None,
+        "query_type_confidence": None,
+        "query_type_matched_rules": [],
+        "summary_scope": None,
+        "resolved_document_ids": [],
+        "document_mention_source": None,
+        "document_mention_confidence": None,
+        "document_mention_candidates": [],
+        "selected_profile": None,
+        "selection_applied": None,
+        "selection_strategy": None,
+        "selected_document_count": None,
+        "selected_parent_count": None,
+        "selected_document_ids": [],
+        "selected_parent_ids": [],
+        "dropped_by_diversity": [],
+        "query_focus_applied": None,
+        "profile_settings": {},
         "contexts": [],
     }
     reference_events = [event for event in emitted_events if event["type"] == "references"]
@@ -1065,7 +1085,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "truncated": False,
         }
     ]
-    assert result["trace"]["retrieval"]["query"] == "alpha"
+    assert result["trace"]["retrieval"]["query"] == "請根據文件回答 alpha"
     assert result["trace"]["assembler"]["kept_chunk_ids"] == [child_one.id, child_two.id]
     assert result["trace"]["agent"]["retrieval_invoked"] is True
     assert result["trace"]["agent"]["contexts_count"] == 1
@@ -1111,6 +1131,36 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert completed_tool_event["output"] == {
         "contexts_count": 1,
         "citations_count": 1,
+        "query_type": "fact_lookup",
+        "query_type_language": "mixed",
+        "query_type_source": "fallback",
+        "query_type_confidence": 0.0,
+        "query_type_matched_rules": [],
+        "summary_scope": None,
+        "resolved_document_ids": [],
+        "document_mention_source": "none",
+        "document_mention_confidence": 0.0,
+        "document_mention_candidates": [],
+        "selected_profile": "fact_lookup_precision_v1",
+        "selection_applied": False,
+        "selection_strategy": "disabled",
+        "selected_document_count": 1,
+        "selected_parent_count": 1,
+        "selected_document_ids": [document.id],
+        "selected_parent_ids": [parent.id],
+        "dropped_by_diversity": [],
+        "query_focus_applied": False,
+        "profile_settings": {
+            "vector_top_k": settings.retrieval_vector_top_k,
+            "fts_top_k": settings.retrieval_fts_top_k,
+            "max_candidates": settings.retrieval_max_candidates,
+            "rerank_top_n": settings.rerank_top_n,
+            "selection_max_contexts": settings.assembler_max_contexts,
+            "assembler_max_contexts": settings.assembler_max_contexts,
+            "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
+            "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
+            "query_focus_enabled": False,
+        },
         "contexts": [
             {
                 "context_index": 0,

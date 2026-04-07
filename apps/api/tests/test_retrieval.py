@@ -1539,6 +1539,201 @@ def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
     assert result.trace.rerank_query == captured_queries[0]
 
 
+def test_retrieve_area_candidates_resolves_single_document_summary_scope_and_filters_other_documents(
+    db_session, app_settings
+) -> None:
+    """單文件摘要應透過文件名稱解析收斂到單一文件。"""
+
+    area = Area(id=_uuid(), name="Single Summary Retrieval")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    first_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="丹堤加盟辦法.pdf",
+        content_type="application/pdf",
+        file_size=100,
+        storage_key="area/dantei-policy.pdf",
+        status=DocumentStatus.ready,
+    )
+    second_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="丹堤門市手冊.pdf",
+        content_type="application/pdf",
+        file_size=100,
+        storage_key="area/dantei-manual.pdf",
+        status=DocumentStatus.ready,
+    )
+    first_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=first_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="丹堤加盟辦法",
+        content="加盟辦法內容",
+        content_preview="加盟辦法內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+    )
+    second_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=second_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=1,
+        child_index=None,
+        heading="丹堤門市手冊",
+        content="門市手冊內容",
+        content_preview="門市手冊內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+    )
+    first_child = DocumentChunk(
+        id=_uuid(),
+        document_id=first_document.id,
+        parent_chunk_id=first_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="丹堤加盟辦法",
+        content="加盟辦法內容",
+        content_preview="加盟辦法內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    second_child = DocumentChunk(
+        id=_uuid(),
+        document_id=second_document.id,
+        parent_chunk_id=second_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=0,
+        heading="丹堤門市手冊",
+        content="門市手冊內容",
+        content_preview="門市手冊內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([first_document, second_document, first_parent, second_parent, first_child, second_child])
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="請摘要丹堤加盟辦法",
+    )
+
+    assert result.trace.summary_scope == "single_document"
+    assert result.trace.selected_profile == "document_summary_single_document_diversified_v1"
+    assert result.trace.resolved_document_ids == [first_document.id]
+    assert result.trace.selected_document_ids == [first_document.id]
+    assert all(candidate.document_id == first_document.id for candidate in result.candidates)
+
+
+def test_retrieve_area_candidates_compare_selection_can_fill_beyond_four_parents(db_session, app_settings) -> None:
+    """compare lane 在 budget 足夠時應可超過四個 selected parents。"""
+
+    settings = app_settings.model_copy(update={"assembler_max_contexts": 6})
+    area = Area(id=_uuid(), name="Compare Fill Retrieval")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    documents = [
+        Document(
+            id=_uuid(),
+            area_id=area.id,
+            file_name="alpha-policy.md",
+            content_type="text/markdown",
+            file_size=100,
+            storage_key="area/alpha-policy.md",
+            status=DocumentStatus.ready,
+        ),
+        Document(
+            id=_uuid(),
+            area_id=area.id,
+            file_name="beta-manual.md",
+            content_type="text/markdown",
+            file_size=100,
+            storage_key="area/beta-manual.md",
+            status=DocumentStatus.ready,
+        ),
+    ]
+    db_session.add_all(documents)
+    position = 0
+    for document, prefix in zip(documents, ("alpha", "beta"), strict=True):
+        for index in range(3):
+            parent = DocumentChunk(
+                id=_uuid(),
+                document_id=document.id,
+                parent_chunk_id=None,
+                chunk_type=ChunkType.parent,
+                structure_kind=ChunkStructureKind.text,
+                position=position,
+                section_index=position,
+                child_index=None,
+                heading=f"{prefix}-{index}",
+                content=f"{prefix} content {index}",
+                content_preview=f"{prefix} content {index}",
+                char_count=len(f"{prefix} content {index}"),
+                start_offset=0,
+                end_offset=len(f"{prefix} content {index}"),
+            )
+            child = DocumentChunk(
+                id=_uuid(),
+                document_id=document.id,
+                parent_chunk_id=parent.id,
+                chunk_type=ChunkType.child,
+                structure_kind=ChunkStructureKind.text,
+                position=position + 1,
+                section_index=position,
+                child_index=0,
+                heading=f"{prefix}-{index}",
+                content=f"{prefix} content {index}",
+                content_preview=f"{prefix} content {index}",
+                char_count=len(f"{prefix} content {index}"),
+                start_offset=0,
+                end_offset=len(f"{prefix} content {index}"),
+                embedding=[0.1] * settings.embedding_dimensions,
+            )
+            db_session.add_all([parent, child])
+            position += 2
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="比較 alpha policy 和 beta manual 的差異",
+    )
+
+    assert result.trace.selected_profile == "cross_document_compare_diversified_v1"
+    assert result.trace.selection_applied is True
+    assert result.trace.selection_strategy == "compare_coverage_then_fill_v1"
+    assert result.trace.selected_document_count == 2
+    assert result.trace.selected_parent_count == 6
+
+
 def test_deterministic_rerank_provider_returns_stable_sorted_scores() -> None:
     """deterministic rerank provider 應回傳可重現且排序穩定的結果。"""
 

@@ -23,6 +23,7 @@ from app.services.retrieval_query import (
     get_query_focus_boost_terms,
 )
 from app.services.retrieval_routing import build_query_routing_decision
+from app.services.retrieval_selection import apply_scope_aware_selection
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
 
@@ -83,8 +84,20 @@ class RetrievalTrace:
     query_type_source: str = "fallback"
     query_type_confidence: float = 0.0
     query_type_matched_rules: list[str] | None = None
+    summary_scope: str | None = None
+    resolved_document_ids: list[str] | None = None
+    document_mention_source: str = "none"
+    document_mention_confidence: float = 0.0
+    document_mention_candidates: list[dict[str, object]] | None = None
     selected_profile: str = ""
     profile_settings: dict[str, object] | None = None
+    selection_applied: bool = False
+    selection_strategy: str = "disabled"
+    selected_document_count: int = 0
+    selected_parent_count: int = 0
+    selected_document_ids: list[str] | None = None
+    selected_parent_ids: list[str] | None = None
+    dropped_by_diversity: list[dict[str, object]] | None = None
     query_focus_applied: bool = False
     query_focus_language: str = "en"
     query_focus_intents: list[str] | None = None
@@ -183,6 +196,9 @@ def retrieve_area_candidates(
         settings=settings,
         query=query,
         explicit_query_type=query_type,
+        session=session,
+        principal=principal,
+        area_id=area_id,
     )
     effective_settings = routing_decision.effective_settings
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=query)
@@ -205,7 +221,14 @@ def retrieve_area_candidates(
         query=query_focus_plan.rerank_query if query_focus_plan.applied else query,
         settings=effective_settings,
     )
-    candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
+    reranked_candidates = [_build_retrieval_candidate(match) for match in reranked_matches]
+    selection_result = apply_scope_aware_selection(
+        candidates=reranked_candidates,
+        selected_profile=routing_decision.selected_profile,
+        resolved_document_ids=routing_decision.resolved_document_ids,
+        max_contexts=effective_settings.assembler_max_contexts,
+    )
+    candidates = selection_result.candidates
 
     return RetrievalResult(
         candidates=candidates,
@@ -220,8 +243,28 @@ def retrieve_area_candidates(
             query_type_source=routing_decision.source,
             query_type_confidence=routing_decision.confidence,
             query_type_matched_rules=list(routing_decision.matched_rules),
+            summary_scope=routing_decision.summary_scope,
+            resolved_document_ids=list(routing_decision.resolved_document_ids),
+            document_mention_source=routing_decision.document_mention_source,
+            document_mention_confidence=routing_decision.document_mention_confidence,
+            document_mention_candidates=[dict(candidate) for candidate in routing_decision.document_mention_candidates],
             selected_profile=routing_decision.selected_profile,
             profile_settings=routing_decision.resolved_settings,
+            selection_applied=selection_result.applied,
+            selection_strategy=selection_result.strategy,
+            selected_document_count=len(selection_result.selected_document_ids),
+            selected_parent_count=len(selection_result.selected_parent_ids),
+            selected_document_ids=list(selection_result.selected_document_ids),
+            selected_parent_ids=list(selection_result.selected_parent_ids),
+            dropped_by_diversity=[
+                {
+                    "document_id": entry.document_id,
+                    "parent_chunk_id": entry.parent_chunk_id,
+                    "chunk_id": entry.chunk_id,
+                    "drop_reason": entry.drop_reason,
+                }
+                for entry in selection_result.dropped_by_diversity
+            ],
             query_focus_applied=query_focus_plan.applied,
             query_focus_language=query_focus_plan.language,
             query_focus_intents=list(query_focus_plan.intents),
