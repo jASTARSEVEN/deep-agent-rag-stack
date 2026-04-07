@@ -15,6 +15,11 @@
   - `postgresql://postgres:postgres@localhost:15432/deep_agent_rag`
 - `OPENAI_API_KEY` 可用，供 queue-only review 使用
 
+補充：
+
+- 所有 compose 操作都應透過 `./scripts/compose.sh`
+- `QASPER 100` 的 `OpenAI` review 屬於 queue-only 補強流程，實際核准數可能會隨 provider 行為有些微波動；重跑時應保留 review log 與 compare artifact
+
 ## 本次 reference run 身分
 
 - Area 名稱：`qasper-100`
@@ -93,6 +98,17 @@ TOKEN=$(
 )
 ```
 
+再取得本次建立 area / run benchmark 所使用的 `actor-sub`：
+
+```bash
+ACTOR_SUB=$(
+  curl -sS \
+    -H "Authorization: Bearer $TOKEN" \
+    http://localhost/api/auth/context \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["sub"])'
+)
+```
+
 建立 area：
 
 ```bash
@@ -116,7 +132,28 @@ for f in /tmp/qasper-100-workspace/source_documents/*.md; do
 done
 ```
 
-等到所有文件都進入 `ready`。
+由於 QASPER 上傳與 ingest 時間不短，建議上傳完成後重新取一次 token，再開始輪詢：
+
+```bash
+TOKEN=$(
+  curl -sS -X POST "http://localhost/auth/realms/deep-agent-dev/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "client_id=deep-agent-web" \
+    -d "grant_type=password" \
+    -d "username=carol" \
+    -d "password=carol123" \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["access_token"])'
+)
+```
+
+等到所有文件都進入 `ready`。建議用下列方式查看整體狀態：
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/areas/$AREA_ID/documents" \
+| python -c 'import sys, json; from collections import Counter; payload=json.load(sys.stdin); print(Counter(item["status"] for item in payload["items"]))'
+```
 
 ## 步驟 5：對齊 evidence 與 queue-only review
 
@@ -156,6 +193,12 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.review_external_benchmar
 本次 reference package 的 queue-only review 結果為：
 
 - `approved_override_count = 2`
+
+若未來重跑結果與此值不同，建議保留以下檔案一起判讀：
+
+- `alignment_review_queue.jsonl`
+- `review_overrides.jsonl`
+- `openai_review_log.jsonl`
 
 ## 步驟 6：建立正式 snapshot
 
@@ -200,8 +243,46 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
   --dataset-id e836874e-5183-5f09-8241-eddb155adab1 \
   --top-k 10 \
   --evaluation-profile production_like_v1 \
-  --actor-sub ea33183f-1e9f-458f-a405-bb365b8266c0
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/qasper-100-run.json
 ```
+
+建議順手取出 candidate run id：
+
+```bash
+RUN_ID=$(
+  python - <<'PY' /tmp/qasper-100-run.json
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(payload["run"]["id"])
+PY
+)
+```
+
+## 步驟 9：比對 reference run 與本次 rerun
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
+PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.compare_benchmark_runs \
+  --reference-report /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/qasper-curated-v1-100/reference_run_summary.json \
+  --candidate-run-id "$RUN_ID" \
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/qasper-100-compare.json
+```
+
+建議至少檢查：
+
+- `summary_metric_deltas.assembled.nDCG@k.delta`
+- `summary_metric_deltas.assembled.Recall@k.delta`
+- `per_query_diff.missing_in_candidate`
+- `per_query_diff.matched_core_evidence_mismatch_count`
+
+補充：
+
+- 若 queue-only review 的核准數與 reference 不同，先確認 snapshot 的 `question_count / span_count / approved_override_count` 是否仍符合預期，再判讀 run 指標
 
 ## Reference Metrics
 

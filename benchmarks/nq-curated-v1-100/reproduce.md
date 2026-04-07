@@ -15,6 +15,11 @@
   - `postgresql://postgres:postgres@localhost:15432/deep_agent_rag`
 - 若 future rerun 的 `alignment_review_queue` 非空，需提供可用的 `OPENAI_API_KEY`
 
+補充：
+
+- 所有 compose 操作都應透過 `./scripts/compose.sh`
+- `NQ 100` 文件量大，若只用單一 worker，等待 `ready` 可能非常久；建議先把 worker scale 到 `4`
+
 ## 本次 reference run 身分
 
 - Area 名稱：`nq-100`
@@ -30,6 +35,7 @@
 ```bash
 ./scripts/compose.sh up --build
 ./scripts/compose.sh exec api python -m app.db.migration_runner
+./scripts/compose.sh up -d --scale worker=4 worker
 ```
 
 ## 步驟 2：建立 oversampled workspace
@@ -73,6 +79,17 @@ TOKEN=$(
 )
 ```
 
+再取得本次建立 area / run benchmark 所使用的 `actor-sub`：
+
+```bash
+ACTOR_SUB=$(
+  curl -sS \
+    -H "Authorization: Bearer $TOKEN" \
+    http://localhost/api/auth/context \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["sub"])'
+)
+```
+
 建立 area：
 
 ```bash
@@ -96,7 +113,28 @@ for f in /tmp/nq-100-workspace/source_documents/*.md; do
 done
 ```
 
-等到所有文件都進入 `ready`。
+由於此流程很長，建議上傳完成後重新取一次 token，再開始輪詢：
+
+```bash
+TOKEN=$(
+  curl -sS -X POST "http://localhost/auth/realms/deep-agent-dev/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "client_id=deep-agent-web" \
+    -d "grant_type=password" \
+    -d "username=carol" \
+    -d "password=carol123" \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["access_token"])'
+)
+```
+
+等到所有文件都進入 `ready`。建議用下列方式查看整體狀態：
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/areas/$AREA_ID/documents" \
+| python -c 'import sys, json; from collections import Counter; payload=json.load(sys.stdin); print(Counter(item["status"] for item in payload["items"]))'
+```
 
 ## 步驟 4：對齊 evidence
 
@@ -179,8 +217,47 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
   --dataset-id c1fef25a-7f8a-59d0-8974-f44ace477600 \
   --top-k 10 \
   --evaluation-profile production_like_v1 \
-  --actor-sub ea33183f-1e9f-458f-a405-bb365b8266c0
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/nq-100-run.json
 ```
+
+建議順手取出 candidate run id：
+
+```bash
+RUN_ID=$(
+  python - <<'PY' /tmp/nq-100-run.json
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(payload["run"]["id"])
+PY
+)
+```
+
+## 步驟 9：比對 reference run 與本次 rerun
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
+PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.compare_benchmark_runs \
+  --reference-report /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/nq-curated-v1-100/reference_run_summary.json \
+  --candidate-run-id "$RUN_ID" \
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/nq-100-compare.json
+```
+
+建議至少檢查：
+
+- `summary_metric_deltas.assembled.nDCG@k.delta`
+- `summary_metric_deltas.assembled.Recall@k.delta`
+- `per_query_diff.missing_in_candidate`
+- `per_query_diff.matched_core_evidence_mismatch_count`
+
+補充：
+
+- 若 `run_retrieval_eval` 在剛匯入完 snapshot 後遇到暫時性資料庫錯誤，先確認 area 內所有文件都已穩定 `ready`，再重跑一次 benchmark
+- 若仍有外部 provider timeout，可先保留已完成的 `prepare / align / snapshot / import` artifact，再獨立重跑 benchmark 與 compare
 
 ## Reference Metrics
 

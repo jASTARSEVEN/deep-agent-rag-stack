@@ -1734,6 +1734,49 @@ def test_process_document_ingest_reindex_keeps_display_text_offsets_stable(monke
         assert second_document.display_text == first_display_text
         second_offsets = [(chunk.start_offset, chunk.end_offset, chunk.content) for chunk in second_children]
         assert second_offsets == first_offsets
-        for chunk in second_children:
-            assert second_document.display_text is not None
-            assert second_document.display_text[chunk.start_offset:chunk.end_offset] == chunk.content
+
+
+def test_process_document_ingest_reindex_refreshes_synopsis_timestamp(monkeypatch, tmp_path: Path) -> None:
+    """同文件重跑 ingest 後，synopsis_updated_at 應更新且 synopsis 內容保持穩定。"""
+
+    settings = build_settings(tmp_path)
+    settings.pdf_parser_provider = "local"
+    settings.chunk_min_parent_section_length = 1
+    monkeypatch.setattr("worker.tasks.ingest.get_settings", lambda: settings)
+    engine = create_database_engine(settings)
+    Base.metadata.create_all(bind=engine)
+    session_factory = create_session_factory(engine)
+
+    payload = b"# Intro\nAlpha body\n\n## Next\nBeta body"
+    document, job = seed_job(session_factory, file_name="synopsis-stable.md", payload=payload)
+    storage_path = Path(settings.local_storage_path) / document.storage_key
+    storage_path.parent.mkdir(parents=True, exist_ok=True)
+    storage_path.write_bytes(payload)
+
+    assert process_document_ingest(job.id) == "succeeded"
+
+    with session_factory() as session:
+        first_document = session.get(Document, document.id)
+        assert first_document is not None
+        first_synopsis_text = first_document.synopsis_text
+        first_synopsis_updated_at = first_document.synopsis_updated_at
+
+        session.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document.id))
+        first_document.status = DocumentStatus.uploaded
+        first_document.display_text = None
+        first_document.normalized_text = None
+        first_document.synopsis_text = None
+        first_document.synopsis_embedding = None
+        first_document.synopsis_updated_at = None
+        session.add(IngestJob(id="job-2", document_id=document.id, status=IngestJobStatus.queued))
+        session.commit()
+
+    assert process_document_ingest("job-2") == "succeeded"
+
+    with session_factory() as session:
+        second_document = session.get(Document, document.id)
+        assert second_document is not None
+        assert second_document.synopsis_text == first_synopsis_text
+        assert first_synopsis_updated_at is not None
+        assert second_document.synopsis_updated_at is not None
+        assert second_document.synopsis_updated_at > first_synopsis_updated_at

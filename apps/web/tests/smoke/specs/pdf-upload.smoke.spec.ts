@@ -1,4 +1,8 @@
+/** Compose smoke 測試 local PDF upload 流程，入口固定走 Caddy。 */
+
 import { expect, test } from "@playwright/test";
+
+import { createAndOpenSmokeArea, loginViaPublicKeycloak } from "../support/publicEntry";
 
 
 /** 可被 local PDF parser 擷取文字的最小 PDF 測試樣本。 */
@@ -42,35 +46,20 @@ startxref
 
 
 test("應可在 compose smoke 中完成 PDF 上傳並看到 ready", async ({ page }) => {
-  await page.goto("http://localhost:13000", { waitUntil: "networkidle" });
-
-  if (await page.getByText("前往 Areas").isVisible()) {
-    await page.click("text=前往 Areas");
-  } else {
-    await page.click('button[data-testid="login-button"]');
-    await page.waitForURL(/.*18080.*/, { timeout: 20000 });
-    await page.fill("#username", "alice");
-    await page.fill("#password", "alice123");
-    await page.click("#kc-login");
-  }
-
-  await page.waitForURL(/.*areas/, { timeout: 20000 });
-  await expect(page.getByText("Knowledge Areas")).toBeVisible();
+  await loginViaPublicKeycloak(page);
 
   const areaName = `PDF-Smoke-${Date.now()}`;
-  await page.fill('input[data-testid="create-area-name"]', areaName);
-  await page.fill('textarea[data-testid="create-area-description"]', "PDF smoke area");
-  await page.click('button[data-testid="create-area-submit"]');
-  await page.waitForSelector(`text=${areaName}`, { timeout: 15000 });
-  await page.click(`text=${areaName}`);
+  await createAndOpenSmokeArea(page, { areaName, description: "PDF smoke area" });
 
   await page.click('button:has-text("管理文件")');
+  const fileName = `smoke-${Date.now()}.pdf`;
   await page.setInputFiles('input[data-testid="document-upload"]', {
-    name: `smoke-${Date.now()}.pdf`,
+    name: fileName,
     mimeType: "application/pdf",
     buffer: MINIMAL_TEXT_PDF,
   });
   await page.click('button[data-testid="upload-document-submit"]');
 
-  await expect(page.getByText("ready")).toBeVisible({ timeout: 60000 });
+  const documentCard = page.getByTestId("documents-list").locator("article").filter({ hasText: fileName });
+  await expect(documentCard).toContainText("ready", { timeout: 60000 });
 });

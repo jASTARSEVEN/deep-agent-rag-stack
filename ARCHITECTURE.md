@@ -225,6 +225,7 @@
 19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；目前不做 section-level synopsis
 19.11. `document_summary` 與 `cross_document_compare` 採兩階段 retrieval：第一階段以 synopsis 做 document recall，第二階段再對入選文件集合做既有 child recall、rerank、selection 與 assembler；第二階段縮小範圍必須透過 SQL `allowed_document_ids` filter 完成，不得以記憶體過濾取代
 19.12. 第一階段 document recall 預設維持 fail-open：若 synopsis recall 無法選出文件集合，第二階段可回退到原本 area-scoped child recall，但必須在 trace / evaluation 中明確保留 `document_recall` 明細
+19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
 22. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流

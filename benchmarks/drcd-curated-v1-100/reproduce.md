@@ -15,6 +15,11 @@
   - `postgresql://postgres:postgres@localhost:15432/deep_agent_rag`
 - `OPENAI_API_KEY` 可用，供 queue-only `OpenAI` review；本次 reference package 雖然 queue 為空，仍保留同一條驗證步驟
 
+補充：
+
+- 所有 compose 操作都應透過 `./scripts/compose.sh`，不要直接呼叫裸 `docker compose`
+- 若要做真正的回歸判讀，除了重跑 reference run 外，還應再跑 `compare_benchmark_runs`
+
 ## 本次 reference run 身分
 
 - Area 名稱：`drcd-100`
@@ -74,6 +79,17 @@ TOKEN=$(
 )
 ```
 
+再取得本次建立 area / run benchmark 所使用的 `actor-sub`：
+
+```bash
+ACTOR_SUB=$(
+  curl -sS \
+    -H "Authorization: Bearer $TOKEN" \
+    http://localhost/api/auth/context \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["sub"])'
+)
+```
+
 建立 area：
 
 ```bash
@@ -97,7 +113,28 @@ find /tmp/drcd-100-workspace/source_documents -type f -name "*.md" | sort | whil
 done
 ```
 
-等到所有文件都進入 `ready`。
+若流程很久，建議在輪詢前重新取得一次 token，避免 `401 Unauthorized`：
+
+```bash
+TOKEN=$(
+  curl -sS -X POST "http://localhost/auth/realms/deep-agent-dev/protocol/openid-connect/token" \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "client_id=deep-agent-web" \
+    -d "grant_type=password" \
+    -d "username=carol" \
+    -d "password=carol123" \
+  | python -c 'import sys, json; print(json.load(sys.stdin)["access_token"])'
+)
+```
+
+等到所有文件都進入 `ready`。可用下列方式檢查：
+
+```bash
+curl -sS \
+  -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/areas/$AREA_ID/documents" \
+| python -c 'import sys, json; from collections import Counter; payload=json.load(sys.stdin); print(Counter(item["status"] for item in payload["items"]))'
+```
 
 ## 步驟 4：對齊 evidence 與輸出報表
 
@@ -183,8 +220,42 @@ PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.run_retrieval_eval run \
   --dataset-id e82455ac-45fc-501e-a13d-333552c4a2ab \
   --top-k 10 \
   --evaluation-profile production_like_v1 \
-  --actor-sub ea33183f-1e9f-458f-a405-bb365b8266c0
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/drcd-100-run.json
 ```
+
+建議順手取出 candidate run id：
+
+```bash
+RUN_ID=$(
+  python - <<'PY' /tmp/drcd-100-run.json
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+print(payload["run"]["id"])
+PY
+)
+```
+
+## 步驟 9：比對 reference run 與本次 rerun
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:15432/deep_agent_rag' \
+PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.compare_benchmark_runs \
+  --reference-report /Users/pin/Desktop/workspace/deep-agent-rag-stack/benchmarks/drcd-curated-v1-100/reference_run_summary.json \
+  --candidate-run-id "$RUN_ID" \
+  --actor-sub "$ACTOR_SUB" \
+  > /tmp/drcd-100-compare.json
+```
+
+建議至少檢查：
+
+- `summary_metric_deltas.assembled.nDCG@k.delta`
+- `summary_metric_deltas.assembled.Recall@k.delta`
+- `per_query_diff.missing_in_candidate`
+- `per_query_diff.matched_core_evidence_mismatch_count`
 
 ## Reference Metrics
 

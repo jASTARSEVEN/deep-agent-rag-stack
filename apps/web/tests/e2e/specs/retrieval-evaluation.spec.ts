@@ -111,6 +111,9 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-create-item").click();
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("Document Summary");
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("document_summary_multi_document_diversified_v1");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("Strategy: synopsis_rrf_v1");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("alpha-zh.md");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("beta-en.md");
 
   await page.getByTestId("evaluation-dataset-name").fill("Compare Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("cross_document_compare");
@@ -121,6 +124,9 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-create-item").click();
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("Cross-Document Compare");
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("cross_document_compare_diversified_v1");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("Strategy: synopsis_rrf_v1");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("alpha-zh.md");
+  await expect(page.getByTestId("evaluation-document-recall")).toContainText("beta-en.md");
 
   await page.getByTestId("evaluation-dataset-name").fill("Disposable Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("fact_lookup");

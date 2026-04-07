@@ -401,7 +401,7 @@
 - section-level synopsis 若未來要做，需等 document-level recall 的品質與成本先被驗證後，再另立 phase 規劃。
 
 狀態：
-- `進行中（document synopsis + document recall 最小切片已落地）`
+- `已完成（closeout 已以 DRCD / NQ / QASPER sentinel rerun、public-entry smoke 與 document recall observability 驗證；其中 QASPER 100 的輕微退化被接受為可承受代價）`
 
 ## Phase 8.4 — Hierarchical Synthesis for Summary / Compare
 

@@ -1,47 +1,27 @@
+/** Compose full-flow smoke，驗證公開入口 login、upload、ready 與 chat 主路徑。 */
+
 import { test, expect } from '@playwright/test';
+
+import { createAndOpenSmokeArea, loginViaPublicKeycloak } from "../support/publicEntry";
 
 test.describe('Phase 6 Full Flow Smoke Test', () => {
   test('應可完成登入、創區、上傳與問答完整流程', async ({ page }) => {
     // 監聽控制台輸出
     page.on('console', msg => console.log(`BROWSER [${msg.type()}]: ${msg.text()}`));
 
-    // 1. 訪問首頁
-    console.log('Visiting Home Page...');
-    await page.goto('http://localhost:13000', { waitUntil: 'networkidle' });
-    
-    // 2. 登入流程
-    if (await page.getByText('前往 Areas').isVisible()) {
-      console.log('Already authenticated, proceeding to Areas...');
-      await page.click('text=前往 Areas');
-    } else {
-      console.log('Clicking login button...');
-      await page.click('button[data-testid="login-button"]');
-      
-      console.log('Waiting for Keycloak login page...');
-      await page.waitForURL(/.*18080.*/, { timeout: 20000 });
-      await page.fill('#username', 'alice');
-      await page.fill('#password', 'alice123');
-      await page.click('#kc-login');
-    }
-
-    // 3. 驗證進入 Areas 頁
+    // 1. 登入流程
     console.log('Waiting for Areas Page...');
-    await page.waitForURL(/.*areas/, { timeout: 20000 });
-    await expect(page.getByText('Knowledge Areas')).toBeVisible();
+    await loginViaPublicKeycloak(page);
 
-    // 4. 建立新 Area
+    // 2. 建立新 Area
     console.log('Creating Area...');
     const areaName = `Test-Area-${Date.now()}`;
-    await page.fill('input[data-testid="create-area-name"]', areaName);
-    await page.fill('textarea[data-testid="create-area-description"]', 'Phase 6 Integration Test');
-    await page.click('button[data-testid="create-area-submit"]');
-    
-    // 等待 Area 列表更新並點擊
-    console.log(`Waiting for Area "${areaName}" to appear...`);
-    await page.waitForSelector(`text=${areaName}`, { timeout: 15000 });
-    await page.click(`text=${areaName}`);
+    await createAndOpenSmokeArea(page, {
+      areaName,
+      description: 'Phase 6 Integration Test',
+    });
 
-    // 5. 打開文件管理抽屜並上傳
+    // 3. 打開文件管理抽屜並上傳
     console.log('Opening Documents Drawer...');
     await page.click('button:has-text("管理文件")');
     
@@ -58,24 +38,24 @@ test.describe('Phase 6 Full Flow Smoke Test', () => {
     
     await page.click('button[data-testid="upload-document-submit"]');
 
-    // 6. 等待處理完成 (Status: ready)
+    // 4. 等待處理完成 (Status: ready)
     console.log('Waiting for document to be ready...');
-    // 檢查是否有 ready 字樣
-    await expect(page.getByText('ready')).toBeVisible({ timeout: 60000 });
+    const documentCard = page.getByTestId("documents-list").locator("article").filter({ hasText: fileName });
+    await expect(documentCard).toContainText("ready", { timeout: 60000 });
     
     // 關閉抽屜 (按 Esc)
     await page.keyboard.press('Escape');
 
-    // 7. 進行對話測試
+    // 5. 進行對話測試
     console.log('Starting Chat...');
-    const chatInput = page.getByPlaceholder('Ask a question...');
-    await chatInput.fill('這份測試文件是關於什麼的？');
+    const chatInput = page.getByPlaceholder('Type your question here...');
+    await chatInput.fill('Supabase 整合的說明是關於什麼？');
     await page.keyboard.press('Enter');
 
-    // 8. 驗證 AI 回答
+    // 6. 驗證 AI 回答
     console.log('Waiting for AI response...');
-    // 檢查是否出現包含關鍵字的回答
-    await expect(page.getByText(/Phase 6|Supabase|整合/)).toBeVisible({ timeout: 40000 });
+    const assistantMessage = page.getByTestId('chat-message-assistant').last();
+    await expect(assistantMessage).toContainText(/Phase 6|Supabase|整合/, { timeout: 40000 });
     
     console.log('✅ Phase 6 Full Flow Test Passed!');
   });

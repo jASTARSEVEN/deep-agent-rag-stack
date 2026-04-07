@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8.3 — Document-Level Representations (In Progress)`
+當前主階段：`Phase 8.4 — Hierarchical Synthesis for Summary / Compare (Not Started)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -39,7 +39,7 @@
 - `Phase 7` Retrieval Correctness Evaluation v1 已完成
 - `Phase 8.1` Query-Aware Retrieval Profiles routing skeleton 已完成
 - `Phase 8.2` Diversified Selection Before Assembly 已完成
-- `Phase 8.3` Document-Level Representations 最小切片已落地
+- `Phase 8.3` Document-Level Representations 已完成
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -93,6 +93,12 @@
 - worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
 - `document_summary` 與 `cross_document_compare` 已新增第一階段 document recall，先以 synopsis 選出文件集合，再以 SQL `allowed_document_ids` filter 執行第二階段 child recall；`fact_lookup` 維持不走 document recall
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `document_recall` 明細，便於 reviewer 直接觀測第一階段選文件結果
+- Web `EvaluationDrawer` 現已直接顯示 `document_recall` 的 strategy、selected / dropped documents 與 candidates；Playwright E2E 也已補上 `document_summary` / `cross_document_compare` 的 document recall 可視性驗證
+- 已完成 `Phase 8.3` closeout 所需的三條 sentinel rerun：
+  - `DRCD 100`：assembled `nDCG@10` 由 `0.8650` 提升到 `0.9900`，`Recall@10` 由 `0.9700` 提升到 `0.9900`
+  - `NQ 100`：assembled 指標與 reference 持平，`nDCG@10=0.7443`、`Recall@10=0.7500`
+  - `QASPER 100`：assembled `nDCG@10` 由 `0.3797` 降至 `0.3739`、`Recall@10` 由 `0.5900` 降至 `0.5800`
+- 依本輪結案判定，`QASPER 100` 的小幅回歸已被接受為可承受代價，因此 `Phase 8.3` 仍視為完成；相關 compare artifacts 保留於 `/tmp/phase83-sentinel-reruns/{drcd,nq,qasper}`
 - 已於 `2026-04-05` 將長期 benchmark 文件擴充為九個 dataset：原先八資料集 current 基線再加上新加入的 `DuReader-robust 100` reference run；目前依 assembled `nDCG@10` 由相對簡單到困難，可近似看成 `DuReader-robust 100 -> MS MARCO 100 -> DRCD 100 -> NQ 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為九資料集 current 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling、`NQ` 補出一條「rerank 幾乎到頂、assembled 仍顯著掉分」的 assembler 壓力測試 lane、`DRCD` 補出「中文 lexical recall 近乎到頂，但 rerank 會輕微退化排序」的繁體中文 rerank 哨兵 lane，而 `DuReader-robust` 則補出「中文 paragraph-level extractive QA 已接近 ceiling」的 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單
@@ -118,6 +124,7 @@
 - 已將 Keycloak 對外模型固定為 `/auth` base path，並支援以 `KEYCLOAK_EXPOSE_ADMIN` 預設封鎖 `/auth/admin*`
 - 已新增並收斂 `app.db.migration_runner`，作為 fresh 與既有資料庫共用的唯一 Alembic 升級入口
 - 已補上 `WEB_ALLOWED_HOSTS` 與瀏覽器非 secure context 的 Keycloak PKCE fallback，降低公開網域與本機開發切換時的登入失敗風險
+- Playwright smoke 現已預設透過 `http://localhost` 的 Caddy 公開入口驗證真實 Keycloak `/auth/*` 流程，不再依賴舊的 `web` / `keycloak` 直連埠；`keycloak-auth`、`pdf-upload` 與 `phase6-full-flow` smoke 已在此路徑下通過
 - 已補上 Windows PowerShell 的本地 worker 啟動腳本，相容保留 `start-worker-marker.ps1` 入口，支援 `compose` 與 `hybrid` 兩種模式
 - 本機 hybrid worker 已改為固定共用專案根目錄 `.venv`，不再維護獨立 worker virtualenv
 - 已將資料庫 migration 收斂為單一 Alembic 路徑，移除 `supabase/migrations` 與 Alembic 並存造成的雙軌 schema 風險
@@ -299,22 +306,18 @@
 ## 目前階段重點
 
 ### Current Focus
-- 延續 `Phase 8.3 — Document-Level Representations` 最小切片，驗證 document synopsis / document recall 對 benchmark 的實際收益與回歸風險
+- 準備進入 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare`
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
-- 持續依 `docs/retrieval-benchmark-strategy-analysis.md` 的最新 miss 題，挑選單一主假設做實跑驗證與深度分析
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 進入 `Phase 8.3 — Document-Level Representations`，定義 document synopsis 的 schema、worker 生成時機與 reindex 一致性
-2. 以 `QASPER 100`、`NQ 100` 與 `DRCD 100` 驗證 document synopsis / document recall 的 `before / after`，確認沒有造成 fact lane 或中文 lane 回歸
-3. 依最新 miss 題與當前 chunks，優先處理 `recall_only / rerank_only` 類 semantic-gap 問題
-4. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
-5. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-6. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-7. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+1. 進入 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare`，定義 `document_summary` / `cross_document_compare` 的 map-reduce / refine runtime
+2. 補一輪 `reindex` consistency 驗證，確認 synopsis 更新後 `document_recall.strategy`、`selected_document_ids` 與 coverage 沒有退化
+3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+4. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## 尚未開始的功能
 

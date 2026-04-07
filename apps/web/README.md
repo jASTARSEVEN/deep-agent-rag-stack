@@ -20,12 +20,13 @@ This module contains the project's React + Tailwind frontend. It currently provi
   - `npx playwright install chromium`
   - `npm run test:e2e`
 - Run the real Keycloak smoke test locally:
-  - Confirm the compose stack for `web`, `api`, and `keycloak` is already running
+  - Start the compose stack with `./scripts/compose.sh up -d --build`
   - `npm install`
   - `npx playwright install chromium`
+  - The default public entry is `http://localhost`; set `SMOKE_WEB_URL` if you use a different public entry
   - `npm run test:smoke:keycloak`
 - Docker Compose:
-  - `docker compose -f ../../infra/docker-compose.yml --env-file ../../.env up web`
+  - `./scripts/compose.sh up -d --build`
 
 ## Environment Variables
 
@@ -36,6 +37,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - `VITE_KEYCLOAK_REALM`
 - `VITE_KEYCLOAK_CLIENT_ID`
 - `WEB_ALLOWED_HOSTS`
+- `SMOKE_WEB_URL`
 
 ## Main Directory Structure
 
@@ -59,7 +61,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - Uses `VITE_API_BASE_URL + /areas*` for area create/list/detail/update/delete, access management, and file upload/list
 - Uses `VITE_API_BASE_URL + /documents/*` and `/ingest-jobs/*` to display document status, chunk summaries, reindex, delete, and job stage
 - `npm run test:e2e`: runs Playwright with the web dev server and the test-mode API for automated verification
-- `npm run test:smoke:keycloak`: smoke-tests the real Keycloak / callback / logout flow against the compose stack
+- `npm run test:smoke:keycloak`: smoke-tests the real Keycloak / callback / logout flow against the compose stack through the single Caddy public entry
 
 ## Troubleshooting
 
@@ -71,6 +73,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - If area APIs keep returning `401`, verify the Keycloak token still contains the `groups` claim and that the API issuer / JWKS settings are correct.
 - `VITE_AUTH_MODE=test` is only for Playwright and local testing. It must not be treated as evidence of a production login flow.
 - `npm run test:e2e` uses test auth mode and does not validate real Keycloak issuer, callback, logout, or SSO behavior. Use `npm run test:smoke:keycloak` for that coverage.
+- `npm run test:smoke:keycloak` defaults to `http://localhost` as the public entry instead of the old direct `web` / `keycloak` container ports. If you use another public entry, set `SMOKE_WEB_URL` accordingly.
 - Files remain integrated into `/areas`; chat is mounted there through `src/features/chat`. Chat uses LangGraph SDK default thread/run endpoints, consumes Deep Agents task progress, and shows assembled contexts rather than child-level citations.
 - Admins can now edit area name/description and hard-delete areas from the dashboard header; deleting an area also removes its document assets server-side.
 - If `npm run test:e2e` fails because the browser is missing, run `npx playwright install chromium` first.

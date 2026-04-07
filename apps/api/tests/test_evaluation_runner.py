@@ -763,6 +763,151 @@ def test_evaluation_preview_and_run_expose_rerank_fallback_reason(client, db_ses
     assert run_payload["per_query"][0]["rerank"]["fallback_reason"] == "provider_error"
 
 
+def test_evaluation_preview_and_run_expose_document_recall_details(client, db_session, app_settings) -> None:
+    """document_summary preview 與 run report 都應暴露 document recall 明細。"""
+
+    area = Area(id=_uuid(), name="Evaluation Document Recall Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+
+    alpha_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="丹堤加盟辦法.pdf",
+        content_type="application/pdf",
+        file_size=128,
+        storage_key="evaluation/dantei-policy.pdf",
+        display_text="## Alpha\n\nAlpha summary facts.",
+        normalized_text="## Alpha\n\nAlpha summary facts.",
+        synopsis_text="Alpha summary facts.",
+        synopsis_embedding=[0.1] * app_settings.embedding_dimensions,
+        status=DocumentStatus.ready,
+    )
+    beta_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="丹堤門市手冊.pdf",
+        content_type="application/pdf",
+        file_size=128,
+        storage_key="evaluation/dantei-manual.pdf",
+        display_text="## Beta\n\nBeta summary facts.",
+        normalized_text="## Beta\n\nBeta summary facts.",
+        synopsis_text="Beta summary facts.",
+        synopsis_embedding=[0.2] * app_settings.embedding_dimensions,
+        status=DocumentStatus.ready,
+    )
+    alpha_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=alpha_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Alpha",
+        content="Alpha summary facts.",
+        content_preview="Alpha summary facts.",
+        char_count=len("Alpha summary facts."),
+        start_offset=10,
+        end_offset=30,
+    )
+    beta_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=beta_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=1,
+        child_index=None,
+        heading="Beta",
+        content="Beta summary facts.",
+        content_preview="Beta summary facts.",
+        char_count=len("Beta summary facts."),
+        start_offset=9,
+        end_offset=28,
+    )
+    alpha_child = DocumentChunk(
+        id=_uuid(),
+        document_id=alpha_document.id,
+        parent_chunk_id=alpha_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Alpha",
+        content="Alpha summary facts.",
+        content_preview="Alpha summary facts.",
+        char_count=len("Alpha summary facts."),
+        start_offset=10,
+        end_offset=30,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    beta_child = DocumentChunk(
+        id=_uuid(),
+        document_id=beta_document.id,
+        parent_chunk_id=beta_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=0,
+        heading="Beta",
+        content="Beta summary facts.",
+        content_preview="Beta summary facts.",
+        char_count=len("Beta summary facts."),
+        start_offset=9,
+        end_offset=28,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([alpha_document, beta_document, alpha_parent, beta_parent, alpha_child, beta_child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "Summary Dataset", "query_type": "document_summary"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "請摘要丹堤加盟辦法", "language": "zh-TW", "query_type": "document_summary"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": alpha_document.id,
+            "start_offset": 10,
+            "end_offset": 30,
+            "relevance_grade": 3,
+        },
+    )
+
+    preview_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/candidate-preview",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={},
+    )
+    assert preview_response.status_code == 200
+    preview_payload = preview_response.json()
+    assert preview_payload["query_routing"]["summary_scope"] == "single_document"
+    assert preview_payload["document_recall"]["strategy"] == "mention_resolved_single_document_v1"
+    assert preview_payload["document_recall"]["selected_document_ids"] == [alpha_document.id]
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5},
+    )
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["per_query"][0]["document_recall"]["strategy"] == "mention_resolved_single_document_v1"
+    assert run_payload["per_query"][0]["document_recall"]["selected_document_ids"] == [alpha_document.id]
+
+
 def test_evaluation_adding_same_span_twice_updates_existing_record(client, db_session, app_settings) -> None:
     """重複新增同一個 span 不應 500，且應更新既有 relevance。"""
 

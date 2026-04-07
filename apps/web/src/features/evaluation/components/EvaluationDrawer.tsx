@@ -1,3 +1,5 @@
+/** EvaluationDrawer 負責 retrieval evaluation 的 reviewer workflow 與報表檢視。 */
+
 import React, { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { MarkdownContent } from "../../../components/MarkdownContent";
@@ -21,6 +23,7 @@ import type {
   EvaluationCandidatePreviewPayload,
   EvaluationDatasetDetailPayload,
   EvaluationDatasetSummary,
+  EvaluationDocumentRecallDetail,
   EvaluationLanguage,
   EvaluationProfile,
   EvaluationQueryType,
@@ -812,6 +815,23 @@ export function EvaluationDrawer({
                           Query Focus: {candidatePreview.query_focus?.applied ? "enabled" : "disabled"}
                         </div>
                       </div>
+                      {candidatePreview.document_recall ? (
+                        <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs text-sky-900" data-testid="evaluation-document-recall">
+                          <div className="font-semibold text-sky-950">Document Recall</div>
+                          <div className="mt-2">Applied: {candidatePreview.document_recall.applied ? "yes" : "no"}</div>
+                          <div>Strategy: {candidatePreview.document_recall.strategy}</div>
+                          <div>Top K: {candidatePreview.document_recall.top_k}</div>
+                          <div>
+                            Selected Documents: {formatDocumentRecallDocuments(candidatePreview.document_recall, candidatePreview.document_recall.selected_document_ids)}
+                          </div>
+                          <div>
+                            Dropped Documents: {formatDocumentRecallDocuments(candidatePreview.document_recall, candidatePreview.document_recall.dropped_document_ids)}
+                          </div>
+                          <div className="mt-2">
+                            Candidates: {formatDocumentRecallCandidates(candidatePreview.document_recall)}
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="mt-3 flex flex-wrap gap-2">
                         {candidatePreview.item.spans.map((span) => (
                           <span key={span.id} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-900">
@@ -1276,6 +1296,15 @@ export function EvaluationDrawer({
                               <div>Selected Profile: {item.query_routing.selected_profile}</div>
                               <div>Query Focus: {item.query_focus?.applied ? "enabled" : "disabled"}</div>
                             </div>
+                            {item.document_recall ? (
+                              <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="evaluation-per-query-document-recall">
+                                <div>Document Recall Applied: {item.document_recall.applied ? "yes" : "no"}</div>
+                                <div>Strategy: {item.document_recall.strategy}</div>
+                                <div>Selected Documents: {formatDocumentRecallDocuments(item.document_recall, item.document_recall.selected_document_ids)}</div>
+                                <div>Dropped Documents: {formatDocumentRecallDocuments(item.document_recall, item.document_recall.dropped_document_ids)}</div>
+                                <div>Candidates: {formatDocumentRecallCandidates(item.document_recall)}</div>
+                              </div>
+                            ) : null}
                             <div className="mt-2 grid gap-2 md:grid-cols-3 text-xs text-stone-700">
                               <div>Recall first hit: {item.recall.first_hit_rank ?? "miss"}</div>
                               <div>Rerank first hit: {item.rerank.first_hit_rank ?? "miss"}</div>
@@ -1343,6 +1372,34 @@ function buildPreviewSegments(previewDocument: DocumentPreviewPayload): PreviewS
   }
 
   return segments;
+}
+
+
+function formatDocumentRecallDocuments(
+  documentRecall: EvaluationDocumentRecallDetail,
+  documentIds: string[],
+): string {
+  /** 將 document recall 的文件 id 列表轉成可閱讀標籤。 */
+
+  if (documentIds.length === 0) {
+    return "-";
+  }
+
+  const fileNamesById = new Map(documentRecall.candidates.map((candidate) => [candidate.document_id, candidate.file_name]));
+  return documentIds.map((documentId) => fileNamesById.get(documentId) ?? documentId).join(", ");
+}
+
+
+function formatDocumentRecallCandidates(documentRecall: EvaluationDocumentRecallDetail): string {
+  /** 將 document recall candidates 轉成單行摘要，便於 preview 與 run report 顯示。 */
+
+  if (documentRecall.candidates.length === 0) {
+    return "-";
+  }
+
+  return documentRecall.candidates
+    .map((candidate) => `${candidate.file_name} (#${candidate.rrf_rank})`)
+    .join(", ");
 }
 
 function _findSegmentByOffset(segments: PreviewSegment[], targetOffset: number): PreviewSegment | null {

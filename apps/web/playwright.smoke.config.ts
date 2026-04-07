@@ -1,10 +1,10 @@
-/** 真實 Keycloak smoke 測試設定。 */
+/** 真實 Keycloak smoke 測試設定，預設走 Caddy 單一公開入口。 */
 
 import { defineConfig, devices } from "@playwright/test";
 
 
-// Compose web 對外網址。
-const SMOKE_WEB_URL = process.env.SMOKE_WEB_URL ?? "http://localhost:13000";
+// Compose smoke 對外網址，預設使用 Caddy 公開入口。
+const SMOKE_WEB_URL = process.env.SMOKE_WEB_URL ?? "http://localhost";
 
 
 export default defineConfig({
