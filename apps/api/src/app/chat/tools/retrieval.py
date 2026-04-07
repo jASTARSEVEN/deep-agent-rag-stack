@@ -212,6 +212,7 @@ def build_tool_call_output_summary(
         "document_mention_confidence": retrieval_trace.get("document_mention_confidence"),
         "document_mention_candidates": retrieval_trace.get("document_mention_candidates", []),
         "selected_profile": retrieval_trace.get("selected_profile"),
+        "document_recall": retrieval_trace.get("document_recall"),
         "selection_applied": retrieval_trace.get("selection_applied"),
         "selection_strategy": retrieval_trace.get("selection_strategy"),
         "selected_document_count": retrieval_trace.get("selected_document_count"),

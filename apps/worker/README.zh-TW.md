@@ -59,6 +59,10 @@
 - `EMBEDDING_RETRY_MAX_ATTEMPTS`
 - `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
+- `DOCUMENT_SYNOPSIS_PROVIDER`
+- `DOCUMENT_SYNOPSIS_MODEL`
+- `DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS`
+- `DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS`
 - `SELF_HOSTED_EMBEDDING_BASE_URL`
 - `SELF_HOSTED_EMBEDDING_API_KEY`
 - `SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS`
@@ -102,8 +106,9 @@
 - `document_chunks` 已包含 `structure_kind=text|table`，可明確區分一般文字與表格內容。
 - 文字 child 會由 `LangChain RecursiveCharacterTextSplitter` 切分；大型表格則依 row groups 切分並重複表頭。
 - `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` 可啟用針對 `dataset`、`experimental setup`、`evaluation metrics` 這類 fact-heavy heading 的 evidence-centric child refinement；此路徑目前仍存在於 repo，但預設不屬於 current benchmark baseline。
-- `ready` 現在代表 chunking 與 embedding 都已完成。
+- `ready` 現在代表 chunking、child embedding、document synopsis 與 synopsis embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
+- worker 現在會在 ingest / reindex 期間以全 parent coverage 生成 document-level synopsis，寫入 `synopsis_text`，再建立 synopsis embedding，供 Phase 8.3 document recall 使用。
 - 目前預設 embedding 路徑仍為 `EMBEDDING_PROVIDER=openai` 與 `EMBEDDING_MODEL=text-embedding-3-small`，而儲存 schema 固定使用 `1536` 維。
 - `EMBEDDING_PROVIDER=huggingface` 可作為本機 / 自架 embedding 路徑，建議模型為 `Qwen/Qwen3-Embedding-0.6B`；worker 會在首次使用時視需要下載模型，之後重用本機 Hugging Face cache，並將模型原生 `1024` 維向量零補齊到目前 `1536` 維 schema。
 - 可選的 self-hosted 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 `SELF_HOSTED_EMBEDDING_*` 設定；建議模型為 `Qwen/Qwen3-Embedding-0.6B`。

@@ -165,10 +165,16 @@ class Document(Base):
     display_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # parser 正規化後、供內部解析與 chunking 使用的完整文字內容。
     normalized_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 以全文件 parent coverage 生成的 document-level synopsis 文字。
+    synopsis_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # synopsis 對應的 document-level embedding 向量。
+    synopsis_embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
     # 文件目前處理狀態。
     status: Mapped[DocumentStatus] = mapped_column(SqlEnum(DocumentStatus, native_enum=False), nullable=False)
     # 最近一次成功完成 chunking 的時間。
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 最近一次成功更新 document synopsis 的時間。
+    synopsis_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 文件建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # 文件最後更新時間。

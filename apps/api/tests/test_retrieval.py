@@ -1646,8 +1646,134 @@ def test_retrieve_area_candidates_resolves_single_document_summary_scope_and_fil
     assert result.trace.summary_scope == "single_document"
     assert result.trace.selected_profile == "document_summary_single_document_diversified_v1"
     assert result.trace.resolved_document_ids == [first_document.id]
+    assert result.trace.document_recall is not None
+    assert result.trace.document_recall.strategy == "mention_resolved_single_document_v1"
     assert result.trace.selected_document_ids == [first_document.id]
     assert all(candidate.document_id == first_document.id for candidate in result.candidates)
+
+
+def test_retrieve_area_candidates_summary_document_recall_filters_second_stage_by_synopsis(
+    db_session, app_settings
+) -> None:
+    """摘要題型應先以 synopsis 選文件，再限制第二階段 child recall。"""
+
+    area = Area(id=_uuid(), name="Document Recall Summary")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    matching_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="alpha.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/alpha.md",
+        synopsis_text="年度預算與成本配置摘要",
+        synopsis_embedding=[0.2] * app_settings.embedding_dimensions,
+        status=DocumentStatus.ready,
+    )
+    unrelated_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="beta.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/beta.md",
+        synopsis_text="人力資源招募流程摘要",
+        synopsis_embedding=None,
+        status=DocumentStatus.ready,
+    )
+    matching_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=matching_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Overview",
+        content="Alpha generic body",
+        content_preview="Alpha generic body",
+        char_count=18,
+        start_offset=0,
+        end_offset=18,
+    )
+    unrelated_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=unrelated_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=1,
+        child_index=None,
+        heading="Overview",
+        content="Beta generic body",
+        content_preview="Beta generic body",
+        char_count=17,
+        start_offset=0,
+        end_offset=17,
+    )
+    matching_child = DocumentChunk(
+        id=_uuid(),
+        document_id=matching_document.id,
+        parent_chunk_id=matching_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Overview",
+        content="Alpha generic body",
+        content_preview="Alpha generic body",
+        char_count=18,
+        start_offset=0,
+        end_offset=18,
+        embedding=[0.3] * app_settings.embedding_dimensions,
+    )
+    unrelated_child = DocumentChunk(
+        id=_uuid(),
+        document_id=unrelated_document.id,
+        parent_chunk_id=unrelated_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=0,
+        heading="Overview",
+        content="Beta generic body",
+        content_preview="Beta generic body",
+        char_count=17,
+        start_offset=0,
+        end_offset=17,
+        embedding=[0.3] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all(
+        [
+            matching_document,
+            unrelated_document,
+            matching_parent,
+            unrelated_parent,
+            matching_child,
+            unrelated_child,
+        ]
+    )
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="請摘要年度預算重點",
+    )
+
+    assert result.trace.document_recall is not None
+    assert result.trace.document_recall.applied is True
+    assert result.trace.document_recall.strategy == "synopsis_rrf_v1"
+    assert result.trace.document_recall.selected_document_ids == [matching_document.id]
+    assert all(candidate.document_id == matching_document.id for candidate in result.candidates)
 
 
 def test_retrieve_area_candidates_compare_selection_can_fill_beyond_four_parents(db_session, app_settings) -> None:

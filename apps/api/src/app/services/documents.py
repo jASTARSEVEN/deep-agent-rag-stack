@@ -86,8 +86,11 @@ def create_document_upload(
         storage_key=storage_key,
         display_text=None,
         normalized_text=None,
+        synopsis_text=None,
+        synopsis_embedding=None,
         status=DocumentStatus.uploaded,
         indexed_at=None,
+        synopsis_updated_at=None,
     )
     job = IngestJob(
         document_id=document.id,
@@ -285,7 +288,10 @@ def reindex_document(
     document.status = DocumentStatus.uploaded
     document.display_text = None
     document.normalized_text = None
+    document.synopsis_text = None
+    document.synopsis_embedding = None
     document.indexed_at = None
+    document.synopsis_updated_at = None
     job = IngestJob(
         document_id=document.id,
         status=IngestJobStatus.queued,

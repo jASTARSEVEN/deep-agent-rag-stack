@@ -39,6 +39,8 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_QUERY_FOCUS_ENABLED",
     "RETRIEVAL_QUERY_FOCUS_VARIANT",
     "RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD",
+    "RETRIEVAL_DOCUMENT_RECALL_ENABLED",
+    "RETRIEVAL_DOCUMENT_RECALL_TOP_K",
     "RETRIEVAL_RRF_K",
     "RETRIEVAL_HNSW_EF_SEARCH",
     "RERANK_TOP_N",
@@ -144,6 +146,8 @@ class AppSettings(BaseSettings):
     retrieval_query_focus_enabled: Annotated[bool, Field(alias="RETRIEVAL_QUERY_FOCUS_ENABLED")] = False
     retrieval_query_focus_variant: Annotated[str, Field(alias="RETRIEVAL_QUERY_FOCUS_VARIANT")] = "generic_field_focus_v1"
     retrieval_query_focus_confidence_threshold: Annotated[float, Field(alias="RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD")] = 0.7
+    retrieval_document_recall_enabled: Annotated[bool, Field(alias="RETRIEVAL_DOCUMENT_RECALL_ENABLED")] = False
+    retrieval_document_recall_top_k: Annotated[int, Field(alias="RETRIEVAL_DOCUMENT_RECALL_TOP_K")] = 6
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60
     retrieval_hnsw_ef_search: Annotated[int, Field(alias="RETRIEVAL_HNSW_EF_SEARCH")] = 100
     rerank_provider: Annotated[str, Field(alias="RERANK_PROVIDER")] = "self-hosted"

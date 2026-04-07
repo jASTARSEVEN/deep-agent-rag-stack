@@ -153,6 +153,9 @@ def _mark_processing(*, session, document: Document, job: IngestJob) -> None:
     document.status = DocumentStatus.processing
     document.normalized_text = None
     document.display_text = None
+    document.synopsis_text = None
+    document.synopsis_embedding = None
+    document.synopsis_updated_at = None
     session.commit()
 
 

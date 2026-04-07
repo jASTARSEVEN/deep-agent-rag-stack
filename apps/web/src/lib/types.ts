@@ -466,6 +466,7 @@ export interface EvaluationCandidatePreviewPayload {
   dataset: EvaluationDatasetSummary;
   item: EvaluationItemSummary;
   query_routing: EvaluationQueryRoutingDetail;
+  document_recall: EvaluationDocumentRecallDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationCandidateStage;
   rerank: EvaluationCandidateStage;
@@ -508,8 +509,33 @@ export interface EvaluationQueryRoutingDetail {
   confidence: number;
   source: "explicit" | "classified" | "fallback";
   matched_rules: string[];
+  summary_scope?: string | null;
+  resolved_document_ids?: string[];
+  document_mention_source?: string;
+  document_mention_confidence?: number;
+  document_mention_candidates?: Array<Record<string, unknown>>;
   selected_profile: string;
   resolved_settings: Record<string, unknown>;
+}
+
+/** 單一 document recall candidate 明細。 */
+export interface EvaluationDocumentRecallCandidate {
+  document_id: string;
+  file_name: string;
+  vector_rank: number | null;
+  fts_rank: number | null;
+  rrf_rank: number;
+  rrf_score: number;
+}
+
+/** 單題 document recall 明細。 */
+export interface EvaluationDocumentRecallDetail {
+  applied: boolean;
+  strategy: string;
+  top_k: number;
+  selected_document_ids: string[];
+  dropped_document_ids: string[];
+  candidates: EvaluationDocumentRecallCandidate[];
 }
 
 /** 單題 query focus 明細。 */
@@ -542,6 +568,7 @@ export interface EvaluationPerQueryDetail {
   retrieval_miss: boolean;
   gold_spans: EvaluationItemSpan[];
   query_routing: EvaluationQueryRoutingDetail;
+  document_recall: EvaluationDocumentRecallDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationPerQueryStageDetail;
   rerank: EvaluationPerQueryStageDetail;

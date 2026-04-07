@@ -74,6 +74,8 @@ This module contains the project's FastAPI service. It currently provides:
 - `RETRIEVAL_VECTOR_TOP_K`
 - `RETRIEVAL_FTS_TOP_K`
 - `RETRIEVAL_MAX_CANDIDATES`
+- `RETRIEVAL_DOCUMENT_RECALL_ENABLED`
+- `RETRIEVAL_DOCUMENT_RECALL_TOP_K`
 - `RETRIEVAL_RRF_K`
 - `RETRIEVAL_HNSW_EF_SEARCH`
 - `KEYCLOAK_URL`
@@ -183,6 +185,8 @@ Notes:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
+- `document_summary` and `cross_document_compare` now use a two-stage retrieval path: document synopsis recall first, then child recall constrained by SQL `allowed_document_ids`.
+- `documents` now persist `synopsis_text`, `synopsis_embedding`, and `synopsis_updated_at`; these fields are part of the formal Phase 8.3 document-level representation contract.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the retrieval schema expects `1536` dimensions.
 - `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the provider applies the official query instruction format for query embeddings, zero-pads the model's `1024`-dim output into the current `1536`-dim schema, and uses the current process CPU / GPU resources.
 - The optional self-hosted embedding path uses `POST /v1/embeddings` with Bearer auth and the `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.

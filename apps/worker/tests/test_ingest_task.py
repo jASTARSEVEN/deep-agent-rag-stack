@@ -100,6 +100,10 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         PDF_PARSER_PROVIDER="opendataloader",
         OPENDATALOADER_USE_STRUCT_TREE=True,
         OPENDATALOADER_QUIET=True,
+        DOCUMENT_SYNOPSIS_PROVIDER="deterministic",
+        DOCUMENT_SYNOPSIS_MODEL="gpt-4.1-mini",
+        DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS=6000,
+        DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS=1600,
         LLAMAPARSE_API_KEY="",
         LLAMAPARSE_DO_NOT_CACHE=True,
         LLAMAPARSE_MERGE_CONTINUED_TABLES=False,
@@ -197,6 +201,9 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_document.indexed_at is not None
         assert refreshed_document.normalized_text == parse_document(file_name="notes.md", payload=payload).normalized_text
         assert refreshed_document.display_text is not None
+        assert refreshed_document.synopsis_text is not None
+        assert refreshed_document.synopsis_embedding is not None
+        assert refreshed_document.synopsis_updated_at is not None
         assert refreshed_document.display_text.startswith("## Title\n\n")
         assert refreshed_job is not None
         assert refreshed_job.status == IngestJobStatus.succeeded
@@ -370,13 +377,15 @@ def test_index_document_chunks_embeddings_include_heading(monkeypatch, tmp_path:
 
         index_document_chunks(session=session, document=document, settings=settings)
 
-    assert captured_texts == [
+    assert captured_texts[:2] == [
         build_embedding_input_text(heading="Intro", content="Alpha body"),
         build_embedding_input_text(
             heading="Budget",
             content="| item | value |\n| --- | --- |\n| alpha | 1 |",
         ),
     ]
+    assert len(captured_texts) == 3
+    assert "Topic:" in captured_texts[2]
 
 
 def test_process_document_ingest_marks_failed_for_embedding_provider_error(monkeypatch, tmp_path: Path) -> None:

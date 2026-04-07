@@ -8,6 +8,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 
 from sqlalchemy import Integer, String, bindparam, select, text
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
@@ -70,6 +71,30 @@ class RetrievalTraceEntry:
 
 
 @dataclass(slots=True)
+class DocumentRecallTraceEntry:
+    """單一 document recall candidate 的 trace metadata。"""
+
+    document_id: str
+    file_name: str
+    vector_rank: int | None
+    fts_rank: int | None
+    rrf_rank: int
+    rrf_score: float
+
+
+@dataclass(slots=True)
+class DocumentRecallTrace:
+    """第一階段 document recall 的 trace metadata。"""
+
+    applied: bool
+    strategy: str
+    top_k: int
+    selected_document_ids: list[str]
+    dropped_document_ids: list[str]
+    candidates: list[DocumentRecallTraceEntry]
+
+
+@dataclass(slots=True)
 class RetrievalTrace:
     """單次 retrieval 的 trace metadata。"""
 
@@ -107,6 +132,7 @@ class RetrievalTrace:
     evidence_synopsis_variant: str = ""
     focus_query: str = ""
     rerank_query: str = ""
+    document_recall: DocumentRecallTrace | None = None
 
 
 @dataclass(slots=True)
@@ -143,6 +169,25 @@ class _RerankParentGroup:
     order: int
 
 
+@dataclass(slots=True)
+class _DocumentRecallMatch:
+    """document-level recall 使用的中間結構。"""
+
+    document: Document
+    vector_rank: int | None = None
+    fts_rank: int | None = None
+    rrf_rank: int | None = None
+    rrf_score: float = 0.0
+
+
+@dataclass(slots=True)
+class DocumentRecallResult:
+    """第一階段 document recall 的選文件結果。"""
+
+    selected_document_ids: tuple[str, ...]
+    trace: DocumentRecallTrace
+
+
 def _build_match_chunks_rpc_statement():
     """建立具備 PostgreSQL 明確 bind type 的 `match_chunks` RPC statement。
 
@@ -157,7 +202,78 @@ def _build_match_chunks_rpc_statement():
         raise RuntimeError("PostgreSQL retrieval 路徑需要 `pgvector` SQLAlchemy 型別支援。")
 
     return text(
-        "SELECT * FROM match_chunks(:query_embedding, :query_text, :area_id, :vector_top_k, :fts_top_k)"
+        "SELECT * FROM match_chunks(:query_embedding, :query_text, :area_id, :vector_top_k, :fts_top_k, :allowed_document_ids)"
+    ).bindparams(
+        bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
+        bindparam("query_text", type_=String()),
+        bindparam("area_id", type_=String()),
+        bindparam("vector_top_k", type_=Integer()),
+        bindparam("fts_top_k", type_=Integer()),
+        bindparam("allowed_document_ids", type_=PG_ARRAY(String(36))),
+    )
+
+
+def _build_document_recall_statement():
+    """建立 PostgreSQL document synopsis recall 的 SQL statement。
+
+    參數：
+    - 無
+
+    回傳：
+    - `TextClause`：已綁定 vector/text/varchar/int 型別的 SQL statement。
+    """
+
+    if Vector is None:  # pragma: no cover - PostgreSQL 正式路徑應固定安裝 pgvector。
+        raise RuntimeError("PostgreSQL document recall 路徑需要 `pgvector` SQLAlchemy 型別支援。")
+
+    return text(
+        """
+        WITH vector_matches AS (
+            SELECT
+                d.id,
+                ROW_NUMBER() OVER (ORDER BY d.synopsis_embedding <=> :query_embedding, d.id) :: INT AS rank
+            FROM documents d
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND d.synopsis_embedding IS NOT NULL
+            ORDER BY d.synopsis_embedding <=> :query_embedding, d.id
+            LIMIT :vector_top_k
+        ),
+        fts_matches AS (
+            SELECT
+                d.id,
+                ROW_NUMBER() OVER (
+                    ORDER BY pgroonga_score(d.tableoid, d.ctid) DESC, d.id
+                ) :: INT AS rank,
+                pgroonga_score(d.tableoid, d.ctid) :: FLOAT AS score
+            FROM documents d
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND d.synopsis_text IS NOT NULL
+              AND d.synopsis_text &@~ :query_text
+            ORDER BY pgroonga_score(d.tableoid, d.ctid) DESC, d.id
+            LIMIT :fts_top_k
+        ),
+        candidate_ids AS (
+            SELECT id FROM vector_matches
+            UNION
+            SELECT id FROM fts_matches
+        )
+        SELECT
+            d.id,
+            d.file_name,
+            vm.rank AS vector_rank,
+            fm.rank AS fts_rank,
+            fm.score AS fts_score
+        FROM candidate_ids c
+        JOIN documents d ON d.id = c.id
+        LEFT JOIN vector_matches vm ON vm.id = d.id
+        LEFT JOIN fts_matches fm ON fm.id = d.id
+        ORDER BY
+            COALESCE(vm.rank, 2147483647),
+            COALESCE(fm.rank, 2147483647),
+            d.id
+        """
     ).bindparams(
         bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
         bindparam("query_text", type_=String()),
@@ -202,11 +318,21 @@ def retrieve_area_candidates(
     )
     effective_settings = routing_decision.effective_settings
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=query)
+    document_recall_result = _resolve_document_recall_result(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=query,
+        query_type=routing_decision.query_type,
+        summary_scope=routing_decision.summary_scope,
+        resolved_document_ids=routing_decision.resolved_document_ids,
+    )
     recalled_matches = _recall_ranked_candidates(
         session=session,
         settings=effective_settings,
         area_id=area_id,
         query=query_focus_plan.focus_query if query_focus_plan.applied else query,
+        allowed_document_ids=document_recall_result.selected_document_ids or None,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
     ranked_matches = _apply_ranking_policy(
@@ -274,6 +400,7 @@ def retrieve_area_candidates(
             evidence_synopsis_variant=effective_settings.retrieval_evidence_synopsis_variant,
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
+            document_recall=document_recall_result.trace,
             candidates=[
                 RetrievalTraceEntry(
                     chunk_id=candidate.chunk_id,
@@ -299,6 +426,7 @@ def _recall_ranked_candidates(
     settings: AppSettings,
     area_id: str,
     query: str,
+    allowed_document_ids: tuple[str, ...] | None = None,
 ) -> list[RankedChunkMatch]:
     """依資料庫方言取得已套用 area/ready 邊界的 ranked candidates。"""
 
@@ -309,12 +437,14 @@ def _recall_ranked_candidates(
             settings=settings,
             area_id=area_id,
             query=query,
+            allowed_document_ids=allowed_document_ids,
         )
     return _run_sqlite_candidate_generation(
         session=session,
         settings=settings,
         area_id=area_id,
         query=query,
+        allowed_document_ids=allowed_document_ids,
     )
 
 
@@ -324,6 +454,7 @@ def _run_postgres_candidate_generation(
     settings: AppSettings,
     area_id: str,
     query: str,
+    allowed_document_ids: tuple[str, ...] | None,
 ) -> list[RankedChunkMatch]:
     """透過 PostgreSQL RPC 取得 recall 候選與其排序輸入。
 
@@ -348,6 +479,7 @@ def _run_postgres_candidate_generation(
             "area_id": area_id,
             "vector_top_k": settings.retrieval_vector_top_k,
             "fts_top_k": settings.retrieval_fts_top_k,
+            "allowed_document_ids": list(allowed_document_ids) if allowed_document_ids else None,
         },
     ).all()
 
@@ -372,6 +504,7 @@ def _run_sqlite_candidate_generation(
     settings: AppSettings,
     area_id: str,
     query: str,
+    allowed_document_ids: tuple[str, ...] | None,
 ) -> list[RankedChunkMatch]:
     """SQLite 本機測試專用的 candidate generation 路徑。"""
 
@@ -384,6 +517,7 @@ def _run_sqlite_candidate_generation(
             Document.area_id == area_id,
             Document.status == DocumentStatus.ready,
             DocumentChunk.chunk_type == ChunkType.child,
+            Document.id.in_(allowed_document_ids) if allowed_document_ids else True,
         )
         .order_by(DocumentChunk.position.asc())
     ).all()
@@ -588,6 +722,237 @@ def _sqlite_fts_score(*, query: str, content: str) -> int:
         tokens = [query.strip().lower()]
     lowered_content = content.lower()
     return sum(lowered_content.count(token) for token in tokens if token)
+
+
+def _resolve_document_recall_result(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    query_type: EvaluationQueryType,
+    summary_scope: str | None,
+    resolved_document_ids: tuple[str, ...],
+) -> DocumentRecallResult:
+    """依 query type 與 synopsis recall 決定第二階段允許的文件集合。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：routing 後的有效設定。
+    - `area_id`：目標 area。
+    - `query`：使用者原始查詢。
+    - `query_type`：本次 query type。
+    - `summary_scope`：若為摘要問題，表示 single/multi document scope。
+    - `resolved_document_ids`：document mention resolver 高信心命中的文件集合。
+
+    回傳：
+    - `DocumentRecallResult`：第一階段選文件結果與 trace。
+    """
+
+    if query_type == EvaluationQueryType.fact_lookup or not settings.retrieval_document_recall_enabled:
+        return DocumentRecallResult(
+            selected_document_ids=(),
+            trace=DocumentRecallTrace(
+                applied=False,
+                strategy="disabled",
+                top_k=settings.retrieval_document_recall_top_k,
+                selected_document_ids=[],
+                dropped_document_ids=[],
+                candidates=[],
+            ),
+        )
+
+    if summary_scope == "single_document" and len(resolved_document_ids) == 1:
+        return DocumentRecallResult(
+            selected_document_ids=resolved_document_ids,
+            trace=DocumentRecallTrace(
+                applied=True,
+                strategy="mention_resolved_single_document_v1",
+                top_k=1,
+                selected_document_ids=list(resolved_document_ids),
+                dropped_document_ids=[],
+                candidates=[],
+            ),
+        )
+
+    recall_matches = _recall_documents_by_synopsis(
+        session=session,
+        settings=settings,
+        area_id=area_id,
+        query=query,
+    )
+    selected_document_ids: list[str] = []
+    for document_id in resolved_document_ids:
+        if document_id not in selected_document_ids:
+            selected_document_ids.append(document_id)
+    for match in recall_matches:
+        if match.document.id in selected_document_ids:
+            continue
+        selected_document_ids.append(match.document.id)
+        if len(selected_document_ids) >= settings.retrieval_document_recall_top_k:
+            break
+
+    selected_document_set = set(selected_document_ids)
+    return DocumentRecallResult(
+        selected_document_ids=tuple(selected_document_ids),
+        trace=DocumentRecallTrace(
+            applied=True,
+            strategy="synopsis_rrf_v1",
+            top_k=settings.retrieval_document_recall_top_k,
+            selected_document_ids=selected_document_ids,
+            dropped_document_ids=[match.document.id for match in recall_matches if match.document.id not in selected_document_set],
+            candidates=[
+                DocumentRecallTraceEntry(
+                    document_id=match.document.id,
+                    file_name=match.document.file_name,
+                    vector_rank=match.vector_rank,
+                    fts_rank=match.fts_rank,
+                    rrf_rank=match.rrf_rank or 0,
+                    rrf_score=match.rrf_score,
+                )
+                for match in recall_matches
+            ],
+        ),
+    )
+
+
+def _recall_documents_by_synopsis(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[_DocumentRecallMatch]:
+    """以 document synopsis 執行第一階段 document-level recall。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：routing 後的有效設定。
+    - `area_id`：目標 area。
+    - `query`：使用者原始查詢。
+
+    回傳：
+    - `list[_DocumentRecallMatch]`：依 RRF 排序後的文件候選。
+    """
+
+    dialect_name = session.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        matches = _run_postgres_document_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+        )
+    else:
+        matches = _run_sqlite_document_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+        )
+
+    for match in matches:
+        match.rrf_score = _compute_rrf_score(match=match, rrf_k=settings.retrieval_rrf_k)
+
+    merged_matches = sorted(
+        matches,
+        key=lambda item: (
+            -item.rrf_score,
+            _best_rank(item),
+            item.document.file_name.casefold(),
+            item.document.id,
+        ),
+    )[: settings.retrieval_document_recall_top_k]
+    for index, match in enumerate(merged_matches, start=1):
+        match.rrf_rank = index
+    return merged_matches
+
+
+def _run_postgres_document_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[_DocumentRecallMatch]:
+    """透過 PostgreSQL 對 document synopsis 執行 recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    rows = session.execute(
+        _build_document_recall_statement(),
+        {
+            "query_embedding": query_embedding,
+            "query_text": query,
+            "area_id": area_id,
+            "vector_top_k": settings.retrieval_document_recall_top_k,
+            "fts_top_k": settings.retrieval_document_recall_top_k,
+        },
+    ).all()
+
+    matches: list[_DocumentRecallMatch] = []
+    for row in rows:
+        document = session.get(Document, str(row.id))
+        if document is None:
+            continue
+        matches.append(
+            _DocumentRecallMatch(
+                document=document,
+                vector_rank=row.vector_rank,
+                fts_rank=row.fts_rank,
+            )
+        )
+    return matches
+
+
+def _run_sqlite_document_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+) -> list[_DocumentRecallMatch]:
+    """SQLite 測試路徑使用的 document synopsis recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    documents = session.scalars(
+        select(Document)
+        .where(
+            Document.area_id == area_id,
+            Document.status == DocumentStatus.ready,
+        )
+        .order_by(Document.file_name.asc())
+    ).all()
+
+    merged_by_document_id: dict[str, _DocumentRecallMatch] = {}
+    vector_scored = sorted(
+        (
+            (_cosine_distance(query_embedding, document.synopsis_embedding), document)
+            for document in documents
+            if document.synopsis_embedding is not None
+        ),
+        key=lambda item: (item[0], item[1].file_name.casefold(), item[1].id),
+    )[: settings.retrieval_document_recall_top_k]
+    for index, (_, document) in enumerate(vector_scored, start=1):
+        current = merged_by_document_id.setdefault(document.id, _DocumentRecallMatch(document=document))
+        current.vector_rank = index
+
+    fts_scored = sorted(
+        (
+            (_sqlite_fts_score(query=query, content=document.synopsis_text or ""), document)
+            for document in documents
+            if document.synopsis_text
+        ),
+        key=lambda item: (-item[0], item[1].file_name.casefold(), item[1].id),
+    )
+    for index, (_, document) in enumerate((item for item in fts_scored if item[0] > 0), start=1):
+        if index > settings.retrieval_document_recall_top_k:
+            break
+        current = merged_by_document_id.setdefault(document.id, _DocumentRecallMatch(document=document))
+        current.fts_rank = index
+
+    return list(merged_by_document_id.values())
 
 
 def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:

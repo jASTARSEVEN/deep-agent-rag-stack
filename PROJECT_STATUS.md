@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8.2 — Diversified Selection Before Assembly (Completed)`
+當前主階段：`Phase 8.3 — Document-Level Representations (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -39,6 +39,7 @@
 - `Phase 7` Retrieval Correctness Evaluation v1 已完成
 - `Phase 8.1` Query-Aware Retrieval Profiles routing skeleton 已完成
 - `Phase 8.2` Diversified Selection Before Assembly 已完成
+- `Phase 8.3` Document-Level Representations 最小切片已落地
 - 專案已具備可驗證的 auth context、area create/list/detail 與 area access management 基礎能力
 - 專案已具備 area update/delete 管理能力，涵蓋 admin-only rename、description update 與 hard-delete cleanup
 - 專案已具備文件 upload、documents list、ingest job 狀態轉換與 Files UI 的最小主流程
@@ -88,7 +89,10 @@
 - 已為 `document_summary` 新增 `single_document | multi_document` 第二層 routing，透過 `documents.file_name` 的 deterministic mention resolver 解析單文件摘要與多文件摘要 scope，且只在已授權 `ready` 文件集合內運作
 - 已在 `rerank -> assembler` 間新增 scope-aware diversified selection layer：`fact_lookup` 維持 bypass，`document_summary` 採 coverage-first + fill 策略，`cross_document_compare` 採雙輪 coverage pass 後再依 rerank 補位
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
-- document-level synopsis 與 document recall 仍明確延後到 `Phase 8.3`
+- 已為 `documents` 新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`，作為 document-level representation 的正式持久化欄位
+- worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
+- `document_summary` 與 `cross_document_compare` 已新增第一階段 document recall，先以 synopsis 選出文件集合，再以 SQL `allowed_document_ids` filter 執行第二階段 child recall；`fact_lookup` 維持不走 document recall
+- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `document_recall` 明細，便於 reviewer 直接觀測第一階段選文件結果
 - 已於 `2026-04-05` 將長期 benchmark 文件擴充為九個 dataset：原先八資料集 current 基線再加上新加入的 `DuReader-robust 100` reference run；目前依 assembled `nDCG@10` 由相對簡單到困難，可近似看成 `DuReader-robust 100 -> MS MARCO 100 -> DRCD 100 -> NQ 100 -> UDA pilot -> self -> UDA 100 -> QASPER pilot -> QASPER 100`
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為九資料集 current 基線，並把 `External 100Q` 壓力測試集合擴充為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：`QASPER` 仍是主要英文 semantic-gap 主戰場、`UDA` 仍偏向 same-document localization、`MS MARCO` 在 snippet-bundle contract 下目前已接近 ceiling、`NQ` 補出一條「rerank 幾乎到頂、assembled 仍顯著掉分」的 assembler 壓力測試 lane、`DRCD` 補出「中文 lexical recall 近乎到頂，但 rerank 會輕微退化排序」的繁體中文 rerank 哨兵 lane，而 `DuReader-robust` 則補出「中文 paragraph-level extractive QA 已接近 ceiling」的 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留 `QASPER + UDA` 詳細 miss 清單
@@ -295,7 +299,7 @@
 ## 目前階段重點
 
 ### Current Focus
-- 進入 `Phase 8.3 — Document-Level Representations` 規劃與最小切片，明定 document synopsis 的生成、持久化與 reindex 語意
+- 延續 `Phase 8.3 — Document-Level Representations` 最小切片，驗證 document synopsis / document recall 對 benchmark 的實際收益與回歸風險
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 持續依 `docs/retrieval-benchmark-strategy-analysis.md` 的最新 miss 題，挑選單一主假設做實跑驗證與深度分析
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
@@ -305,11 +309,12 @@
 
 ### 最適合立即進行的工作
 1. 進入 `Phase 8.3 — Document-Level Representations`，定義 document synopsis 的 schema、worker 生成時機與 reindex 一致性
-2. 依最新 miss 題與當前 chunks，優先處理 `recall_only / rerank_only` 類 semantic-gap 問題
-3. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
-4. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
-5. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-6. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+2. 以 `QASPER 100`、`NQ 100` 與 `DRCD 100` 驗證 document synopsis / document recall 的 `before / after`，確認沒有造成 fact lane 或中文 lane 回歸
+3. 依最新 miss 題與當前 chunks，優先處理 `recall_only / rerank_only` 類 semantic-gap 問題
+4. 在 Phase 7 benchmark 上固定 baseline run，作為後續 retrieval/profile 調整的 regression 比對基準
+5. 補齊真實 compose / Keycloak / LangGraph / Deep Agents smoke 與 E2E 驗證
+6. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+7. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## 尚未開始的功能
 

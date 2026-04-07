@@ -59,6 +59,10 @@ This module contains the project's Celery worker. It currently provides the mini
 - `EMBEDDING_RETRY_MAX_ATTEMPTS`
 - `EMBEDDING_RETRY_BASE_DELAY_SECONDS`
 - `EMBEDDING_DIMENSIONS`
+- `DOCUMENT_SYNOPSIS_PROVIDER`
+- `DOCUMENT_SYNOPSIS_MODEL`
+- `DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS`
+- `DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS`
 - `SELF_HOSTED_EMBEDDING_BASE_URL`
 - `SELF_HOSTED_EMBEDDING_API_KEY`
 - `SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS`
@@ -102,8 +106,9 @@ This module contains the project's Celery worker. It currently provides the mini
 - `document_chunks` include `structure_kind=text|table`, so table-aware results remain visible to the API and later retrieval layers.
 - Text children are split by `LangChain RecursiveCharacterTextSplitter`; large tables are split by row groups with repeated headers.
 - `CHUNK_FACT_HEAVY_REFINEMENT_ENABLED=true` enables an optional evidence-centric child refinement path for fact-heavy headings such as `dataset`, `experimental setup`, and `evaluation metrics`; this path exists in the repo but is not part of the current benchmark baseline by default.
-- `ready` now means chunking and embeddings have been completed.
+- `ready` now means chunking, child embeddings, document synopsis, and synopsis embedding have all been completed.
 - The worker is now responsible for child-chunk embeddings.
+- The worker now builds document-level synopsis from full parent coverage during ingest/reindex, stores `synopsis_text`, and then writes a synopsis embedding for Phase 8.3 document recall.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the storage schema expects `1536` dimensions.
 - `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the worker downloads the model on first use when needed, reuses the local Hugging Face cache afterwards, and zero-pads the model's `1024`-dim output into the current `1536`-dim schema.
 - The optional self-hosted path uses `POST /v1/embeddings` with Bearer auth and dedicated `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.

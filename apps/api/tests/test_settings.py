@@ -30,6 +30,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         RETRIEVAL_QUERY_FOCUS_ENABLED="",
         RETRIEVAL_QUERY_FOCUS_VARIANT="",
         RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD="",
+        RETRIEVAL_DOCUMENT_RECALL_ENABLED="",
+        RETRIEVAL_DOCUMENT_RECALL_TOP_K="",
         SELF_HOSTED_RERANK_BASE_URL="",
         SELF_HOSTED_RERANK_API_KEY="",
         SELF_HOSTED_RERANK_TIMEOUT_SECONDS="",
@@ -62,6 +64,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.retrieval_query_focus_enabled is False
     assert settings.retrieval_query_focus_variant == "generic_field_focus_v1"
     assert settings.retrieval_query_focus_confidence_threshold == 0.7
+    assert settings.retrieval_document_recall_enabled is False
+    assert settings.retrieval_document_recall_top_k == 6
     assert settings.rerank_provider == "self-hosted"
     assert settings.rerank_model == "BAAI/bge-reranker-v2-m3"
     assert settings.self_hosted_rerank_base_url == "http://easypinex.duckdns.org:8000"

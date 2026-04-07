@@ -7,7 +7,7 @@ from sqlalchemy.engine import Engine
 
 
 # preview contract 升級後 documents 必須存在的欄位。
-REQUIRED_DOCUMENT_COLUMNS = frozenset({"display_text"})
+REQUIRED_DOCUMENT_COLUMNS = frozenset({"display_text", "synopsis_text", "synopsis_embedding", "synopsis_updated_at"})
 
 # Phase 7 evaluation 必須存在的資料表。
 REQUIRED_EVALUATION_TABLES = frozenset(

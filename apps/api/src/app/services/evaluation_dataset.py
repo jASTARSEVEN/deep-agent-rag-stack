@@ -32,6 +32,8 @@ from app.schemas.evaluation import (
     EvaluationCandidateStageResponse,
     EvaluationDatasetDetailResponse,
     EvaluationDatasetListResponse,
+    EvaluationDocumentRecallCandidate,
+    EvaluationDocumentRecallDetail,
     EvaluationDatasetSummary,
     EvaluationDocumentSearchHit,
     EvaluationItemSpanResponse,
@@ -50,12 +52,14 @@ from app.services.retrieval_query import QueryFocusPlan, build_query_focus_plan_
 from app.services.retrieval_routing import QueryRoutingDecision, build_query_routing_decision
 from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
 from app.services.retrieval import (
+    DocumentRecallResult,
     RetrievalResult,
     _apply_python_rrf,
     _apply_ranking_policy,
     _apply_rerank,
     _build_retrieval_candidate,
     _recall_ranked_candidates,
+    _resolve_document_recall_result,
 )
 from app.services.retrieval_assembler import assemble_retrieval_result
 
@@ -67,6 +71,7 @@ class ItemStageEvaluationResult:
     item: RetrievalEvalItem
     gold_spans: list[GoldSpan]
     query_routing: EvaluationQueryRoutingDetail
+    document_recall: EvaluationDocumentRecallDetail
     selection: EvaluationSelectionDetail
     query_focus: EvaluationQueryFocusDetail
     recall_stage: EvaluationCandidateStageResponse
@@ -386,6 +391,7 @@ def preview_evaluation_candidates(
         dataset=build_dataset_summary(session=session, dataset=dataset),
         item=build_item_summary(item=item, spans=spans),
         query_routing=stage_result.query_routing,
+        document_recall=stage_result.document_recall,
         selection=stage_result.selection,
         query_focus=stage_result.query_focus,
         recall=stage_result.recall_stage,
@@ -438,10 +444,25 @@ def evaluate_item_stage_outputs(
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=item.query_text)
     retrieval_query = item.query_text
     rerank_query = item.query_text
+    document_recall_result = _resolve_document_recall_result(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=item.query_text,
+        query_type=routing_decision.query_type,
+        summary_scope=routing_decision.summary_scope,
+        resolved_document_ids=routing_decision.resolved_document_ids,
+    )
 
     recall_matches = _apply_ranking_policy(
         matches=_apply_python_rrf(
-            matches=_recall_ranked_candidates(session=session, settings=effective_settings, area_id=area_id, query=retrieval_query),
+            matches=_recall_ranked_candidates(
+                session=session,
+                settings=effective_settings,
+                area_id=area_id,
+                query=retrieval_query,
+                allowed_document_ids=document_recall_result.selected_document_ids or None,
+            ),
             settings=effective_settings,
         ),
         query=item.query_text,
@@ -468,6 +489,7 @@ def evaluate_item_stage_outputs(
             settings=effective_settings,
             total_candidates=len(rerank_matches),
             routing_decision=routing_decision,
+            document_recall_result=document_recall_result,
             query_focus_plan=query_focus_plan,
             selection_result=selection_result,
         ),
@@ -488,6 +510,7 @@ def evaluate_item_stage_outputs(
         item=item,
         gold_spans=gold_spans,
         query_routing=_build_query_routing_detail(routing_decision=routing_decision),
+        document_recall=_build_document_recall_detail(document_recall_result=document_recall_result),
         selection=_build_selection_detail(selection_result=selection_result),
         query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
         recall_stage=_build_recall_stage(
@@ -825,6 +848,7 @@ def _build_empty_trace(
     settings: AppSettings,
     total_candidates: int,
     routing_decision: QueryRoutingDecision,
+    document_recall_result: DocumentRecallResult,
     query_focus_plan: QueryFocusPlan,
     selection_result: RetrievalSelectionResult,
 ) -> dict[str, object]:
@@ -860,6 +884,24 @@ def _build_empty_trace(
         "document_mention_candidates": [dict(candidate) for candidate in routing_decision.document_mention_candidates],
         "selected_profile": routing_decision.selected_profile,
         "profile_settings": routing_decision.resolved_settings,
+        "document_recall": {
+            "applied": document_recall_result.trace.applied,
+            "strategy": document_recall_result.trace.strategy,
+            "top_k": document_recall_result.trace.top_k,
+            "selected_document_ids": list(document_recall_result.trace.selected_document_ids),
+            "dropped_document_ids": list(document_recall_result.trace.dropped_document_ids),
+            "candidates": [
+                {
+                    "document_id": candidate.document_id,
+                    "file_name": candidate.file_name,
+                    "vector_rank": candidate.vector_rank,
+                    "fts_rank": candidate.fts_rank,
+                    "rrf_rank": candidate.rrf_rank,
+                    "rrf_score": candidate.rrf_score,
+                }
+                for candidate in document_recall_result.trace.candidates
+            ],
+        },
         "selection_applied": selection_result.applied,
         "selection_strategy": selection_result.strategy,
         "selected_document_count": len(selection_result.selected_document_ids),
@@ -936,6 +978,39 @@ def _build_query_focus_detail(*, query_focus_plan: QueryFocusPlan) -> Evaluation
         rule_family=query_focus_plan.rule_family,
         focus_query=query_focus_plan.focus_query,
         rerank_query=query_focus_plan.rerank_query,
+    )
+
+
+def _build_document_recall_detail(
+    *,
+    document_recall_result: DocumentRecallResult,
+) -> EvaluationDocumentRecallDetail:
+    """將 document recall 結果轉為 evaluation API detail。
+
+    參數：
+    - `document_recall_result`：第一階段 document recall 結果。
+
+    回傳：
+    - `EvaluationDocumentRecallDetail`：preview 與 benchmark 共用的 document recall detail。
+    """
+
+    return EvaluationDocumentRecallDetail(
+        applied=document_recall_result.trace.applied,
+        strategy=document_recall_result.trace.strategy,
+        top_k=document_recall_result.trace.top_k,
+        selected_document_ids=list(document_recall_result.trace.selected_document_ids),
+        dropped_document_ids=list(document_recall_result.trace.dropped_document_ids),
+        candidates=[
+            EvaluationDocumentRecallCandidate(
+                document_id=candidate.document_id,
+                file_name=candidate.file_name,
+                vector_rank=candidate.vector_rank,
+                fts_rank=candidate.fts_rank,
+                rrf_rank=candidate.rrf_rank,
+                rrf_score=candidate.rrf_score,
+            )
+            for candidate in document_recall_result.trace.candidates
+        ],
     )
 
 

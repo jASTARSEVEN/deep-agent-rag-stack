@@ -251,6 +251,28 @@ class EvaluationQueryRoutingDetail(BaseModel):
     resolved_settings: dict[str, object]
 
 
+class EvaluationDocumentRecallCandidate(BaseModel):
+    """單一 document recall candidate 明細。"""
+
+    document_id: str
+    file_name: str
+    vector_rank: int | None
+    fts_rank: int | None
+    rrf_rank: int
+    rrf_score: float
+
+
+class EvaluationDocumentRecallDetail(BaseModel):
+    """單題 document recall 明細。"""
+
+    applied: bool
+    strategy: str
+    top_k: int
+    selected_document_ids: list[str]
+    dropped_document_ids: list[str]
+    candidates: list[EvaluationDocumentRecallCandidate]
+
+
 class EvaluationSelectionDetail(BaseModel):
     """單題 diversified selection 明細。"""
 
@@ -269,6 +291,7 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     dataset: EvaluationDatasetSummary
     item: EvaluationItemSummary
     query_routing: EvaluationQueryRoutingDetail
+    document_recall: EvaluationDocumentRecallDetail | None = None
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
@@ -327,6 +350,7 @@ class EvaluationPerQueryDetail(BaseModel):
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
     query_routing: EvaluationQueryRoutingDetail
+    document_recall: EvaluationDocumentRecallDetail | None = None
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail
