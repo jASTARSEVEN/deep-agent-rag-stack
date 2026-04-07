@@ -26,22 +26,17 @@
 - `PUBLIC_BASE_URL`
 - `TLS_ACME_*`
 - `KEYCLOAK_EXPOSE_ADMIN`
-- `WEB_PUBLIC_URL`
-- `API_PUBLIC_URL`
-- `KEYCLOAK_PUBLIC_URL`
 - `POSTGRES_*`
 - `REDIS_PORT`
 - `MINIO_*`
-- `KEYCLOAK_*`
-- `API_*`
-- `DATABASE_URL`
-- `REDIS_URL`
+- `KEYCLOAK_REALM`
+- `KEYCLOAK_CLIENT_ID`
+- `KEYCLOAK_GROUPS_CLAIM`
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
 - `OPENDATALOADER_*`
 - `LLAMAPARSE_*`
-- `CELERY_*`
 - `NVIDIA_*`
 - `API_INSTALL_OPTIONAL_GROUPS`
 - `WORKER_INSTALL_OPTIONAL_GROUPS`
@@ -51,9 +46,13 @@
 - `COHERE_API_KEY`
 - `SELF_HOSTED_EMBEDDING_*`
 - `SELF_HOSTED_RERANK_*`
+- `CHAT_MODEL`
 - `LANGSMITH_*`
-- `RETRIEVAL_*`
-- `VITE_*`
+- `VITE_APP_NAME`
+- `VITE_CHAT_STREAM_DEBUG`
+
+Compose 範本刻意省略了許多低頻的 runtime tuning 參數。
+只有真的需要微調時，再手動把額外 env var 加進 `.env` 即可。
 
 ## 主要目錄結構
 
@@ -82,7 +81,7 @@
 
 - 當 `PUBLIC_HOST=localhost` 或 `127.0.0.1` 時，Caddy 會刻意改走純 HTTP，避免本機開發依賴 ACME 憑證。
 - 若憑證無法簽發，先確認 `PUBLIC_HOST` 可由公網解析，且 `80/443` 已正確轉發到 Docker 主機。
-- 若 reverse proxy 切換後登入失敗，請確認 `KEYCLOAK_PUBLIC_URL`、`KEYCLOAK_ISSUER`、`KEYCLOAK_JWKS_URL` 與 realm client redirect URI 都已對齊 `/auth`。
+- 若 reverse proxy 切換後登入失敗，請確認 `PUBLIC_BASE_URL` 正確，且 realm client 的 redirect URI 仍指向 `<PUBLIC_BASE_URL>/auth/callback` 與 `<PUBLIC_BASE_URL>/silent-check-sso.html`。
 - `Caddy` 會把 `/auth/callback` 轉給 web，並把其餘 `/auth*` 轉給 Keycloak，因為前端 callback 與 Keycloak 共用 `/auth` prefix。
 - `KEYCLOAK_EXPOSE_ADMIN=false` 會在 proxy 層封鎖 `/auth/admin*`；只有在你確定需要遠端管理主控台時，才應改成 `true`。
 - compose stack 已不再公開舊的 `13000/18000/18080`，因此直接從 host 連 web / API / Keycloak 失敗是預期行為。

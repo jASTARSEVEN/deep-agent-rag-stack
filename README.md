@@ -148,7 +148,7 @@ cp .env.example .env
 - Keep the default `localhost` URLs for local development.
 - Fill the provider keys that match your chosen embedding and rerank providers.
 - If you use local Hugging Face models, also enable the optional dependency groups before rebuilding Compose images.
-- If you want public HTTPS instead of local `localhost`, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `WEB_PUBLIC_URL`, `API_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, and `TLS_ACME_EMAIL`.
+- If you want public HTTPS instead of local `localhost`, set `PUBLIC_HOST`, `PUBLIC_BASE_URL`, and `TLS_ACME_EMAIL`.
 
 3. Start the full stack.
 
@@ -184,14 +184,14 @@ The local Keycloak development realm is imported automatically by the Compose st
 
 Review these groups first:
 
-- Public routing: `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `WEB_PUBLIC_URL`, `API_PUBLIC_URL`, `KEYCLOAK_PUBLIC_URL`, `TLS_ACME_EMAIL`
-- Auth: `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, `KEYCLOAK_GROUPS_CLAIM`
-- Storage and infra: `POSTGRES_*`, `REDIS_URL`, `MINIO_*`, `STORAGE_BACKEND`
+- Public routing: `PUBLIC_HOST`, `PUBLIC_BASE_URL`, `TLS_ACME_EMAIL`, `KEYCLOAK_EXPOSE_ADMIN`
+- Auth: `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_GROUPS_CLAIM`
+- Storage and infra: `POSTGRES_*`, `REDIS_PORT`, `MINIO_*`, `STORAGE_BACKEND`
 - Ingestion: `PDF_PARSER_PROVIDER`, `LLAMAPARSE_API_KEY`
-- Retrieval: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `RERANK_PROVIDER`, `RERANK_MODEL`
-- Chat and observability: `CHAT_PROVIDER`, `CHAT_MODEL`, `LANGSMITH_TRACING`
+- Model providers: `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `RERANK_PROVIDER`, `RERANK_MODEL`
+- Chat and observability: `CHAT_MODEL`, `LANGSMITH_TRACING`
 
-Use [`.env.example`](.env.example) as the full source of truth.
+Use [`.env.example`](.env.example) for the common Compose startup variables. For extra runtime-only overrides, see [apps/api/README.md](apps/api/README.md) and [apps/worker/README.md](apps/worker/README.md).
 
 ## Main Directory Structure
 
@@ -223,7 +223,7 @@ Long-lived project documents:
 
 - If `./scripts/compose.sh` fails immediately, make sure `.env` exists at the repository root.
 - If PDF parsing fails with `opendataloader`, verify `java -version` reports Java `11+`.
-- If login fails, re-check `KEYCLOAK_PUBLIC_URL`, `VITE_KEYCLOAK_URL`, and `PUBLIC_BASE_URL`.
+- If login fails, re-check `PUBLIC_BASE_URL` and confirm the Keycloak realm redirect URIs still point to `<PUBLIC_BASE_URL>/auth/callback` and `<PUBLIC_BASE_URL>/silent-check-sso.html`.
 - If retrieval fails on an existing database, rerun:
 
 ```bash

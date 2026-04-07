@@ -26,22 +26,17 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `PUBLIC_BASE_URL`
 - `TLS_ACME_*`
 - `KEYCLOAK_EXPOSE_ADMIN`
-- `WEB_PUBLIC_URL`
-- `API_PUBLIC_URL`
-- `KEYCLOAK_PUBLIC_URL`
 - `POSTGRES_*`
 - `REDIS_PORT`
 - `MINIO_*`
-- `KEYCLOAK_*`
-- `API_*`
-- `DATABASE_URL`
-- `REDIS_URL`
+- `KEYCLOAK_REALM`
+- `KEYCLOAK_CLIENT_ID`
+- `KEYCLOAK_GROUPS_CLAIM`
 - `STORAGE_BACKEND`
 - `LOCAL_STORAGE_PATH`
 - `PDF_PARSER_PROVIDER`
 - `OPENDATALOADER_*`
 - `LLAMAPARSE_*`
-- `CELERY_*`
 - `NVIDIA_*`
 - `API_INSTALL_OPTIONAL_GROUPS`
 - `WORKER_INSTALL_OPTIONAL_GROUPS`
@@ -51,9 +46,13 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 - `COHERE_API_KEY`
 - `SELF_HOSTED_EMBEDDING_*`
 - `SELF_HOSTED_RERANK_*`
+- `CHAT_MODEL`
 - `LANGSMITH_*`
-- `RETRIEVAL_*`
-- `VITE_*`
+- `VITE_APP_NAME`
+- `VITE_CHAT_STREAM_DEBUG`
+
+The Compose template intentionally omits many low-frequency runtime tuning variables.
+Add those extra overrides manually in `.env` only when needed.
 
 ## Main Directory Structure
 
@@ -82,7 +81,7 @@ The current deployment model uses a single public HTTPS origin through `Caddy`, 
 
 - When `PUBLIC_HOST=localhost` or `127.0.0.1`, Caddy intentionally serves plain HTTP so local development does not depend on ACME certificates.
 - If certificates are not issued, verify that `PUBLIC_HOST` resolves publicly and ports `80/443` reach the Docker host.
-- If login fails after the reverse proxy cutover, verify that `KEYCLOAK_PUBLIC_URL`, `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, and the realm client redirect URIs all point to `/auth`.
+- If login fails after the reverse proxy cutover, verify that `PUBLIC_BASE_URL` is correct and the realm client redirect URIs still point to `<PUBLIC_BASE_URL>/auth/callback` and `<PUBLIC_BASE_URL>/silent-check-sso.html`.
 - `Caddy` routes `/auth/callback` to the web app and the rest of `/auth*` to Keycloak because the frontend callback path shares the `/auth` prefix.
 - `KEYCLOAK_EXPOSE_ADMIN=false` blocks `/auth/admin*` at the proxy. Set it to `true` only when you intentionally need remote admin console access.
 - The compose stack no longer publishes the previous `13000/18000/18080` host ports, so direct host access to web / API / Keycloak is expected to fail.

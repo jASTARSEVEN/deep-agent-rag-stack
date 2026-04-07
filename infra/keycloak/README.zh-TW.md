@@ -17,7 +17,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 - `keycloak` 服務會在啟動時讀取 `/opt/keycloak/data/import` 下的 realm JSON。
 - 目前單一入口部署下，Keycloak 對外會以 `https://<PUBLIC_HOST>/auth` 形式提供服務。
-- compose runtime 會固定 `KC_HTTP_RELATIVE_PATH=/auth`，並將 `KC_HOSTNAME` 對齊公開 `/auth` URL，避免瀏覽器端 URL、issuer metadata 與 API JWT 驗證彼此不一致。
+- compose runtime 會固定 `KC_HTTP_RELATIVE_PATH=/auth`，並從 `PUBLIC_BASE_URL` 推導公開 `/auth` URL，避免瀏覽器端 URL、issuer metadata 與 API JWT 驗證彼此不一致。
 - 若你修改 `deep-agent-dev-realm.json` 後希望套用到既有本機環境，單純重啟既有 container 不會生效，必須先重置 Keycloak 的持久化資料。
 
 ## 環境變數
@@ -25,9 +25,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 - `KEYCLOAK_REALM`
 - `KEYCLOAK_CLIENT_ID`
 - `KEYCLOAK_GROUPS_CLAIM`
-- `KEYCLOAK_PUBLIC_URL`
-- `KEYCLOAK_ISSUER`
-- `KEYCLOAK_JWKS_URL`
+- `PUBLIC_BASE_URL`
 - `KEYCLOAK_EXPOSE_ADMIN`
 
 ## 主要目錄結構
@@ -55,10 +53,10 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ## Redirect 與 Origin 規則
 
 - 瀏覽器看到的 Keycloak URL 必須使用 `/auth`
-- 前端 callback URI 為 `https://<PUBLIC_HOST>/auth/callback`
-- silent SSO 使用 `https://<PUBLIC_HOST>/silent-check-sso.html`
+- 前端 callback URI 為 `<PUBLIC_BASE_URL>/auth/callback`
+- silent SSO 使用 `<PUBLIC_BASE_URL>/silent-check-sso.html`
 - realm client redirect URIs 必須明確允許 callback URI 與 silent SSO URI
-- `webOrigins` 應允許公開 web origin `https://<PUBLIC_HOST>`
+- `webOrigins` 應允許公開 web origin `<PUBLIC_BASE_URL>`
 
 ## 群組設計原則
 
@@ -77,5 +75,5 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 - 若你修改了 `deep-agent-dev-realm.json`，要讓新的 realm 設定、使用者、mapper、redirect URIs 或 web origins 生效，必須先重置 Keycloak 的持久化資料。
 - 若瀏覽器登入顯示 `invalid_redirect_uri`，請先檢查 realm client 是否已包含 `/auth/callback` 與 `/silent-check-sso.html`。
-- 若前端 callback 顯示 access token 驗證失敗，請確認 `KEYCLOAK_PUBLIC_URL`、`KEYCLOAK_ISSUER`、`KEYCLOAK_JWKS_URL` 都指向同一個 `/auth` 公開入口。
+- 若前端 callback 顯示 access token 驗證失敗，請確認 `PUBLIC_BASE_URL` 正確，且 realm 的 issuer metadata 與 redirect URI 仍對齊同一個 `/auth` 公開入口。
 - `KEYCLOAK_EXPOSE_ADMIN=false` 會刻意在 proxy 層封鎖 `/auth/admin*`；只有在明確需要遠端管理主控台時才應改成 `true`。

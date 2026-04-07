@@ -17,7 +17,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 - The `keycloak` service reads the realm JSON from `/opt/keycloak/data/import` at startup.
 - On the current single-entry deployment, Keycloak is published externally through `https://<PUBLIC_HOST>/auth`.
-- The compose runtime pins `KC_HTTP_RELATIVE_PATH=/auth` and `KC_HOSTNAME` to the public `/auth` URL so browser-side URLs, issuer metadata, and API JWT validation stay aligned.
+- The compose runtime pins `KC_HTTP_RELATIVE_PATH=/auth` and derives the public `/auth` URL from `PUBLIC_BASE_URL` so browser-side URLs, issuer metadata, and API JWT validation stay aligned.
 - If you change `deep-agent-dev-realm.json` and want the changes applied to an existing local environment, a simple restart is not enough. You must reset Keycloak persistent data first.
 
 ## Environment Variables
@@ -25,9 +25,7 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 - `KEYCLOAK_REALM`
 - `KEYCLOAK_CLIENT_ID`
 - `KEYCLOAK_GROUPS_CLAIM`
-- `KEYCLOAK_PUBLIC_URL`
-- `KEYCLOAK_ISSUER`
-- `KEYCLOAK_JWKS_URL`
+- `PUBLIC_BASE_URL`
 - `KEYCLOAK_EXPOSE_ADMIN`
 
 ## Main Directory Structure
@@ -55,10 +53,10 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 ## Redirect and Origin Rules
 
 - Browser-facing Keycloak URLs must use `/auth`.
-- The frontend callback URI is `https://<PUBLIC_HOST>/auth/callback`.
-- Silent SSO uses `https://<PUBLIC_HOST>/silent-check-sso.html`.
+- The frontend callback URI is `<PUBLIC_BASE_URL>/auth/callback`.
+- Silent SSO uses `<PUBLIC_BASE_URL>/silent-check-sso.html`.
 - Realm client redirect URIs must explicitly allow both the callback URI and the silent SSO URI.
-- `webOrigins` should allow the public web origin `https://<PUBLIC_HOST>`.
+- `webOrigins` should allow the public web origin `<PUBLIC_BASE_URL>`.
 
 ## Group Design Principles
 
@@ -77,5 +75,5 @@ docker compose -f infra/docker-compose.yml --env-file .env up --build
 
 - If you updated `deep-agent-dev-realm.json`, you must reset Keycloak persistent data before the new realm settings, users, mappers, redirect URIs, or web origins take effect.
 - If browser login shows `invalid_redirect_uri`, first verify that the realm client includes both `/auth/callback` and `/silent-check-sso.html`.
-- If the frontend callback shows an access token validation error, verify that `KEYCLOAK_PUBLIC_URL`, `KEYCLOAK_ISSUER`, and `KEYCLOAK_JWKS_URL` all point to the same `/auth`-scoped public origin.
+- If the frontend callback shows an access token validation error, verify that `PUBLIC_BASE_URL` is correct and that the realm still uses the same `/auth`-scoped public origin for its issuer metadata and redirect URIs.
 - `KEYCLOAK_EXPOSE_ADMIN=false` intentionally blocks `/auth/admin*` at the proxy. Set it to `true` only when you explicitly want remote admin console access.

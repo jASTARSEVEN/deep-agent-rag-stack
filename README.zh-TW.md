@@ -148,7 +148,7 @@ cp .env.example .env
 - 本機開發可先保留預設的 `localhost` URL。
 - 填入和你實際選用的 embedding / rerank provider 對應的金鑰。
 - 若使用本機 Hugging Face 模型，請記得在重建 Compose image 前同步開啟 optional dependency groups。
-- 若要啟用公開 HTTPS，而不是本機 `localhost`，請同步設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL`、`WEB_PUBLIC_URL`、`API_PUBLIC_URL`、`KEYCLOAK_PUBLIC_URL` 與 `TLS_ACME_EMAIL`。
+- 若要啟用公開 HTTPS，而不是本機 `localhost`，請同步設定 `PUBLIC_HOST`、`PUBLIC_BASE_URL` 與 `TLS_ACME_EMAIL`。
 
 3. 啟動完整 stack。
 
@@ -184,14 +184,14 @@ cp .env.example .env
 
 建議先優先檢查這幾組：
 
-- 公開路由：`PUBLIC_HOST`、`PUBLIC_BASE_URL`、`WEB_PUBLIC_URL`、`API_PUBLIC_URL`、`KEYCLOAK_PUBLIC_URL`、`TLS_ACME_EMAIL`
-- Auth：`KEYCLOAK_REALM`、`KEYCLOAK_CLIENT_ID`、`KEYCLOAK_ISSUER`、`KEYCLOAK_JWKS_URL`、`KEYCLOAK_GROUPS_CLAIM`
-- 儲存與基礎設施：`POSTGRES_*`、`REDIS_URL`、`MINIO_*`、`STORAGE_BACKEND`
+- 公開路由：`PUBLIC_HOST`、`PUBLIC_BASE_URL`、`TLS_ACME_EMAIL`、`KEYCLOAK_EXPOSE_ADMIN`
+- Auth：`KEYCLOAK_REALM`、`KEYCLOAK_CLIENT_ID`、`KEYCLOAK_GROUPS_CLAIM`
+- 儲存與基礎設施：`POSTGRES_*`、`REDIS_PORT`、`MINIO_*`、`STORAGE_BACKEND`
 - Ingestion：`PDF_PARSER_PROVIDER`、`LLAMAPARSE_API_KEY`
-- Retrieval：`EMBEDDING_PROVIDER`、`EMBEDDING_MODEL`、`RERANK_PROVIDER`、`RERANK_MODEL`
-- Chat 與觀測：`CHAT_PROVIDER`、`CHAT_MODEL`、`LANGSMITH_TRACING`
+- Model providers：`EMBEDDING_PROVIDER`、`EMBEDDING_MODEL`、`RERANK_PROVIDER`、`RERANK_MODEL`
+- Chat 與觀測：`CHAT_MODEL`、`LANGSMITH_TRACING`
 
-完整設定請以 [`.env.example`](.env.example) 為準。
+常用 Compose 啟動設定請以 [`.env.example`](.env.example) 為準；若需要額外的 runtime-only 覆寫，請再參考 [apps/api/README.md](apps/api/README.md) 與 [apps/worker/README.md](apps/worker/README.md)。
 
 ## Main Directory Structure
 
@@ -223,7 +223,7 @@ cp .env.example .env
 
 - 若 `./scripts/compose.sh` 一開始就失敗，先確認 repo 根目錄已建立 `.env`。
 - 若 `opendataloader` 的 PDF 解析失敗，請先確認 `java -version` 可解析到 Java `11+`。
-- 若登入失敗，請重新檢查 `KEYCLOAK_PUBLIC_URL`、`VITE_KEYCLOAK_URL` 與 `PUBLIC_BASE_URL`。
+- 若登入失敗，請重新檢查 `PUBLIC_BASE_URL`，並確認 Keycloak realm 的 redirect URI 仍指向 `<PUBLIC_BASE_URL>/auth/callback` 與 `<PUBLIC_BASE_URL>/silent-check-sso.html`。
 - 若既有資料庫上的 retrieval 失敗，先在 API container 內重跑：
 
 ```bash
