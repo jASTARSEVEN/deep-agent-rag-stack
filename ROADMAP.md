@@ -249,7 +249,7 @@
 ## Phase 7 — Retrieval Correctness Evaluation
 
 目標：
-- 建立獨立於最終 LLM 回答品質的 retrieval correctness evaluation，專注評估 evidence 是否正確、排序是否合理、coverage 是否足夠。
+- 建立獨立於最終 LLM 回答品質的 retrieval correctness evaluation，專注評估正確 `source span / chunk / assembled context` 是否被找對、排對、組對。
 - 本 phase 明確不以 answer wording、answer completeness 或 answer faithfulness 作為主要評分對象。
 - 第一版評估範圍先鎖定 `fact_lookup`，以控制標註成本並建立穩定的 retrieval benchmark。
 - retrieval correctness evaluation 必須同時涵蓋繁體中文、英文與必要時的中英混合查詢。
@@ -259,8 +259,8 @@
 - benchmark 文件需走正式 ingest pipeline，並以系統內的 `display_text` 作為標註與 offset 對齊基準。
 - 建立 retrieval evaluation dataset，第一版只覆蓋 `fact_lookup` query。
 - 長期 gold truth 以 source span 保存，而非直接綁定某一版 chunk 或 assembled context。
-- 主評分單位固定採 `assembled context`，以對齊目前實際送進 LLM 的 evidence 單位；評分前由程式將 gold source spans 映射到當前版本的 chunk 與 assembled context。
-- dataset 標註需保留 evidence traceability，可追回原始 `document / parent / child chunks`。
+- 主評分單位固定採 `assembled context`，以對齊目前實際送進 LLM 的 context 單位；評分前由程式將 gold source spans 映射到當前版本的 chunk 與 assembled context。
+- dataset 標註需保留 source-span traceability，可追回原始 `document / parent / child chunks`。
 - relevance 標註採簡化 graded relevance，第一版至少支援：
   - `3`：核心證據
   - `2`：可接受但非最佳證據
@@ -275,7 +275,7 @@
 - 建立 retrieval-only benchmark runner，分層輸出至少以下階段的結果：
   - recall
   - rerank
-  - assembled evidence
+  - assembled contexts
 - 至少量測以下 retrieval metrics：
   - `nDCG@k`
   - `Recall@k`
@@ -293,7 +293,7 @@
   - per-query 明細
   - 與 baseline run 的 regression compare
 - per-query 明細需能看出正確證據首次出現的 rank，以及是否屬於 `retrieval_miss`。
-- Phase 7 完成後需固定一組 retrieval profile 作為 baseline；後續 `Phase 8.*` 的 retrieval profile、selection、synopsis 或 synthesis 相關調整，都應回到本 phase benchmark 比較 evidence ranking 與 coverage 是否退化。
+- Phase 7 完成後需固定一組 retrieval profile 作為 baseline；後續 `Phase 8.*` 的 retrieval profile、selection、synopsis 或 synthesis 相關調整，都應回到本 phase benchmark 比較 span/chunk/context ranking 與 coverage 是否退化。
 
 狀態：
 - `已完成（v1：Full Reviewer UI + CLI-first runner + baseline compare + 單機 E2E）`
@@ -409,6 +409,40 @@
 
 ## Phase 8.4 — Hierarchical Synthesis for Summary / Compare
 
+### Phase 8 Query Flow Overview
+
+本段落用來收斂 `Phase 8.4 ~ 8.8` 的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
+
+共同原則：
+- `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應理解為同層級資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`，而不是單一召回器。
+- `document synopsis`、`section synopsis` 與 `evidence units` 都屬於 retrieval / planning layer，不是最終 citation 單位。
+- 最終 citation 一律回到 `child chunk / source span`；`parent` 只作為 materialization 邊界，`document/section/evidence` synopsis 只作為查找與排序輔助。
+- `Evidence Hints` 若要送進 LLM，必須先經過 selection / compression，只能作為 optional hints；送進 LLM 的主體仍是 assembled `parent/child` evidence contexts。
+
+建議 route-by-route 主線如下：
+- `fact_lookup`
+  - 主線：`child hybrid recall -> parent-level rerank -> assembler`
+  - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可加 `evidence-unit hybrid recall`
+  - evidence-unit 命中後需先回推到 `source_child_chunk_ids` 再與 child candidates 合併，不得直接作為 citation
+- `document_overview_summary`
+  - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
+  - `document synopsis` 的角色是 overview planning input，不應直接原封不動作為最終回答
+  - `evidence units` 可作為 optional enhancement，但不是預設主路徑
+- `section_focused_summary`
+  - 主線：`document scope resolve or document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
+  - 對 semantic-gap 較高或 evidence-dense 的 section，可選擇加 `evidence-unit hybrid recall` 補強
+- `multi_document_theme_summary`
+  - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
+  - 若主題屬於 claim / metric / findings-heavy，可選擇加 `evidence-unit hybrid recall`
+- `cross_document_compare`
+  - 主線：`document synopsis recall -> evidence-unit hybrid recall or section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
+  - 此 route 是 evidence-centric layer 最應優先產生 ROI 的場景
+
+LLM 輸入規則：
+- 預設只送 assembled `parent/child` evidence contexts 給 LLM。
+- `document synopsis`、`section synopsis` 與 `evidence units` 只應在必要時以 selected / compressed hints 形式送入，不得與 citation-ready contexts 混成同權重主體。
+- 不得將 `document synopsis`、`section synopsis` 或 `evidence units` 直接當作最終 citation payload。
+
 目標：
 - 讓長文件摘要與多文件比較改走分階段 synthesize，而不是單次把 assemble 結果全部塞進 LLM。
 - synthesis prompt、map/reduce 結構與 citation 組裝需同時適用於繁體中文與英文問答輸出。
@@ -517,7 +551,7 @@
 ## Phase 8.7 — LLM-Assisted Evidence-Centric Enrichment with Deterministic Fallback
 
 目標：
-- 在既有 `document synopsis` / `section synopsis` 之外，新增一層 evidence-centric 中介表示，讓系統不只知道「這份文件在講什麼」，也知道「哪一些段落更像可引用的事實、結論、數值、步驟或比較依據」。
+- 在既有 `document synopsis` / `section synopsis` 之外，新增一層以 recall uplift 為主的 evidence-centric retrieval layer，讓系統不只知道「這份文件在講什麼」，也能更容易透過 `FTS + vector search + RRF` 找到可引用的事實、結論、數值、步驟或比較依據。
 - evidence-centric enrichment 預設可使用 LLM 建立，但必須提供 deterministic fallback，避免 provider 不可用、成本超標或批次重建時整條 ingest / reindex 路徑失敗。
 - 新增的 evidence layer 必須維持 SQL-first、可觀測、可回退，且不得取代原始 `child chunk` 作為最終 citation 來源。
 
@@ -547,10 +581,15 @@
   - 流程 / 步驟
   - 表格結論
   - 可比較的立場 / 結論
-- runtime 使用方式應為「導航與召回輔助」，不是直接作為最終回答引用：
-  - `fact_lookup` 可先用 evidence units 做補充 recall / rerank hint
-  - `document_summary` 可先挑 evidence-dense sections，再下探 child chunks
-  - `cross_document_compare` 可先找可比較的 evidence units，再進 section / child materialization
+- runtime 使用方式以 recall uplift 為主、rerank / selection hint 為次，不是直接作為最終回答引用：
+  - `fact_lookup` 可在 semantic-gap 較高時，先用 evidence units 做 evidence-level hybrid recall，再回推到 child chunks；rerank hint 屬次要用途
+  - `document_summary` 可先用 evidence units 找到 evidence-dense sections，再下探 child chunks
+  - `cross_document_compare` 可先用 evidence units 找到可比較的 evidence，再進 section / child materialization
+- evidence-unit recall 的正式主線應採 hybrid search：
+  - `evidence_text` 走 `FTS`
+  - `evidence_embedding` 走 vector search
+  - 兩者以 `RRF` 合併
+  - 命中 evidence units 後，再回推到 `parent_chunk_id + source_child_chunk_ids`
 - deterministic fallback 必須是正式支援路徑，不是只存在測試環境：
   - 設定可顯式指定 `llm | deterministic | auto`
   - `auto` 預設先嘗試 `llm`，失敗時回退 `deterministic`
@@ -572,7 +611,7 @@
 ## Phase 8.8 — Evaluation Expansion for Evidence-Centric Enrichment
 
 目標：
-- 在 `8.7` evidence-centric layer 進入主線後，補上第二個 evaluation checkpoint，確認新 evidence layer 真的改善 retrieval / synthesis，而不是只增加 schema、成本與複雜度。
+- 在 `8.7` evidence-centric layer 進入主線後，補上第二個 evaluation checkpoint，確認新 evidence layer 真的透過 `FTS + vector search + RRF` 改善 retrieval / synthesis，而不是只增加 schema、成本與複雜度。
 - 本 phase 僅處理 evidence-centric enrichment 對 summary / compare 路徑的增益與風險，不負責 `fact_lookup` 的 retrieval correctness。
 
 內容：
@@ -582,6 +621,15 @@
   - evidence-unit -> citation traceability
   - `llm | deterministic | auto` fallback quality
   - evidence-centric enrichment 對 recall / rerank / synthesis latency 與成本的影響
+- 需明確比較至少三條 lane：
+  - 無 evidence layer 的 baseline
+  - `deterministic` evidence layer
+  - `llm` / `auto` evidence layer
+- 需明確量測 evidence-unit hybrid recall uplift，而不是只看最終回答品質：
+  - evidence-level `Recall@k`
+  - evidence-level `Precision@k`
+  - first relevant evidence rank
+  - 對最終 child/source-span citation hit rate 的增益
 - 明確區分：
   - evidence layer 幫助找到更多可引用 evidence
   - evidence layer 只是重複既有 child/parent 命中，沒有實質增益

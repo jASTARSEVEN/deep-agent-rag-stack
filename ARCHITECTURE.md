@@ -225,6 +225,14 @@
 19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；目前不做 section-level synopsis
 19.11. `document_summary` 與 `cross_document_compare` 採兩階段 retrieval：第一階段以 synopsis 做 document recall，第二階段再對入選文件集合做既有 child recall、rerank、selection 與 assembler；第二階段縮小範圍必須透過 SQL `allowed_document_ids` filter 完成，不得以記憶體過濾取代
 19.12. 第一階段 document recall 預設維持 fail-open：若 synopsis recall 無法選出文件集合，第二階段可回退到原本 area-scoped child recall，但必須在 trace / evaluation 中明確保留 `document_recall` 明細
+19.12.1. `Phase 8.5` 起的 `task routing` 正式主線採 `deterministic + embedding`，輸出 route 應至少包含 `fact_lookup`、`document_overview_summary`、`section_focused_summary`、`multi_document_theme_summary` 與 `cross_document_compare`；LLM routing 只允許作為可關閉的實驗性 fallback
+19.12.2. `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應視為各自資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`；不得把任一 recall node 簡化為單一檢索器的概念
+19.12.3. `document_overview_summary` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；`document synopsis` 只作為 overview planning input，不得原封不動作為最終回答
+19.12.4. `section_focused_summary` 的主線應為 `document scope resolve or document synopsis recall -> section synopsis recall -> child recall`；僅在 semantic-gap 較高或 evidence-dense 的 section 才允許加上 `evidence-unit recall` 補強
+19.12.5. `cross_document_compare` 的主線應為 `document synopsis recall -> evidence-unit recall or section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；此 route 是 `evidence-centric layer` 的主要 ROI 場景
+19.12.6. `fact_lookup` 的主線仍是 area-scoped `child recall -> rerank -> assembler`；但在 semantic-gap、數值 / 表格 query 或第一輪 child recall 信心不足時，允許加入 `evidence-unit recall` 補強 recall，再回推到 `source_child_chunk_ids`
+19.12.7. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
+19.12.8. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state

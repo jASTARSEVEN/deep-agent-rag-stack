@@ -62,6 +62,7 @@
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
+- 目前 `Phase 7` 的 retrieval correctness evaluation 本質上仍是 `source span / chunk / assembled context` 層級評估，尚未進入 `Phase 8.7/8.8` 規劃中的 evidence-centric layer / evidence-unit 專屬評估
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
