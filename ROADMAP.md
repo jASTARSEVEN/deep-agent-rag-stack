@@ -237,14 +237,12 @@
 ## 近期建議順序
 
 1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + query_focus off + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
-2. 先完成 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare` 的最小可運作垂直切片，讓 `document_summary` / `cross_document_compare` 不再只依賴單次 assemble 後直接進 LLM 的回答路徑
-3. 先完成 `Phase 8.5 — Section Synopsis & Task Routing for Summary / Compare`，把目前只有半套的 routing 補成正式 runtime 能力
-4. 再完成 `Phase 8.6 — Evaluation & Guardrails Checkpoint for Synthesis + Routing`，先驗證 `8.4 + 8.5` 主線品質，再決定是否推進新的 evidence layer
-5. 之後實作 `Phase 8.7 — LLM-Assisted Evidence-Centric Enrichment with Deterministic Fallback`，在 ingest / reindex 階段建立 evidence-centric 中介表示
-6. 最後以 `Phase 8.8 — Evaluation Expansion for Evidence-Centric Enrichment` 擴充 evidence-layer 專屬評估與 guardrails
-7. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
-8. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
-9. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+2. 先完成 `Phase 8A — Summary / Compare Runtime Consolidation`，把舊 `8.4 ~ 8.6` 收斂為單一快速交付批次，讓 `document_summary` / `cross_document_compare` 先具備可用的 hierarchical synthesis、最小 section synopsis 與正式 task routing
+3. `Phase 8A` 內建最小 evaluation checkpoint 與 guardrails，不再額外拆出獨立 phase；若 `8A` 品質未穩定，不推進 evidence layer
+4. 待 `Phase 8A` 穩定後，再進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation`，以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
+5. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
+6. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
+7. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## Phase 7 — Retrieval Correctness Evaluation
 
@@ -407,11 +405,11 @@
 狀態：
 - `已完成（closeout 已以 DRCD / NQ / QASPER sentinel rerun、public-entry smoke 與 document recall observability 驗證；其中 QASPER 100 的輕微退化被接受為可承受代價）`
 
-## Phase 8.4 — Hierarchical Synthesis for Summary / Compare
+## Phase 8A — Summary / Compare Runtime Consolidation
 
 ### Phase 8 Query Flow Overview
 
-本段落用來收斂 `Phase 8.4 ~ 8.8` 的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
+本段落用來收斂 `Phase 8A ~ 8B` 的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
 
 共同原則：
 - `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應理解為同層級資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`，而不是單一召回器。
@@ -425,21 +423,21 @@
 建議 route-by-route 主線如下：
 - 第一層 `task_type=fact_lookup`
   - 主線：`child hybrid recall -> parent-level rerank -> assembler`
-  - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可加 `evidence-unit hybrid recall`
+  - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可在 `Phase 8B` 加上 `evidence-unit hybrid recall`
   - evidence-unit 命中後需先回推到 `source_child_chunk_ids` 再與 child candidates 合併，不得直接作為 citation
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=document_overview`
   - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
   - `document synopsis` 的角色是 overview planning input，不應直接原封不動作為最終回答
-  - `evidence units` 可作為 optional enhancement，但不是預設主路徑
+  - `evidence units` 僅在 `Phase 8B` 作為 optional enhancement，不是 `8A` 的預設主路徑
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=section_focused`
   - 主線：`document scope resolve or document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
-  - 對 semantic-gap 較高或 evidence-dense 的 section，可選擇加 `evidence-unit hybrid recall` 補強
+  - 對 semantic-gap 較高或 evidence-dense 的 section，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall` 補強
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=multi_document_theme`
   - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
-  - 若主題屬於 claim / metric / findings-heavy，可選擇加 `evidence-unit hybrid recall`
+  - 若主題屬於 claim / metric / findings-heavy，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall`
 - 第一層 `task_type=cross_document_compare`
-  - 主線：`document synopsis recall -> evidence-unit hybrid recall or section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
-  - 此 route 是 evidence-centric layer 最應優先產生 ROI 的場景
+  - `Phase 8A` 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> diversified selection -> assembler -> synthesis`
+  - `Phase 8B` 可再疊加 `evidence-unit hybrid recall`，此 route 也是 evidence-centric layer 最應優先產生 ROI 的場景
 
 LLM 輸入規則：
 - 預設只送 assembled `parent/child` evidence contexts 給 LLM。
@@ -447,7 +445,8 @@ LLM 輸入規則：
 - 不得將 `document synopsis`、`section synopsis` 或 `evidence units` 直接當作最終 citation payload。
 
 目標：
-- 讓長文件摘要與多文件比較改走分階段 synthesize，而不是單次把 assemble 結果全部塞進 LLM。
+- 以較少 phase 快速落地 `document_summary` / `cross_document_compare` 的可用 runtime。
+- 把舊 `8.4 ~ 8.6` 合併為單一交付批次：一次完成 hierarchical synthesis、最小 section synopsis、正式 task routing 與最小 evaluation checkpoint。
 - synthesis prompt、map/reduce 結構與 citation 組裝需同時適用於繁體中文與英文問答輸出。
 
 內容：
@@ -455,58 +454,24 @@ LLM 輸入規則：
 - 對 `document_summary` 與 `cross_document_compare` 類問題，採用至少兩段式流程：
   - map：先對單文件或單群組 context 產生局部摘要 / 比較筆記
   - reduce：再合成最終回答與 citations
-- 本 phase 允許先沿用既有 `query_type + summary_scope` routing 作為最小進入條件；更細的 task routing 與 section-level synopsis 正式化留給 `Phase 8.5`。
-- 本 phase 不新增 evidence-centric enrichment schema、evidence-unit table 或新的 ingest stage；輸入以既有 assembled contexts、citations 與 routing 結果為主。
-- 必要時支援 refine step，處理 context 過長或文件數偏多的情境。
-- citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
-- trace metadata 補上 map/reduce 階段輸入輸出摘要，便於 debug 與成本觀測。
-- 對比較型問題定義較穩定的輸出結構，例如：
-  - 共通點
-  - 差異點
-  - 各文件立場 / 結論
-  - 不足證據或矛盾處
-
-狀態：
-- `未開始`
-
-## Phase 8.5 — Section Synopsis & Task Routing for Summary / Compare
-
-目標：
-- 補上介於 `document synopsis` 與 `child chunks` 之間的 section-level 中介表示，避免長文件摘要 / 比較只能在「整份文件過粗」與「child chunk 過碎」之間二選一。
-- 將目前偏 retrieval-profile 導向、只有半套的 routing 擴充為正式 task routing，讓 runtime 能依任務型態決定要走 document-level、section-level 或 child-level evidence plan。
-- section synopsis 與 task routing 必須同時支援繁體中文、英文與必要時的中英混合查詢，不得只對單一語言或單一 benchmark 題型成立。
-
-內容：
-- 在 ingest / reindex pipeline 新增 section synopsis 生成，正式範圍以 parent section 或 parent cluster 為單位，不直接退化成逐 child chunk 摘要。
-- section-level 表示必須補上 hierarchical section context；至少要在 parent / section 層保存：
+- 在 ingest / reindex pipeline 新增最小可用的 section synopsis，正式範圍以 parent section 或 parent cluster 為單位，不退化成逐 child chunk 摘要。
+- section-level 表示需補上 hierarchical section context，至少包含：
   - `heading_path`
   - `section_path_text`
   - `heading_level`
-- `section synopsis` 生成不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 作為正式輸入。
-- section synopsis 必須維持 SQL-first 可查詢與可觀測；若正式落資料，需具備對應的 synopsis text、embedding、updated_at 與來源 section locator，而不是只存在記憶體快取。
-- task routing 的正式主線採 2 層 `deterministic + embedding`，不以 LLM routing 作為預設依賴：
+- `section synopsis` 的正式輸入應以 `document title + heading_path / section_path_text + local content` 為主，不得只看最近一層 heading。
+- 正式 task routing 收斂為 2 層 `deterministic + embedding`：
   - 第一層 `task_type`：`fact_lookup | document_summary | cross_document_compare`
   - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
-  - `deterministic` 負責 query intent、文件提及、section / topic / compare 關鍵詞與明確 scope 線索
-  - `embedding` 負責 query 對 document / section synopsis 的相似度判斷與第一層、第二層 route disambiguation
-  - 只有在主線分數不足以做穩定判斷時，才允許實驗性 `LLM mini + low` fallback，且必須可關閉、可觀測、不可作為 ready-path 必要依賴
-- 第一層 `task_type` 先決定大方向：
-  - `fact_lookup`：直接走 child 為主的 evidence path
-  - `document_summary`：再進第二層 `summary_strategy`
-  - `cross_document_compare`：走 compare 專用 evidence path
-- 第二層 `summary_strategy` 再決定 `document_summary` 的 evidence plan，例如：
-  - `document_overview`：先走 document synopsis recall 再進 section synopsis recall
-  - `section_focused`：直接在已解析單文件 scope 或 document recall 後走 section synopsis + child recall
-  - `multi_document_theme`：先做文件集合解析，再做 section-level coverage-first materialization
-- task routing 必須有明確 confidence gate：
-  - 第一層與第二層都必須各自產生 confidence
-  - 高信心時才採用對應 route / strategy
-  - 低信心時先回退到較保守的 `document_summary` / area-scoped child recall 路徑
-  - 不得因 routing 不確定就強制依賴 LLM 作最終裁決
-- `summary_strategy=section_focused` 必須能處理「摘要某章節 / 某主題 / 某面向」這類 query；若無高信心 section match，允許 fail-open 回退到 `Phase 8.4` 的既有 hierarchical synthesis 路徑，但 trace 必須保留 fallback 原因。
-- 本 phase 不新增 evidence-unit schema，也不把 evidence-centric enrichment 納入 routing 主線；該類能力留給 `Phase 8.7`。
-- section-level recall 必須吃 path-aware text，而不是只吃最近一層 heading 或 local content；正式的 section recall text 應至少包含 `section_path_text + local content`，必要時可再補 `document title`。
-- trace metadata 需新增：
+  - `LLM routing` 只允許作為可關閉的實驗性 fallback，不得作為 ready-path 必要依賴
+- rollout 優先順序以快速交付為原則：
+  - 先穩定 `document_summary`
+  - `document_overview` 與 `section_focused` 優先於 `multi_document_theme`
+  - `cross_document_compare` 在 `8A` 先以保守 coverage-first 版本落地，不導入 evidence-unit 依賴
+- 本 phase 不新增 evidence-centric enrichment schema、evidence-unit table 或新的 ingest stage；evidence-centric layer 留給 `Phase 8B`。
+- 必要時支援 refine step，處理 context 過長或文件數偏多的情境。
+- citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
+- trace metadata 需至少補上：
   - `task_type`
   - `task_type_source / confidence`
   - `summary_strategy`
@@ -515,25 +480,14 @@ LLM 輸入規則：
   - selected synopsis level（`document | section | child`）
   - section match candidates / kept sections / dropped sections
   - fallback reason
-- section synopsis 的 rollout 應先支援 `task_type=document_summary`，再擴充到 `cross_document_compare`；compare 不得一開始就引入過度複雜的 section alignment heuristic。
-- benchmark 與回歸驗證需至少觀測：
-  - `QASPER 100` 的長文件 section-targeted summary miss
-  - `NQ 100` 的長段落 materialization regression
-  - `DRCD 100` 的中文 section match / rerank regression
-
-狀態：
-- `提案中`
-
-## Phase 8.6 — Evaluation & Guardrails Checkpoint for Synthesis + Routing
-
-目標：
-- 為 `8.4 + 8.5` 主線建立第一個可回歸的品質 checkpoint，避免在 routing 與 section synopsis 剛落地後就繼續擴張 evidence layer。
-- 本 phase 僅處理 `document_summary` 與 `cross_document_compare` 的 synthesis / coverage evaluation，不負責 `fact_lookup` 的 retrieval correctness。
-- evaluation 與 guardrails 必須把繁體中文、英文與必要時的中英混合查詢都納入正式驗證範圍。
-
-內容：
-- 本 phase 依賴 `Phase 8.3 — Document-Level Representations`、`Phase 8.4 — Hierarchical Synthesis for Summary / Compare` 與 `Phase 8.5 — Section Synopsis & Task Routing for Summary / Compare` 已具備可評估的 runtime。
-- 建立摘要 / 比較專用 evaluation set，覆蓋：
+  - map / reduce / refine 階段輸入輸出摘要
+- 對比較型問題定義較穩定的輸出結構，例如：
+  - 共通點
+  - 差異點
+  - 各文件立場 / 結論
+  - 不足證據或矛盾處
+- `Phase 8A` 的 exit criteria 內建最小 evaluation checkpoint 與 guardrails，不再額外拆成獨立 phase：
+  - 建立摘要 / 比較專用 evaluation set，覆蓋：
   - 單長文件摘要
   - 多文件共同主題摘要
   - 多文件差異比較
@@ -546,30 +500,34 @@ LLM 輸入規則：
   - answer faithfulness
   - map / reduce token 成本
   - 回答延遲
-- 補 guardrails，限制：
+- guardrails 至少限制：
   - 最大入選文件數
   - 最大 map / reduce token 預算
   - synopsis 長度
   - 比較型問題的每文件 context 配額
 - 本 checkpoint 至少覆蓋：
-  - `8.4` 的 synthesis completeness / faithfulness / latency
-  - `8.5` 的 `task_type` accuracy、`summary_strategy` accuracy、section-scope coverage 與 fallback rate
+  - hierarchical synthesis 的 completeness / faithfulness / latency
+  - `task_type` accuracy
+  - `summary_strategy` accuracy
+  - section-scope coverage
+  - fallback rate
 - 將 evaluation 結果回饋到 profile、selection、synopsis 與 synthesis 參數調整，避免單次 heuristic 長期失真。
 - `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
 狀態：
 - `未開始`
 
-## Phase 8.7 — LLM-Assisted Evidence-Centric Enrichment with Deterministic Fallback
+## Phase 8B — Evidence-Centric Enrichment & Evaluation
 
 目標：
-- 在既有 `document synopsis` / `section synopsis` 之外，新增一層以 recall uplift 為主的 evidence-centric retrieval layer，讓系統不只知道「這份文件在講什麼」，也能更容易透過 `FTS + vector search + RRF` 找到可引用的事實、結論、數值、步驟或比較依據。
+- 在 `Phase 8A` 穩定後，再導入 evidence-centric retrieval layer，讓系統不只知道「這份文件在講什麼」，也能更容易透過 `FTS + vector search + RRF` 找到可引用的事實、結論、數值、步驟或比較依據。
 - evidence-centric enrichment 預設可使用 LLM 建立，但必須提供 deterministic fallback，避免 provider 不可用、成本超標或批次重建時整條 ingest / reindex 路徑失敗。
+- `Phase 8B` 合併舊 `8.7 + 8.8`：同一批次內完成 evidence layer、其 retrieval-side consumption 與專屬 evaluation checkpoint。
 - 新增的 evidence layer 必須維持 SQL-first、可觀測、可回退，且不得取代原始 `child chunk` 作為最終 citation 來源。
 
 內容：
 - 在 ingest / reindex pipeline 新增 evidence-centric enrichment stage，正式時機固定在 chunk tree 與 synopsis 建立之後、文件進入 `ready` 之前。
-- 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、fallback 與 retrieval-side consumption。
+- 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、fallback、retrieval-side consumption 與其專屬評估。
 - evidence unit 的正式輸入不得只看 local parent heading；至少應包含：
   - `document title`
   - `heading_path`
@@ -622,20 +580,7 @@ LLM 輸入規則：
   - `NQ 100` 的長段落 evidence materialization 是否更穩定
   - `DRCD 100` 的中文數值 / 表格 evidence 是否退化
 - 本 phase 應避免引入 corpus-specific heuristic；任何 evidence type taxonomy 與 prompt wording 都必須維持 generic-first，不得為單一 benchmark 硬調。
-- 本 phase 完成後，必須進入 `Phase 8.8`，補上 evidence-unit coverage、evidence-unit -> citation traceability 與 deterministic fallback quality 的評估。
-
-狀態：
-- `提案中`
-
-## Phase 8.8 — Evaluation Expansion for Evidence-Centric Enrichment
-
-目標：
-- 在 `8.7` evidence-centric layer 進入主線後，補上第二個 evaluation checkpoint，確認新 evidence layer 真的透過 `FTS + vector search + RRF` 改善 retrieval / synthesis，而不是只增加 schema、成本與複雜度。
-- 本 phase 僅處理 evidence-centric enrichment 對 summary / compare 路徑的增益與風險，不負責 `fact_lookup` 的 retrieval correctness。
-
-內容：
-- 本 phase 依賴 `Phase 8.7 — LLM-Assisted Evidence-Centric Enrichment with Deterministic Fallback` 已進入可評估主線。
-- 在 `8.6` 的 evaluation 基礎上，新增 evidence-layer 專屬評估：
+- `Phase 8B` 的 exit criteria 需內建 evidence-layer 專屬評估，確認新 evidence layer 真的透過 `FTS + vector search + RRF` 改善 retrieval / synthesis，而不是只增加 schema、成本與複雜度：
   - evidence-unit coverage
   - evidence-unit -> citation traceability
   - `llm | deterministic | auto` fallback quality
@@ -658,7 +603,7 @@ LLM 輸入規則：
   - evidence layer 只是重複既有 child/parent 命中，沒有實質增益
   - evidence layer 引入新的 false-positive 或 compare 對齊錯誤
 - 評估結果需回饋到 evidence taxonomy、build strategy、fallback policy 與 retrieval-side consumption 規則。
-- 若 evidence-centric enrichment 未能穩定改善 `QASPER 100`、或反而讓 `NQ 100` / `DRCD 100` 哨兵退化，應回退主線或至少關閉預設 lane。
+- rollout 預設採 feature flag / optional lane；若 evidence-centric enrichment 未能穩定改善 `QASPER 100`、或反而讓 `NQ 100` / `DRCD 100` 哨兵退化，應保持預設關閉、回退主線或兩者擇一。
 
 狀態：
-- `未開始`
+- `提案中`

@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8.4 — Hierarchical Synthesis for Summary / Compare (Not Started)`
+當前主階段：`Phase 8A — Summary / Compare Runtime Consolidation (Not Started)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -62,7 +62,7 @@
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
-- 目前 `Phase 7` 的 retrieval correctness evaluation 本質上仍是 `source span / chunk / assembled context` 層級評估，尚未進入 `Phase 8.7/8.8` 規劃中的 evidence-centric layer / evidence-unit 專屬評估
+- 目前 `Phase 7` 的 retrieval correctness evaluation 本質上仍是 `source span / chunk / assembled context` 層級評估，尚未進入 `Phase 8B` 規劃中的 evidence-centric layer / evidence-unit 專屬評估
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
@@ -84,7 +84,7 @@
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
 - 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
 - 已新增 rule-based bilingual query-type classifier，正式支援 `fact_lookup | document_summary | cross_document_compare`
-- `Phase 8.5+` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
+- `Phase 8A` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
 - 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
 - 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
 - `query_focus` 是否實際套用仍由環境變數 / settings 控制；本輪保留相容欄位與 profile knobs，但不再由 routing skeleton 強制覆寫總開關
@@ -308,7 +308,7 @@
 ## 目前階段重點
 
 ### Current Focus
-- 準備進入 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare`
+- 準備進入 `Phase 8A — Summary / Compare Runtime Consolidation`
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -316,8 +316,8 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 進入 `Phase 8.4 — Hierarchical Synthesis for Summary / Compare`，定義 `document_summary` / `cross_document_compare` 的 map-reduce / refine runtime
-2. 補一輪 `reindex` consistency 驗證，確認 synopsis 更新後 `document_recall.strategy`、`selected_document_ids` 與 coverage 沒有退化
+1. 進入 `Phase 8A — Summary / Compare Runtime Consolidation`，以單一交付批次完成 `document_summary` / `cross_document_compare` 的 hierarchical synthesis、最小 section synopsis、正式 task routing 與最小 evaluation checkpoint
+2. 補一輪 `reindex` consistency 驗證，確認 document / section synopsis 更新後 `document_recall.strategy`、`selected_document_ids`、`selected_synopsis_level` 與 coverage 沒有退化
 3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
 4. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
