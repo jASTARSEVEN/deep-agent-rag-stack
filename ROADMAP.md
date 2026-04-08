@@ -418,23 +418,26 @@
 - `document synopsis`、`section synopsis` 與 `evidence units` 都屬於 retrieval / planning layer，不是最終 citation 單位。
 - 最終 citation 一律回到 `child chunk / source span`；`parent` 只作為 materialization 邊界，`document/section/evidence` synopsis 只作為查找與排序輔助。
 - `Evidence Hints` 若要送進 LLM，必須先經過 selection / compression，只能作為 optional hints；送進 LLM 的主體仍是 assembled `parent/child` evidence contexts。
+- 正式 routing 模型採 2 層，而不是平面 5 類：
+  - 第一層 `task_type`：`fact_lookup | document_summary | cross_document_compare`
+  - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
 
 建議 route-by-route 主線如下：
-- `fact_lookup`
+- 第一層 `task_type=fact_lookup`
   - 主線：`child hybrid recall -> parent-level rerank -> assembler`
   - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可加 `evidence-unit hybrid recall`
   - evidence-unit 命中後需先回推到 `source_child_chunk_ids` 再與 child candidates 合併，不得直接作為 citation
-- `document_overview_summary`
+- 第一層 `task_type=document_summary` + 第二層 `summary_strategy=document_overview`
   - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
   - `document synopsis` 的角色是 overview planning input，不應直接原封不動作為最終回答
   - `evidence units` 可作為 optional enhancement，但不是預設主路徑
-- `section_focused_summary`
+- 第一層 `task_type=document_summary` + 第二層 `summary_strategy=section_focused`
   - 主線：`document scope resolve or document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
   - 對 semantic-gap 較高或 evidence-dense 的 section，可選擇加 `evidence-unit hybrid recall` 補強
-- `multi_document_theme_summary`
+- 第一層 `task_type=document_summary` + 第二層 `summary_strategy=multi_document_theme`
   - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
   - 若主題屬於 claim / metric / findings-heavy，可選擇加 `evidence-unit hybrid recall`
-- `cross_document_compare`
+- 第一層 `task_type=cross_document_compare`
   - 主線：`document synopsis recall -> evidence-unit hybrid recall or section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
   - 此 route 是 evidence-centric layer 最應優先產生 ROI 的場景
 
@@ -475,35 +478,44 @@ LLM 輸入規則：
 
 內容：
 - 在 ingest / reindex pipeline 新增 section synopsis 生成，正式範圍以 parent section 或 parent cluster 為單位，不直接退化成逐 child chunk 摘要。
+- section-level 表示必須補上 hierarchical section context；至少要在 parent / section 層保存：
+  - `heading_path`
+  - `section_path_text`
+  - `heading_level`
+- `section synopsis` 生成不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 作為正式輸入。
 - section synopsis 必須維持 SQL-first 可查詢與可觀測；若正式落資料，需具備對應的 synopsis text、embedding、updated_at 與來源 section locator，而不是只存在記憶體快取。
-- task routing 的正式主線採 `deterministic + embedding`，不以 LLM routing 作為預設依賴：
+- task routing 的正式主線採 2 層 `deterministic + embedding`，不以 LLM routing 作為預設依賴：
+  - 第一層 `task_type`：`fact_lookup | document_summary | cross_document_compare`
+  - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
   - `deterministic` 負責 query intent、文件提及、section / topic / compare 關鍵詞與明確 scope 線索
-  - `embedding` 負責 query 對 document / section synopsis 的相似度判斷與 route disambiguation
+  - `embedding` 負責 query 對 document / section synopsis 的相似度判斷與第一層、第二層 route disambiguation
   - 只有在主線分數不足以做穩定判斷時，才允許實驗性 `LLM mini + low` fallback，且必須可關閉、可觀測、不可作為 ready-path 必要依賴
-- 明確定義 task routing 輸出 contract，至少區分：
-  - `fact_lookup_direct`
-  - `document_overview_summary`
-  - `section_focused_summary`
-  - `multi_document_theme_summary`
-  - `cross_document_compare`
-- task routing 不只判斷 query type，還要決定 evidence plan，例如：
-  - 先走 document synopsis recall 再進 section synopsis recall
-  - 直接在已解析單文件 scope 內走 section synopsis + child recall
-  - 比較題先做文件集合解析，再對可比 section 做 coverage-first materialization
+- 第一層 `task_type` 先決定大方向：
+  - `fact_lookup`：直接走 child 為主的 evidence path
+  - `document_summary`：再進第二層 `summary_strategy`
+  - `cross_document_compare`：走 compare 專用 evidence path
+- 第二層 `summary_strategy` 再決定 `document_summary` 的 evidence plan，例如：
+  - `document_overview`：先走 document synopsis recall 再進 section synopsis recall
+  - `section_focused`：直接在已解析單文件 scope 或 document recall 後走 section synopsis + child recall
+  - `multi_document_theme`：先做文件集合解析，再做 section-level coverage-first materialization
 - task routing 必須有明確 confidence gate：
-  - 高信心時採用對應 route
+  - 第一層與第二層都必須各自產生 confidence
+  - 高信心時才採用對應 route / strategy
   - 低信心時先回退到較保守的 `document_summary` / area-scoped child recall 路徑
   - 不得因 routing 不確定就強制依賴 LLM 作最終裁決
-- `section_focused_summary` 必須能處理「摘要某章節 / 某主題 / 某面向」這類 query；若無高信心 section match，允許 fail-open 回退到 `Phase 8.4` 的既有 hierarchical synthesis 路徑，但 trace 必須保留 fallback 原因。
+- `summary_strategy=section_focused` 必須能處理「摘要某章節 / 某主題 / 某面向」這類 query；若無高信心 section match，允許 fail-open 回退到 `Phase 8.4` 的既有 hierarchical synthesis 路徑，但 trace 必須保留 fallback 原因。
 - 本 phase 不新增 evidence-unit schema，也不把 evidence-centric enrichment 納入 routing 主線；該類能力留給 `Phase 8.7`。
+- section-level recall 必須吃 path-aware text，而不是只吃最近一層 heading 或 local content；正式的 section recall text 應至少包含 `section_path_text + local content`，必要時可再補 `document title`。
 - trace metadata 需新增：
-  - `task_route`
-  - route source / confidence
+  - `task_type`
+  - `task_type_source / confidence`
+  - `summary_strategy`
+  - `summary_strategy_source / confidence`
   - selected evidence plan
   - selected synopsis level（`document | section | child`）
   - section match candidates / kept sections / dropped sections
   - fallback reason
-- section synopsis 的 rollout 應先支援 `document_summary`，再擴充到 `cross_document_compare`；compare 不得一開始就引入過度複雜的 section alignment heuristic。
+- section synopsis 的 rollout 應先支援 `task_type=document_summary`，再擴充到 `cross_document_compare`；compare 不得一開始就引入過度複雜的 section alignment heuristic。
 - benchmark 與回歸驗證需至少觀測：
   - `QASPER 100` 的長文件 section-targeted summary miss
   - `NQ 100` 的長段落 materialization regression
@@ -541,7 +553,7 @@ LLM 輸入規則：
   - 比較型問題的每文件 context 配額
 - 本 checkpoint 至少覆蓋：
   - `8.4` 的 synthesis completeness / faithfulness / latency
-  - `8.5` 的 route accuracy、section-scope coverage 與 fallback rate
+  - `8.5` 的 `task_type` accuracy、`summary_strategy` accuracy、section-scope coverage 與 fallback rate
 - 將 evaluation 結果回饋到 profile、selection、synopsis 與 synthesis 參數調整，避免單次 heuristic 長期失真。
 - `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
@@ -558,6 +570,12 @@ LLM 輸入規則：
 內容：
 - 在 ingest / reindex pipeline 新增 evidence-centric enrichment stage，正式時機固定在 chunk tree 與 synopsis 建立之後、文件進入 `ready` 之前。
 - 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、fallback 與 retrieval-side consumption。
+- evidence unit 的正式輸入不得只看 local parent heading；至少應包含：
+  - `document title`
+  - `heading_path`
+  - `section_path_text`
+  - local parent / child content
+- 以 parent 為抽取範圍時，`heading_path / section_path_text` 屬於必要語境；若 evidence 需要跨同一路徑下的多個 sibling parents，應允許擴充為 `primary_parent_chunk_id + source_parent_chunk_ids` 模型，而不是被單一最近層 heading 綁死。
 - evidence-centric enrichment 的正式來源可為：
   - `llm`：由 LLM 根據 parent section / parent cluster / table context 萃取 evidence-oriented 結構
   - `deterministic`：由 heading、list/table 模式、句界視窗、數值/日期/專名等規則組合出較保守的 evidence 表示
@@ -586,6 +604,7 @@ LLM 輸入規則：
   - `document_summary` 可先用 evidence units 找到 evidence-dense sections，再下探 child chunks
   - `cross_document_compare` 可先用 evidence units 找到可比較的 evidence，再進 section / child materialization
 - evidence-unit recall 的正式主線應採 hybrid search：
+  - `heading_path / section_path_text + evidence_text` 應共同參與 recall text 表示
   - `evidence_text` 走 `FTS`
   - `evidence_embedding` 走 vector search
   - 兩者以 `RRF` 合併
@@ -621,6 +640,10 @@ LLM 輸入規則：
   - evidence-unit -> citation traceability
   - `llm | deterministic | auto` fallback quality
   - evidence-centric enrichment 對 recall / rerank / synthesis latency 與成本的影響
+- 必須額外驗證 hierarchical path 帶來的增益，而不是只看 local content：
+  - path-aware section recall uplift
+  - path-aware evidence-unit precision / recall uplift
+  - compare 對齊是否因 `heading_path / section_path_text` 而更穩定
 - 需明確比較至少三條 lane：
   - 無 evidence layer 的 baseline
   - `deterministic` evidence layer

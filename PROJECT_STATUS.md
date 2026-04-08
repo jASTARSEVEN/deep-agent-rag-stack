@@ -84,6 +84,7 @@
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
 - 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
 - 已新增 rule-based bilingual query-type classifier，正式支援 `fact_lookup | document_summary | cross_document_compare`
+- `Phase 8.5+` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
 - 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
 - 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
 - `query_focus` 是否實際套用仍由環境變數 / settings 控制；本輪保留相容欄位與 profile knobs，但不再由 routing skeleton 強制覆寫總開關

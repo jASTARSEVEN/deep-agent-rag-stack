@@ -92,6 +92,44 @@
 12. Worker 為 child chunks 寫入 `embedding`
 13. Worker 更新 document/job 狀態為 `ready` 或 `failed`
 
+```mermaid
+flowchart TD
+    U["Upload / Reindex Request"] --> API["API 建立 documents / ingest_jobs"]
+    API --> OBJ["原始檔寫入 MinIO / Storage"]
+    API --> W["Worker Ingest"]
+
+    W --> PA{"可重用 parse artifacts?"}
+    PA -->|Yes| PD["重建 ParsedDocument"]
+    PA -->|No| PR["Parse Routing"]
+
+    PR --> PDF["PDF provider parse"]
+    PR --> OFFICE["DOCX / PPTX / XLSX parse"]
+    PR --> TEXT["TXT / Markdown / HTML parse"]
+
+    PDF --> PD
+    OFFICE --> PD
+    TEXT --> PD
+
+    PD["ParsedDocument / blocks"] --> PC["建立 Parent Chunks"]
+    PC --> CC["建立 Child Chunks"]
+    PC --> DS["Document Synopsis"]
+    PC --> SS["Section Synopsis (Phase 8.5 planned)"]
+    PC --> EU["Evidence Units (Phase 8.7 planned)"]
+
+    CC --> CE["Child Embeddings"]
+    DS --> DE["Document Synopsis Embedding"]
+    SS --> SE["Section Synopsis Embedding"]
+    EU --> EE["Evidence Embeddings"]
+
+    PD --> DT["documents.display_text / offsets"]
+
+    CE --> READY["document ready / failed"]
+    DE --> READY
+    SE --> READY
+    EE --> READY
+    DT --> READY
+```
+
 ### 問答流程
 1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run；每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
 2. LangGraph Server 先透過 custom auth 驗證 Bearer token
@@ -103,6 +141,64 @@
 8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
 9. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
 10. 前端正式引用 UX 為回答句尾 chips + 右側全文預覽欄；`Assembled Contexts`、工具輸入與工具輸出保留為 debug/details
+
+```mermaid
+flowchart TD
+    Q["User Query"] --> AUTH["Auth / SQL Gate"]
+    AUTH --> L1["Layer 1 Routing<br/>task_type<br/>deterministic + embedding"]
+
+    L1 --> RT{"task_type"}
+
+    RT -->|fact_lookup| FL["Fact Lookup"]
+    RT -->|document_summary| L2["Layer 2 Routing<br/>summary_strategy"]
+    RT -->|cross_document_compare| CDC["Cross-Document Compare"]
+
+    L2 -->|document_overview| DOS["Document Overview Summary"]
+    L2 -->|section_focused| SFS["Section Focused Summary"]
+    L2 -->|multi_document_theme| MDS["Multi-Document Theme Summary"]
+
+    FL --> CH0["Child Hybrid Recall<br/>FTS + vector + RRF"]
+    FL -. conditional .-> EH0["Evidence Hybrid Recall<br/>FTS + vector + RRF"]
+    EH0 --> MAP0["回推 source_child_chunk_ids"]
+    CH0 --> MERGE0["Merge Child Candidates"]
+    MAP0 --> MERGE0
+
+    DOS --> DR1["Document Hybrid Recall"]
+    DR1 --> SR1["Section Hybrid Recall"]
+    SR1 --> CH1["Child Hybrid Recall"]
+
+    SFS --> DR2["Document Scope Resolve / Document Recall"]
+    DR2 --> SR2["Section Hybrid Recall"]
+    SR2 --> CH2["Child Hybrid Recall"]
+    SR2 -. optional .-> EH2["Evidence Hybrid Recall"]
+    EH2 --> CH2
+
+    MDS --> DR3["Document Hybrid Recall"]
+    DR3 --> SR3["Section Hybrid Recall"]
+    SR3 --> CH3["Child Hybrid Recall"]
+    SR3 -. optional .-> EH3["Evidence Hybrid Recall"]
+    EH3 --> CH3
+
+    CDC --> DR4["Document Hybrid Recall"]
+    DR4 --> EH4["Evidence Hybrid Recall<br/>or Section Hybrid Recall"]
+    EH4 --> CH4["Child Hybrid Recall"]
+
+    MERGE0 --> RR["Parent-level Rerank"]
+    CH1 --> RR
+    CH2 --> RR
+    CH3 --> RR
+    CH4 --> RR
+
+    RR --> ASM["Assembler by Parent"]
+    ASM --> CTX["Primary LLM Contexts<br/>assembled parent / child evidence"]
+    EH2 -. selected / compressed hints .-> HINT["Optional Evidence Hints"]
+    EH3 -. selected / compressed hints .-> HINT
+    EH4 -. selected / compressed hints .-> HINT
+
+    CTX --> SYN["Synthesis / Answer"]
+    HINT --> SYN
+    ASM --> CIT["Citations -> child chunk / source span"]
+```
 
 ### 文件管理預覽流程
 1. 使用者在 `DocumentsDrawer` 中選取 `ready` 文件
@@ -223,16 +319,22 @@
 19.8. `query_focus` 是否實際套用，仍以 `AppSettings` / 環境變數開關為主；query-aware routing profile 不得自行覆寫此總開關，只能在開啟時補充 variant / threshold 等相容 knobs
 19.9. `documents` 正式新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`；`ready` 的成立條件除 chunk tree 與 child embeddings 外，還包含 document synopsis 與 synopsis embedding 成功寫入
 19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；目前不做 section-level synopsis
+19.10.1. `Phase 8.5` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
+19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
 19.11. `document_summary` 與 `cross_document_compare` 採兩階段 retrieval：第一階段以 synopsis 做 document recall，第二階段再對入選文件集合做既有 child recall、rerank、selection 與 assembler；第二階段縮小範圍必須透過 SQL `allowed_document_ids` filter 完成，不得以記憶體過濾取代
 19.12. 第一階段 document recall 預設維持 fail-open：若 synopsis recall 無法選出文件集合，第二階段可回退到原本 area-scoped child recall，但必須在 trace / evaluation 中明確保留 `document_recall` 明細
-19.12.1. `Phase 8.5` 起的 `task routing` 正式主線採 `deterministic + embedding`，輸出 route 應至少包含 `fact_lookup`、`document_overview_summary`、`section_focused_summary`、`multi_document_theme_summary` 與 `cross_document_compare`；LLM routing 只允許作為可關閉的實驗性 fallback
+19.12.1. `Phase 8.5` 起的 `task routing` 正式主線採 2 層 `deterministic + embedding`；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`；LLM routing 只允許作為可關閉的實驗性 fallback
 19.12.2. `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應視為各自資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`；不得把任一 recall node 簡化為單一檢索器的概念
-19.12.3. `document_overview_summary` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；`document synopsis` 只作為 overview planning input，不得原封不動作為最終回答
-19.12.4. `section_focused_summary` 的主線應為 `document scope resolve or document synopsis recall -> section synopsis recall -> child recall`；僅在 semantic-gap 較高或 evidence-dense 的 section 才允許加上 `evidence-unit recall` 補強
-19.12.5. `cross_document_compare` 的主線應為 `document synopsis recall -> evidence-unit recall or section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；此 route 是 `evidence-centric layer` 的主要 ROI 場景
-19.12.6. `fact_lookup` 的主線仍是 area-scoped `child recall -> rerank -> assembler`；但在 semantic-gap、數值 / 表格 query 或第一輪 child recall 信心不足時，允許加入 `evidence-unit recall` 補強 recall，再回推到 `source_child_chunk_ids`
-19.12.7. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
-19.12.8. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
+19.12.2.1. `section recall` 的正式文字表示必須是 path-aware text，而不是只有 local heading / local content；至少應包含 `section_path_text + local content`，必要時再補 `document title`
+19.12.3. 第一層 `task_type=fact_lookup` 的主線仍是 area-scoped `child recall -> rerank -> assembler`；但在 semantic-gap、數值 / 表格 query 或第一輪 child recall 信心不足時，允許加入 `evidence-unit recall` 補強 recall，再回推到 `source_child_chunk_ids`
+19.12.4. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=document_overview` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；`document synopsis` 只作為 overview planning input，不得原封不動作為最終回答
+19.12.5. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=section_focused` 的主線應為 `document scope resolve or document synopsis recall -> section synopsis recall -> child recall`；僅在 semantic-gap 較高或 evidence-dense 的 section 才允許加上 `evidence-unit recall` 補強
+19.12.6. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=multi_document_theme` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`
+19.12.7. 第一層 `task_type=cross_document_compare` 的主線應為 `document synopsis recall -> evidence-unit recall or section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；此 route 是 `evidence-centric layer` 的主要 ROI 場景
+19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
+19.12.8.1. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
+19.12.8.2. `evidence recall` 的正式文字表示應使用 path-aware text，也就是 `heading_path / section_path_text + evidence_text` 共同參與 `FTS` 與 embedding 前處理
+19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state
