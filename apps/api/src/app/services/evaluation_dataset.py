@@ -34,6 +34,8 @@ from app.schemas.evaluation import (
     EvaluationDatasetListResponse,
     EvaluationDocumentRecallCandidate,
     EvaluationDocumentRecallDetail,
+    EvaluationSectionRecallCandidate,
+    EvaluationSectionRecallDetail,
     EvaluationDatasetSummary,
     EvaluationDocumentSearchHit,
     EvaluationItemSpanResponse,
@@ -53,6 +55,7 @@ from app.services.retrieval_routing import QueryRoutingDecision, build_query_rou
 from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
 from app.services.retrieval import (
     DocumentRecallResult,
+    SectionRecallResult,
     RetrievalResult,
     _apply_python_rrf,
     _apply_ranking_policy,
@@ -60,6 +63,7 @@ from app.services.retrieval import (
     _build_retrieval_candidate,
     _recall_ranked_candidates,
     _resolve_document_recall_result,
+    _resolve_section_recall_result,
 )
 from app.services.retrieval_assembler import assemble_retrieval_result
 
@@ -72,6 +76,8 @@ class ItemStageEvaluationResult:
     gold_spans: list[GoldSpan]
     query_routing: EvaluationQueryRoutingDetail
     document_recall: EvaluationDocumentRecallDetail
+    section_recall: EvaluationSectionRecallDetail
+    selected_synopsis_level: str
     selection: EvaluationSelectionDetail
     query_focus: EvaluationQueryFocusDetail
     recall_stage: EvaluationCandidateStageResponse
@@ -392,6 +398,8 @@ def preview_evaluation_candidates(
         item=build_item_summary(item=item, spans=spans),
         query_routing=stage_result.query_routing,
         document_recall=stage_result.document_recall,
+        section_recall=stage_result.section_recall,
+        selected_synopsis_level=stage_result.selected_synopsis_level,
         selection=stage_result.selection,
         query_focus=stage_result.query_focus,
         recall=stage_result.recall_stage,
@@ -453,6 +461,15 @@ def evaluate_item_stage_outputs(
         summary_scope=routing_decision.summary_scope,
         resolved_document_ids=routing_decision.resolved_document_ids,
     )
+    section_recall_result = _resolve_section_recall_result(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=item.query_text,
+        query_type=routing_decision.query_type,
+        summary_strategy=routing_decision.summary_strategy,
+        allowed_document_ids=document_recall_result.selected_document_ids or None,
+    )
 
     recall_matches = _apply_ranking_policy(
         matches=_apply_python_rrf(
@@ -462,6 +479,7 @@ def evaluate_item_stage_outputs(
                 area_id=area_id,
                 query=retrieval_query,
                 allowed_document_ids=document_recall_result.selected_document_ids or None,
+                allowed_parent_ids=section_recall_result.selected_parent_ids or None,
             ),
             settings=effective_settings,
         ),
@@ -490,6 +508,7 @@ def evaluate_item_stage_outputs(
             total_candidates=len(rerank_matches),
             routing_decision=routing_decision,
             document_recall_result=document_recall_result,
+            section_recall_result=section_recall_result,
             query_focus_plan=query_focus_plan,
             selection_result=selection_result,
         ),
@@ -511,6 +530,12 @@ def evaluate_item_stage_outputs(
         gold_spans=gold_spans,
         query_routing=_build_query_routing_detail(routing_decision=routing_decision),
         document_recall=_build_document_recall_detail(document_recall_result=document_recall_result),
+        section_recall=_build_section_recall_detail(section_recall_result=section_recall_result),
+        selected_synopsis_level=(
+            "section"
+            if section_recall_result.trace.applied and section_recall_result.selected_parent_ids
+            else ("document" if document_recall_result.trace.applied and document_recall_result.selected_document_ids else "child")
+        ),
         selection=_build_selection_detail(selection_result=selection_result),
         query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
         recall_stage=_build_recall_stage(
@@ -849,6 +874,7 @@ def _build_empty_trace(
     total_candidates: int,
     routing_decision: QueryRoutingDecision,
     document_recall_result: DocumentRecallResult,
+    section_recall_result: SectionRecallResult,
     query_focus_plan: QueryFocusPlan,
     selection_result: RetrievalSelectionResult,
 ) -> dict[str, object]:
@@ -878,6 +904,9 @@ def _build_empty_trace(
         "query_type_confidence": routing_decision.confidence,
         "query_type_matched_rules": list(routing_decision.matched_rules),
         "summary_scope": routing_decision.summary_scope,
+        "summary_strategy": routing_decision.summary_strategy,
+        "summary_strategy_source": routing_decision.summary_strategy_source,
+        "summary_strategy_confidence": routing_decision.summary_strategy_confidence,
         "resolved_document_ids": list(routing_decision.resolved_document_ids),
         "document_mention_source": routing_decision.document_mention_source,
         "document_mention_confidence": routing_decision.document_mention_confidence,
@@ -902,6 +931,32 @@ def _build_empty_trace(
                 for candidate in document_recall_result.trace.candidates
             ],
         },
+        "section_recall": {
+            "applied": section_recall_result.trace.applied,
+            "strategy": section_recall_result.trace.strategy,
+            "top_k": section_recall_result.trace.top_k,
+            "selected_parent_ids": list(section_recall_result.trace.selected_parent_ids),
+            "dropped_parent_ids": list(section_recall_result.trace.dropped_parent_ids),
+            "candidates": [
+                {
+                    "parent_chunk_id": candidate.parent_chunk_id,
+                    "document_id": candidate.document_id,
+                    "heading": candidate.heading,
+                    "heading_path": candidate.heading_path,
+                    "section_path_text": candidate.section_path_text,
+                    "vector_rank": candidate.vector_rank,
+                    "fts_rank": candidate.fts_rank,
+                    "rrf_rank": candidate.rrf_rank,
+                    "rrf_score": candidate.rrf_score,
+                }
+                for candidate in section_recall_result.trace.candidates
+            ],
+        },
+        "selected_synopsis_level": (
+            "section"
+            if section_recall_result.trace.applied and section_recall_result.selected_parent_ids
+            else ("document" if document_recall_result.trace.applied and document_recall_result.selected_document_ids else "child")
+        ),
         "selection_applied": selection_result.applied,
         "selection_strategy": selection_result.strategy,
         "selected_document_count": len(selection_result.selected_document_ids),
@@ -949,6 +1004,9 @@ def _build_query_routing_detail(
         source=routing_decision.source,
         matched_rules=list(routing_decision.matched_rules),
         summary_scope=routing_decision.summary_scope,
+        summary_strategy=routing_decision.summary_strategy,
+        summary_strategy_source=routing_decision.summary_strategy_source,
+        summary_strategy_confidence=routing_decision.summary_strategy_confidence,
         resolved_document_ids=list(routing_decision.resolved_document_ids),
         document_mention_source=routing_decision.document_mention_source,
         document_mention_confidence=routing_decision.document_mention_confidence,
@@ -1010,6 +1068,35 @@ def _build_document_recall_detail(
                 rrf_score=candidate.rrf_score,
             )
             for candidate in document_recall_result.trace.candidates
+        ],
+    )
+
+
+def _build_section_recall_detail(
+    *,
+    section_recall_result: SectionRecallResult,
+) -> EvaluationSectionRecallDetail:
+    """將 section recall 結果轉為 evaluation API detail。"""
+
+    return EvaluationSectionRecallDetail(
+        applied=section_recall_result.trace.applied,
+        strategy=section_recall_result.trace.strategy,
+        top_k=section_recall_result.trace.top_k,
+        selected_parent_ids=list(section_recall_result.trace.selected_parent_ids),
+        dropped_parent_ids=list(section_recall_result.trace.dropped_parent_ids),
+        candidates=[
+            EvaluationSectionRecallCandidate(
+                parent_chunk_id=candidate.parent_chunk_id,
+                document_id=candidate.document_id,
+                heading=candidate.heading,
+                heading_path=candidate.heading_path,
+                section_path_text=candidate.section_path_text,
+                vector_rank=candidate.vector_rank,
+                fts_rank=candidate.fts_rank,
+                rrf_rank=candidate.rrf_rank,
+                rrf_score=candidate.rrf_score,
+            )
+            for candidate in section_recall_result.trace.candidates
         ],
     )
 

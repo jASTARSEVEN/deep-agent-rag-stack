@@ -243,6 +243,9 @@ class EvaluationQueryRoutingDetail(BaseModel):
     source: str
     matched_rules: list[str]
     summary_scope: str | None = None
+    summary_strategy: str | None = None
+    summary_strategy_source: str = "not_applicable"
+    summary_strategy_confidence: float = 0.0
     resolved_document_ids: list[str]
     document_mention_source: str
     document_mention_confidence: float
@@ -273,6 +276,31 @@ class EvaluationDocumentRecallDetail(BaseModel):
     candidates: list[EvaluationDocumentRecallCandidate]
 
 
+class EvaluationSectionRecallCandidate(BaseModel):
+    """單一 section recall candidate 明細。"""
+
+    parent_chunk_id: str
+    document_id: str
+    heading: str | None
+    heading_path: str | None
+    section_path_text: str | None
+    vector_rank: int | None
+    fts_rank: int | None
+    rrf_rank: int
+    rrf_score: float
+
+
+class EvaluationSectionRecallDetail(BaseModel):
+    """單題 section recall 明細。"""
+
+    applied: bool
+    strategy: str
+    top_k: int
+    selected_parent_ids: list[str]
+    dropped_parent_ids: list[str]
+    candidates: list[EvaluationSectionRecallCandidate]
+
+
 class EvaluationSelectionDetail(BaseModel):
     """單題 diversified selection 明細。"""
 
@@ -292,6 +320,8 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     item: EvaluationItemSummary
     query_routing: EvaluationQueryRoutingDetail
     document_recall: EvaluationDocumentRecallDetail | None = None
+    section_recall: EvaluationSectionRecallDetail | None = None
+    selected_synopsis_level: str = "child"
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
@@ -351,6 +381,8 @@ class EvaluationPerQueryDetail(BaseModel):
     gold_spans: list[EvaluationItemSpanResponse]
     query_routing: EvaluationQueryRoutingDetail
     document_recall: EvaluationDocumentRecallDetail | None = None
+    section_recall: EvaluationSectionRecallDetail | None = None
+    selected_synopsis_level: str = "child"
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail

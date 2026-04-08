@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8A — Summary / Compare Runtime Consolidation (Not Started)`
+當前主階段：`Phase 8A — Summary / Compare Runtime Consolidation (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -96,6 +96,11 @@
 - `document_summary` 與 `cross_document_compare` 已新增第一階段 document recall，先以 synopsis 選出文件集合，再以 SQL `allowed_document_ids` filter 執行第二階段 child recall；`fact_lookup` 維持不走 document recall
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `document_recall` 明細，便於 reviewer 直接觀測第一階段選文件結果
 - Web `EvaluationDrawer` 現已直接顯示 `document_recall` 的 strategy、selected / dropped documents 與 candidates；Playwright E2E 也已補上 `document_summary` / `cross_document_compare` 的 document recall 可視性驗證
+- `Phase 8A` 已完成核心 runtime 首輪落地：worker 現在會在 parent chunk 層持久化 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
+- `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
+- `Phase 8A` 已新增第二階段 `section recall`，以 `section synopsis` 先選 parent/section，再透過 SQL `allowed_parent_chunk_ids` filter 收斂 child recall；`fact_lookup` 維持不走此路徑
+- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_strategy`、`section_recall`、`selected_synopsis_level` 與摘要層級 fallback reason
+- chat runtime 已為 `document_summary` / `cross_document_compare` 落地最小 map/reduce synthesis；`cross_document_compare` 現在固定輸出 `共通點 / 差異點 / 各文件立場或結論 / 不足證據或矛盾處`
 - 已完成 `Phase 8.3` closeout 所需的三條 sentinel rerun：
   - `DRCD 100`：assembled `nDCG@10` 由 `0.8650` 提升到 `0.9900`，`Recall@10` 由 `0.9700` 提升到 `0.9900`
   - `NQ 100`：assembled 指標與 reference 持平，`nDCG@10=0.7443`、`Recall@10=0.7500`
@@ -308,7 +313,7 @@
 ## 目前階段重點
 
 ### Current Focus
-- 準備進入 `Phase 8A — Summary / Compare Runtime Consolidation`
+- 持續收尾 `Phase 8A — Summary / Compare Runtime Consolidation`
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -316,8 +321,8 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 進入 `Phase 8A — Summary / Compare Runtime Consolidation`，以單一交付批次完成 `document_summary` / `cross_document_compare` 的 hierarchical synthesis、最小 section synopsis、正式 task routing 與最小 evaluation checkpoint
-2. 補一輪 `reindex` consistency 驗證，確認 document / section synopsis 更新後 `document_recall.strategy`、`selected_document_ids`、`selected_synopsis_level` 與 coverage 沒有退化
+1. 完成 `Phase 8A` 的 E2E 與最小 evaluation checkpoint，覆蓋 `document_overview`、`section_focused`、`multi_document_theme` 與 `cross_document_compare`
+2. 補一輪 `reindex` consistency 驗證，確認 document / section synopsis 更新後 `document_recall.strategy`、`section_recall.strategy`、`selected_document_ids`、`selected_synopsis_level` 與 coverage 沒有退化
 3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
 4. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 

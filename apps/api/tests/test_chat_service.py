@@ -16,11 +16,13 @@ from app.db.models import (
     Document,
     DocumentChunk,
     DocumentStatus,
+    EvaluationQueryType,
     Role,
 )
 from app.chat.agent.runtime import (
     DeepAgentsChatRuntime,
     DeterministicChatRuntime,
+    _build_summary_compare_answer,
     _build_answer_blocks_from_markers,
     _build_agent_input_messages,
     build_chat_runtime,
@@ -253,6 +255,72 @@ def test_build_answer_blocks_from_markers_parses_context_labels() -> None:
     assert [block.text for block in answer_blocks] == ["第一段重點", "第二段綜合整理"]
     assert answer_blocks[0].citation_context_indices == [0]
     assert [item.context_label for item in answer_blocks[1].display_citations] == ["C1", "C2"]
+
+
+def test_build_summary_compare_answer_uses_fixed_compare_sections() -> None:
+    """compare synthesis 應輸出固定段落骨架與 map-reduce trace。"""
+
+    citations = [
+        SimpleNamespace(
+            document_id="doc-1",
+            model_dump=lambda mode="json": {
+                "context_label": "C1",
+                "document_id": "doc-1",
+                "document_name": "alpha.md",
+            },
+        ),
+        SimpleNamespace(
+            document_id="doc-2",
+            model_dump=lambda mode="json": {
+                "context_label": "C2",
+                "document_id": "doc-2",
+                "document_name": "beta.md",
+            },
+        ),
+    ]
+    retrieval_result = SimpleNamespace(
+        assembled_contexts=[
+            AssembledContext(
+                document_id="doc-1",
+                parent_chunk_id="parent-1",
+                chunk_ids=["child-1"],
+                structure_kind=ChunkStructureKind.text,
+                heading="Alpha Section",
+                assembled_text="Alpha document focuses on onboarding and approvals.",
+                source="hybrid",
+                start_offset=0,
+                end_offset=20,
+            ),
+            AssembledContext(
+                document_id="doc-2",
+                parent_chunk_id="parent-2",
+                chunk_ids=["child-2"],
+                structure_kind=ChunkStructureKind.text,
+                heading="Beta Section",
+                assembled_text="Beta document focuses on security checks and controls.",
+                source="hybrid",
+                start_offset=21,
+                end_offset=45,
+            ),
+        ],
+        citations=citations,
+    )
+    routing_decision = SimpleNamespace(
+        query_type=EvaluationQueryType.cross_document_compare,
+        summary_strategy=None,
+    )
+
+    answer, trace = _build_summary_compare_answer(
+        question="比較 alpha 與 beta",
+        routing_decision=routing_decision,
+        retrieval_result=retrieval_result,
+    )
+
+    assert "共通點：" in answer
+    assert "差異點：" in answer
+    assert "各文件立場 / 結論：" in answer
+    assert "不足證據或矛盾處：" in answer
+    assert trace["map_group_count"] == 2
 
 
 def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch) -> None:
@@ -488,11 +556,18 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "query_type_confidence": None,
         "query_type_matched_rules": [],
         "summary_scope": None,
+        "summary_strategy": None,
+        "summary_strategy_source": None,
+        "summary_strategy_confidence": None,
         "resolved_document_ids": [],
         "document_mention_source": None,
         "document_mention_confidence": None,
         "document_mention_candidates": [],
         "selected_profile": None,
+        "document_recall": None,
+        "section_recall": None,
+        "selected_synopsis_level": None,
+        "fallback_reason": None,
         "selection_applied": None,
         "selection_strategy": None,
         "selected_document_count": None,
@@ -1150,10 +1225,33 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
         "selected_parent_ids": [parent.id],
         "dropped_by_diversity": [],
         "query_focus_applied": False,
+        "summary_strategy": None,
+        "summary_strategy_source": "not_applicable",
+        "summary_strategy_confidence": 0.0,
+        "document_recall": {
+            "applied": False,
+            "strategy": "disabled",
+            "top_k": settings.retrieval_document_recall_top_k,
+            "selected_document_ids": [],
+            "dropped_document_ids": [],
+            "candidates": [],
+        },
+        "section_recall": {
+            "applied": False,
+            "strategy": "disabled",
+            "top_k": 0,
+            "selected_parent_ids": [],
+            "dropped_parent_ids": [],
+            "candidates": [],
+        },
+        "selected_synopsis_level": "child",
+        "fallback_reason": None,
         "profile_settings": {
             "vector_top_k": settings.retrieval_vector_top_k,
             "fts_top_k": settings.retrieval_fts_top_k,
             "max_candidates": settings.retrieval_max_candidates,
+            "document_recall_enabled": False,
+            "document_recall_top_k": settings.retrieval_document_recall_top_k,
             "rerank_top_n": settings.rerank_top_n,
             "selection_max_contexts": settings.assembler_max_contexts,
             "assembler_max_contexts": settings.assembler_max_contexts,

@@ -467,6 +467,9 @@ export interface EvaluationCandidatePreviewPayload {
   item: EvaluationItemSummary;
   query_routing: EvaluationQueryRoutingDetail;
   document_recall: EvaluationDocumentRecallDetail | null;
+  section_recall: EvaluationSectionRecallDetail | null;
+  selected_synopsis_level: string;
+  selection: EvaluationSelectionDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationCandidateStage;
   rerank: EvaluationCandidateStage;
@@ -510,6 +513,9 @@ export interface EvaluationQueryRoutingDetail {
   source: "explicit" | "classified" | "fallback";
   matched_rules: string[];
   summary_scope?: string | null;
+  summary_strategy?: string | null;
+  summary_strategy_source?: string;
+  summary_strategy_confidence?: number;
   resolved_document_ids?: string[];
   document_mention_source?: string;
   document_mention_confidence?: number;
@@ -536,6 +542,40 @@ export interface EvaluationDocumentRecallDetail {
   selected_document_ids: string[];
   dropped_document_ids: string[];
   candidates: EvaluationDocumentRecallCandidate[];
+}
+
+/** 單一 section recall candidate 明細。 */
+export interface EvaluationSectionRecallCandidate {
+  parent_chunk_id: string;
+  document_id: string;
+  heading: string | null;
+  heading_path: string | null;
+  section_path_text: string | null;
+  vector_rank: number | null;
+  fts_rank: number | null;
+  rrf_rank: number;
+  rrf_score: number;
+}
+
+/** 單題 section recall 明細。 */
+export interface EvaluationSectionRecallDetail {
+  applied: boolean;
+  strategy: string;
+  top_k: number;
+  selected_parent_ids: string[];
+  dropped_parent_ids: string[];
+  candidates: EvaluationSectionRecallCandidate[];
+}
+
+/** 單題 diversified selection 明細。 */
+export interface EvaluationSelectionDetail {
+  applied: boolean;
+  strategy: string;
+  selected_document_count: number;
+  selected_parent_count: number;
+  selected_document_ids: string[];
+  selected_parent_ids: string[];
+  dropped_by_diversity: Array<Record<string, unknown>>;
 }
 
 /** 單題 query focus 明細。 */
@@ -569,6 +609,9 @@ export interface EvaluationPerQueryDetail {
   gold_spans: EvaluationItemSpan[];
   query_routing: EvaluationQueryRoutingDetail;
   document_recall: EvaluationDocumentRecallDetail | null;
+  section_recall: EvaluationSectionRecallDetail | null;
+  selected_synopsis_level: string;
+  selection: EvaluationSelectionDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationPerQueryStageDetail;
   rerank: EvaluationPerQueryStageDetail;

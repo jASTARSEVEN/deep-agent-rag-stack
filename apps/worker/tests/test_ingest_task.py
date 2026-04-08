@@ -101,7 +101,7 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         OPENDATALOADER_USE_STRUCT_TREE=True,
         OPENDATALOADER_QUIET=True,
         DOCUMENT_SYNOPSIS_PROVIDER="deterministic",
-        DOCUMENT_SYNOPSIS_MODEL="gpt-4.1-mini",
+        DOCUMENT_SYNOPSIS_MODEL="gpt-5-mini",
         DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS=6000,
         DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS=1600,
         LLAMAPARSE_API_KEY="",
@@ -212,6 +212,12 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert refreshed_job.child_chunk_count == 2
         assert len(refreshed_chunks) == 4
         assert {chunk.structure_kind for chunk in refreshed_chunks} == {ChunkStructureKind.text}
+        parent_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.parent]
+        assert parent_chunks
+        assert all(chunk.section_path_text is not None for chunk in parent_chunks)
+        assert all(chunk.section_synopsis_text is not None for chunk in parent_chunks)
+        assert all(chunk.section_synopsis_embedding is not None for chunk in parent_chunks)
+        assert all(chunk.section_synopsis_updated_at is not None for chunk in parent_chunks)
         child_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.child]
         assert child_chunks
         assert all(chunk.embedding is not None for chunk in child_chunks)
@@ -384,8 +390,9 @@ def test_index_document_chunks_embeddings_include_heading(monkeypatch, tmp_path:
             content="| item | value |\n| --- | --- |\n| alpha | 1 |",
         ),
     ]
-    assert len(captured_texts) == 3
-    assert "Topic:" in captured_texts[2]
+    assert len(captured_texts) == 4
+    assert "Section topic:" in captured_texts[2]
+    assert "Topic:" in captured_texts[3]
 
 
 def test_process_document_ingest_marks_failed_for_embedding_provider_error(monkeypatch, tmp_path: Path) -> None:

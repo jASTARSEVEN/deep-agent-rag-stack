@@ -1776,6 +1776,119 @@ def test_retrieve_area_candidates_summary_document_recall_filters_second_stage_b
     assert all(candidate.document_id == matching_document.id for candidate in result.candidates)
 
 
+def test_retrieve_area_candidates_section_recall_filters_child_candidates_by_parent(db_session, app_settings) -> None:
+    """summary lane 應先選 section，再用 allowed parent ids 收斂 child recall。"""
+
+    area = Area(id=_uuid(), name="Section Recall Summary")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="leave-policy.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/leave-policy.md",
+        synopsis_text="員工手冊請假與休假制度摘要",
+        synopsis_embedding=[0.2] * app_settings.embedding_dimensions,
+        status=DocumentStatus.ready,
+    )
+    keep_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Leave Policy",
+        heading_path="Employee Handbook / Leave Policy",
+        section_path_text="Employee Handbook / Leave Policy",
+        heading_level=2,
+        section_synopsis_text="請假制度與核准流程摘要",
+        section_synopsis_embedding=[0.3] * app_settings.embedding_dimensions,
+        content="請假制度內容",
+        content_preview="請假制度內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+    )
+    drop_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=1,
+        child_index=None,
+        heading="Travel Policy",
+        heading_path="Employee Handbook / Travel Policy",
+        section_path_text="Employee Handbook / Travel Policy",
+        heading_level=2,
+        section_synopsis_text="差旅報支與出差流程摘要",
+        section_synopsis_embedding=None,
+        content="差旅制度內容",
+        content_preview="差旅制度內容",
+        char_count=6,
+        start_offset=7,
+        end_offset=13,
+    )
+    keep_child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=keep_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Leave Policy",
+        content="請假制度內容",
+        content_preview="請假制度內容",
+        char_count=6,
+        start_offset=0,
+        end_offset=6,
+        embedding=[0.3] * app_settings.embedding_dimensions,
+    )
+    drop_child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=drop_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=0,
+        heading="Travel Policy",
+        content="差旅制度內容",
+        content_preview="差旅制度內容",
+        char_count=6,
+        start_offset=7,
+        end_offset=13,
+        embedding=[0.3] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([document, keep_parent, drop_parent, keep_child, drop_child])
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="請摘要 leave policy 的章節",
+    )
+
+    assert result.trace.summary_strategy == "section_focused"
+    assert result.trace.section_recall is not None
+    assert result.trace.section_recall.applied is True
+    assert result.trace.selected_synopsis_level == "section"
+    assert result.trace.section_recall.selected_parent_ids == [keep_parent.id]
+    assert [candidate.parent_chunk_id for candidate in result.candidates] == [keep_parent.id]
+
+
 def test_retrieve_area_candidates_compare_selection_can_fill_beyond_four_parents(db_session, app_settings) -> None:
     """compare lane 在 budget 足夠時應可超過四個 selected parents。"""
 

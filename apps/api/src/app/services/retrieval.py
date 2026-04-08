@@ -95,6 +95,33 @@ class DocumentRecallTrace:
 
 
 @dataclass(slots=True)
+class SectionRecallTraceEntry:
+    """單一 section recall candidate 的 trace metadata。"""
+
+    parent_chunk_id: str
+    document_id: str
+    heading: str | None
+    heading_path: str | None
+    section_path_text: str | None
+    vector_rank: int | None
+    fts_rank: int | None
+    rrf_rank: int
+    rrf_score: float
+
+
+@dataclass(slots=True)
+class SectionRecallTrace:
+    """section recall trace metadata。"""
+
+    applied: bool
+    strategy: str
+    top_k: int
+    selected_parent_ids: list[str]
+    dropped_parent_ids: list[str]
+    candidates: list[SectionRecallTraceEntry]
+
+
+@dataclass(slots=True)
 class RetrievalTrace:
     """單次 retrieval 的 trace metadata。"""
 
@@ -110,6 +137,9 @@ class RetrievalTrace:
     query_type_confidence: float = 0.0
     query_type_matched_rules: list[str] | None = None
     summary_scope: str | None = None
+    summary_strategy: str | None = None
+    summary_strategy_source: str = "not_applicable"
+    summary_strategy_confidence: float = 0.0
     resolved_document_ids: list[str] | None = None
     document_mention_source: str = "none"
     document_mention_confidence: float = 0.0
@@ -133,6 +163,9 @@ class RetrievalTrace:
     focus_query: str = ""
     rerank_query: str = ""
     document_recall: DocumentRecallTrace | None = None
+    section_recall: SectionRecallTrace | None = None
+    selected_synopsis_level: str = "child"
+    fallback_reason: str | None = None
 
 
 @dataclass(slots=True)
@@ -188,6 +221,25 @@ class DocumentRecallResult:
     trace: DocumentRecallTrace
 
 
+@dataclass(slots=True)
+class _SectionRecallMatch:
+    """section-level recall 使用的中間結構。"""
+
+    parent_chunk: DocumentChunk
+    vector_rank: int | None = None
+    fts_rank: int | None = None
+    rrf_rank: int | None = None
+    rrf_score: float = 0.0
+
+
+@dataclass(slots=True)
+class SectionRecallResult:
+    """section-level recall 結果。"""
+
+    selected_parent_ids: tuple[str, ...]
+    trace: SectionRecallTrace
+
+
 def _build_match_chunks_rpc_statement():
     """建立具備 PostgreSQL 明確 bind type 的 `match_chunks` RPC statement。
 
@@ -202,7 +254,7 @@ def _build_match_chunks_rpc_statement():
         raise RuntimeError("PostgreSQL retrieval 路徑需要 `pgvector` SQLAlchemy 型別支援。")
 
     return text(
-        "SELECT * FROM match_chunks(:query_embedding, :query_text, :area_id, :vector_top_k, :fts_top_k, :allowed_document_ids)"
+        "SELECT * FROM match_chunks(:query_embedding, :query_text, :area_id, :vector_top_k, :fts_top_k, :allowed_document_ids, :allowed_parent_chunk_ids)"
     ).bindparams(
         bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
         bindparam("query_text", type_=String()),
@@ -210,6 +262,7 @@ def _build_match_chunks_rpc_statement():
         bindparam("vector_top_k", type_=Integer()),
         bindparam("fts_top_k", type_=Integer()),
         bindparam("allowed_document_ids", type_=PG_ARRAY(String(36))),
+        bindparam("allowed_parent_chunk_ids", type_=PG_ARRAY(String(36))),
     )
 
 
@@ -283,6 +336,85 @@ def _build_document_recall_statement():
     )
 
 
+def _build_section_recall_statement():
+    """建立 PostgreSQL section synopsis recall 的 SQL statement。"""
+
+    if Vector is None:  # pragma: no cover - PostgreSQL 正式路徑應固定安裝 pgvector。
+        raise RuntimeError("PostgreSQL section recall 路徑需要 `pgvector` SQLAlchemy 型別支援。")
+
+    return text(
+        """
+        WITH vector_matches AS (
+            SELECT
+                dc.id,
+                ROW_NUMBER() OVER (ORDER BY dc.section_synopsis_embedding <=> :query_embedding, dc.id) :: INT AS rank
+            FROM document_chunks dc
+            JOIN documents d ON d.id = dc.document_id
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND dc.chunk_type = 'parent'
+              AND dc.section_synopsis_embedding IS NOT NULL
+              AND (
+                :allowed_document_ids IS NULL
+                OR d.id = ANY(:allowed_document_ids)
+              )
+            ORDER BY dc.section_synopsis_embedding <=> :query_embedding, dc.id
+            LIMIT :vector_top_k
+        ),
+        fts_matches AS (
+            SELECT
+                dc.id,
+                ROW_NUMBER() OVER (
+                    ORDER BY pgroonga_score(dc.tableoid, dc.ctid) DESC, dc.id
+                ) :: INT AS rank,
+                pgroonga_score(dc.tableoid, dc.ctid) :: FLOAT AS score
+            FROM document_chunks dc
+            JOIN documents d ON d.id = dc.document_id
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND dc.chunk_type = 'parent'
+              AND dc.section_synopsis_text IS NOT NULL
+              AND dc.section_synopsis_text &@~ :query_text
+              AND (
+                :allowed_document_ids IS NULL
+                OR d.id = ANY(:allowed_document_ids)
+              )
+            ORDER BY pgroonga_score(dc.tableoid, dc.ctid) DESC, dc.id
+            LIMIT :fts_top_k
+        ),
+        candidate_ids AS (
+            SELECT id FROM vector_matches
+            UNION
+            SELECT id FROM fts_matches
+        )
+        SELECT
+            dc.id,
+            dc.document_id,
+            dc.heading,
+            dc.heading_path,
+            dc.section_path_text,
+            vm.rank AS vector_rank,
+            fm.rank AS fts_rank,
+            fm.score AS fts_score
+        FROM candidate_ids c
+        JOIN document_chunks dc ON dc.id = c.id
+        LEFT JOIN vector_matches vm ON vm.id = dc.id
+        LEFT JOIN fts_matches fm ON fm.id = dc.id
+        ORDER BY
+            COALESCE(vm.rank, 2147483647),
+            COALESCE(fm.rank, 2147483647),
+            dc.id
+        """
+    ).bindparams(
+        bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
+        bindparam("query_text", type_=String()),
+        bindparam("area_id", type_=String()),
+        bindparam("vector_top_k", type_=Integer()),
+        bindparam("fts_top_k", type_=Integer()),
+        bindparam("allowed_document_ids", type_=PG_ARRAY(String(36))),
+    )
+
+
 def retrieve_area_candidates(
     *,
     session: Session,
@@ -327,12 +459,22 @@ def retrieve_area_candidates(
         summary_scope=routing_decision.summary_scope,
         resolved_document_ids=routing_decision.resolved_document_ids,
     )
+    section_recall_result = _resolve_section_recall_result(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=query,
+        query_type=routing_decision.query_type,
+        summary_strategy=routing_decision.summary_strategy,
+        allowed_document_ids=document_recall_result.selected_document_ids or None,
+    )
     recalled_matches = _recall_ranked_candidates(
         session=session,
         settings=effective_settings,
         area_id=area_id,
         query=query_focus_plan.focus_query if query_focus_plan.applied else query,
         allowed_document_ids=document_recall_result.selected_document_ids or None,
+        allowed_parent_ids=section_recall_result.selected_parent_ids or None,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
     ranked_matches = _apply_ranking_policy(
@@ -370,6 +512,9 @@ def retrieve_area_candidates(
             query_type_confidence=routing_decision.confidence,
             query_type_matched_rules=list(routing_decision.matched_rules),
             summary_scope=routing_decision.summary_scope,
+            summary_strategy=routing_decision.summary_strategy,
+            summary_strategy_source=routing_decision.summary_strategy_source,
+            summary_strategy_confidence=routing_decision.summary_strategy_confidence,
             resolved_document_ids=list(routing_decision.resolved_document_ids),
             document_mention_source=routing_decision.document_mention_source,
             document_mention_confidence=routing_decision.document_mention_confidence,
@@ -401,6 +546,16 @@ def retrieve_area_candidates(
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
             document_recall=document_recall_result.trace,
+            section_recall=section_recall_result.trace,
+            selected_synopsis_level=(
+                "section"
+                if section_recall_result.trace.applied and section_recall_result.selected_parent_ids
+                else ("document" if document_recall_result.trace.applied and document_recall_result.selected_document_ids else "child")
+            ),
+            fallback_reason=_resolve_retrieval_fallback_reason(
+                document_recall_result=document_recall_result,
+                section_recall_result=section_recall_result,
+            ),
             candidates=[
                 RetrievalTraceEntry(
                     chunk_id=candidate.chunk_id,
@@ -427,6 +582,7 @@ def _recall_ranked_candidates(
     area_id: str,
     query: str,
     allowed_document_ids: tuple[str, ...] | None = None,
+    allowed_parent_ids: tuple[str, ...] | None = None,
 ) -> list[RankedChunkMatch]:
     """依資料庫方言取得已套用 area/ready 邊界的 ranked candidates。"""
 
@@ -438,6 +594,7 @@ def _recall_ranked_candidates(
             area_id=area_id,
             query=query,
             allowed_document_ids=allowed_document_ids,
+            allowed_parent_ids=allowed_parent_ids,
         )
     return _run_sqlite_candidate_generation(
         session=session,
@@ -445,6 +602,7 @@ def _recall_ranked_candidates(
         area_id=area_id,
         query=query,
         allowed_document_ids=allowed_document_ids,
+        allowed_parent_ids=allowed_parent_ids,
     )
 
 
@@ -455,6 +613,7 @@ def _run_postgres_candidate_generation(
     area_id: str,
     query: str,
     allowed_document_ids: tuple[str, ...] | None,
+    allowed_parent_ids: tuple[str, ...] | None,
 ) -> list[RankedChunkMatch]:
     """透過 PostgreSQL RPC 取得 recall 候選與其排序輸入。
 
@@ -480,6 +639,7 @@ def _run_postgres_candidate_generation(
             "vector_top_k": settings.retrieval_vector_top_k,
             "fts_top_k": settings.retrieval_fts_top_k,
             "allowed_document_ids": list(allowed_document_ids) if allowed_document_ids else None,
+            "allowed_parent_chunk_ids": list(allowed_parent_ids) if allowed_parent_ids else None,
         },
     ).all()
 
@@ -505,6 +665,7 @@ def _run_sqlite_candidate_generation(
     area_id: str,
     query: str,
     allowed_document_ids: tuple[str, ...] | None,
+    allowed_parent_ids: tuple[str, ...] | None,
 ) -> list[RankedChunkMatch]:
     """SQLite 本機測試專用的 candidate generation 路徑。"""
 
@@ -518,6 +679,7 @@ def _run_sqlite_candidate_generation(
             Document.status == DocumentStatus.ready,
             DocumentChunk.chunk_type == ChunkType.child,
             Document.id.in_(allowed_document_ids) if allowed_document_ids else True,
+            DocumentChunk.parent_chunk_id.in_(allowed_parent_ids) if allowed_parent_ids else True,
         )
         .order_by(DocumentChunk.position.asc())
     ).all()
@@ -953,6 +1115,244 @@ def _run_sqlite_document_recall(
         current.fts_rank = index
 
     return list(merged_by_document_id.values())
+
+
+def _resolve_section_recall_result(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    query_type: EvaluationQueryType,
+    summary_strategy: str | None,
+    allowed_document_ids: tuple[str, ...] | None,
+) -> SectionRecallResult:
+    """依 query type 與 summary strategy 決定第二階段 section 集合。"""
+
+    if query_type == EvaluationQueryType.fact_lookup:
+        return SectionRecallResult(
+            selected_parent_ids=(),
+            trace=SectionRecallTrace(
+                applied=False,
+                strategy="disabled",
+                top_k=0,
+                selected_parent_ids=[],
+                dropped_parent_ids=[],
+                candidates=[],
+            ),
+        )
+
+    section_top_k = _resolve_section_recall_top_k(
+        settings=settings,
+        query_type=query_type,
+        summary_strategy=summary_strategy,
+    )
+    recall_matches = _recall_sections_by_synopsis(
+        session=session,
+        settings=settings,
+        area_id=area_id,
+        query=query,
+        allowed_document_ids=allowed_document_ids,
+        top_k=section_top_k,
+    )
+    selected_parent_ids = [match.parent_chunk.id for match in recall_matches[:section_top_k]]
+    selected_parent_set = set(selected_parent_ids)
+    return SectionRecallResult(
+        selected_parent_ids=tuple(selected_parent_ids),
+        trace=SectionRecallTrace(
+            applied=bool(selected_parent_ids),
+            strategy="section_synopsis_rrf_v1",
+            top_k=section_top_k,
+            selected_parent_ids=selected_parent_ids,
+            dropped_parent_ids=[match.parent_chunk.id for match in recall_matches if match.parent_chunk.id not in selected_parent_set],
+            candidates=[
+                SectionRecallTraceEntry(
+                    parent_chunk_id=match.parent_chunk.id,
+                    document_id=match.parent_chunk.document_id,
+                    heading=match.parent_chunk.heading,
+                    heading_path=match.parent_chunk.heading_path,
+                    section_path_text=match.parent_chunk.section_path_text,
+                    vector_rank=match.vector_rank,
+                    fts_rank=match.fts_rank,
+                    rrf_rank=match.rrf_rank or 0,
+                    rrf_score=match.rrf_score,
+                )
+                for match in recall_matches
+            ],
+        ),
+    )
+
+
+def _resolve_section_recall_top_k(
+    *,
+    settings: AppSettings,
+    query_type: EvaluationQueryType,
+    summary_strategy: str | None,
+) -> int:
+    """依題型與策略決定 section recall top-k。"""
+
+    if query_type == EvaluationQueryType.cross_document_compare:
+        return max(settings.assembler_max_contexts * 2, 10)
+    if summary_strategy == "section_focused":
+        return max(settings.assembler_max_contexts, 6)
+    return max(settings.assembler_max_contexts * 2, 8)
+
+
+def _recall_sections_by_synopsis(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+    top_k: int,
+) -> list[_SectionRecallMatch]:
+    """以 section synopsis 執行 parent-level recall。"""
+
+    dialect_name = session.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        matches = _run_postgres_section_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+            allowed_document_ids=allowed_document_ids,
+            top_k=top_k,
+        )
+    else:
+        matches = _run_sqlite_section_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+            allowed_document_ids=allowed_document_ids,
+            top_k=top_k,
+        )
+
+    for match in matches:
+        match.rrf_score = _compute_rrf_score(match=match, rrf_k=settings.retrieval_rrf_k)
+
+    merged_matches = sorted(
+        matches,
+        key=lambda item: (
+            -item.rrf_score,
+            _best_rank(item),
+            item.parent_chunk.position,
+            item.parent_chunk.id,
+        ),
+    )[:top_k]
+    for index, match in enumerate(merged_matches, start=1):
+        match.rrf_rank = index
+    return merged_matches
+
+
+def _run_postgres_section_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+    top_k: int,
+) -> list[_SectionRecallMatch]:
+    """透過 PostgreSQL 對 section synopsis 執行 recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    rows = session.execute(
+        _build_section_recall_statement(),
+        {
+            "query_embedding": query_embedding,
+            "query_text": query,
+            "area_id": area_id,
+            "vector_top_k": top_k,
+            "fts_top_k": top_k,
+            "allowed_document_ids": list(allowed_document_ids) if allowed_document_ids else None,
+        },
+    ).all()
+
+    matches: list[_SectionRecallMatch] = []
+    for row in rows:
+        parent_chunk = session.get(DocumentChunk, str(row.id))
+        if parent_chunk is None:
+            continue
+        matches.append(
+            _SectionRecallMatch(
+                parent_chunk=parent_chunk,
+                vector_rank=row.vector_rank,
+                fts_rank=row.fts_rank,
+            )
+        )
+    return matches
+
+
+def _run_sqlite_section_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+    top_k: int,
+) -> list[_SectionRecallMatch]:
+    """SQLite 測試路徑使用的 section synopsis recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    parents = session.scalars(
+        select(DocumentChunk)
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(
+            Document.area_id == area_id,
+            Document.status == DocumentStatus.ready,
+            DocumentChunk.chunk_type == ChunkType.parent,
+            Document.id.in_(allowed_document_ids) if allowed_document_ids else True,
+        )
+        .order_by(DocumentChunk.position.asc())
+    ).all()
+
+    merged_by_parent_id: dict[str, _SectionRecallMatch] = {}
+    vector_scored = sorted(
+        (
+            (_cosine_distance(query_embedding, parent.section_synopsis_embedding), parent)
+            for parent in parents
+            if parent.section_synopsis_embedding is not None
+        ),
+        key=lambda item: (item[0], item[1].position, item[1].id),
+    )[:top_k]
+    for index, (_, parent) in enumerate(vector_scored, start=1):
+        current = merged_by_parent_id.setdefault(parent.id, _SectionRecallMatch(parent_chunk=parent))
+        current.vector_rank = index
+
+    fts_scored = sorted(
+        (
+            (_sqlite_fts_score(query=query, content=parent.section_synopsis_text or ""), parent)
+            for parent in parents
+            if parent.section_synopsis_text
+        ),
+        key=lambda item: (-item[0], item[1].position, item[1].id),
+    )
+    for index, (_, parent) in enumerate((item for item in fts_scored if item[0] > 0), start=1):
+        if index > top_k:
+            break
+        current = merged_by_parent_id.setdefault(parent.id, _SectionRecallMatch(parent_chunk=parent))
+        current.fts_rank = index
+
+    return list(merged_by_parent_id.values())
+
+
+def _resolve_retrieval_fallback_reason(
+    *,
+    document_recall_result: DocumentRecallResult,
+    section_recall_result: SectionRecallResult,
+) -> str | None:
+    """依 document/section recall 結果決定是否有摘要層級 fallback。"""
+
+    if document_recall_result.trace.strategy != "disabled" and not document_recall_result.selected_document_ids:
+        return "document_recall_empty_fallback_to_child"
+    if section_recall_result.trace.strategy != "disabled" and not section_recall_result.selected_parent_ids:
+        return "section_recall_empty_fallback_to_document_scope"
+    return None
 
 
 def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppSettings) -> list[RankedChunkMatch]:

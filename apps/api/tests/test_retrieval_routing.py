@@ -1,8 +1,17 @@
 """Query-aware retrieval routing 測試。"""
 
+from uuid import uuid4
+
+from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import EvaluationQueryType
+from app.db.models import Area, AreaUserRole, Document, DocumentStatus, EvaluationQueryType, Role
 from app.services.retrieval_routing import build_query_routing_decision, classify_query_type
+
+
+def _uuid() -> str:
+    """建立測試用 UUID 字串。"""
+
+    return str(uuid4())
 
 
 def test_classifier_detects_document_summary_in_traditional_chinese() -> None:
@@ -97,6 +106,65 @@ def test_build_query_routing_decision_keeps_query_focus_env_toggle() -> None:
 
     assert decision.query_type == EvaluationQueryType.document_summary
     assert decision.summary_scope == "multi_document"
+    assert decision.summary_strategy == "multi_document_theme"
     assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
     assert decision.effective_settings.retrieval_query_focus_enabled is True
     assert decision.resolved_settings["query_focus_enabled"] is True
+
+
+def test_build_query_routing_decision_uses_section_focused_for_single_document_section_query(db_session) -> None:
+    """單文件摘要且帶 section cue 時應選 `section_focused`。"""
+
+    area = Area(id=_uuid(), name="Routing Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="employee-handbook.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="routing/employee-handbook.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader), document])
+    db_session.commit()
+
+    decision = build_query_routing_decision(
+        settings=AppSettings(),
+        query="請摘要 employee handbook 關於 leave policy 的章節",
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=()),
+        area_id=area.id,
+    )
+
+    assert decision.summary_scope == "single_document"
+    assert decision.summary_strategy == "section_focused"
+    assert decision.summary_strategy_source == "section_focus_rule"
+
+
+def test_build_query_routing_decision_uses_document_overview_for_single_document_summary(db_session) -> None:
+    """單文件摘要且未命中 section cue 時應選 `document_overview`。"""
+
+    area = Area(id=_uuid(), name="Routing Overview Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="benefits-policy.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="routing/benefits-policy.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader), document])
+    db_session.commit()
+
+    decision = build_query_routing_decision(
+        settings=AppSettings(),
+        query="請摘要 benefits policy",
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=()),
+        area_id=area.id,
+    )
+
+    assert decision.summary_scope == "single_document"
+    assert decision.summary_strategy == "document_overview"
+    assert decision.summary_strategy_source == "single_document_default"

@@ -89,6 +89,7 @@ def run_evaluation_dataset(
         top_k=top_k,
         query_type=dataset.query_type.value,
         selected_profile=routing_decision.selected_profile,
+        summary_strategy=routing_decision.summary_strategy,
     )
 
     run = RetrievalEvalRun(
@@ -179,6 +180,7 @@ def _build_evaluation_config_snapshot(
     top_k: int,
     query_type: str,
     selected_profile: str,
+    summary_strategy: str | None,
 ) -> dict[str, object]:
     """建立 benchmark run 的設定快照。"""
 
@@ -189,6 +191,7 @@ def _build_evaluation_config_snapshot(
                 "query_type": query_type,
                 "selected_profile": selected_profile,
                 "summary_scope": None,
+                "summary_strategy": summary_strategy,
                 "resolved_document_ids": [],
             },
             "retrieval": {

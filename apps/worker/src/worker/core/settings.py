@@ -41,6 +41,10 @@ EMPTY_STRING_ENV_KEYS = {
     "DOCUMENT_SYNOPSIS_MODEL",
     "DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS",
     "DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS",
+    "DOCUMENT_SYNOPSIS_MAX_OUTPUT_TOKENS",
+    "DOCUMENT_SYNOPSIS_PARALLELISM",
+    "DOCUMENT_SYNOPSIS_REASONING_EFFORT",
+    "DOCUMENT_SYNOPSIS_TEXT_VERBOSITY",
     "OPENDATALOADER_USE_STRUCT_TREE",
     "OPENDATALOADER_QUIET",
     "LLAMAPARSE_DO_NOT_CACHE",
@@ -122,9 +126,13 @@ class WorkerSettings(BaseSettings):
         float | None, Field(alias="SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS")
     ] = 60.0
     document_synopsis_provider: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_PROVIDER")] = "openai"
-    document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-4.1-mini"
+    document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-5-mini"
     document_synopsis_max_input_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS")] = 6000
     document_synopsis_max_output_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS")] = 1600
+    document_synopsis_max_output_tokens: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_TOKENS")] = 2000
+    document_synopsis_parallelism: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_PARALLELISM")] = 6
+    document_synopsis_reasoning_effort: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_REASONING_EFFORT")] = "minimal"
+    document_synopsis_text_verbosity: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_TEXT_VERBOSITY")] = "low"
 
     @model_validator(mode="before")
     @classmethod

@@ -272,7 +272,7 @@ OPENAI_API_KEY="$OPENAI_KEY" \
 PYTHONPATH=src python -m app.scripts.review_external_benchmark_with_openai \
   --workspace-dir /tmp/uda-pilot-workspace \
   --area-id "$AREA_ID" \
-  --model gpt-4.1-mini \
+  --model gpt-5-mini \
   --replace
 
 PYTHONPATH=src python -m app.scripts.prepare_external_benchmark report \

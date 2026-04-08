@@ -176,6 +176,12 @@ class DocumentChunk(Base):
     child_index: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # markdown section 標題；TXT 或無標題時為空值。
     heading: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # parent/section 的層級路徑文字；child 預設為空值。
+    heading_path: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # 供 section recall 使用的 path-aware section 文字；child 預設為空值。
+    section_path_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # section 對應的 heading level；child 或未知時為空值。
+    heading_level: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # chunk 原始內容。
     content: Mapped[str] = mapped_column(Text(), nullable=False)
     # 供 observability 使用的內容摘要。
@@ -188,6 +194,12 @@ class DocumentChunk(Base):
     end_offset: Mapped[int] = mapped_column(Integer(), nullable=False)
     # 僅 child chunk 使用的 embedding 向量；parent 固定為空值。
     embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
+    # 以 parent/section 為單位生成的 section-level synopsis 文字；child 固定為空值。
+    section_synopsis_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    # section synopsis 對應的 embedding 向量；child 固定為空值。
+    section_synopsis_embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
+    # 最近一次成功更新 section synopsis 的時間；child 固定為空值。
+    section_synopsis_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # chunk 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 

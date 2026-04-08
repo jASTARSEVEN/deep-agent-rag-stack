@@ -61,7 +61,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="使用 OpenAI API 對外部 benchmark 題目做 LLM review。")
     parser.add_argument("--workspace-dir", required=True, help="benchmark curation workspace。")
     parser.add_argument("--area-id", required=True, help="目標 area id。")
-    parser.add_argument("--model", default="gpt-4.1-mini", help="OpenAI model 名稱。")
+    parser.add_argument("--model", default="gpt-5-mini", help="OpenAI model 名稱。")
     parser.add_argument("--max-items", type=int, default=None, help="最多 review 幾題。")
     parser.add_argument("--replace", action="store_true", help="覆蓋既有 review_overrides，而不是 merge。")
     parser.add_argument(

@@ -323,6 +323,7 @@ flowchart TD
 19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；目前不做 section-level synopsis
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
 19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
+19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；正式持久化欄位為 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
 19.11. `document_summary` 與 `cross_document_compare` 採兩階段 retrieval：第一階段以 synopsis 做 document recall，第二階段再對入選文件集合做既有 child recall、rerank、selection 與 assembler；第二階段縮小範圍必須透過 SQL `allowed_document_ids` filter 完成，不得以記憶體過濾取代
 19.12. 第一階段 document recall 預設維持 fail-open：若 synopsis recall 無法選出文件集合，第二階段可回退到原本 area-scoped child recall，但必須在 trace / evaluation 中明確保留 `document_recall` 明細
 19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層 `deterministic + embedding`；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`；LLM routing 只允許作為可關閉的實驗性 fallback
@@ -333,6 +334,7 @@ flowchart TD
 19.12.5. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=section_focused` 的主線應為 `document scope resolve or document synopsis recall -> section synopsis recall -> child recall`；僅在 semantic-gap 較高或 evidence-dense 的 section 才允許於 `Phase 8B` 加上 `evidence-unit recall` 補強
 19.12.6. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=multi_document_theme` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`
 19.12.7. 第一層 `task_type=cross_document_compare` 在 `Phase 8A` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；進入 `Phase 8B` 後可再加入 `evidence-unit recall` 補強，此 route 也是 `evidence-centric layer` 的主要 ROI 場景
+19.12.7.1. `Phase 8A` 目前已為 `document_summary` / `cross_document_compare` 落地最小 deterministic map/reduce synthesis；summary 依 `summary_strategy` 聚合文件或章節 evidence，compare 固定輸出 `共通點 / 差異點 / 各文件立場或結論 / 不足證據或矛盾處`
 19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
 19.12.8.1. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
 19.12.8.2. `evidence recall` 的正式文字表示應使用 path-aware text，也就是 `heading_path / section_path_text + evidence_text` 共同參與 `FTS` 與 embedding 前處理

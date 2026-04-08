@@ -49,6 +49,12 @@ class SectionDraft:
     start_offset: int
     # section 在 normalize 後文字中的結束 offset。
     end_offset: int
+    # section 層級路徑文字。
+    heading_path: str | None = None
+    # 供 section recall 使用的 path-aware section 文字。
+    section_path_text: str | None = None
+    # heading level；未知時為空值。
+    heading_level: int | None = None
     # 此 parent 內部保留的 component blocks；若為空值代表整段視為單一 component。
     components: list["SectionComponent"] | None = None
     # 此 section 涵蓋的起始頁碼。
@@ -107,6 +113,12 @@ class ChunkDraft:
     start_offset: int
     # chunk 在 display_text 中的結束 offset。
     end_offset: int
+    # section 層級路徑文字；child 預設為空值。
+    heading_path: str | None = None
+    # 供 section recall 使用的 path-aware section 文字；child 預設為空值。
+    section_path_text: str | None = None
+    # heading level；未知時為空值。
+    heading_level: int | None = None
     # chunk 涵蓋的起始頁碼。
     page_start: int | None = None
     # chunk 涵蓋的結束頁碼。
@@ -175,6 +187,9 @@ def build_chunk_tree(*, parsed_document: ParsedDocument, config: ChunkingConfig)
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                heading_path=section.heading_path,
+                section_path_text=section.section_path_text,
+                heading_level=section.heading_level,
                 page_start=section.page_start,
                 page_end=section.page_end,
                 regions=section.regions,
@@ -217,33 +232,38 @@ def _build_sections(*, parsed_document: ParsedDocument, config: ChunkingConfig) 
     if parsed_document.source_format == "txt":
         return _build_text_sections(text=parsed_document.normalized_text, config=config)
 
-    sections = [
-        SectionDraft(
-            section_index=index,
-            structure_kind=block.block_kind,
-            heading=block.heading,
-            content=block.content,
-            start_offset=block.start_offset,
-            end_offset=block.end_offset,
-            components=[
-                SectionComponent(
-                    structure_kind=block.block_kind,
-                    heading=block.heading,
-                    content=block.content,
-                    start_offset=0,
-                    end_offset=len(block.content),
-                    page_start=block.page_start,
-                    page_end=block.page_end,
-                    regions=block.regions,
-                )
-            ],
-            page_start=block.page_start,
-            page_end=block.page_end,
-            regions=block.regions,
+    sections = []
+    for index, (block, heading_path) in enumerate(_resolve_block_heading_paths(parsed_document.blocks)):
+        if not block.content.strip():
+            continue
+        sections.append(
+            SectionDraft(
+                section_index=index,
+                structure_kind=block.block_kind,
+                heading=block.heading,
+                content=block.content,
+                start_offset=block.start_offset,
+                end_offset=block.end_offset,
+                heading_path=heading_path,
+                section_path_text=_build_section_path_text(heading_path=heading_path, section_index=index),
+                heading_level=block.heading_level if block.heading_level is not None else _infer_heading_level(block.heading),
+                components=[
+                    SectionComponent(
+                        structure_kind=block.block_kind,
+                        heading=block.heading,
+                        content=block.content,
+                        start_offset=0,
+                        end_offset=len(block.content),
+                        page_start=block.page_start,
+                        page_end=block.page_end,
+                        regions=block.regions,
+                    )
+                ],
+                page_start=block.page_start,
+                page_end=block.page_end,
+                regions=block.regions,
+            )
         )
-        for index, block in enumerate(parsed_document.blocks)
-        if block.content.strip()
-    ]
     if parsed_document.source_format == "pdf":
         sections = _consolidate_pdf_sections(sections, config=config)
     return _normalize_sections(sections, config=config)
@@ -275,9 +295,68 @@ def _build_text_sections(text: str, *, config: ChunkingConfig) -> list[SectionDr
                 content=content,
                 start_offset=0,
                 end_offset=0,
+                heading_path=None,
+                section_path_text=_build_section_path_text(
+                    heading_path=None,
+                    section_index=len(grouped_sections),
+                ),
+                heading_level=None,
             )
         )
     return _normalize_sections(grouped_sections, config=config)
+
+
+def _resolve_block_heading_paths(blocks) -> list[tuple[object, str | None]]:
+    """為 parser blocks 建立最小 path-aware heading 路徑。
+
+    參數：
+    - `blocks`：parser 產出的 block 清單。
+
+    回傳：
+    - `list[tuple[object, str | None]]`：每個 block 與其 heading path。
+    """
+
+    resolved: list[tuple[object, str | None]] = []
+    heading_stack: list[str] = []
+
+    for block in blocks:
+        heading = _normalize_heading_text(getattr(block, "heading", None))
+        heading_level = getattr(block, "heading_level", None)
+        if heading:
+            if isinstance(heading_level, int) and heading_level > 0:
+                heading_stack = heading_stack[: max(heading_level - 1, 0)]
+                heading_stack.append(heading)
+            elif not heading_stack or heading_stack[-1] != heading:
+                heading_stack = [heading]
+        resolved.append((block, " / ".join(heading_stack) if heading_stack else None))
+
+    return resolved
+
+
+def _normalize_heading_text(heading: str | None) -> str | None:
+    """將 heading 正規化為單行文字。"""
+
+    normalized = re.sub(r"\s+", " ", heading or "").strip()
+    return normalized or None
+
+
+def _infer_heading_level(heading: str | None) -> int | None:
+    """在 parser 未提供 heading level 時，用最小規則推估層級。"""
+
+    normalized_heading = _normalize_heading_text(heading)
+    if normalized_heading is None:
+        return None
+    if "/" in normalized_heading:
+        return max(1, len(_split_heading_segments(normalized_heading)))
+    return 1
+
+
+def _build_section_path_text(*, heading_path: str | None, section_index: int) -> str:
+    """建立 section recall 使用的 path-aware section 文字。"""
+
+    if heading_path:
+        return heading_path
+    return f"Section {section_index + 1}"
 
 
 def _normalize_sections(sections: list[SectionDraft], *, config: ChunkingConfig) -> list[SectionDraft]:
@@ -605,6 +684,9 @@ def _reindex_sections(*, sections: list[SectionDraft]) -> list[SectionDraft]:
                 content=section.content,
                 start_offset=start_offset,
                 end_offset=end_offset,
+                heading_path=section.heading_path,
+                section_path_text=section.section_path_text,
+                heading_level=section.heading_level,
                 components=section.components,
                 page_start=section.page_start,
                 page_end=section.page_end,
@@ -760,6 +842,8 @@ def _merge_section_sequence(
     merged_components: list[SectionComponent] = []
     cursor = 0
     heading: str | None = None
+    heading_path: str | None = None
+    heading_level: int | None = None
 
     for index, section in enumerate(sections):
         if index > 0 and merged_content_parts and section.content:
@@ -767,6 +851,8 @@ def _merge_section_sequence(
             cursor += 2
         merged_content_parts.append(section.content)
         heading = _merge_headings(heading, section.heading)
+        heading_path = _merge_section_heading_paths(heading_path, section.heading_path)
+        heading_level = _pick_heading_level(heading_level, section.heading_level)
         if preserve_components:
             for component in _section_components(section):
                 merged_components.append(
@@ -790,6 +876,12 @@ def _merge_section_sequence(
         content="".join(merged_content_parts),
         start_offset=sections[0].start_offset if sections else 0,
         end_offset=sections[-1].end_offset if sections else 0,
+        heading_path=heading_path,
+        section_path_text=_build_section_path_text(
+            heading_path=heading_path,
+            section_index=sections[0].section_index if sections else 0,
+        ),
+        heading_level=heading_level,
         components=merged_components if preserve_components else None,
         page_start=min((section.page_start for section in sections if section.page_start is not None), default=None),
         page_end=max((section.page_end for section in sections if section.page_end is not None), default=None),
@@ -856,6 +948,30 @@ def _merge_headings(left_heading: str | None, right_heading: str | None) -> str 
     return left_heading or right_heading
 
 
+def _merge_section_heading_paths(left_path: str | None, right_path: str | None) -> str | None:
+    """合併多個 section 的 heading path。"""
+
+    if left_path and right_path:
+        left_segments = _split_heading_segments(left_path)
+        right_segments = _split_heading_segments(right_path)
+        if _is_heading_prefix(left_segments, right_segments):
+            return right_path
+        if _is_heading_prefix(right_segments, left_segments):
+            return left_path
+        return f"{left_path} / {right_path}"
+    return left_path or right_path
+
+
+def _pick_heading_level(left_level: int | None, right_level: int | None) -> int | None:
+    """在合併 section 時保留較深的 heading level。"""
+
+    if left_level is None:
+        return right_level
+    if right_level is None:
+        return left_level
+    return max(left_level, right_level)
+
+
 def _build_child_chunks(
     *,
     section: SectionDraft,
@@ -904,6 +1020,9 @@ def _build_child_chunks(
             content=component.content,
             start_offset=section.start_offset + component.start_offset,
             end_offset=section.start_offset + component.end_offset,
+            heading_path=section.heading_path,
+            section_path_text=section.section_path_text,
+            heading_level=section.heading_level,
             components=[component],
             page_start=component.page_start,
             page_end=component.page_end,
@@ -979,6 +1098,9 @@ def _build_text_child_chunks(
                 char_count=len(chunk_content),
                 start_offset=display_start,
                 end_offset=display_end,
+                heading_path=None,
+                section_path_text=None,
+                heading_level=None,
                 page_start=section.page_start,
                 page_end=section.page_end,
                 regions=section.regions,
@@ -1105,6 +1227,9 @@ def _build_table_child_chunks(
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                heading_path=None,
+                section_path_text=None,
+                heading_level=None,
                 page_start=section.page_start,
                 page_end=section.page_end,
                 regions=section.regions,
@@ -1126,6 +1251,9 @@ def _build_table_child_chunks(
                 char_count=len(section.content),
                 start_offset=display_content_start,
                 end_offset=display_content_start + len(section.content),
+                heading_path=None,
+                section_path_text=None,
+                heading_level=None,
                 page_start=section.page_start,
                 page_end=section.page_end,
                 regions=section.regions,
@@ -1154,6 +1282,9 @@ def _build_table_child_chunks(
                 char_count=len(child_content),
                 start_offset=display_content_start + row_start,
                 end_offset=display_content_start + row_end,
+                heading_path=None,
+                section_path_text=None,
+                heading_level=None,
                 page_start=section.page_start,
                 page_end=section.page_end,
                 regions=section.regions,

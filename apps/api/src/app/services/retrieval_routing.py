@@ -34,6 +34,13 @@ RETRIEVAL_PROFILE_DOCUMENT_SUMMARY_MULTI_DOCUMENT_DIVERSIFIED_V1 = "document_sum
 # `cross_document_compare_diversified_v1` 表示多文件比較的 diversified profile。
 RETRIEVAL_PROFILE_CROSS_DOCUMENT_COMPARE_DIVERSIFIED_V1 = "cross_document_compare_diversified_v1"
 
+# `document_overview` 表示單文件整體摘要。
+SUMMARY_STRATEGY_DOCUMENT_OVERVIEW = "document_overview"
+# `section_focused` 表示單文件聚焦章節摘要。
+SUMMARY_STRATEGY_SECTION_FOCUSED = "section_focused"
+# `multi_document_theme` 表示多文件共同主題摘要。
+SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME = "multi_document_theme"
+
 # `zh-TW` 摘要型 query 關鍵詞。
 SUMMARY_TRIGGER_PHRASES_ZH_TW = ("摘要", "總結", "整理", "概述", "重點")
 # `en` 摘要型 query 關鍵詞。
@@ -42,6 +49,10 @@ SUMMARY_TRIGGER_PHRASES_EN = ("summary", "summarize", "overview", "key points")
 COMPARE_TRIGGER_PHRASES_ZH_TW = ("比較", "差異", "相比", "不同", "優缺點")
 # `en` 比較型 query 關鍵詞。
 COMPARE_TRIGGER_PHRASES_EN = ("compare", "comparison", "difference", "vs", "versus")
+# `zh-TW` 章節聚焦摘要 cue。
+SECTION_FOCUS_TRIGGER_PHRASES_ZH_TW = ("章節", "段落", "部分", "關於", "聚焦", "著重")
+# `en` 章節聚焦摘要 cue。
+SECTION_FOCUS_TRIGGER_PHRASES_EN = ("section", "chapter", "part", "focus on", "about")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +76,9 @@ class QueryRoutingDecision:
     source: str
     matched_rules: tuple[str, ...]
     summary_scope: str | None
+    summary_strategy: str | None
+    summary_strategy_source: str
+    summary_strategy_confidence: float
     resolved_document_ids: tuple[str, ...]
     document_mention_source: str
     document_mention_confidence: float
@@ -174,10 +188,17 @@ def build_query_routing_decision(
         query_type=classification.query_type,
         mention_resolution=mention_resolution,
     )
+    summary_strategy, summary_strategy_source, summary_strategy_confidence = _resolve_summary_strategy(
+        query=normalized_query,
+        language=classification.language,
+        query_type=classification.query_type,
+        summary_scope=summary_scope,
+    )
     profile_name, overrides = _resolve_runtime_profile_overrides(
         settings=settings,
         query_type=classification.query_type,
         summary_scope=summary_scope,
+        summary_strategy=summary_strategy,
     )
     effective_settings = settings.model_copy(update=overrides)
     return QueryRoutingDecision(
@@ -187,6 +208,9 @@ def build_query_routing_decision(
         source=classification.source,
         matched_rules=classification.matched_rules,
         summary_scope=summary_scope,
+        summary_strategy=summary_strategy,
+        summary_strategy_source=summary_strategy_source,
+        summary_strategy_confidence=summary_strategy_confidence,
         resolved_document_ids=mention_resolution.resolved_document_ids,
         document_mention_source=mention_resolution.source,
         document_mention_confidence=mention_resolution.confidence,
@@ -210,6 +234,7 @@ def _resolve_runtime_profile_overrides(
     settings: AppSettings,
     query_type: EvaluationQueryType,
     summary_scope: str | None,
+    summary_strategy: str | None,
 ) -> tuple[str, dict[str, int | str | bool]]:
     """依 query type 解析 runtime profile 名稱與設定覆寫。
 
@@ -232,6 +257,21 @@ def _resolve_runtime_profile_overrides(
                     "retrieval_max_candidates": max(settings.retrieval_max_candidates, 45),
                     "retrieval_document_recall_enabled": True,
                     "retrieval_document_recall_top_k": 1,
+                    "rerank_top_n": max(settings.rerank_top_n, 36),
+                    "assembler_max_contexts": max(settings.assembler_max_contexts, 12),
+                    "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3600),
+                    "assembler_max_children_per_parent": max(settings.assembler_max_children_per_parent, 7),
+                },
+            )
+        if summary_strategy == SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME:
+            return (
+                RETRIEVAL_PROFILE_DOCUMENT_SUMMARY_MULTI_DOCUMENT_DIVERSIFIED_V1,
+                {
+                    "retrieval_vector_top_k": max(settings.retrieval_vector_top_k, 45),
+                    "retrieval_fts_top_k": max(settings.retrieval_fts_top_k, 45),
+                    "retrieval_max_candidates": max(settings.retrieval_max_candidates, 45),
+                    "retrieval_document_recall_enabled": True,
+                    "retrieval_document_recall_top_k": max(settings.retrieval_document_recall_top_k, 6),
                     "rerank_top_n": max(settings.rerank_top_n, 36),
                     "assembler_max_contexts": max(settings.assembler_max_contexts, 12),
                     "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3600),
@@ -306,6 +346,29 @@ def build_resolved_settings_trace(*, settings: AppSettings) -> dict[str, int | b
         "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
         "query_focus_enabled": settings.retrieval_query_focus_enabled,
     }
+
+
+def _resolve_summary_strategy(
+    *,
+    query: str,
+    language: str,
+    query_type: EvaluationQueryType,
+    summary_scope: str | None,
+) -> tuple[str | None, str, float]:
+    """依 query 與 scope 決定 `document_summary` 的第二層 strategy。"""
+
+    if query_type != EvaluationQueryType.document_summary:
+        return None, "not_applicable", 0.0
+    if summary_scope == "single_document":
+        if _match_trigger_phrases(
+            lowered_query=query.casefold(),
+            language=language,
+            zh_tw_phrases=SECTION_FOCUS_TRIGGER_PHRASES_ZH_TW,
+            en_phrases=SECTION_FOCUS_TRIGGER_PHRASES_EN,
+        ):
+            return SUMMARY_STRATEGY_SECTION_FOCUSED, "section_focus_rule", 0.85
+        return SUMMARY_STRATEGY_DOCUMENT_OVERVIEW, "single_document_default", 0.8
+    return SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME, "multi_document_default", 0.8
 
 
 def _resolve_document_mentions_for_query_type(

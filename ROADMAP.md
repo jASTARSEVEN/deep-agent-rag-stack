@@ -515,7 +515,7 @@ LLM 輸入規則：
 - `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
 狀態：
-- `未開始`
+- `進行中（core runtime / section synopsis / section recall / synthesis trace 已落地；尚待 E2E 與最小 evaluation checkpoint 收尾）`
 
 ## Phase 8B — Evidence-Centric Enrichment & Evaluation
 

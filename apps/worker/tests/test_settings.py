@@ -32,6 +32,10 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         DOCUMENT_SYNOPSIS_MODEL="",
         DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS="",
         DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS="",
+        DOCUMENT_SYNOPSIS_MAX_OUTPUT_TOKENS="",
+        DOCUMENT_SYNOPSIS_PARALLELISM="",
+        DOCUMENT_SYNOPSIS_REASONING_EFFORT="",
+        DOCUMENT_SYNOPSIS_TEXT_VERBOSITY="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
         OPENDATALOADER_USE_STRUCT_TREE="",
@@ -66,9 +70,13 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.self_hosted_embedding_api_key is None
     assert settings.self_hosted_embedding_timeout_seconds == 60.0
     assert settings.document_synopsis_provider == "openai"
-    assert settings.document_synopsis_model == "gpt-4.1-mini"
+    assert settings.document_synopsis_model == "gpt-5-mini"
     assert settings.document_synopsis_max_input_chars == 6000
     assert settings.document_synopsis_max_output_chars == 1600
+    assert settings.document_synopsis_max_output_tokens == 2000
+    assert settings.document_synopsis_parallelism == 6
+    assert settings.document_synopsis_reasoning_effort == "minimal"
+    assert settings.document_synopsis_text_verbosity == "low"
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True
