@@ -54,7 +54,7 @@ def app_settings(tmp_path: Path) -> AppSettings:
         MINIO_BUCKET="documents",
         LOCAL_STORAGE_PATH=tmp_path / "storage",
         MAX_UPLOAD_SIZE_BYTES=1024,
-        CHUNK_MIN_PARENT_SECTION_LENGTH=300,
+        CHUNK_MIN_PARENT_SECTION_LENGTH=800,
         CHUNK_TARGET_CHILD_SIZE=800,
         CHUNK_CHILD_OVERLAP=120,
         CHUNK_CONTENT_PREVIEW_LENGTH=120,

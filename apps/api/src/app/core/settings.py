@@ -110,7 +110,7 @@ class AppSettings(BaseSettings):
     minio_bucket: Annotated[str, Field(alias="MINIO_BUCKET")] = "documents"
     local_storage_path: Annotated[Path, Field(alias="LOCAL_STORAGE_PATH")] = Path(".local-storage")
     max_upload_size_bytes: Annotated[int, Field(alias="MAX_UPLOAD_SIZE_BYTES")] = 5 * 1024 * 1024
-    chunk_min_parent_section_length: Annotated[int, Field(alias="CHUNK_MIN_PARENT_SECTION_LENGTH")] = 300
+    chunk_min_parent_section_length: Annotated[int, Field(alias="CHUNK_MIN_PARENT_SECTION_LENGTH")] = 800
     chunk_target_child_size: Annotated[int, Field(alias="CHUNK_TARGET_CHILD_SIZE")] = 800
     chunk_child_overlap: Annotated[int, Field(alias="CHUNK_CHILD_OVERLAP")] = 120
     chunk_content_preview_length: Annotated[int, Field(alias="CHUNK_CONTENT_PREVIEW_LENGTH")] = 120

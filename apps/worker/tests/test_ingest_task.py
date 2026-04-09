@@ -90,7 +90,7 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         MINIO_ACCESS_KEY="minio",
         MINIO_SECRET_KEY="minio123",
         MINIO_BUCKET="documents",
-        CHUNK_MIN_PARENT_SECTION_LENGTH=300,
+        CHUNK_MIN_PARENT_SECTION_LENGTH=800,
         CHUNK_TARGET_CHILD_SIZE=800,
         CHUNK_CHILD_OVERLAP=120,
         CHUNK_CONTENT_PREVIEW_LENGTH=120,
