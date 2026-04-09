@@ -320,6 +320,12 @@ def _resolve_block_heading_paths(blocks) -> list[tuple[object, str | None]]:
     heading_stack: list[str] = []
 
     for block in blocks:
+        explicit_heading_path = _normalize_heading_text(getattr(block, "heading_path", None))
+        if explicit_heading_path:
+            heading_stack = list(_split_heading_segments(explicit_heading_path))
+            resolved.append((block, explicit_heading_path))
+            continue
+
         heading = _normalize_heading_text(getattr(block, "heading", None))
         heading_level = getattr(block, "heading_level", None)
         if heading:

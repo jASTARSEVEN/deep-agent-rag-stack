@@ -27,8 +27,18 @@ REUSABLE_PARSE_ARTIFACT_FILE_NAMES = {
     "pptx": "pptx.extracted.html",
 }
 
-# Markdown heading 判定規則。
-MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,3})\s+(?P<heading>.+?)\s*$")
+# Markdown heading 判定規則；PDF/Markdown 需支援到 `h6`。
+MARKDOWN_HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(?P<heading>.+?)\s*$")
+
+# PDF 目錄 heading 常見的 dot leaders + 頁碼尾碼。
+MARKDOWN_TOC_DOT_LEADER_PATTERN = re.compile(r"^(?P<title>.+?)\.{2,}\s*\d+\s*$")
+
+# 視為目錄容器的 heading 名稱。
+MARKDOWN_TOC_HEADINGS = {
+    "contents",
+    "table of contents",
+    "目錄",
+}
 
 # Markdown table delimiter 判定規則。
 MARKDOWN_TABLE_DELIMITER_PATTERN = re.compile(r"^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$")
@@ -100,6 +110,8 @@ class ParsedBlock:
     element_kind: str | None = None
     # heading 等級；若無則為空值。
     heading_level: int | None = None
+    # heading 的完整階層路徑；若無則為空值。
+    heading_path: str | None = None
     # 此 block 橫跨的起始頁碼。
     page_start: int | None = None
     # 此 block 橫跨的結束頁碼。
@@ -358,35 +370,72 @@ def _parse_markdown_text(*, text: str, source_format: str) -> ParsedDocument:
         raise ValueError("文件內容不可為空白。")
 
     lines = text.splitlines()
-    block_inputs: list[tuple[str, str | None, str]] = []
+    block_inputs: list[tuple[object, ...]] = []
     current_heading: str | None = None
+    current_heading_level: int | None = None
+    current_heading_path: str | None = None
     current_text_lines: list[str] = []
+    heading_stack: list[str] = []
     index = 0
 
     while index < len(lines):
         line = lines[index].rstrip()
         heading_match = MARKDOWN_HEADING_PATTERN.match(line)
         if heading_match:
-            _append_markdown_text_block(block_inputs=block_inputs, heading=current_heading, lines=current_text_lines)
-            current_heading = heading_match.group("heading").strip()
+            raw_heading = heading_match.group("heading").strip()
+            is_toc_heading = _is_table_of_contents_heading(raw_heading)
+            _append_markdown_text_block(
+                block_inputs=block_inputs,
+                heading=current_heading,
+                heading_level=current_heading_level,
+                heading_path=current_heading_path,
+                lines=current_text_lines,
+            )
+            current_heading = _normalize_markdown_heading_text(raw_heading)
+            current_heading_level = len(heading_match.group(1))
+            if _contains_toc_heading(heading_stack=heading_stack) and not is_toc_heading:
+                heading_stack = _drop_toc_heading_suffix(heading_stack=heading_stack)
+            heading_stack = heading_stack[: max(current_heading_level - 1, 0)]
+            heading_stack.append(current_heading)
+            current_heading_path = " / ".join(heading_stack) if heading_stack else None
             current_text_lines = []
             index += 1
             continue
 
         if _is_markdown_table_start(lines=lines, start_index=index, source_format=source_format):
-            _append_markdown_text_block(block_inputs=block_inputs, heading=current_heading, lines=current_text_lines)
+            _append_markdown_text_block(
+                block_inputs=block_inputs,
+                heading=current_heading,
+                heading_level=current_heading_level,
+                heading_path=current_heading_path,
+                lines=current_text_lines,
+            )
             current_text_lines = []
             table_lines, next_index = _consume_markdown_table(lines=lines, start_index=index)
-            block_inputs.append(("table", current_heading, "\n".join(table_lines).strip()))
+            block_inputs.append(
+                (
+                    "table",
+                    current_heading,
+                    "\n".join(table_lines).strip(),
+                    current_heading_level,
+                    current_heading_path,
+                )
+            )
             index = next_index
             continue
 
         current_text_lines.append(line)
         index += 1
 
-    _append_markdown_text_block(block_inputs=block_inputs, heading=current_heading, lines=current_text_lines)
+    _append_markdown_text_block(
+        block_inputs=block_inputs,
+        heading=current_heading,
+        heading_level=current_heading_level,
+        heading_path=current_heading_path,
+        lines=current_text_lines,
+    )
     if not block_inputs:
-        block_inputs.append(("text", None, text))
+        block_inputs.append(("text", None, text, None, None))
     return _materialize_blocks(source_format=source_format, block_inputs=block_inputs)
 
 
@@ -462,8 +511,10 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
 
 def _append_markdown_text_block(
     *,
-    block_inputs: list[tuple[str, str | None, str]],
+    block_inputs: list[tuple[object, ...]],
     heading: str | None,
+    heading_level: int | None,
+    heading_path: str | None,
     lines: list[str],
 ) -> None:
     """將 Markdown 累積中的文字內容附加為 text block。
@@ -471,6 +522,8 @@ def _append_markdown_text_block(
     參數：
     - `block_inputs`：目前累積的 block 輸入。
     - `heading`：當前 heading。
+    - `heading_level`：當前 heading level。
+    - `heading_path`：當前 heading 完整路徑。
     - `lines`：當前文字行列表。
 
     回傳：
@@ -479,7 +532,71 @@ def _append_markdown_text_block(
 
     content = "\n".join(lines).strip()
     if content:
-        block_inputs.append(("text", heading, content))
+        block_inputs.append(("text", heading, content, heading_level, heading_path))
+
+
+def _normalize_markdown_heading_text(heading: str) -> str:
+    """清理 Markdown heading 文字，避免 TOC dot leaders 污染 path。
+
+    參數：
+    - `heading`：原始 Markdown heading。
+
+    回傳：
+    - `str`：正規化後的 heading 文字。
+    """
+
+    normalized_heading = re.sub(r"\s+", " ", heading).strip()
+    toc_match = MARKDOWN_TOC_DOT_LEADER_PATTERN.match(normalized_heading)
+    if toc_match is not None:
+        return re.sub(r"\s+", " ", toc_match.group("title")).strip()
+    return normalized_heading
+
+
+def _is_table_of_contents_heading(heading: str | None) -> bool:
+    """判斷 heading 是否屬於目錄容器或目錄條目。
+
+    參數：
+    - `heading`：欲判斷的 heading。
+
+    回傳：
+    - `bool`：若屬於目錄 heading 則回傳真值。
+    """
+
+    normalized_heading = re.sub(r"\s+", " ", heading or "").strip().lower()
+    if not normalized_heading:
+        return False
+    if normalized_heading in MARKDOWN_TOC_HEADINGS:
+        return True
+    return MARKDOWN_TOC_DOT_LEADER_PATTERN.match(normalized_heading) is not None
+
+
+def _contains_toc_heading(*, heading_stack: list[str]) -> bool:
+    """判斷目前 heading stack 是否仍位於目錄路徑之下。
+
+    參數：
+    - `heading_stack`：目前已解析的 heading stack。
+
+    回傳：
+    - `bool`：若 stack 內含目錄 heading 則回傳真值。
+    """
+
+    return any(_is_table_of_contents_heading(heading) for heading in heading_stack)
+
+
+def _drop_toc_heading_suffix(*, heading_stack: list[str]) -> list[str]:
+    """移除 heading stack 中從目錄節點開始的後綴。
+
+    參數：
+    - `heading_stack`：目前已解析的 heading stack。
+
+    回傳：
+    - `list[str]`：去除目錄後綴後的新 stack。
+    """
+
+    for index, heading in enumerate(heading_stack):
+        if _is_table_of_contents_heading(heading):
+            return heading_stack[:index]
+    return list(heading_stack)
 
 
 def _is_markdown_table_start(*, lines: list[str], start_index: int, source_format: str) -> bool:
@@ -768,14 +885,14 @@ def _extract_html_block_inputs(*, text: str) -> list[tuple[str, str | None, str]
 def _materialize_blocks(
     *,
     source_format: str,
-    block_inputs: list[tuple[str, str | None, str]],
+    block_inputs: list[tuple[object, ...]],
     artifacts: list[ParseArtifact] | None = None,
 ) -> ParsedDocument:
     """將 block 輸入轉為帶 offset 的 ParsedDocument。
 
     參數：
     - `source_format`：來源格式。
-    - `block_inputs`：block 型別、heading 與內容清單。
+    - `block_inputs`：block 型別、heading、內容與可選的 heading metadata 清單。
 
     回傳：
     - `ParsedDocument`：帶有 normalized text 與 blocks 的結果。
@@ -785,7 +902,19 @@ def _materialize_blocks(
     normalized_parts: list[str] = []
     cursor = 0
 
-    for block_kind, heading, raw_content in block_inputs:
+    for raw_block_input in block_inputs:
+        if len(raw_block_input) == 3:
+            block_kind, heading, raw_content = raw_block_input
+            heading_level = None
+            heading_path = None
+        elif len(raw_block_input) == 4:
+            block_kind, heading, raw_content, heading_level = raw_block_input
+            heading_path = None
+        elif len(raw_block_input) == 5:
+            block_kind, heading, raw_content, heading_level, heading_path = raw_block_input
+        else:
+            raise ValueError("block input 格式不正確。")
+
         content = raw_content.strip()
         if not content:
             continue
@@ -798,6 +927,8 @@ def _materialize_blocks(
                 content=content,
                 start_offset=start_offset,
                 end_offset=end_offset,
+                heading_level=heading_level if isinstance(heading_level, int) else None,
+                heading_path=heading_path if isinstance(heading_path, str) and heading_path.strip() else None,
             )
         )
         normalized_parts.append(content)
@@ -867,8 +998,12 @@ def _extract_opendataloader_elements(*, artifact_payload: dict[str, object]) -> 
         raw_content = artifact_payload.get("content")
         if isinstance(raw_content, dict):
             raw_elements = raw_content.get("elements")
-        elif isinstance(artifact_payload.get("document"), dict):
-            raw_elements = artifact_payload["document"].get("elements")
+    if not isinstance(raw_elements, list) and isinstance(artifact_payload.get("document"), dict):
+        raw_elements = artifact_payload["document"].get("elements")
+    if not isinstance(raw_elements, list):
+        raw_elements = artifact_payload.get("kids")
+    if not isinstance(raw_elements, list) and isinstance(artifact_payload.get("document"), dict):
+        raw_elements = artifact_payload["document"].get("kids")
     if not isinstance(raw_elements, list):
         return []
 
@@ -876,25 +1011,140 @@ def _extract_opendataloader_elements(*, artifact_payload: dict[str, object]) -> 
     for item in raw_elements:
         if not isinstance(item, dict):
             continue
-        content = str(item.get("markdown") or item.get("text") or item.get("content") or "").strip()
+        element_kind = str(item.get("type") or item.get("kind") or item.get("label") or "text").strip().lower()
+        if element_kind in {"header", "footer"}:
+            continue
+        content = _extract_opendataloader_item_content(item=item, element_kind=element_kind)
         if not content:
             continue
-        element_kind = str(item.get("type") or item.get("kind") or item.get("label") or "text").strip().lower()
         heading = item.get("heading")
-        heading_level = item.get("heading_level") or item.get("level")
+        if not isinstance(heading, str) or not heading.strip():
+            heading = content if element_kind == "heading" else None
+        heading_level = _normalize_opendataloader_heading_level(
+            item.get("heading_level") or item.get("heading level") or item.get("level")
+        )
         page_start, page_end = _extract_page_span(item)
         extracted_elements.append(
             _OpenDataLoaderElement(
                 element_kind=element_kind,
                 content=content,
                 heading=str(heading).strip() if isinstance(heading, str) and heading.strip() else None,
-                heading_level=int(heading_level) if isinstance(heading_level, int) else None,
+                heading_level=heading_level,
                 page_start=page_start,
                 page_end=page_end,
                 regions=_extract_parsed_regions(item),
             )
         )
     return extracted_elements
+
+
+def _extract_opendataloader_item_content(*, item: dict[str, object], element_kind: str) -> str:
+    """抽出單一 OpenDataLoader node 的可比對文字內容。
+
+    參數：
+    - `item`：單一 OpenDataLoader node。
+    - `element_kind`：node 類型名稱。
+
+    回傳：
+    - `str`：可用於與 Markdown block 對齊的內容文字。
+    """
+
+    direct_content = str(item.get("markdown") or item.get("text") or item.get("content") or "").strip()
+    if direct_content:
+        return direct_content
+    if element_kind == "table":
+        return _render_opendataloader_table_rows_as_markdown(rows=item.get("rows"))
+    return ""
+
+
+def _render_opendataloader_table_rows_as_markdown(*, rows: object) -> str:
+    """將 OpenDataLoader `rows` 結構轉為穩定的 Markdown table。
+
+    參數：
+    - `rows`：OpenDataLoader table rows 欄位。
+
+    回傳：
+    - `str`：轉為 Markdown 後的表格內容；若無法轉換則回傳空字串。
+    """
+
+    if not isinstance(rows, list):
+        return ""
+
+    rendered_rows: list[list[str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        raw_cells = row.get("cells")
+        if not isinstance(raw_cells, list):
+            continue
+        rendered_rows.append([_extract_opendataloader_table_cell_text(cell=cell) for cell in raw_cells])
+    return _render_table_rows_as_markdown(rendered_rows)
+
+
+def _extract_opendataloader_table_cell_text(*, cell: object) -> str:
+    """抽出 OpenDataLoader table cell 的純文字內容。
+
+    參數：
+    - `cell`：單一 OpenDataLoader table cell node。
+
+    回傳：
+    - `str`：cell 文字；若無內容則回傳空字串。
+    """
+
+    if not isinstance(cell, dict):
+        return ""
+
+    direct_content = str(cell.get("content") or cell.get("text") or "").strip()
+    if direct_content:
+        return direct_content
+
+    raw_kids = cell.get("kids")
+    if not isinstance(raw_kids, list):
+        return ""
+
+    text_parts: list[str] = []
+    for kid in raw_kids:
+        if not isinstance(kid, dict):
+            continue
+        content = str(kid.get("content") or kid.get("text") or "").strip()
+        if content:
+            text_parts.append(content)
+    return " ".join(text_parts).strip()
+
+
+def _normalize_opendataloader_heading_level(raw_level: object) -> int | None:
+    """將 OpenDataLoader heading level 正規化為整數層級。
+
+    參數：
+    - `raw_level`：OpenDataLoader 原始 level 欄位。
+
+    回傳：
+    - `int | None`：正規化後的 heading level；無法判定時回傳空值。
+    """
+
+    if isinstance(raw_level, int) and raw_level > 0:
+        return raw_level
+    if not isinstance(raw_level, str):
+        return None
+
+    normalized_level = raw_level.strip().lower().replace(" ", "")
+    if not normalized_level:
+        return None
+    if normalized_level.isdigit():
+        return int(normalized_level)
+
+    level_mapping = {
+        "doctitle": 1,
+        "title": 1,
+        "subtitle": 2,
+    }
+    if normalized_level in level_mapping:
+        return level_mapping[normalized_level]
+
+    heading_number_match = re.search(r"(\d+)$", normalized_level)
+    if heading_number_match is not None:
+        return int(heading_number_match.group(1))
+    return None
 
 
 def _enrich_blocks_with_opendataloader_elements(
@@ -941,9 +1191,10 @@ def _enrich_blocks_with_opendataloader_elements(
                 start_offset=block.start_offset,
                 end_offset=block.end_offset,
                 element_kind=first_element.element_kind,
-                heading_level=first_element.heading_level,
-                page_start=min(page_numbers) if page_numbers else first_element.page_start,
-                page_end=max(page_numbers) if page_numbers else first_element.page_end,
+                heading_level=first_element.heading_level if first_element.heading_level is not None else block.heading_level,
+                heading_path=block.heading_path,
+                page_start=min(page_numbers) if page_numbers else (first_element.page_start or block.page_start),
+                page_end=max(page_numbers) if page_numbers else (first_element.page_end or block.page_end),
                 regions=all_regions or None,
             )
         )
@@ -995,15 +1246,17 @@ def _normalize_element_kind(value: str) -> str:
     normalized = value.strip().lower()
     if "table" in normalized:
         return "table"
+    if "heading" in normalized or normalized in {"doctitle", "title", "subtitle"}:
+        return "heading"
     return "text"
 
 
 def _extract_page_span(item: dict[str, object]) -> tuple[int | None, int | None]:
     """從 OpenDataLoader element 擷取頁碼範圍。"""
 
-    page_number = item.get("page_number") or item.get("page")
-    page_start = item.get("page_start")
-    page_end = item.get("page_end")
+    page_number = item.get("page_number") or item.get("page") or item.get("page number")
+    page_start = item.get("page_start") or item.get("page start")
+    page_end = item.get("page_end") or item.get("page end")
     if isinstance(page_number, int):
         return page_number, page_number
     return (
@@ -1019,8 +1272,25 @@ def _extract_parsed_regions(item: dict[str, object]) -> list[ParsedRegion]:
     if isinstance(raw_regions, dict):
         raw_regions = [raw_regions]
     if raw_regions is None:
-        raw_bbox = item.get("bbox")
-        raw_regions = [raw_bbox] if isinstance(raw_bbox, dict) else []
+        raw_bbox = item.get("bbox") or item.get("bounding box")
+        if isinstance(raw_bbox, dict):
+            raw_regions = [raw_bbox]
+        elif (
+            isinstance(raw_bbox, list)
+            and len(raw_bbox) == 4
+            and all(isinstance(value, (int, float)) for value in raw_bbox)
+        ):
+            raw_regions = [
+                {
+                    "page_number": item.get("page_number") or item.get("page") or item.get("page number"),
+                    "left": raw_bbox[0],
+                    "bottom": raw_bbox[1],
+                    "right": raw_bbox[2],
+                    "top": raw_bbox[3],
+                }
+            ]
+        else:
+            raw_regions = []
     if not isinstance(raw_regions, list):
         return []
 
@@ -1029,7 +1299,7 @@ def _extract_parsed_regions(item: dict[str, object]) -> list[ParsedRegion]:
     for region_order, region in enumerate(raw_regions):
         if not isinstance(region, dict):
             continue
-        page_number = region.get("page_number") or region.get("page") or fallback_page
+        page_number = region.get("page_number") or region.get("page") or region.get("page number") or fallback_page
         if not isinstance(page_number, int):
             continue
         left = region.get("left", region.get("x0"))
