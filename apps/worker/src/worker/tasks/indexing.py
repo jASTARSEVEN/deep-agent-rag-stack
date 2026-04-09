@@ -4,12 +4,21 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from itertools import repeat
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
 from worker.core.settings import WorkerSettings
-from worker.db import ChunkType, Document, DocumentChunk
+from worker.db import (
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentChunkEvidenceUnit,
+    DocumentChunkEvidenceUnitChildSource,
+    DocumentChunkEvidenceUnitParentSource,
+    EvidenceEnrichmentStatus,
+)
 from worker.embedding_text import build_embedding_input_text
 from worker.embeddings import build_embedding_provider
+from worker.evidence_units import generate_evidence_units_for_document
 from worker.synopsis import (
     build_document_synopsis_provider,
     build_document_synopsis_source_text,
@@ -65,24 +74,30 @@ def index_document_chunks(*, session, document: Document, settings: WorkerSettin
     for chunk, embedding in zip(child_chunks, embeddings, strict=True):
         chunk.embedding = embedding
 
-    synopsis_provider = build_document_synopsis_provider(settings)
-    section_synopsis_texts = _generate_section_synopsis_texts(
-        settings=settings,
-        file_name=document.file_name,
-        parent_chunks=parent_chunks,
-    )
-    section_synopsis_embeddings = provider.embed_texts(section_synopsis_texts)
-    section_synopsis_updated_at = datetime.now(UTC)
-    for parent_chunk, synopsis_text, synopsis_embedding in zip(
-        parent_chunks,
-        section_synopsis_texts,
-        section_synopsis_embeddings,
-        strict=True,
-    ):
-        parent_chunk.section_synopsis_text = synopsis_text
-        parent_chunk.section_synopsis_embedding = synopsis_embedding
-        parent_chunk.section_synopsis_updated_at = section_synopsis_updated_at
+    if settings.document_section_synopsis_enabled:
+        section_synopsis_texts = _generate_section_synopsis_texts(
+            settings=settings,
+            file_name=document.file_name,
+            parent_chunks=parent_chunks,
+        )
+        section_synopsis_embeddings = provider.embed_texts(section_synopsis_texts)
+        section_synopsis_updated_at = datetime.now(UTC)
+        for parent_chunk, synopsis_text, synopsis_embedding in zip(
+            parent_chunks,
+            section_synopsis_texts,
+            section_synopsis_embeddings,
+            strict=True,
+        ):
+            parent_chunk.section_synopsis_text = synopsis_text
+            parent_chunk.section_synopsis_embedding = synopsis_embedding
+            parent_chunk.section_synopsis_updated_at = section_synopsis_updated_at
+    else:
+        for parent_chunk in parent_chunks:
+            parent_chunk.section_synopsis_text = None
+            parent_chunk.section_synopsis_embedding = None
+            parent_chunk.section_synopsis_updated_at = None
 
+    synopsis_provider = build_document_synopsis_provider(settings)
     synopsis_source_text = build_document_synopsis_source_text(
         file_name=document.file_name,
         parent_chunks=parent_chunks,
@@ -97,8 +112,129 @@ def index_document_chunks(*, session, document: Document, settings: WorkerSettin
     document.synopsis_text = synopsis_text
     document.synopsis_embedding = provider.embed_texts([synopsis_text])[0]
     document.synopsis_updated_at = datetime.now(UTC)
+    _replace_document_evidence_units(
+        session=session,
+        document=document,
+        parent_chunks=parent_chunks,
+        child_chunks=child_chunks,
+        settings=settings,
+        embedding_provider=provider,
+    )
 
     session.flush()
+
+
+def _replace_document_evidence_units(
+    *,
+    session,
+    document: Document,
+    parent_chunks: list[DocumentChunk],
+    child_chunks: list[DocumentChunk],
+    settings: WorkerSettings,
+    embedding_provider,
+) -> None:
+    """以 replace-all 方式重建單一文件的 evidence units。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `document`：目前處理中的文件。
+    - `parent_chunks`：依文件順序排列的 parent chunks。
+    - `child_chunks`：依文件順序排列的 child chunks。
+    - `settings`：worker 執行期設定。
+    - `embedding_provider`：目前 indexing 共用的 embedding provider。
+
+    回傳：
+    - `None`：此函式只負責更新 evidence units 與 observability 欄位。
+    """
+
+    session.execute(
+        delete(DocumentChunkEvidenceUnitChildSource).where(
+            DocumentChunkEvidenceUnitChildSource.evidence_unit_id.in_(
+                select(DocumentChunkEvidenceUnit.id).where(DocumentChunkEvidenceUnit.document_id == document.id)
+            )
+        )
+    )
+    session.execute(
+        delete(DocumentChunkEvidenceUnitParentSource).where(
+            DocumentChunkEvidenceUnitParentSource.evidence_unit_id.in_(
+                select(DocumentChunkEvidenceUnit.id).where(DocumentChunkEvidenceUnit.document_id == document.id)
+            )
+        )
+    )
+    session.execute(delete(DocumentChunkEvidenceUnit).where(DocumentChunkEvidenceUnit.document_id == document.id))
+
+    if not settings.evidence_units_enabled:
+        document.evidence_enrichment_status = EvidenceEnrichmentStatus.skipped
+        document.evidence_enrichment_strategy = None
+        document.evidence_enrichment_error = None
+        document.evidence_enrichment_updated_at = datetime.now(UTC)
+        return
+
+    document.evidence_enrichment_status = EvidenceEnrichmentStatus.processing
+    generation_result = generate_evidence_units_for_document(
+        settings=settings,
+        file_name=document.file_name,
+        parent_chunks=parent_chunks,
+        child_chunks=child_chunks,
+    )
+
+    if not generation_result.drafts:
+        document.evidence_enrichment_status = EvidenceEnrichmentStatus.failed
+        document.evidence_enrichment_strategy = generation_result.effective_strategy
+        document.evidence_enrichment_error = generation_result.fallback_reason or "no_evidence_generated"
+        document.evidence_enrichment_updated_at = datetime.now(UTC)
+        return
+
+    texts = [draft.evidence_text for draft in generation_result.drafts]
+    embeddings = embedding_provider.embed_texts(texts)
+    now = datetime.now(UTC)
+    for position, (draft, embedding) in enumerate(zip(generation_result.drafts, embeddings, strict=True)):
+        evidence_unit = DocumentChunkEvidenceUnit(
+            document_id=document.id,
+            primary_parent_chunk_id=draft.parent_chunk_ids[0],
+            evidence_type=draft.evidence_type,
+            evidence_text=draft.evidence_text,
+            evidence_embedding=embedding,
+            build_strategy=draft.build_strategy,
+            position=position,
+            confidence=draft.confidence,
+            path_quality_score=draft.path_quality_score,
+            path_quality_reason=draft.path_quality_reason,
+            cluster_strategy=draft.cluster_strategy,
+            heading_path=draft.heading_path,
+            section_path_text=draft.section_path_text,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(evidence_unit)
+        session.flush()
+        session.add_all(
+            [
+                DocumentChunkEvidenceUnitChildSource(
+                    evidence_unit_id=evidence_unit.id,
+                    child_chunk_id=child_chunk_id,
+                    position=child_position,
+                    created_at=now,
+                )
+                for child_position, child_chunk_id in enumerate(draft.child_chunk_ids)
+            ]
+        )
+        session.add_all(
+            [
+                DocumentChunkEvidenceUnitParentSource(
+                    evidence_unit_id=evidence_unit.id,
+                    parent_chunk_id=parent_chunk_id,
+                    position=parent_position,
+                    created_at=now,
+                )
+                for parent_position, parent_chunk_id in enumerate(draft.parent_chunk_ids)
+            ]
+        )
+
+    document.evidence_enrichment_status = EvidenceEnrichmentStatus.ready
+    document.evidence_enrichment_strategy = generation_result.effective_strategy
+    document.evidence_enrichment_error = generation_result.fallback_reason
+    document.evidence_enrichment_updated_at = now
 
 
 def _generate_section_synopsis_texts(

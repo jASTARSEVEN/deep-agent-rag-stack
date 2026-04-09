@@ -328,11 +328,11 @@ flowchart TD
 19.7. `cross_document_compare` 採 coverage-first diversified selection：先完成每文件代表 parent 的 coverage pass，再依 rerank 排名補位；不得以硬上限截斷掉尚有 budget 且仍具高分證據的 compare 候選
 19.8. `query_focus` 是否實際套用，仍以 `AppSettings` / 環境變數開關為主；query-aware routing profile 不得自行覆寫此總開關，只能在開啟時補充 variant / threshold 等相容 knobs
 19.9. `documents` 正式新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`；`ready` 的成立條件除 chunk tree 與 child embeddings 外，還包含 document synopsis 與 synopsis embedding 成功寫入
-19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；目前不做 section-level synopsis
+19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；`section synopsis` 目前已改為 repo-wide opt-in，不再是正式預設產物
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
 19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
-19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；正式持久化欄位為 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
-19.11. worker 仍可持久化 `document synopsis` 與 `section synopsis`，但 API/runtime 的正式 query-time 主線不再依賴 synopsis recall；summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
+19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；但它現在只保留為 opt-in 實驗資料，正式預設已關閉
+19.11. worker 目前正式預設只保留 `document synopsis` 與 `Phase 8B` evidence enrichment；API/runtime 的正式 query-time 主線不依賴 synopsis recall。summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
 19.12. `document_summary` 與 `cross_document_compare` 的 scope 收斂目前只允許來自 mention resolver 與 routing scope；若已解析出文件範圍，必須透過 SQL `allowed_document_ids` filter 套用，不得以記憶體過濾取代
 19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層統一 classifier framework；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`
 19.12.1.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學，避免一層 rule-only、一層 model-only 造成維護與觀測不一致
@@ -345,9 +345,11 @@ flowchart TD
 19.12.7. 第一層 `task_type=cross_document_compare` 在 `Phase 8A` 的主線同樣是 `routing scope -> child recall -> rerank -> diversified selection -> assembler`；進入 `Phase 8B` 後才考慮疊加 `evidence-unit recall`
 19.12.7.1. `document_summary` 與 `cross_document_compare` 的最終回答正式由主 `Deep Agents` agent 根據 `retrieve_area_contexts` 的 assembled contexts 直接完成，不再維持 runtime 專用 synthesis lane
 19.12.7.2. `thinking_mode` 目前僅屬於前後端與 checkpoint 的相容 metadata；它不再影響 retrieval 與 answer path 的正式主線行為
-19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
-19.12.8.1. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
-19.12.8.2. `evidence recall` 的正式文字表示應使用 path-aware text，也就是 `heading_path / section_path_text + evidence_text` 共同參與 `FTS` 與 embedding 前處理
+19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `primary_parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
+19.12.8.1. `Phase 8B` 已新增獨立 evidence schema：`document_chunk_evidence_units`、`document_chunk_evidence_unit_child_sources`、`document_chunk_evidence_unit_parent_sources`，以及 `documents.evidence_enrichment_*` observability 欄位
+19.12.8.2. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local parent/child content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
+19.12.8.3. `heading_path / section_path_text` 在 `Phase 8B` 的正式角色是 `soft hint`，不是硬邊界；path 缺失、空白、命中 `目錄 / table of contents / contents`、帶 leader dots 或局部不穩定時，必須以 `path_quality_score` 降權，並退回 `adjacency/content similarity/table-text coupling` clustering
+19.12.8.4. `evidence recall` 的正式文字表示使用 `heading_path / section_path_text + evidence_text`；但 path 權重需受 `path_quality_score` 與 `cluster_strategy` 約束，不得假設 parser path 永遠可靠
 19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool

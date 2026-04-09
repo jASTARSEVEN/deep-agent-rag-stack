@@ -38,6 +38,7 @@ EMPTY_STRING_ENV_KEYS = {
     "SELF_HOSTED_EMBEDDING_API_KEY",
     "SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS",
     "DOCUMENT_SYNOPSIS_PROVIDER",
+    "DOCUMENT_SECTION_SYNOPSIS_ENABLED",
     "DOCUMENT_SYNOPSIS_MODEL",
     "DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS",
     "DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS",
@@ -45,6 +46,16 @@ EMPTY_STRING_ENV_KEYS = {
     "DOCUMENT_SYNOPSIS_PARALLELISM",
     "DOCUMENT_SYNOPSIS_REASONING_EFFORT",
     "DOCUMENT_SYNOPSIS_TEXT_VERBOSITY",
+    "EVIDENCE_UNITS_ENABLED",
+    "EVIDENCE_UNITS_BUILD_STRATEGY",
+    "EVIDENCE_UNITS_MODEL",
+    "EVIDENCE_UNITS_MAX_UNITS_PER_PARENT",
+    "EVIDENCE_UNITS_MAX_INPUT_CHARS",
+    "EVIDENCE_UNITS_MAX_OUTPUT_CHARS",
+    "EVIDENCE_UNITS_MAX_OUTPUT_TOKENS",
+    "EVIDENCE_UNITS_LLM_PARALLELISM",
+    "EVIDENCE_UNITS_REASONING_EFFORT",
+    "EVIDENCE_UNITS_TEXT_VERBOSITY",
     "OPENDATALOADER_USE_STRUCT_TREE",
     "OPENDATALOADER_QUIET",
     "LLAMAPARSE_DO_NOT_CACHE",
@@ -126,6 +137,7 @@ class WorkerSettings(BaseSettings):
         float | None, Field(alias="SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS")
     ] = 60.0
     document_synopsis_provider: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_PROVIDER")] = "openai"
+    document_section_synopsis_enabled: Annotated[bool, Field(alias="DOCUMENT_SECTION_SYNOPSIS_ENABLED")] = False
     document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-5-mini"
     document_synopsis_max_input_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS")] = 6000
     document_synopsis_max_output_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS")] = 1600
@@ -133,6 +145,16 @@ class WorkerSettings(BaseSettings):
     document_synopsis_parallelism: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_PARALLELISM")] = 6
     document_synopsis_reasoning_effort: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_REASONING_EFFORT")] = "minimal"
     document_synopsis_text_verbosity: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_TEXT_VERBOSITY")] = "low"
+    evidence_units_enabled: Annotated[bool, Field(alias="EVIDENCE_UNITS_ENABLED")] = False
+    evidence_units_build_strategy: Annotated[str, Field(alias="EVIDENCE_UNITS_BUILD_STRATEGY")] = "auto"
+    evidence_units_model: Annotated[str, Field(alias="EVIDENCE_UNITS_MODEL")] = "gpt-5-mini"
+    evidence_units_max_units_per_parent: Annotated[int, Field(alias="EVIDENCE_UNITS_MAX_UNITS_PER_PARENT")] = 3
+    evidence_units_max_input_chars: Annotated[int, Field(alias="EVIDENCE_UNITS_MAX_INPUT_CHARS")] = 4000
+    evidence_units_max_output_chars: Annotated[int, Field(alias="EVIDENCE_UNITS_MAX_OUTPUT_CHARS")] = 900
+    evidence_units_max_output_tokens: Annotated[int, Field(alias="EVIDENCE_UNITS_MAX_OUTPUT_TOKENS")] = 1200
+    evidence_units_llm_parallelism: Annotated[int, Field(alias="EVIDENCE_UNITS_LLM_PARALLELISM")] = 6
+    evidence_units_reasoning_effort: Annotated[str, Field(alias="EVIDENCE_UNITS_REASONING_EFFORT")] = "minimal"
+    evidence_units_text_verbosity: Annotated[str, Field(alias="EVIDENCE_UNITS_TEXT_VERBOSITY")] = "low"
 
     @model_validator(mode="before")
     @classmethod

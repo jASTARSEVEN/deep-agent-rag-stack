@@ -16,6 +16,7 @@ from app.db.models import (
     DocumentChunk,
     DocumentChunkRegion,
     DocumentStatus,
+    EvidenceEnrichmentStatus,
     IngestJob,
     IngestJobStatus,
     Role,
@@ -91,6 +92,10 @@ def create_document_upload(
         status=DocumentStatus.uploaded,
         indexed_at=None,
         synopsis_updated_at=None,
+        evidence_enrichment_status=EvidenceEnrichmentStatus.skipped,
+        evidence_enrichment_strategy=None,
+        evidence_enrichment_error=None,
+        evidence_enrichment_updated_at=None,
     )
     job = IngestJob(
         document_id=document.id,
@@ -292,6 +297,10 @@ def reindex_document(
     document.synopsis_embedding = None
     document.indexed_at = None
     document.synopsis_updated_at = None
+    document.evidence_enrichment_status = EvidenceEnrichmentStatus.skipped
+    document.evidence_enrichment_strategy = None
+    document.evidence_enrichment_error = None
+    document.evidence_enrichment_updated_at = None
     job = IngestJob(
         document_id=document.id,
         status=IngestJobStatus.queued,

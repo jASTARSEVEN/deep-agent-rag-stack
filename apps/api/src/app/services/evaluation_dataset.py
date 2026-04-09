@@ -52,6 +52,7 @@ from app.services.retrieval_selection import RetrievalSelectionResult, apply_sco
 from app.services.retrieval import (
     RetrievalResult,
     _apply_python_rrf,
+    _merge_evidence_recall,
     _apply_ranking_policy,
     _apply_rerank,
     _build_retrieval_candidate,
@@ -69,6 +70,7 @@ class ItemStageEvaluationResult:
     query_routing: EvaluationQueryRoutingDetail
     selection: EvaluationSelectionDetail
     query_focus: EvaluationQueryFocusDetail
+    evidence_stage: EvaluationCandidateStageResponse
     recall_stage: EvaluationCandidateStageResponse
     rerank_stage: EvaluationCandidateStageResponse
     assembled_stage: EvaluationCandidateStageResponse
@@ -388,6 +390,7 @@ def preview_evaluation_candidates(
         query_routing=stage_result.query_routing,
         selection=stage_result.selection,
         query_focus=stage_result.query_focus,
+        evidence_recall=stage_result.evidence_stage,
         recall=stage_result.recall_stage,
         rerank=stage_result.rerank_stage,
         assembled=stage_result.assembled_stage,
@@ -456,10 +459,18 @@ def evaluate_item_stage_outputs(
         focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
         query_focus_plan=query_focus_plan,
     )
+    evidence_merge_result = _merge_evidence_recall(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=retrieval_query,
+        matches=recall_matches,
+        allowed_document_ids=routing_decision.resolved_document_ids or None,
+    )
     rerank_matches = (
-        _apply_rerank(matches=recall_matches, query=rerank_query, settings=effective_settings)
+        _apply_rerank(matches=evidence_merge_result.matches, query=rerank_query, settings=effective_settings)
         if apply_rerank
-        else recall_matches
+        else evidence_merge_result.matches
     )
     reranked_candidates = [_build_retrieval_candidate(match) for match in rerank_matches]
     selection_result = apply_scope_aware_selection(
@@ -497,6 +508,13 @@ def evaluate_item_stage_outputs(
         query_routing=_build_query_routing_detail(routing_decision=routing_decision),
         selection=_build_selection_detail(selection_result=selection_result),
         query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
+        evidence_stage=_build_evidence_stage(
+            session=session,
+            evidence_hits=evidence_merge_result.hits,
+            gold_spans=gold_spans,
+            document_names=document_names,
+            top_k=top_k,
+        ),
         recall_stage=_build_recall_stage(
             matches=recall_matches,
             gold_spans=gold_spans,
@@ -932,6 +950,11 @@ def _build_empty_trace(
         "query_focus_variant": query_focus_plan.variant,
         "query_focus_rule_family": query_focus_plan.rule_family,
         "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
+        "evidence_units_enabled": settings.retrieval_evidence_units_enabled,
+        "evidence_build_strategy_used": None,
+        "evidence_recall_hits": [],
+        "mapped_child_ids": [],
+        "evidence_fallback_reason": None,
         "focus_query": query_focus_plan.focus_query,
         "rerank_query": query_focus_plan.rerank_query,
         "candidates": [],
@@ -1058,6 +1081,99 @@ def _build_selection_detail(*, selection_result: RetrievalSelectionResult) -> Ev
             }
             for entry in selection_result.dropped_by_diversity
         ],
+    )
+
+
+def _build_evidence_stage(
+    *,
+    session: Session,
+    evidence_hits,
+    gold_spans: list[GoldSpan],
+    document_names: dict[str, str],
+    top_k: int,
+) -> EvaluationCandidateStageResponse:
+    """建立 evidence recall stage response。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `evidence_hits`：evidence recall 命中列表。
+    - `gold_spans`：本題 gold spans。
+    - `document_names`：文件名稱映射。
+    - `top_k`：stage 回傳上限。
+
+    回傳：
+    - `EvaluationCandidateStageResponse`：evidence recall stage response。
+    """
+
+    items: list[EvaluationStageCandidate] = []
+    relevances: list[int | None] = []
+    full_relevances: list[int | None] = []
+    for evidence_hit in evidence_hits:
+        child_chunks = session.scalars(
+            select(DocumentChunk).where(DocumentChunk.id.in_(list(evidence_hit.mapped_child_chunk_ids)))
+        ).all() if evidence_hit.mapped_child_chunk_ids else []
+        windows = [
+            CandidateWindow(
+                document_id=str(chunk.document_id),
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+            )
+            for chunk in child_chunks
+        ]
+        if not windows:
+            windows = [
+                CandidateWindow(
+                    document_id=str(evidence_hit.evidence_unit.document_id),
+                    start_offset=0,
+                    end_offset=0,
+                )
+            ]
+        full_relevances.append(match_gold_relevance_for_windows(gold_spans, windows))
+
+    for rank, evidence_hit in enumerate(evidence_hits[:top_k], start=1):
+        child_chunks = session.scalars(
+            select(DocumentChunk).where(DocumentChunk.id.in_(list(evidence_hit.mapped_child_chunk_ids)))
+        ).all() if evidence_hit.mapped_child_chunk_ids else []
+        windows = [
+            CandidateWindow(
+                document_id=str(chunk.document_id),
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+            )
+            for chunk in child_chunks
+        ]
+        relevance = match_gold_relevance_for_windows(gold_spans, windows) if windows else None
+        relevances.append(relevance)
+        items.append(
+            EvaluationStageCandidate(
+                document_id=evidence_hit.evidence_unit.document_id,
+                document_name=document_names.get(evidence_hit.evidence_unit.document_id, "Unknown"),
+                parent_chunk_id=evidence_hit.evidence_unit.primary_parent_chunk_id,
+                child_chunk_ids=[chunk.id for chunk in child_chunks],
+                heading=evidence_hit.evidence_unit.heading_path or evidence_hit.evidence_unit.section_path_text,
+                start_offset=min((chunk.start_offset for chunk in child_chunks), default=0),
+                end_offset=max((chunk.end_offset for chunk in child_chunks), default=0),
+                excerpt=evidence_hit.evidence_unit.evidence_text[:240],
+                source="evidence_recall",
+                rank=rank,
+                vector_rank=evidence_hit.vector_rank,
+                fts_rank=evidence_hit.fts_rank,
+                rrf_rank=evidence_hit.rrf_rank,
+                rerank_rank=None,
+                matched_relevance=relevance,
+                evidence_unit_id=evidence_hit.evidence_unit.id,
+                evidence_type=evidence_hit.evidence_unit.evidence_type.value,
+                path_quality_score=evidence_hit.evidence_unit.path_quality_score,
+                cluster_strategy=evidence_hit.evidence_unit.cluster_strategy.value,
+            )
+        )
+    return EvaluationCandidateStageResponse(
+        stage="evidence_recall",
+        first_hit_rank=first_hit_rank(relevances),
+        full_hit_rank=first_hit_rank(full_relevances),
+        rerank_applied=None,
+        fallback_reason=None,
+        items=items,
     )
 
 

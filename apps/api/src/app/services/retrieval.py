@@ -13,7 +13,16 @@ from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
-from app.db.models import ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, EvaluationQueryType
+from app.db.models import (
+    ChunkStructureKind,
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentChunkEvidenceUnit,
+    DocumentChunkEvidenceUnitChildSource,
+    DocumentStatus,
+    EvaluationQueryType,
+)
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.access import require_area_access
 from app.services.embeddings import build_embedding_provider
@@ -53,6 +62,12 @@ class RetrievalCandidate:
     rerank_score: float | None
     rerank_applied: bool
     rerank_fallback_reason: str | None
+    evidence_rank: int | None = None
+    evidence_rrf_score: float = 0.0
+    evidence_unit_id: str | None = None
+    evidence_type: str | None = None
+    path_quality_score: float | None = None
+    cluster_strategy: str | None = None
 
 
 @dataclass(slots=True)
@@ -69,6 +84,12 @@ class RetrievalTraceEntry:
     rerank_score: float | None
     rerank_applied: bool
     rerank_fallback_reason: str | None
+    evidence_rank: int | None = None
+    evidence_rrf_score: float = 0.0
+    evidence_unit_id: str | None = None
+    evidence_type: str | None = None
+    path_quality_score: float | None = None
+    cluster_strategy: str | None = None
 
 
 @dataclass(slots=True)
@@ -175,6 +196,13 @@ class RetrievalTrace:
     query_focus_variant: str = ""
     query_focus_rule_family: str = ""
     evidence_synopsis_variant: str = ""
+    evidence_units_enabled: bool = False
+    evidence_build_strategy_used: str | None = None
+    evidence_recall_hits: list[dict[str, object]] | None = None
+    mapped_child_ids: list[str] | None = None
+    path_quality_score: float | None = None
+    cluster_strategy: str | None = None
+    evidence_fallback_reason: str | None = None
     focus_query: str = ""
     rerank_query: str = ""
     fallback_reason: str | None = None
@@ -201,6 +229,35 @@ class RankedChunkMatch:
     rerank_score: float | None = None
     rerank_applied: bool = False
     rerank_fallback_reason: str | None = None
+    evidence_rank: int | None = None
+    evidence_rrf_score: float = 0.0
+    evidence_unit_id: str | None = None
+    evidence_type: str | None = None
+    path_quality_score: float | None = None
+    cluster_strategy: str | None = None
+
+
+@dataclass(slots=True)
+class _EvidenceRecallMatch:
+    """單一 evidence recall 命中的中間結構。"""
+
+    evidence_unit: DocumentChunkEvidenceUnit
+    mapped_child_chunk_ids: tuple[str, ...]
+    vector_rank: int | None = None
+    fts_rank: int | None = None
+    rrf_rank: int | None = None
+    rrf_score: float = 0.0
+
+
+@dataclass(slots=True)
+class EvidenceRecallMergeResult:
+    """Evidence recall merge 後的結果。"""
+
+    matches: list[RankedChunkMatch]
+    hits: list[_EvidenceRecallMatch]
+    build_strategy_used: str | None
+    mapped_child_ids: list[str]
+    fallback_reason: str | None
 
 
 @dataclass(slots=True)
@@ -427,6 +484,91 @@ def _build_section_recall_statement():
     )
 
 
+def _build_evidence_recall_statement():
+    """建立 PostgreSQL evidence recall 的 SQL statement。
+
+    參數：
+    - 無
+
+    回傳：
+    - `TextClause`：已綁定 vector/text/varchar/int 型別的 SQL statement。
+    """
+
+    if Vector is None:  # pragma: no cover - PostgreSQL 正式路徑應固定安裝 pgvector。
+        raise RuntimeError("PostgreSQL evidence recall 路徑需要 `pgvector` SQLAlchemy 型別支援。")
+
+    return text(
+        """
+        WITH vector_matches AS (
+            SELECT
+                eu.id,
+                ROW_NUMBER() OVER (ORDER BY eu.evidence_embedding <=> :query_embedding, eu.id) :: INT AS rank
+            FROM document_chunk_evidence_units eu
+            JOIN documents d ON d.id = eu.document_id
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND eu.evidence_embedding IS NOT NULL
+              AND (
+                :allowed_document_ids IS NULL
+                OR d.id = ANY(:allowed_document_ids)
+              )
+            ORDER BY eu.evidence_embedding <=> :query_embedding, eu.id
+            LIMIT :vector_top_k
+        ),
+        fts_matches AS (
+            SELECT
+                eu.id,
+                ROW_NUMBER() OVER (
+                    ORDER BY pgroonga_score(eu.tableoid, eu.ctid) DESC, eu.id
+                ) :: INT AS rank,
+                pgroonga_score(eu.tableoid, eu.ctid) :: FLOAT AS score
+            FROM document_chunk_evidence_units eu
+            JOIN documents d ON d.id = eu.document_id
+            WHERE d.area_id = :area_id
+              AND d.status = 'ready'
+              AND (
+                COALESCE(eu.heading_path, '') || ' ' || COALESCE(eu.section_path_text, '') || ' ' || eu.evidence_text
+              ) &@~ :query_text
+              AND (
+                :allowed_document_ids IS NULL
+                OR d.id = ANY(:allowed_document_ids)
+              )
+            ORDER BY pgroonga_score(eu.tableoid, eu.ctid) DESC, eu.id
+            LIMIT :fts_top_k
+        ),
+        candidate_ids AS (
+            SELECT id FROM vector_matches
+            UNION
+            SELECT id FROM fts_matches
+        )
+        SELECT
+            eu.id,
+            eu.document_id,
+            eu.primary_parent_chunk_id,
+            eu.evidence_type,
+            eu.path_quality_score,
+            eu.cluster_strategy,
+            vm.rank AS vector_rank,
+            fm.rank AS fts_rank
+        FROM candidate_ids c
+        JOIN document_chunk_evidence_units eu ON eu.id = c.id
+        LEFT JOIN vector_matches vm ON vm.id = eu.id
+        LEFT JOIN fts_matches fm ON fm.id = eu.id
+        ORDER BY
+            COALESCE(vm.rank, 2147483647),
+            COALESCE(fm.rank, 2147483647),
+            eu.id
+        """
+    ).bindparams(
+        bindparam("query_embedding", type_=Vector(DEFAULT_EMBEDDING_DIMENSIONS)),
+        bindparam("query_text", type_=String()),
+        bindparam("area_id", type_=String()),
+        bindparam("vector_top_k", type_=Integer()),
+        bindparam("fts_top_k", type_=Integer()),
+        bindparam("allowed_document_ids", type_=PG_ARRAY(String(36))),
+    )
+
+
 def retrieve_area_candidates(
     *,
     session: Session,
@@ -474,8 +616,16 @@ def retrieve_area_candidates(
         allowed_parent_ids=None,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
-    ranked_matches = _apply_ranking_policy(
+    evidence_merge_result = _merge_evidence_recall(
+        session=session,
+        settings=effective_settings,
+        area_id=area_id,
+        query=query_focus_plan.focus_query if query_focus_plan.applied else query,
         matches=rrf_matches,
+        allowed_document_ids=routing_decision.resolved_document_ids or None,
+    )
+    ranked_matches = _apply_ranking_policy(
+        matches=evidence_merge_result.matches,
         query=query,
         settings=effective_settings,
         focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
@@ -580,6 +730,26 @@ def retrieve_area_candidates(
             query_focus_variant=query_focus_plan.variant,
             query_focus_rule_family=query_focus_plan.rule_family,
             evidence_synopsis_variant=effective_settings.retrieval_evidence_synopsis_variant,
+            evidence_units_enabled=effective_settings.retrieval_evidence_units_enabled,
+            evidence_build_strategy_used=evidence_merge_result.build_strategy_used,
+            evidence_recall_hits=[
+                {
+                    "evidence_unit_id": hit.evidence_unit.id,
+                    "document_id": hit.evidence_unit.document_id,
+                    "primary_parent_chunk_id": hit.evidence_unit.primary_parent_chunk_id,
+                    "evidence_type": hit.evidence_unit.evidence_type.value,
+                    "vector_rank": hit.vector_rank,
+                    "fts_rank": hit.fts_rank,
+                    "rrf_rank": hit.rrf_rank,
+                    "rrf_score": hit.rrf_score,
+                    "mapped_child_ids": list(hit.mapped_child_chunk_ids),
+                    "path_quality_score": hit.evidence_unit.path_quality_score,
+                    "cluster_strategy": hit.evidence_unit.cluster_strategy.value,
+                }
+                for hit in evidence_merge_result.hits
+            ],
+            mapped_child_ids=evidence_merge_result.mapped_child_ids,
+            evidence_fallback_reason=evidence_merge_result.fallback_reason,
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
             fallback_reason=None,
@@ -595,6 +765,12 @@ def retrieve_area_candidates(
                     rerank_score=candidate.rerank_score,
                     rerank_applied=candidate.rerank_applied,
                     rerank_fallback_reason=candidate.rerank_fallback_reason,
+                    evidence_rank=candidate.evidence_rank,
+                    evidence_rrf_score=candidate.evidence_rrf_score,
+                    evidence_unit_id=candidate.evidence_unit_id,
+                    evidence_type=candidate.evidence_type,
+                    path_quality_score=candidate.path_quality_score,
+                    cluster_strategy=candidate.cluster_strategy,
                 )
                 for candidate in candidates
             ],
@@ -742,6 +918,224 @@ def _run_sqlite_candidate_generation(
     return list(merged_by_chunk_id.values())
 
 
+def _recall_evidence_units(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+) -> list[_EvidenceRecallMatch]:
+    """對 evidence units 執行 hybrid recall。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：API 執行期設定。
+    - `area_id`：目標 area。
+    - `query`：本次 recall query。
+    - `allowed_document_ids`：可用文件白名單。
+
+    回傳：
+    - `list[_EvidenceRecallMatch]`：依 evidence-level RRF 排序後的命中。
+    """
+
+    dialect_name = session.get_bind().dialect.name
+    if dialect_name == "postgresql":
+        matches = _run_postgres_evidence_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+            allowed_document_ids=allowed_document_ids,
+        )
+    else:
+        matches = _run_sqlite_evidence_recall(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+            allowed_document_ids=allowed_document_ids,
+        )
+
+    for match in matches:
+        match.rrf_score = _compute_rrf_score(match=match, rrf_k=settings.retrieval_rrf_k)
+
+    merged_matches = sorted(
+        matches,
+        key=lambda item: (
+            -item.rrf_score,
+            _best_rank(item),
+            item.evidence_unit.position,
+            item.evidence_unit.id,
+        ),
+    )[: settings.retrieval_evidence_units_top_k]
+    for index, match in enumerate(merged_matches, start=1):
+        match.rrf_rank = index
+        match.rrf_score = _compute_rrf_score(match=match, rrf_k=settings.retrieval_rrf_k)
+    return merged_matches
+
+
+def _run_postgres_evidence_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+) -> list[_EvidenceRecallMatch]:
+    """透過 PostgreSQL 執行 evidence units recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    rows = session.execute(
+        _build_evidence_recall_statement(),
+        {
+            "query_embedding": query_embedding,
+            "query_text": query,
+            "area_id": area_id,
+            "vector_top_k": settings.retrieval_evidence_units_top_k,
+            "fts_top_k": settings.retrieval_evidence_units_top_k,
+            "allowed_document_ids": list(allowed_document_ids) if allowed_document_ids else None,
+        },
+    ).all()
+    mapped_child_ids = _load_evidence_child_sources(session=session, evidence_unit_ids=[str(row.id) for row in rows])
+
+    matches: list[_EvidenceRecallMatch] = []
+    for row in rows:
+        evidence_unit = session.get(DocumentChunkEvidenceUnit, str(row.id))
+        if evidence_unit is None:
+            continue
+        matches.append(
+            _EvidenceRecallMatch(
+                evidence_unit=evidence_unit,
+                mapped_child_chunk_ids=tuple(
+                    mapped_child_ids.get(evidence_unit.id, [])[: settings.retrieval_evidence_units_max_mapped_children]
+                ),
+                vector_rank=row.vector_rank,
+                fts_rank=row.fts_rank,
+            )
+        )
+    return matches
+
+
+def _run_sqlite_evidence_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    allowed_document_ids: tuple[str, ...] | None,
+) -> list[_EvidenceRecallMatch]:
+    """SQLite 測試路徑的 evidence recall。"""
+
+    provider = build_embedding_provider(settings)
+    query_embedding = provider.embed_query(query)
+    evidence_units = session.scalars(
+        select(DocumentChunkEvidenceUnit)
+        .join(Document, Document.id == DocumentChunkEvidenceUnit.document_id)
+        .where(
+            Document.area_id == area_id,
+            Document.status == DocumentStatus.ready,
+            Document.id.in_(allowed_document_ids) if allowed_document_ids else True,
+        )
+        .order_by(DocumentChunkEvidenceUnit.position.asc(), DocumentChunkEvidenceUnit.id.asc())
+    ).all()
+    mapped_child_ids = _load_evidence_child_sources(
+        session=session,
+        evidence_unit_ids=[evidence_unit.id for evidence_unit in evidence_units],
+    )
+    merged_by_unit_id: dict[str, _EvidenceRecallMatch] = {}
+
+    vector_scored = sorted(
+        (
+            (_cosine_distance(query_embedding, evidence_unit.evidence_embedding), evidence_unit)
+            for evidence_unit in evidence_units
+            if evidence_unit.evidence_embedding is not None
+        ),
+        key=lambda item: (item[0], item[1].position, item[1].id),
+    )[: settings.retrieval_evidence_units_top_k]
+    for index, (_, evidence_unit) in enumerate(vector_scored, start=1):
+        current = merged_by_unit_id.setdefault(
+            evidence_unit.id,
+            _EvidenceRecallMatch(
+                evidence_unit=evidence_unit,
+                mapped_child_chunk_ids=tuple(
+                    mapped_child_ids.get(evidence_unit.id, [])[: settings.retrieval_evidence_units_max_mapped_children]
+                ),
+            ),
+        )
+        current.vector_rank = index
+
+    fts_scored = sorted(
+        (
+            (
+                _sqlite_fts_score(
+                    query=query,
+                    content=" ".join(
+                        filter(
+                            None,
+                            [
+                                evidence_unit.heading_path or "",
+                                evidence_unit.section_path_text or "",
+                                evidence_unit.evidence_text,
+                            ],
+                        )
+                    ),
+                ),
+                evidence_unit,
+            )
+            for evidence_unit in evidence_units
+            if evidence_unit.evidence_text
+        ),
+        key=lambda item: (-item[0], item[1].position, item[1].id),
+    )
+    for index, (_, evidence_unit) in enumerate((item for item in fts_scored if item[0] > 0), start=1):
+        if index > settings.retrieval_evidence_units_top_k:
+            break
+        current = merged_by_unit_id.setdefault(
+            evidence_unit.id,
+            _EvidenceRecallMatch(
+                evidence_unit=evidence_unit,
+                mapped_child_chunk_ids=tuple(
+                    mapped_child_ids.get(evidence_unit.id, [])[: settings.retrieval_evidence_units_max_mapped_children]
+                ),
+            ),
+        )
+        current.fts_rank = index
+
+    return list(merged_by_unit_id.values())
+
+
+def _load_evidence_child_sources(*, session: Session, evidence_unit_ids: list[str]) -> dict[str, list[str]]:
+    """載入 evidence unit 對應的 child source ids。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `evidence_unit_ids`：待查 evidence unit ids。
+
+    回傳：
+    - `dict[str, list[str]]`：evidence unit -> child ids 映射。
+    """
+
+    if not evidence_unit_ids:
+        return {}
+    rows = session.execute(
+        select(
+            DocumentChunkEvidenceUnitChildSource.evidence_unit_id,
+            DocumentChunkEvidenceUnitChildSource.child_chunk_id,
+        )
+        .where(DocumentChunkEvidenceUnitChildSource.evidence_unit_id.in_(evidence_unit_ids))
+        .order_by(
+            DocumentChunkEvidenceUnitChildSource.evidence_unit_id.asc(),
+            DocumentChunkEvidenceUnitChildSource.position.asc(),
+        )
+    ).all()
+    mapped: dict[str, list[str]] = {}
+    for evidence_unit_id, child_chunk_id in rows:
+        mapped.setdefault(str(evidence_unit_id), []).append(str(child_chunk_id))
+    return mapped
+
+
 def _apply_python_rrf(*, matches: list[RankedChunkMatch], settings: AppSettings) -> list[RankedChunkMatch]:
     """在 Python 層對 recall 候選套用 RRF。"""
 
@@ -761,6 +1155,109 @@ def _apply_python_rrf(*, matches: list[RankedChunkMatch], settings: AppSettings)
     for index, match in enumerate(merged_matches, start=1):
         match.rrf_rank = index
     return merged_matches
+
+
+def _merge_evidence_recall(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    query: str,
+    matches: list[RankedChunkMatch],
+    allowed_document_ids: tuple[str, ...] | None,
+) -> EvidenceRecallMergeResult:
+    """將 evidence recall 命中映射回 child candidates 並與既有結果合併。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：API 執行期設定。
+    - `area_id`：目標 area。
+    - `query`：本次實際 recall query。
+    - `matches`：既有 child recall 的 RRF 候選。
+    - `allowed_document_ids`：可用文件白名單。
+
+    回傳：
+    - `EvidenceRecallMergeResult`：合併後的候選與 evidence trace。
+    """
+
+    if not settings.retrieval_evidence_units_enabled:
+        return EvidenceRecallMergeResult(
+            matches=matches,
+            hits=[],
+            build_strategy_used=None,
+            mapped_child_ids=[],
+            fallback_reason=None,
+        )
+
+    try:
+        evidence_hits = _recall_evidence_units(
+            session=session,
+            settings=settings,
+            area_id=area_id,
+            query=query,
+            allowed_document_ids=allowed_document_ids,
+        )
+    except Exception as exc:
+        LOGGER.warning("Evidence recall failed; falling back to child-only retrieval.", exc_info=True)
+        return EvidenceRecallMergeResult(
+            matches=matches,
+            hits=[],
+            build_strategy_used=None,
+            mapped_child_ids=[],
+            fallback_reason=f"evidence_recall_error:{exc}",
+        )
+
+    if not evidence_hits:
+        return EvidenceRecallMergeResult(
+            matches=matches,
+            hits=[],
+            build_strategy_used=None,
+            mapped_child_ids=[],
+            fallback_reason=None,
+        )
+
+    merged_by_chunk_id = {match.chunk.id: match for match in matches}
+    mapped_child_ids: list[str] = []
+    build_strategy_used = evidence_hits[0].evidence_unit.build_strategy.value
+    for evidence_hit in evidence_hits:
+        for child_chunk_id in evidence_hit.mapped_child_chunk_ids[: settings.retrieval_evidence_units_max_mapped_children]:
+            mapped_child_ids.append(child_chunk_id)
+            match = merged_by_chunk_id.get(child_chunk_id)
+            if match is None:
+                chunk = session.get(DocumentChunk, child_chunk_id)
+                if chunk is None:
+                    continue
+                match = RankedChunkMatch(chunk=chunk)
+                merged_by_chunk_id[child_chunk_id] = match
+            match.evidence_rank = min(
+                (value for value in (match.evidence_rank, evidence_hit.rrf_rank) if value is not None),
+                default=evidence_hit.rrf_rank,
+            )
+            match.evidence_rrf_score += evidence_hit.rrf_score
+            match.rrf_score += evidence_hit.rrf_score
+            match.evidence_unit_id = evidence_hit.evidence_unit.id
+            match.evidence_type = evidence_hit.evidence_unit.evidence_type.value
+            match.path_quality_score = evidence_hit.evidence_unit.path_quality_score
+            match.cluster_strategy = evidence_hit.evidence_unit.cluster_strategy.value
+
+    merged_matches = sorted(
+        merged_by_chunk_id.values(),
+        key=lambda item: (
+            -item.rrf_score,
+            _best_rank(item),
+            item.chunk.position,
+            item.chunk.id,
+        ),
+    )[: settings.retrieval_max_candidates]
+    for index, match in enumerate(merged_matches, start=1):
+        match.rrf_rank = index
+    return EvidenceRecallMergeResult(
+        matches=merged_matches,
+        hits=evidence_hits,
+        build_strategy_used=build_strategy_used,
+        mapped_child_ids=sorted(set(mapped_child_ids)),
+        fallback_reason=None,
+    )
 
 
 def _apply_ranking_policy(
@@ -887,7 +1384,16 @@ def _compute_rrf_score(*, match: RankedChunkMatch, rrf_k: int) -> float:
 def _best_rank(match: RankedChunkMatch) -> int:
     """回傳候選可用 rank 中最好的那個，用於 tie-break。"""
 
-    available_ranks = [rank for rank in (match.vector_rank, match.fts_rank) if rank is not None]
+    available_ranks = [
+        rank
+        for rank in (
+            getattr(match, "vector_rank", None),
+            getattr(match, "fts_rank", None),
+            getattr(match, "evidence_rank", None),
+            getattr(match, "rrf_rank", None),
+        )
+        if rank is not None
+    ]
     return min(available_ranks) if available_ranks else 1_000_000
 
 
@@ -1554,14 +2060,24 @@ def _build_retrieval_candidate(match: RankedChunkMatch) -> RetrievalCandidate:
         rerank_score=match.rerank_score,
         rerank_applied=match.rerank_applied,
         rerank_fallback_reason=match.rerank_fallback_reason,
+        evidence_rank=match.evidence_rank,
+        evidence_rrf_score=match.evidence_rrf_score,
+        evidence_unit_id=match.evidence_unit_id,
+        evidence_type=match.evidence_type,
+        path_quality_score=match.path_quality_score,
+        cluster_strategy=match.cluster_strategy,
     )
 
 
 def _resolve_candidate_source(match: RankedChunkMatch) -> str:
     """根據 rank 來源決定 candidate source 欄位。"""
 
+    if match.evidence_rank is not None and (match.vector_rank is not None or match.fts_rank is not None):
+        return "hybrid+evidence"
     if match.vector_rank is not None and match.fts_rank is not None:
         return "hybrid"
+    if match.evidence_rank is not None:
+        return "evidence_hybrid"
     if match.vector_rank is not None:
         return "vector"
     return "fts"

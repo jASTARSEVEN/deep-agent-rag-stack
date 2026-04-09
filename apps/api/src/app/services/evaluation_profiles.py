@@ -39,6 +39,10 @@ GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "generic_guarded_evidence_synopsis_v
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "generic_guarded_evidence_synopsis_v3_gate"
 # 通用 query focus lane 第一輪 deterministic gate profile 名稱。
 GENERIC_GUARDED_QUERY_FOCUS_V1_GATE = "generic_guarded_query_focus_v1_gate"
+# Phase 8B deterministic evidence units lane。
+PHASE8B_EVIDENCE_UNITS_DETERMINISTIC_V1 = "phase8b_evidence_units_deterministic_v1"
+# Phase 8B auto evidence units lane。
+PHASE8B_EVIDENCE_UNITS_AUTO_V1 = "phase8b_evidence_units_auto_v1"
 
 # 無需進入 iteration 的 effect-check 假設名稱。
 HYPOTHESIS_NONE = "no_iteration_needed"
@@ -276,6 +280,20 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
         is_gate=True,
         lane_name="query_focus",
     ),
+    PHASE8B_EVIDENCE_UNITS_DETERMINISTIC_V1: EvaluationProfileSpec(
+        name=PHASE8B_EVIDENCE_UNITS_DETERMINISTIC_V1,
+        overrides={
+            "retrieval_evidence_units_enabled": True,
+        },
+        lane_name="phase8b_evidence_units",
+    ),
+    PHASE8B_EVIDENCE_UNITS_AUTO_V1: EvaluationProfileSpec(
+        name=PHASE8B_EVIDENCE_UNITS_AUTO_V1,
+        overrides={
+            "retrieval_evidence_units_enabled": True,
+        },
+        lane_name="phase8b_evidence_units",
+    ),
 }
 
 # benchmark strategy lane registry；新增策略時應以新增 lane 定義為主。
@@ -370,6 +388,10 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
             max_contexts=6,
             max_chars_per_context=3000,
         )
+    if evaluation_profile in {PHASE8B_EVIDENCE_UNITS_DETERMINISTIC_V1, PHASE8B_EVIDENCE_UNITS_AUTO_V1}:
+        return {
+            "retrieval_evidence_units_enabled": True,
+        }
 
     spec = EVALUATION_PROFILE_SPECS[evaluation_profile]
     merged_overrides: dict[str, int | str | bool] = {}

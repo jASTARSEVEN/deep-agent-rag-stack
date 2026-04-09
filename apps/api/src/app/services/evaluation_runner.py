@@ -202,6 +202,9 @@ def _build_evaluation_config_snapshot(
                 "document_recall_top_k": settings.retrieval_document_recall_top_k,
                 "evidence_synopsis_enabled": settings.retrieval_evidence_synopsis_enabled,
                 "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
+                "evidence_units_enabled": settings.retrieval_evidence_units_enabled,
+                "evidence_units_top_k": settings.retrieval_evidence_units_top_k,
+                "evidence_units_max_mapped_children": settings.retrieval_evidence_units_max_mapped_children,
                 "query_focus_enabled": settings.retrieval_query_focus_enabled,
                 "query_focus_variant": settings.retrieval_query_focus_variant,
                 "query_focus_confidence_threshold": settings.retrieval_query_focus_confidence_threshold,
@@ -279,7 +282,7 @@ def _build_run_report_payload(
             top_k=top_k,
         )
         per_query.append(detail)
-        for stage_name in ("recall", "rerank", "assembled"):
+        for stage_name in ("evidence_recall", "recall", "rerank", "assembled"):
             metrics = detail["_metrics"][stage_name]
             summary_bucket[stage_name].append(metrics)
             breakdown_bucket[("language", item.language.value)][stage_name].append(metrics)
@@ -344,6 +347,7 @@ def _evaluate_single_item(
     )
     gold_spans = stage_result.gold_spans
     recall_relevances = [candidate.matched_relevance for candidate in stage_result.recall_stage.items[:top_k]]
+    evidence_recall_relevances = [candidate.matched_relevance for candidate in stage_result.evidence_stage.items[:top_k]]
     rerank_relevances = [candidate.matched_relevance for candidate in stage_result.rerank_stage.items[:top_k]]
     assembled_relevances = [candidate.matched_relevance for candidate in stage_result.assembled_stage.items[:top_k]]
     gold_document_ids = {str(span.document_id) for span in gold_spans if span.document_id is not None}
@@ -351,6 +355,12 @@ def _evaluate_single_item(
         "recall": _build_stage_metrics(
             relevances=recall_relevances,
             document_ids=[str(candidate.document_id) for candidate in stage_result.recall_stage.items[:top_k]],
+            gold_document_ids=gold_document_ids,
+            top_k=top_k,
+        ),
+        "evidence_recall": _build_stage_metrics(
+            relevances=evidence_recall_relevances,
+            document_ids=[str(candidate.document_id) for candidate in stage_result.evidence_stage.items[:top_k]],
             gold_document_ids=gold_document_ids,
             top_k=top_k,
         ),
@@ -376,6 +386,7 @@ def _evaluate_single_item(
         "query_routing": stage_result.query_routing.model_dump(mode="json"),
         "selection": stage_result.selection.model_dump(mode="json"),
         "query_focus": stage_result.query_focus.model_dump(mode="json"),
+        "evidence_recall": _build_stage_detail(evidence_recall_relevances).model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
         "rerank": _build_stage_detail(
             rerank_relevances,

@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8A — Unified Deep Agents Summary / Compare Stabilization (Completed / Closeout Accepted)`
+當前主階段：`Phase 8B — Path-Robust Evidence Units & Evaluation (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -62,7 +62,7 @@
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
-- 目前 `Phase 7` 的 retrieval correctness evaluation 本質上仍是 `source span / chunk / assembled context` 層級評估，尚未進入 `Phase 8B` 規劃中的 evidence-centric layer / evidence-unit 專屬評估
+- 目前 `Phase 7` 的 retrieval correctness evaluation 已擴充 additive `evidence_recall` stage 與 evidence trace 欄位，但正式 promotion gate 仍待用 `QASPER 100 / NQ 100 / DRCD 100 / phase8a-summary-compare-v1` 跑完後確認
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
@@ -93,9 +93,10 @@
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
 - 已為 `documents` 新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`，作為 document-level representation 的正式持久化欄位
 - worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
-- worker ingest / reindex 仍會生成 `document synopsis` 與 `section synopsis`，但 API/runtime 已不再把 synopsis recall 當成正式 query-time 主線依賴
+- worker ingest / reindex 目前正式預設只生成 `document synopsis`；`section synopsis` 已改為 repo-wide opt-in，避免在主線與 benchmark 預設路徑增加成本
 - `document_summary` 與 `cross_document_compare` 的 retrieval 正式主線已回到 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler`；`fact_lookup` 維持同一路徑
-- `Phase 8A` 已完成核心 runtime 首輪落地：worker 現在會在 parent chunk 層持久化 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
+- `Phase 8B` 已完成第一批 schema 與 runtime 接線：新增 `document_chunk_evidence_units`、child/parent source mapping tables，以及 `documents.evidence_enrichment_*` observability 欄位
+- `Phase 8B` runtime 已新增 feature-flag 控制的 `evidence recall -> mapped child chunks -> rerank/selection/assembler` merge lane；trace、candidate preview 與 chat tool summary 已可觀測 evidence hits、mapped child ids、path quality 與 cluster strategy
 - `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
 - `Phase 8A` routing 現已不再是單層 rule-only 決策；第一層 `task_type` 與第二層 `summary_strategy` 皆共用相同 routing engine，低信心時會正式啟用 `LLM fallback`
 - `Phase 8A` routing 仍維持 `task_type + summary_strategy` 的兩層統一 classifier framework，但其下游正式主線已改為 unified `Deep Agents` answer path
@@ -322,7 +323,7 @@
 ## 目前階段重點
 
 ### Current Focus
-- `Phase 8A` 已結束；後續以 `Phase 8B` 設計準備與 `Phase 8C` synopsis reuse 規劃為主
+- `Phase 8B` 已開始實作；目前 focus 是 evidence recall uplift 的 benchmark 驗證與 regression guardrails，而不是再調 `Phase 8A` 分數
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -331,10 +332,10 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 將 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 收斂成可實作設計，不急著接回主線
-2. 補一輪 `reindex` consistency 驗證，確認 worker 仍可穩定生成 synopsis，但 API/runtime 在不依賴 synopsis recall 的情況下 coverage 不退化
+1. 跑完 `QASPER 100`、`NQ 100`、`DRCD 100` 與 `phase8a-summary-compare-v1`，驗證 `phase8b_evidence_units_*` lane 是否具備 promotion 條件
+2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`，且 evidence enrichment observability 正常更新
 3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-4. 規劃 `Phase 8C` 的 synopsis-as-hint 是否值得進入後續實驗
+4. 依 benchmark 結果決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
 
 ## 尚未開始的功能
 

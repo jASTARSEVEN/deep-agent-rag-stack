@@ -522,12 +522,14 @@ LLM 輸入規則：
 內容：
 - 在 ingest / reindex pipeline 新增 evidence-centric enrichment stage，正式時機固定在 chunk tree 與 synopsis 建立之後、文件進入 `ready` 之前。
 - 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、fallback、retrieval-side consumption 與其專屬評估。
+- `section synopsis` 已在 repo-wide 預設改為關閉；`document synopsis` 保留。`Phase 8B` 不再把 `section synopsis` 視為正式前置條件，而是改以 `heading_path / section_path_text` 與 evidence unit 自身的 path quality / clustering metadata 承接 path-aware 能力。
 - evidence unit 的正式輸入不得只看 local parent heading；至少應包含：
   - `document title`
   - `heading_path`
   - `section_path_text`
   - local parent / child content
-- 以 parent 為抽取範圍時，`heading_path / section_path_text` 屬於必要語境；若 evidence 需要跨同一路徑下的多個 sibling parents，應允許擴充為 `primary_parent_chunk_id + source_parent_chunk_ids` 模型，而不是被單一最近層 heading 綁死。
+- 以 parent 為抽取範圍時，`heading_path / section_path_text` 僅屬 `soft hint`；若 parser path 缺失、空白、命中 `目錄 / table of contents / contents` 或整體 path quality 偏低，必須改走 `position adjacency + page adjacency + content similarity + table/text coupling` fallback，而不是直接放棄 evidence。
+- 若 evidence 需要跨同一路徑下的多個 sibling parents，應允許擴充為 `primary_parent_chunk_id + source_parent_chunk_ids` 模型，而不是被單一最近層 heading 綁死。
 - evidence-centric enrichment 的正式來源可為：
   - `llm`：由 LLM 根據 parent section / parent cluster / table context 萃取 evidence-oriented 結構
   - `deterministic`：由 heading、list/table 模式、句界視窗、數值/日期/專名等規則組合出較保守的 evidence 表示
@@ -561,6 +563,11 @@ LLM 輸入規則：
   - `evidence_embedding` 走 vector search
   - 兩者以 `RRF` 合併
   - 命中 evidence units 後，再回推到 `parent_chunk_id + source_child_chunk_ids`
+- 第一批正式交付採 `feature flag / optional lane`，並同步完成四塊：
+  - evidence units schema 與 documents observability
+  - worker evidence enrichment
+  - runtime evidence recall merge
+  - additive evaluation / checkpoint trace 擴充
 - deterministic fallback 必須是正式支援路徑，不是只存在測試環境：
   - 設定可顯式指定 `llm | deterministic | auto`
   - `auto` 預設先嘗試 `llm`，失敗時回退 `deterministic`
@@ -600,7 +607,7 @@ LLM 輸入規則：
 - rollout 預設採 feature flag / optional lane；若 evidence-centric enrichment 未能穩定改善 `QASPER 100`、或反而讓 `NQ 100` / `DRCD 100` 哨兵退化，應保持預設關閉、回退主線或兩者擇一。
 
 狀態：
-- `提案中`
+- `進行中（schema、worker enrichment、runtime evidence merge 與 additive evaluation trace 已落地；正式 promotion gate 與 benchmark compare 尚在驗證）`
 
 ## Phase 8C — Synopsis Reuse as Agent-Side Optional Hints
 
