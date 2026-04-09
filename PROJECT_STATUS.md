@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8A — Summary / Compare Runtime Consolidation (In Progress)`
+當前主階段：`Phase 8A — Unified Deep Agents Summary / Compare Stabilization (Completed / Closeout Accepted)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -83,7 +83,7 @@
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review，最新 rerun assembled `Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides，最新 rerun assembled `Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
 - 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
-- 已新增 rule-based bilingual query-type classifier，正式支援 `fact_lookup | document_summary | cross_document_compare`
+- 已將 `task_type + summary_strategy` routing 收斂為統一 classifier framework：兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`，並保留 `source / confidence / embedding margin / fallback_used / fallback_reason` 可觀測欄位
 - `Phase 8A` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
 - 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
 - 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
@@ -93,14 +93,23 @@
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
 - 已為 `documents` 新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`，作為 document-level representation 的正式持久化欄位
 - worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
-- `document_summary` 與 `cross_document_compare` 已新增第一階段 document recall，先以 synopsis 選出文件集合，再以 SQL `allowed_document_ids` filter 執行第二階段 child recall；`fact_lookup` 維持不走 document recall
-- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `document_recall` 明細，便於 reviewer 直接觀測第一階段選文件結果
-- Web `EvaluationDrawer` 現已直接顯示 `document_recall` 的 strategy、selected / dropped documents 與 candidates；Playwright E2E 也已補上 `document_summary` / `cross_document_compare` 的 document recall 可視性驗證
+- worker ingest / reindex 仍會生成 `document synopsis` 與 `section synopsis`，但 API/runtime 已不再把 synopsis recall 當成正式 query-time 主線依賴
+- `document_summary` 與 `cross_document_compare` 的 retrieval 正式主線已回到 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler`；`fact_lookup` 維持同一路徑
 - `Phase 8A` 已完成核心 runtime 首輪落地：worker 現在會在 parent chunk 層持久化 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
 - `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
-- `Phase 8A` 已新增第二階段 `section recall`，以 `section synopsis` 先選 parent/section，再透過 SQL `allowed_parent_chunk_ids` filter 收斂 child recall；`fact_lookup` 維持不走此路徑
-- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_strategy`、`section_recall`、`selected_synopsis_level` 與摘要層級 fallback reason
-- chat runtime 已為 `document_summary` / `cross_document_compare` 落地最小 map/reduce synthesis；`cross_document_compare` 現在固定輸出 `共通點 / 差異點 / 各文件立場或結論 / 不足證據或矛盾處`
+- `Phase 8A` routing 現已不再是單層 rule-only 決策；第一層 `task_type` 與第二層 `summary_strategy` 皆共用相同 routing engine，低信心時會正式啟用 `LLM fallback`
+- `Phase 8A` routing 仍維持 `task_type + summary_strategy` 的兩層統一 classifier framework，但其下游正式主線已改為 unified `Deep Agents` answer path
+- chat runtime 現在統一為單一路徑 `deepagents_unified`：`fact_lookup`、`document_summary` 與 `cross_document_compare` 都由主 `Deep Agents` agent 自行決定何時呼叫 `retrieve_area_contexts` 並完成回答
+- `thinking_mode` 前後端欄位與 checkpoint metadata 仍保留相容，但後端不再用它分流；trace 只保留 `answer_path="deepagents_unified"`、`thinking_mode` 與 `thinking_mode_ignored`
+- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已移除 `document_recall`、`section_recall` 與 `selected_synopsis_level` 等 synopsis-stage contract
+- `Phase 8A` 已新增 CLI-first 的 summary/compare evaluation checkpoint：`python -m app.scripts.run_summary_compare_checkpoint`
+- checkpoint 會以固定 dataset 直接跑真實 chat runtime，再用 `LLM-as-judge` 評 `completeness / faithfulness / structure / compare_coverage`，並以 deterministic hard blockers 擋 `task_type`、`summary_strategy`、`ready-only citations`、必需文件覆蓋、timeout 與 token budget
+- checkpoint run metadata 已新增固定 `answer_path="deepagents_unified"`，用來明確標示目前正式驗證的是主 Deep Agents answer path
+- `Phase 8A` 目前的正式驗收定義已不再要求 query-time synopsis recall 或 summary/compare 專用 synthesis lane；驗收核心改為 unified Deep Agents path 是否能在固定 checkpoint 上穩定過線
+- synopsis 的再利用目前不屬於 `Phase 8A` 或 `Phase 8B` 正式交付；若後續仍保留價值，規劃將延後到 `Phase 8C` 再評估是否以 agent-side optional hints 形式接回
+- repo 已新增固定 benchmark package `benchmarks/phase8a-summary-compare-v1`，包含 `16` 題 summary/compare checkpoint fixtures 與對應 source documents
+- `Phase 8A` 已完成最新一輪正式驗收 checkpoint；最新 accepted artifact 為 `parallel-6` runner 輸出，雖未通過原先 `passed=true` gate，但專案已判定目前優化接近現階段上限，因此接受當前 ceiling 並以現況結案
+- 最新 accepted checkpoint 觀測值為：`task_type_accuracy=0.75`、`summary_strategy_accuracy=0.5`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_completeness=4.8125`、`avg_faithfulness_to_citations=4.375`、`avg_structure_quality=4.875`、`avg_compare_coverage=4.625`、`avg_overall_score=4.6719`、`p95_latency_seconds=21.0378`
 - 已完成 `Phase 8.3` closeout 所需的三條 sentinel rerun：
   - `DRCD 100`：assembled `nDCG@10` 由 `0.8650` 提升到 `0.9900`，`Recall@10` 由 `0.9700` 提升到 `0.9900`
   - `NQ 100`：assembled 指標與 reference 持平，`nDCG@10=0.7443`、`Recall@10=0.7500`
@@ -313,18 +322,19 @@
 ## 目前階段重點
 
 ### Current Focus
-- 持續收尾 `Phase 8A — Summary / Compare Runtime Consolidation`
+- `Phase 8A` 已結束；後續以 `Phase 8B` 設計準備與 `Phase 8C` synopsis reuse 規劃為主
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
+- 保留 `phase8a-summary-compare-v1` checkpoint 作為已接受 closeout artifact，不再把 8A 分數提升視為當前主線目標
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 完成 `Phase 8A` 的 E2E 與最小 evaluation checkpoint，覆蓋 `document_overview`、`section_focused`、`multi_document_theme` 與 `cross_document_compare`
-2. 補一輪 `reindex` consistency 驗證，確認 document / section synopsis 更新後 `document_recall.strategy`、`section_recall.strategy`、`selected_document_ids`、`selected_synopsis_level` 與 coverage 沒有退化
+1. 將 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 收斂成可實作設計，不急著接回主線
+2. 補一輪 `reindex` consistency 驗證，確認 worker 仍可穩定生成 synopsis，但 API/runtime 在不依賴 synopsis recall 的情況下 coverage 不退化
 3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-4. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+4. 規劃 `Phase 8C` 的 synopsis-as-hint 是否值得進入後續實驗
 
 ## 尚未開始的功能
 

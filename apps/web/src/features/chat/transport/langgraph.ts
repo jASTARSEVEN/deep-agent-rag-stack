@@ -65,6 +65,12 @@ export interface LangGraphChatStreamUpdate {
   usedKnowledgeBase?: boolean;
 }
 
+/** 單次 chat 送出時可攜帶的選項。 */
+export interface LangGraphChatRunOptions {
+  /** 是否啟用 thinking mode。 */
+  thinkingMode?: boolean;
+}
+
 /** 等待 run 結束後再提交到 UI 的最終 state 摘要。 */
 interface PendingCompletionUpdate {
   /** 最終 references。 */
@@ -511,8 +517,9 @@ export async function streamAreaThreadChat(
   question: string,
   accessTokenGetter: AccessTokenGetter,
   onUpdate: (update: LangGraphChatStreamUpdate) => void,
+  options?: LangGraphChatRunOptions,
 ): Promise<void> {
-  await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, true);
+  await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, true, options);
 }
 
 
@@ -523,6 +530,7 @@ async function streamAreaThreadChatInternal(
   accessTokenGetter: AccessTokenGetter,
   onUpdate: (update: LangGraphChatStreamUpdate) => void,
   allowRetry: boolean,
+  options?: LangGraphChatRunOptions,
 ): Promise<void> {
   const token = await accessTokenGetter();
   if (!token) {
@@ -540,6 +548,7 @@ async function streamAreaThreadChatInternal(
       input: {
         area_id: areaId,
         question,
+        thinking_mode: Boolean(options?.thinkingMode),
         messages: [
           {
             role: "user",
@@ -683,7 +692,7 @@ async function streamAreaThreadChatInternal(
     if (allowRetry && message.includes("Thread or assistant not found")) {
       clearAreaThreadId(areaId);
       clearAssistantId();
-      await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, false);
+      await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, false, options);
       return;
     }
     throw error;

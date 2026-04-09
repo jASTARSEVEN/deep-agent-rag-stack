@@ -374,7 +374,6 @@ def _evaluate_single_item(
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
         "query_routing": stage_result.query_routing.model_dump(mode="json"),
-        "document_recall": stage_result.document_recall.model_dump(mode="json"),
         "selection": stage_result.selection.model_dump(mode="json"),
         "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),

@@ -37,6 +37,8 @@ class ChatGraphState(TypedDict):
     area_id: str
     # 使用者提問。
     question: str
+    # 是否啟用 thinking mode。
+    thinking_mode: NotRequired[bool]
     # 目前已驗證使用者。
     principal: dict[str, object]
     # 最終回答文字。
@@ -80,6 +82,7 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
                 settings=runtime_settings,
                 area_id=state["area_id"],
                 question=state["question"],
+                thinking_mode=bool(state.get("thinking_mode", False)),
                 conversation_messages=list(state.get("messages", [])),
                 writer=get_stream_writer(),
             )
@@ -132,6 +135,9 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
                     "model": runtime.model,
                     "contexts_count": len(retrieval_tool_result.assembled_contexts),
                     "used_fallback": len(retrieval_tool_result.assembled_contexts) == 0,
+                    "answer_path": "deepagents_unified",
+                    "thinking_mode": False,
+                    "thinking_mode_ignored": False,
                 },
             },
         }

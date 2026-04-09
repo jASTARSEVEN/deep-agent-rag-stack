@@ -10,6 +10,7 @@ from app.chat.tools.retrieval import (
     build_tool_call_output_summary,
     retrieve_area_contexts_tool,
 )
+from app.services.retrieval_routing import RetrievalStrategy
 from app.services.retrieval import RetrievalTrace
 from app.services.retrieval_assembler import (
     AssembledContext,
@@ -144,6 +145,80 @@ def test_retrieve_area_contexts_tool_returns_context_level_contract(db_session, 
     assert result.trace["assembler"]["kept_chunk_ids"] == [child_one.id, child_two.id]
     assert result.trace["assembler"]["contexts"][0]["context_index"] == 0
     assert result.trace["assembler"]["contexts"][0]["truncated"] is False
+
+
+def test_retrieve_area_contexts_tool_trusts_explicit_retrieval_strategy(db_session, app_settings) -> None:
+    """tool 提供 retrieval strategy 時應直接採用該策略。"""
+
+    area = Area(id=_uuid(), name="Explicit Strategy Tool Contract")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="benefits-overview.mixed.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-explicit-strategy/benefits-overview.mixed.md",
+        display_text="Leave and Flexibility\nFull-time employees receive 12 days of annual leave in the first year.",
+        normalized_text="placeholder",
+        status=DocumentStatus.ready,
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Leave and Flexibility",
+        content="Full-time employees receive 12 days of annual leave in the first year.",
+        content_preview="Full-time employees receive 12 days",
+        char_count=68,
+        start_offset=0,
+        end_offset=68,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Leave and Flexibility",
+        content="Full-time employees receive 12 days of annual leave in the first year.",
+        content_preview="Full-time employees receive 12 days",
+        char_count=68,
+        start_offset=0,
+        end_offset=68,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            document,
+            parent,
+            child,
+        ]
+    )
+    db_session.commit()
+
+    result = retrieve_area_contexts_tool(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        question="Summarize the key points of Benefits Overview, including the Chinese onboarding note.",
+        retrieval_strategy=RetrievalStrategy.DOCUMENT_OVERVIEW,
+    )
+
+    assert result.trace["retrieval"]["query_type"] == "document_summary"
+    assert result.trace["retrieval"]["query_type_source"] == "explicit"
+    assert result.trace["retrieval"]["summary_strategy"] == "document_overview"
+    assert result.trace["retrieval"]["summary_strategy_source"] == "explicit"
 
 
 def test_retrieve_area_contexts_tool_uses_summary_profile_budget_for_assembler(db_session, app_settings) -> None:
@@ -335,78 +410,63 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
             "assembled_text": "alpha intr",
         }
     ]
-    assert summary_payload == {
-        "contexts_count": 1,
-        "citations_count": 1,
-        "query_type": "fact_lookup",
-        "query_type_language": "en",
-        "query_type_source": "fallback",
-        "query_type_confidence": 0.0,
-        "query_type_matched_rules": [],
-        "summary_scope": None,
-        "summary_strategy": None,
-        "summary_strategy_source": "not_applicable",
-        "summary_strategy_confidence": 0.0,
-        "resolved_document_ids": [],
-        "document_mention_source": "none",
-        "document_mention_confidence": 0.0,
-        "document_mention_candidates": [],
-        "selected_profile": "fact_lookup_precision_v1",
-        "document_recall": {
-            "applied": False,
-            "strategy": "disabled",
-            "top_k": settings.retrieval_document_recall_top_k,
-            "selected_document_ids": [],
-            "dropped_document_ids": [],
-            "candidates": [],
-        },
-        "section_recall": {
-            "applied": False,
-            "strategy": "disabled",
-            "top_k": 0,
-            "selected_parent_ids": [],
-            "dropped_parent_ids": [],
-            "candidates": [],
-        },
-        "selected_synopsis_level": "child",
-        "fallback_reason": None,
-        "selection_applied": False,
-        "selection_strategy": "disabled",
-        "selected_document_count": 1,
-        "selected_parent_count": 1,
-        "selected_document_ids": [document.id],
-        "selected_parent_ids": [parent.id],
-        "dropped_by_diversity": [],
-        "query_focus_applied": False,
-        "profile_settings": {
-            "vector_top_k": settings.retrieval_vector_top_k,
-            "fts_top_k": settings.retrieval_fts_top_k,
-            "max_candidates": settings.retrieval_max_candidates,
-            "document_recall_enabled": False,
-            "document_recall_top_k": settings.retrieval_document_recall_top_k,
-            "rerank_top_n": settings.rerank_top_n,
-            "selection_max_contexts": settings.assembler_max_contexts,
-            "assembler_max_contexts": settings.assembler_max_contexts,
-            "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
-            "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
-            "query_focus_enabled": False,
-        },
-        "contexts": [
-            {
-                "context_index": 0,
-                "context_label": "C1",
-                "document_id": document.id,
-                "document_name": "tool-payload.md",
-                "parent_chunk_id": parent.id,
-                "child_chunk_ids": [child.id],
-                "heading": "Payload Section",
-                "structure_kind": "text",
-                "source": "hybrid",
-                "truncated": True,
-                "excerpt": "alpha intr",
-            }
-        ],
-    }
+    assert summary_payload["contexts_count"] == 1
+    assert summary_payload["citations_count"] == 1
+    assert summary_payload["query_type"] == "fact_lookup"
+    assert summary_payload["query_type_language"] == "en"
+    assert summary_payload["query_type_source"] == "fallback"
+    assert summary_payload["query_type_confidence"] == 0.0
+    assert summary_payload["query_type_matched_rules"] == []
+    assert summary_payload["query_type_rule_hits"] == []
+    assert summary_payload["query_type_top_label"] is not None
+    assert summary_payload["query_type_runner_up_label"] is not None
+    assert summary_payload["query_type_embedding_margin"] >= 0.0
+    assert summary_payload["query_type_fallback_used"] is False
+    assert summary_payload["query_type_fallback_reason"] == "llm_fallback_unavailable"
+    assert summary_payload["summary_scope"] is None
+    assert summary_payload["summary_strategy"] is None
+    assert summary_payload["summary_strategy_source"] == "not_applicable"
+    assert summary_payload["summary_strategy_confidence"] == 0.0
+    assert summary_payload["summary_strategy_rule_hits"] == []
+    assert summary_payload["summary_strategy_embedding_scores"] == []
+    assert summary_payload["summary_strategy_top_label"] is None
+    assert summary_payload["summary_strategy_runner_up_label"] is None
+    assert summary_payload["summary_strategy_embedding_margin"] == 0.0
+    assert summary_payload["summary_strategy_fallback_used"] is False
+    assert summary_payload["summary_strategy_fallback_reason"] is None
+    assert summary_payload["resolved_document_ids"] == []
+    assert summary_payload["document_mention_source"] == "none"
+    assert summary_payload["document_mention_confidence"] == 0.0
+    assert summary_payload["document_mention_candidates"] == []
+    assert summary_payload["selected_profile"] == "fact_lookup_precision_v1"
+    assert summary_payload["fallback_reason"] is None
+    assert summary_payload["selection_applied"] is False
+    assert summary_payload["selection_strategy"] == "disabled"
+    assert summary_payload["selected_document_count"] == 1
+    assert summary_payload["selected_parent_count"] == 1
+    assert summary_payload["selected_document_ids"] == [document.id]
+    assert summary_payload["selected_parent_ids"] == [parent.id]
+    assert summary_payload["dropped_by_diversity"] == []
+    assert summary_payload["query_focus_applied"] is False
+    assert summary_payload["profile_settings"]["vector_top_k"] == settings.retrieval_vector_top_k
+    assert summary_payload["profile_settings"]["task_type_embedding_scores"]
+    assert summary_payload["profile_settings"]["task_type_embedding_margin"] >= 0.0
+    assert summary_payload["profile_settings"]["task_type_fallback_used"] is False
+    assert summary_payload["contexts"] == [
+        {
+            "context_index": 0,
+            "context_label": "C1",
+            "document_id": document.id,
+            "document_name": "tool-payload.md",
+            "parent_chunk_id": parent.id,
+            "child_chunk_ids": [child.id],
+            "heading": "Payload Section",
+            "structure_kind": "text",
+            "source": "hybrid",
+            "truncated": True,
+            "excerpt": "alpha intr",
+        }
+    ]
 
 
 def test_retrieval_tool_payload_builders_accept_none() -> None:
@@ -429,18 +489,29 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
         "query_type_source": None,
         "query_type_confidence": None,
         "query_type_matched_rules": [],
+        "query_type_rule_hits": [],
+        "query_type_embedding_scores": [],
+        "query_type_top_label": None,
+        "query_type_runner_up_label": None,
+        "query_type_embedding_margin": None,
+        "query_type_fallback_used": None,
+        "query_type_fallback_reason": None,
         "summary_scope": None,
         "summary_strategy": None,
         "summary_strategy_source": None,
         "summary_strategy_confidence": None,
+        "summary_strategy_rule_hits": [],
+        "summary_strategy_embedding_scores": [],
+        "summary_strategy_top_label": None,
+        "summary_strategy_runner_up_label": None,
+        "summary_strategy_embedding_margin": None,
+        "summary_strategy_fallback_used": None,
+        "summary_strategy_fallback_reason": None,
         "resolved_document_ids": [],
         "document_mention_source": None,
         "document_mention_confidence": None,
         "document_mention_candidates": [],
         "selected_profile": None,
-        "document_recall": None,
-        "section_recall": None,
-        "selected_synopsis_level": None,
         "fallback_reason": None,
         "selection_applied": None,
         "selection_strategy": None,

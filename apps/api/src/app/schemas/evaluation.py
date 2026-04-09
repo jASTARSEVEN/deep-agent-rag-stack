@@ -242,63 +242,30 @@ class EvaluationQueryRoutingDetail(BaseModel):
     confidence: float
     source: str
     matched_rules: list[str]
+    query_type_rule_hits: list[dict[str, object]] = []
+    query_type_embedding_scores: list[dict[str, object]] = []
+    query_type_top_label: str | None = None
+    query_type_runner_up_label: str | None = None
+    query_type_embedding_margin: float = 0.0
+    query_type_fallback_used: bool = False
+    query_type_fallback_reason: str | None = None
     summary_scope: str | None = None
     summary_strategy: str | None = None
     summary_strategy_source: str = "not_applicable"
     summary_strategy_confidence: float = 0.0
+    summary_strategy_rule_hits: list[dict[str, object]] = []
+    summary_strategy_embedding_scores: list[dict[str, object]] = []
+    summary_strategy_top_label: str | None = None
+    summary_strategy_runner_up_label: str | None = None
+    summary_strategy_embedding_margin: float = 0.0
+    summary_strategy_fallback_used: bool = False
+    summary_strategy_fallback_reason: str | None = None
     resolved_document_ids: list[str]
     document_mention_source: str
     document_mention_confidence: float
     document_mention_candidates: list[dict[str, object]]
     selected_profile: str
     resolved_settings: dict[str, object]
-
-
-class EvaluationDocumentRecallCandidate(BaseModel):
-    """單一 document recall candidate 明細。"""
-
-    document_id: str
-    file_name: str
-    vector_rank: int | None
-    fts_rank: int | None
-    rrf_rank: int
-    rrf_score: float
-
-
-class EvaluationDocumentRecallDetail(BaseModel):
-    """單題 document recall 明細。"""
-
-    applied: bool
-    strategy: str
-    top_k: int
-    selected_document_ids: list[str]
-    dropped_document_ids: list[str]
-    candidates: list[EvaluationDocumentRecallCandidate]
-
-
-class EvaluationSectionRecallCandidate(BaseModel):
-    """單一 section recall candidate 明細。"""
-
-    parent_chunk_id: str
-    document_id: str
-    heading: str | None
-    heading_path: str | None
-    section_path_text: str | None
-    vector_rank: int | None
-    fts_rank: int | None
-    rrf_rank: int
-    rrf_score: float
-
-
-class EvaluationSectionRecallDetail(BaseModel):
-    """單題 section recall 明細。"""
-
-    applied: bool
-    strategy: str
-    top_k: int
-    selected_parent_ids: list[str]
-    dropped_parent_ids: list[str]
-    candidates: list[EvaluationSectionRecallCandidate]
 
 
 class EvaluationSelectionDetail(BaseModel):
@@ -319,9 +286,6 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     dataset: EvaluationDatasetSummary
     item: EvaluationItemSummary
     query_routing: EvaluationQueryRoutingDetail
-    document_recall: EvaluationDocumentRecallDetail | None = None
-    section_recall: EvaluationSectionRecallDetail | None = None
-    selected_synopsis_level: str = "child"
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
@@ -380,9 +344,6 @@ class EvaluationPerQueryDetail(BaseModel):
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
     query_routing: EvaluationQueryRoutingDetail
-    document_recall: EvaluationDocumentRecallDetail | None = None
-    section_recall: EvaluationSectionRecallDetail | None = None
-    selected_synopsis_level: str = "child"
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail

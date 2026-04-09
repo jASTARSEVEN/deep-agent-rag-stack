@@ -38,6 +38,7 @@ export function ChatPanel({
   const [chatQuestion, setChatQuestion] = useState(EMPTY_CHAT_INPUT);
   const [chatMessages, setChatMessages] = useState<ChatMessageViewModel[]>([]);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
+  const [isThinkingModeEnabled, setIsThinkingModeEnabled] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewDocumentCache, setPreviewDocumentCache] = useState<Record<string, DocumentPreviewPayload>>({});
@@ -47,6 +48,7 @@ export function ChatPanel({
   useEffect(() => {
     setChatQuestion(EMPTY_CHAT_INPUT);
     setIsSubmittingChat(false);
+    setIsThinkingModeEnabled(false);
     isChatSubmitLockedRef.current = false;
 
     if (!areaId) {
@@ -167,7 +169,7 @@ export function ChatPanel({
     try {
       await streamAreaThreadChat(areaId, trimmedQuestion, accessTokenGetter, (streamUpdate) => {
         setChatMessages((current) => applyStreamUpdate(current, streamUpdate));
-      });
+      }, { thinkingMode: isThinkingModeEnabled });
     } catch (streamError) {
           const errorMessage = streamError instanceof Error ? streamError.message : "chat 失敗。";
           setChatMessages((current) =>
@@ -193,11 +195,22 @@ export function ChatPanel({
   return (
     <div className="flex h-full overflow-hidden rounded-[2rem] border border-stone-900/10 bg-white shadow-[0_18px_50px_rgba(47,39,24,0.04)]">
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center justify-between border-b border-stone-900/5 px-8 py-4">
+        <div className="flex items-center justify-between border-b border-stone-900/5 px-8 py-4 gap-4">
           <h3 className="text-lg font-semibold text-stone-900">Area Chat</h3>
-          <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">
-            {areaId ? "Active Session" : "No Area Selected"}
-          </span>
+          <div className="flex items-center gap-4">
+            <label className="inline-flex items-center gap-2 text-xs font-medium text-stone-500">
+              <input
+                type="checkbox"
+                checked={isThinkingModeEnabled}
+                disabled={isSubmittingChat || !areaId}
+                onChange={(event) => setIsThinkingModeEnabled(event.currentTarget.checked)}
+              />
+              <span>Thinking mode</span>
+            </label>
+            <span className="text-xs font-medium text-stone-400 uppercase tracking-wider">
+              {areaId ? "Active Session" : "No Area Selected"}
+            </span>
+          </div>
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden">

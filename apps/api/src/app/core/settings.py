@@ -56,6 +56,10 @@ EMPTY_STRING_ENV_KEYS = {
     "CHAT_TIMEOUT_SECONDS",
     "CHAT_STREAM_CHUNK_SIZE",
     "CHAT_STREAM_DEBUG",
+    "SUMMARY_COMPARE_EVAL_JUDGE_MODEL",
+    "SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS",
+    "SUMMARY_COMPARE_EVAL_MAX_TOTAL_TOKENS_PER_ITEM",
+    "SUMMARY_COMPARE_EVAL_PASS_MIN_AVG_SCORE",
     "LANGGRAPH_SERVICE_PORT",
     "LANGSMITH_API_KEY",
     "LANGSMITH_ENDPOINT",
@@ -172,6 +176,16 @@ class AppSettings(BaseSettings):
     chat_include_trace: Annotated[bool, Field(alias="CHAT_INCLUDE_TRACE")] = False
     chat_stream_chunk_size: Annotated[int, Field(alias="CHAT_STREAM_CHUNK_SIZE")] = 64
     chat_stream_debug: Annotated[bool, Field(alias="CHAT_STREAM_DEBUG")] = False
+    summary_compare_eval_judge_model: Annotated[str, Field(alias="SUMMARY_COMPARE_EVAL_JUDGE_MODEL")] = "gpt-5-mini"
+    summary_compare_eval_max_p95_latency_seconds: Annotated[
+        float, Field(alias="SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS")
+    ] = 30.0
+    summary_compare_eval_max_total_tokens_per_item: Annotated[
+        int, Field(alias="SUMMARY_COMPARE_EVAL_MAX_TOTAL_TOKENS_PER_ITEM")
+    ] = 12000
+    summary_compare_eval_pass_min_avg_score: Annotated[
+        float, Field(alias="SUMMARY_COMPARE_EVAL_PASS_MIN_AVG_SCORE")
+    ] = 4.2
     langgraph_service_port: Annotated[int, Field(alias="LANGGRAPH_SERVICE_PORT")] = 8000
     langsmith_tracing: Annotated[bool, Field(alias="LANGSMITH_TRACING")] = False
     langsmith_api_key: Annotated[str | None, Field(alias="LANGSMITH_API_KEY")] = None

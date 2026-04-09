@@ -237,12 +237,13 @@
 ## 近期建議順序
 
 1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + query_focus off + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
-2. 先完成 `Phase 8A — Summary / Compare Runtime Consolidation`，把舊 `8.4 ~ 8.6` 收斂為單一快速交付批次，讓 `document_summary` / `cross_document_compare` 先具備可用的 hierarchical synthesis、最小 section synopsis 與正式 task routing
-3. `Phase 8A` 內建最小 evaluation checkpoint 與 guardrails，不再額外拆出獨立 phase；若 `8A` 品質未穩定，不推進 evidence layer
-4. 待 `Phase 8A` 穩定後，再進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation`，以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
-5. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
-6. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
-7. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+2. `Phase 8A` 已以 closeout accepted 方式結束；summary/compare 的 unified Deep Agents 主線與其 checkpoint artifacts 保留作為後續 phase 的 baseline
+3. 進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 前，先保持 `Phase 8A` 主線凍結，避免再把 8A/8B 問題混在一起
+4. `Phase 8B` 以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
+5. `document synopsis` / `section synopsis` 的再利用不納入 `Phase 8A` 或 `Phase 8B` 核心交付；若後續仍有價值，統一延後到 `Phase 8C` 再評估是否以 agent-side optional hints 形式接回
+6. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
+7. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
+8. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## Phase 7 — Retrieval Correctness Evaluation
 
@@ -405,17 +406,17 @@
 狀態：
 - `已完成（closeout 已以 DRCD / NQ / QASPER sentinel rerun、public-entry smoke 與 document recall observability 驗證；其中 QASPER 100 的輕微退化被接受為可承受代價）`
 
-## Phase 8A — Summary / Compare Runtime Consolidation
+## Phase 8A — Unified Deep Agents Summary / Compare Stabilization
 
 ### Phase 8 Query Flow Overview
 
 本段落用來收斂 `Phase 8A ~ 8B` 的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
 
 共同原則：
-- `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應理解為同層級資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`，而不是單一召回器。
-- `document synopsis`、`section synopsis` 與 `evidence units` 都屬於 retrieval / planning layer，不是最終 citation 單位。
-- 最終 citation 一律回到 `child chunk / source span`；`parent` 只作為 materialization 邊界，`document/section/evidence` synopsis 只作為查找與排序輔助。
-- `Evidence Hints` 若要送進 LLM，必須先經過 selection / compression，只能作為 optional hints；送進 LLM 的主體仍是 assembled `parent/child` evidence contexts。
+- 正式 retrieval 主線目前以 `child hybrid recall -> rerank -> diversified selection -> assembler` 為準，並以 routing scope / mention scope 做 SQL-first 收斂。
+- `document synopsis`、`section synopsis` 與未來 `evidence units` 都不是最終 citation 單位；它們若存在，最多只屬於 ingest-side 表示或未來 optional enhancement。
+- 最終 citation 一律回到 `child chunk / source span`；`parent` 只作為 materialization 邊界。
+- 送進 LLM 的正式主體必須是 assembled `parent/child` evidence contexts；任何 hints 都只能是次要輔助。
 - 正式 routing 模型採 2 層，而不是平面 5 類：
   - 第一層 `task_type`：`fact_lookup | document_summary | cross_document_compare`
   - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
@@ -426,61 +427,54 @@
   - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可在 `Phase 8B` 加上 `evidence-unit hybrid recall`
   - evidence-unit 命中後需先回推到 `source_child_chunk_ids` 再與 child candidates 合併，不得直接作為 citation
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=document_overview`
-  - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
-  - `document synopsis` 的角色是 overview planning input，不應直接原封不動作為最終回答
+  - 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
+  - overview 的摘要責任由主 `Deep Agents` agent 根據 assembled contexts 完成，不再依賴 query-time synopsis recall
   - `evidence units` 僅在 `Phase 8B` 作為 optional enhancement，不是 `8A` 的預設主路徑
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=section_focused`
-  - 主線：`document scope resolve or document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
-  - 對 semantic-gap 較高或 evidence-dense 的 section，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall` 補強
+  - 主線：`document scope resolve -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
+  - 對 semantic-gap 較高或 evidence-dense 的 query，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall` 補強
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=multi_document_theme`
-  - 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> assembler -> synthesis`
+  - 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
   - 若主題屬於 claim / metric / findings-heavy，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall`
 - 第一層 `task_type=cross_document_compare`
-  - `Phase 8A` 主線：`document synopsis recall -> section synopsis recall -> child hybrid recall -> rerank -> diversified selection -> assembler -> synthesis`
+  - `Phase 8A` 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
   - `Phase 8B` 可再疊加 `evidence-unit hybrid recall`，此 route 也是 evidence-centric layer 最應優先產生 ROI 的場景
 
 LLM 輸入規則：
 - 預設只送 assembled `parent/child` evidence contexts 給 LLM。
-- `document synopsis`、`section synopsis` 與 `evidence units` 只應在必要時以 selected / compressed hints 形式送入，不得與 citation-ready contexts 混成同權重主體。
+- `document synopsis`、`section synopsis` 與 `evidence units` 若未來重新接回 runtime，也只應以 selected / compressed hints 形式送入，不得與 citation-ready contexts 混成同權重主體。
 - 不得將 `document synopsis`、`section synopsis` 或 `evidence units` 直接當作最終 citation payload。
 
 目標：
-- 以較少 phase 快速落地 `document_summary` / `cross_document_compare` 的可用 runtime。
-- 把舊 `8.4 ~ 8.6` 合併為單一交付批次：一次完成 hierarchical synthesis、最小 section synopsis、正式 task routing 與最小 evaluation checkpoint。
-- synthesis prompt、map/reduce 結構與 citation 組裝需同時適用於繁體中文與英文問答輸出。
+- 以較少 phase 快速穩定 `document_summary` / `cross_document_compare` 的 unified Deep Agents answer path。
+- 把舊 `8.4 ~ 8.6` 收斂為單一交付批次：一次完成正式 task routing、unified answer path、selection contract 與最小 evaluation checkpoint。
+- summary/compare 的正式產品能力，以主 `Deep Agents` agent 搭配 `retrieve_area_contexts` tool 的端到端表現為準。
 
 內容：
-- 在 LangGraph chat runtime 導入 hierarchical synthesis flow。
-- 對 `document_summary` 與 `cross_document_compare` 類問題，採用至少兩段式流程：
-  - map：先對單文件或單群組 context 產生局部摘要 / 比較筆記
-  - reduce：再合成最終回答與 citations
-- 在 ingest / reindex pipeline 新增最小可用的 section synopsis，正式範圍以 parent section 或 parent cluster 為單位，不退化成逐 child chunk 摘要。
-- section-level 表示需補上 hierarchical section context，至少包含：
-  - `heading_path`
-  - `section_path_text`
-  - `heading_level`
-- `section synopsis` 的正式輸入應以 `document title + heading_path / section_path_text + local content` 為主，不得只看最近一層 heading。
-- 正式 task routing 收斂為 2 層 `deterministic + embedding`：
+- 在 LangGraph chat runtime 將 `fact_lookup`、`document_summary` 與 `cross_document_compare` 統一到同一條主 `Deep Agents` answer path。
+- `thinking_mode` 前後端欄位短期保留為相容 metadata，但不再決定 answer lane。
+- 保留 worker 已落地的 `document synopsis` / `section synopsis` 生成與持久化，但它們不再屬於 `Phase 8A` query-time 依賴。
+- 正式 task routing 收斂為 2 層統一 classifier framework：
   - 第一層 `task_type`：`fact_lookup | document_summary | cross_document_compare`
   - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
-  - `LLM routing` 只允許作為可關閉的實驗性 fallback，不得作為 ready-path 必要依賴
+  - 兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`
+  - `LLM fallback` 輸入僅限 query、language、document mention summary 與 label options，不得讀全文、不得改寫 query
 - rollout 優先順序以快速交付為原則：
   - 先穩定 `document_summary`
   - `document_overview` 與 `section_focused` 優先於 `multi_document_theme`
   - `cross_document_compare` 在 `8A` 先以保守 coverage-first 版本落地，不導入 evidence-unit 依賴
 - 本 phase 不新增 evidence-centric enrichment schema、evidence-unit table 或新的 ingest stage；evidence-centric layer 留給 `Phase 8B`。
-- 必要時支援 refine step，處理 context 過長或文件數偏多的情境。
 - citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
 - trace metadata 需至少補上：
   - `task_type`
   - `task_type_source / confidence`
   - `summary_strategy`
   - `summary_strategy_source / confidence`
-  - selected evidence plan
-  - selected synopsis level（`document | section | child`）
-  - section match candidates / kept sections / dropped sections
+  - `answer_path`
+  - `thinking_mode`
+  - `thinking_mode_ignored`
   - fallback reason
-  - map / reduce / refine 階段輸入輸出摘要
+  - retrieval / assembler 的主要 candidate 與 selection 摘要
 - 對比較型問題定義較穩定的輸出結構，例如：
   - 共通點
   - 差異點
@@ -506,16 +500,16 @@ LLM 輸入規則：
   - synopsis 長度
   - 比較型問題的每文件 context 配額
 - 本 checkpoint 至少覆蓋：
-  - hierarchical synthesis 的 completeness / faithfulness / latency
+  - unified Deep Agents answer path 的 completeness / faithfulness / latency
   - `task_type` accuracy
   - `summary_strategy` accuracy
-  - section-scope coverage
+  - 文件 / citation / section coverage
   - fallback rate
-- 將 evaluation 結果回饋到 profile、selection、synopsis 與 synthesis 參數調整，避免單次 heuristic 長期失真。
+- 將 evaluation 結果回饋到 prompt、selection、routing 與 tool contract 調整，避免單次 heuristic 長期失真。
 - `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
 狀態：
-- `進行中（core runtime / section synopsis / section recall / synthesis trace 已落地；尚待 E2E 與最小 evaluation checkpoint 收尾）`
+- `已完成（closeout accepted；已保留 unified answer path、兩層 routing 與 CLI-first checkpoint artifacts 作為後續 baseline。最新 accepted 驗收 run 雖未滿足原先全部 gate，但經產品決策接受目前 ceiling，8A 不再繼續調參收分）`
 
 ## Phase 8B — Evidence-Centric Enrichment & Evaluation
 
@@ -607,3 +601,18 @@ LLM 輸入規則：
 
 狀態：
 - `提案中`
+
+## Phase 8C — Synopsis Reuse as Agent-Side Optional Hints
+
+目標：
+- 重新評估既有 `document synopsis` / `section synopsis` 是否仍具產品價值，但不把它們重新塞回正式 retrieval 主線。
+- 若確認有價值，將 synopsis 定位為主 `Deep Agents` agent 的 optional hints，而不是 recall gate、selection gate 或 citation 單位。
+
+內容：
+- 僅在長文件 `document_overview`、多文件 `multi_document_theme` 或其他經驗證確實受益的情境下，將 selected / compressed synopsis hints 作為 agent-side 輔助資訊。
+- synopsis hints 的主責任是 orientation / planning，不得參與 SQL scope、candidate 去留或最終 citation 產生。
+- 送進 LLM 的主體仍必須是 assembled `parent/child` evidence contexts；synopsis hints 只能是次要欄位。
+- 若驗證顯示 synopsis hints 沒有穩定提升 summary/compare 品質，應維持不接回主線，並考慮後續停用 worker 生成或改為純離線分析資產。
+
+狀態：
+- `未開始`

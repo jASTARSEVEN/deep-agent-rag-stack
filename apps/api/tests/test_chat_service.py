@@ -22,7 +22,6 @@ from app.db.models import (
 from app.chat.agent.runtime import (
     DeepAgentsChatRuntime,
     DeterministicChatRuntime,
-    _build_summary_compare_answer,
     _build_answer_blocks_from_markers,
     _build_agent_input_messages,
     build_chat_runtime,
@@ -257,72 +256,6 @@ def test_build_answer_blocks_from_markers_parses_context_labels() -> None:
     assert [item.context_label for item in answer_blocks[1].display_citations] == ["C1", "C2"]
 
 
-def test_build_summary_compare_answer_uses_fixed_compare_sections() -> None:
-    """compare synthesis 應輸出固定段落骨架與 map-reduce trace。"""
-
-    citations = [
-        SimpleNamespace(
-            document_id="doc-1",
-            model_dump=lambda mode="json": {
-                "context_label": "C1",
-                "document_id": "doc-1",
-                "document_name": "alpha.md",
-            },
-        ),
-        SimpleNamespace(
-            document_id="doc-2",
-            model_dump=lambda mode="json": {
-                "context_label": "C2",
-                "document_id": "doc-2",
-                "document_name": "beta.md",
-            },
-        ),
-    ]
-    retrieval_result = SimpleNamespace(
-        assembled_contexts=[
-            AssembledContext(
-                document_id="doc-1",
-                parent_chunk_id="parent-1",
-                chunk_ids=["child-1"],
-                structure_kind=ChunkStructureKind.text,
-                heading="Alpha Section",
-                assembled_text="Alpha document focuses on onboarding and approvals.",
-                source="hybrid",
-                start_offset=0,
-                end_offset=20,
-            ),
-            AssembledContext(
-                document_id="doc-2",
-                parent_chunk_id="parent-2",
-                chunk_ids=["child-2"],
-                structure_kind=ChunkStructureKind.text,
-                heading="Beta Section",
-                assembled_text="Beta document focuses on security checks and controls.",
-                source="hybrid",
-                start_offset=21,
-                end_offset=45,
-            ),
-        ],
-        citations=citations,
-    )
-    routing_decision = SimpleNamespace(
-        query_type=EvaluationQueryType.cross_document_compare,
-        summary_strategy=None,
-    )
-
-    answer, trace = _build_summary_compare_answer(
-        question="比較 alpha 與 beta",
-        routing_decision=routing_decision,
-        retrieval_result=retrieval_result,
-    )
-
-    assert "共通點：" in answer
-    assert "差異點：" in answer
-    assert "各文件立場 / 結論：" in answer
-    assert "不足證據或矛盾處：" in answer
-    assert trace["map_group_count"] == 2
-
-
 def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch) -> None:
     """Deep Agents runtime 應把 LangGraph thread 累積的 messages 傳給主 agent。
 
@@ -555,18 +488,29 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "query_type_source": None,
         "query_type_confidence": None,
         "query_type_matched_rules": [],
+        "query_type_rule_hits": [],
+        "query_type_embedding_scores": [],
+        "query_type_top_label": None,
+        "query_type_runner_up_label": None,
+        "query_type_embedding_margin": None,
+        "query_type_fallback_used": None,
+        "query_type_fallback_reason": None,
         "summary_scope": None,
         "summary_strategy": None,
         "summary_strategy_source": None,
         "summary_strategy_confidence": None,
+        "summary_strategy_rule_hits": [],
+        "summary_strategy_embedding_scores": [],
+        "summary_strategy_top_label": None,
+        "summary_strategy_runner_up_label": None,
+        "summary_strategy_embedding_margin": None,
+        "summary_strategy_fallback_used": None,
+        "summary_strategy_fallback_reason": None,
         "resolved_document_ids": [],
         "document_mention_source": None,
         "document_mention_confidence": None,
         "document_mention_candidates": [],
         "selected_profile": None,
-        "document_recall": None,
-        "section_recall": None,
-        "selected_synopsis_level": None,
         "fallback_reason": None,
         "selection_applied": None,
         "selection_strategy": None,
@@ -583,6 +527,104 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
     assert reference_events == [{"type": "references", "references": []}]
     token_events = [event for event in emitted_events if event["type"] == "token"]
     assert token_events == [{"type": "token", "delta": "這是帶搜尋流程的回答。"}]
+
+
+def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch) -> None:
+    """summary query 應不再分 lane，而是統一走 Deep Agents answer path。"""
+
+    captured_llm_kwargs: list[dict[str, object]] = []
+    captured_inputs: list[object] = []
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。"""
+
+            self.kwargs = kwargs
+            captured_llm_kwargs.append(dict(kwargs))
+
+    class FakeAgent:
+        """模擬主 agent，會主動呼叫 retrieval tool。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。"""
+
+            self.tools = tools
+
+        def stream(self, agent_input, *, stream_mode):
+            """先執行 retrieval tool，再回傳固定回答。"""
+
+            captured_inputs.append(agent_input)
+            assert stream_mode == ["messages", "values"]
+            self.tools[0]("summary question")
+            return iter(
+                [
+                    ("messages", ({"content": "這是統一路徑摘要回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是統一路徑摘要回答。"}]}),
+                ]
+            )
+
+    def fake_create_deep_agent(**kwargs):
+        """建立固定假 agent。"""
+
+        return FakeAgent(kwargs.get("tools", []))
+
+    def fake_retrieve_area_contexts_tool(**kwargs):
+        """回傳最小 retrieval 結果。"""
+
+        return SimpleNamespace(
+            assembled_contexts=[],
+            citations=[],
+            trace={"retrieval": {"query": kwargs["question"]}, "assembler": {"contexts": []}},
+        )
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", fake_create_deep_agent)
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+
+    result_false = provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="Summarize the document",
+        thinking_mode=False,
+    )
+    result_true = provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="Summarize the section",
+        thinking_mode=True,
+    )
+
+    assert result_false["answer"] == "這是統一路徑摘要回答。"
+    assert result_true["answer"] == "這是統一路徑摘要回答。"
+    assert result_false["trace"]["agent"]["answer_path"] == "deepagents_unified"
+    assert result_true["trace"]["agent"]["answer_path"] == "deepagents_unified"
+    assert result_false["trace"]["agent"]["thinking_mode"] is False
+    assert result_true["trace"]["agent"]["thinking_mode"] is True
+    assert result_false["trace"]["agent"]["thinking_mode_ignored"] is False
+    assert result_true["trace"]["agent"]["thinking_mode_ignored"] is True
+    assert captured_llm_kwargs[0]["reasoning_effort"] == "minimal"
+    assert all(item == {"messages": [{"role": "user", "content": "Summarize the document"}]} or item == {"messages": [{"role": "user", "content": "Summarize the section"}]} for item in captured_inputs)
 
 
 def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypatch) -> None:
@@ -1203,78 +1245,60 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "truncated": False,
         }
     ]
-    assert completed_tool_event["output"] == {
-        "contexts_count": 1,
-        "citations_count": 1,
-        "query_type": "fact_lookup",
-        "query_type_language": "mixed",
-        "query_type_source": "fallback",
-        "query_type_confidence": 0.0,
-        "query_type_matched_rules": [],
-        "summary_scope": None,
-        "resolved_document_ids": [],
-        "document_mention_source": "none",
-        "document_mention_confidence": 0.0,
-        "document_mention_candidates": [],
-        "selected_profile": "fact_lookup_precision_v1",
-        "selection_applied": False,
-        "selection_strategy": "disabled",
-        "selected_document_count": 1,
-        "selected_parent_count": 1,
-        "selected_document_ids": [document.id],
-        "selected_parent_ids": [parent.id],
-        "dropped_by_diversity": [],
-        "query_focus_applied": False,
-        "summary_strategy": None,
-        "summary_strategy_source": "not_applicable",
-        "summary_strategy_confidence": 0.0,
-        "document_recall": {
-            "applied": False,
-            "strategy": "disabled",
-            "top_k": settings.retrieval_document_recall_top_k,
-            "selected_document_ids": [],
-            "dropped_document_ids": [],
-            "candidates": [],
-        },
-        "section_recall": {
-            "applied": False,
-            "strategy": "disabled",
-            "top_k": 0,
-            "selected_parent_ids": [],
-            "dropped_parent_ids": [],
-            "candidates": [],
-        },
-        "selected_synopsis_level": "child",
-        "fallback_reason": None,
-        "profile_settings": {
-            "vector_top_k": settings.retrieval_vector_top_k,
-            "fts_top_k": settings.retrieval_fts_top_k,
-            "max_candidates": settings.retrieval_max_candidates,
-            "document_recall_enabled": False,
-            "document_recall_top_k": settings.retrieval_document_recall_top_k,
-            "rerank_top_n": settings.rerank_top_n,
-            "selection_max_contexts": settings.assembler_max_contexts,
-            "assembler_max_contexts": settings.assembler_max_contexts,
-            "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
-            "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
-            "query_focus_enabled": False,
-        },
-        "contexts": [
-            {
-                "context_index": 0,
-                "context_label": "C1",
-                "document_id": document.id,
-                "document_name": "reader-policy.md",
-                "parent_chunk_id": parent.id,
-                "child_chunk_ids": [child_one.id, child_two.id],
-                "heading": "Reader Policy",
-                "structure_kind": "text",
-                "source": "hybrid",
-                "truncated": False,
-                "excerpt": "alpha intro\n\nalpha details",
-            }
-        ],
-    }
+    assert completed_tool_event["output"]["contexts_count"] == 1
+    assert completed_tool_event["output"]["citations_count"] == 1
+    assert completed_tool_event["output"]["query_type"] == "fact_lookup"
+    assert completed_tool_event["output"]["query_type_language"] == "mixed"
+    assert completed_tool_event["output"]["query_type_source"] == "fallback"
+    assert completed_tool_event["output"]["query_type_confidence"] == 0.0
+    assert completed_tool_event["output"]["query_type_matched_rules"] == []
+    assert completed_tool_event["output"]["query_type_rule_hits"] == []
+    assert completed_tool_event["output"]["query_type_embedding_scores"]
+    assert completed_tool_event["output"]["query_type_embedding_margin"] >= 0.0
+    assert completed_tool_event["output"]["query_type_fallback_used"] is False
+    assert completed_tool_event["output"]["query_type_fallback_reason"] == "llm_fallback_unavailable"
+    assert completed_tool_event["output"]["summary_scope"] is None
+    assert completed_tool_event["output"]["resolved_document_ids"] == []
+    assert completed_tool_event["output"]["document_mention_source"] == "none"
+    assert completed_tool_event["output"]["document_mention_confidence"] == 0.0
+    assert completed_tool_event["output"]["document_mention_candidates"] == []
+    assert completed_tool_event["output"]["selected_profile"] == "fact_lookup_precision_v1"
+    assert completed_tool_event["output"]["selection_applied"] is False
+    assert completed_tool_event["output"]["selection_strategy"] == "disabled"
+    assert completed_tool_event["output"]["selected_document_count"] == 1
+    assert completed_tool_event["output"]["selected_parent_count"] == 1
+    assert completed_tool_event["output"]["selected_document_ids"] == [document.id]
+    assert completed_tool_event["output"]["selected_parent_ids"] == [parent.id]
+    assert completed_tool_event["output"]["dropped_by_diversity"] == []
+    assert completed_tool_event["output"]["query_focus_applied"] is False
+    assert completed_tool_event["output"]["summary_strategy"] is None
+    assert completed_tool_event["output"]["summary_strategy_source"] == "not_applicable"
+    assert completed_tool_event["output"]["summary_strategy_confidence"] == 0.0
+    assert completed_tool_event["output"]["summary_strategy_rule_hits"] == []
+    assert completed_tool_event["output"]["summary_strategy_embedding_scores"] == []
+    assert completed_tool_event["output"]["summary_strategy_top_label"] is None
+    assert completed_tool_event["output"]["summary_strategy_runner_up_label"] is None
+    assert completed_tool_event["output"]["summary_strategy_embedding_margin"] == 0.0
+    assert completed_tool_event["output"]["summary_strategy_fallback_used"] is False
+    assert completed_tool_event["output"]["summary_strategy_fallback_reason"] is None
+    assert completed_tool_event["output"]["fallback_reason"] is None
+    assert completed_tool_event["output"]["profile_settings"]["vector_top_k"] == settings.retrieval_vector_top_k
+    assert completed_tool_event["output"]["profile_settings"]["task_type_embedding_scores"]
+    assert completed_tool_event["output"]["contexts"] == [
+        {
+            "context_index": 0,
+            "context_label": "C1",
+            "document_id": document.id,
+            "document_name": "reader-policy.md",
+            "parent_chunk_id": parent.id,
+            "child_chunk_ids": [child_one.id, child_two.id],
+            "heading": "Reader Policy",
+            "structure_kind": "text",
+            "source": "hybrid",
+            "truncated": False,
+            "excerpt": "alpha intro\n\nalpha details",
+        }
+    ]
 
 
 def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkeypatch) -> None:

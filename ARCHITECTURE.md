@@ -133,7 +133,7 @@ flowchart TD
 ### 問答流程
 1. Web 於 area 內建立或恢復對應的 LangGraph thread，並送出 chat run；每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
 2. LangGraph Server 先透過 custom auth 驗證 Bearer token
-3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
+3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id`、`question` 與顯式 `thinking_mode`
 4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
 5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 必須維持 SQL gate、deny-by-default 與 ready-only 邊界，但實際採用的 recall / fusion / rerank / assembly 組合可隨主線策略演進
 6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 `citations`、`assembled_contexts`、`answer_blocks` 與 `used_knowledge_base`；其中回答引用由 `[[C1]]` marker 解析為 UI 可用的 `answer_blocks`
@@ -141,6 +141,7 @@ flowchart TD
 8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
 9. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
 10. 前端正式引用 UX 為回答句尾 chips + 右側全文預覽欄；`Assembled Contexts`、工具輸入與工具輸出保留為 debug/details
+11. `document_summary / cross_document_compare` 與 `fact_lookup` 一樣，都統一走主 `Deep Agents` answer path；`thinking mode` 目前僅作為相容 metadata 保留，不再決定 answer lane
 
 ```mermaid
 flowchart TD
@@ -218,6 +219,13 @@ flowchart TD
 6. benchmark 改善任務的正式策略為：先實際跑分建立 baseline；每一輪只允許一個主假設與最小改動；改動後必須重新跑分，若相對目前最佳結果退化，除分析文件外其餘改動一律回退；無論提升與否，都必須重新分析 miss 題與當前查到的 chunks，才能決定下一輪策略。
 6.5. benchmark 治理的第一核心是「不得造成 domain overfit」；任何 candidate profile 若引入非 generic-first 的 retrieval wording、query rewrite 或 corpus-specific heuristic，必須在治理腳本層直接視為失敗，不得進入正式 lane 比較。
 7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 進行，資料庫不得新增策略專用欄位
+
+### Phase 8A summary/compare checkpoint 流程
+1. `Phase 8A` 的正式過線不沿用 Phase 7 retrieval-only runner，而是透過 `python -m app.scripts.run_summary_compare_checkpoint` 執行固定 summary/compare dataset。
+2. checkpoint runner 直接呼叫真實 chat runtime，逐題保存 `answer`、`answer_blocks`、`citations`、routing / selection trace、fallback reason 與 latency。
+3. 判定流程採兩層：先做 deterministic hard blockers，再做 `LLM-as-judge` 的 `completeness / faithfulness_to_citations / structure_quality / compare_coverage` 評分。
+4. hard blockers 至少包含：`task_type` 命中、`summary_strategy` 命中、citations 只來自 `ready` 文件、必需文件被引用、允許證據不足的題目不得硬編結論、不得 timeout、不得超過 token budget。
+5. checkpoint report 固定輸出 `run_metadata`、`aggregate_metrics`、`gate_results`、`per_item_results`、`judge_scores`、`hard_blocker_failures` 與 `recommendations`；`run_metadata.answer_path` 固定標示 `deepagents_unified`。原始設計上 `Phase 8A` 需在 report `passed=true` 時才視為真正過線，但本專案已在 closeout 決策中接受最新 ceiling 與 artifact，故目前 8A 視為結束並凍結主線。
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` / `MS MARCO` / `Natural Questions` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式；其中 `MS MARCO` 與 `NQ` 可直接使用 `hf://...` dataset-server 參照。
@@ -324,17 +332,19 @@ flowchart TD
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
 19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
 19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；正式持久化欄位為 `heading_path`、`section_path_text`、`heading_level`、`section_synopsis_text`、`section_synopsis_embedding` 與 `section_synopsis_updated_at`
-19.11. `document_summary` 與 `cross_document_compare` 採兩階段 retrieval：第一階段以 synopsis 做 document recall，第二階段再對入選文件集合做既有 child recall、rerank、selection 與 assembler；第二階段縮小範圍必須透過 SQL `allowed_document_ids` filter 完成，不得以記憶體過濾取代
-19.12. 第一階段 document recall 預設維持 fail-open：若 synopsis recall 無法選出文件集合，第二階段可回退到原本 area-scoped child recall，但必須在 trace / evaluation 中明確保留 `document_recall` 明細
-19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層 `deterministic + embedding`；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`；LLM routing 只允許作為可關閉的實驗性 fallback
-19.12.2. `document recall`、`section recall`、`evidence recall` 與 `child recall` 若存在，正式都應視為各自資料模型上的 hybrid recall stage，也就是 `FTS + vector search + RRF`；不得把任一 recall node 簡化為單一檢索器的概念
-19.12.2.1. `section recall` 的正式文字表示必須是 path-aware text，而不是只有 local heading / local content；至少應包含 `section_path_text + local content`，必要時再補 `document title`
+19.11. worker 仍可持久化 `document synopsis` 與 `section synopsis`，但 API/runtime 的正式 query-time 主線不再依賴 synopsis recall；summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
+19.12. `document_summary` 與 `cross_document_compare` 的 scope 收斂目前只允許來自 mention resolver 與 routing scope；若已解析出文件範圍，必須透過 SQL `allowed_document_ids` filter 套用，不得以記憶體過濾取代
+19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層統一 classifier framework；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`
+19.12.1.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學，避免一層 rule-only、一層 model-only 造成維護與觀測不一致
+19.12.1.2. `LLM fallback` 已是正式 ready-path 的一部分，但輸入必須嚴格受限為 query、language、document mention summary 與 label options；不得讀全文、不得改寫 query、不得輸出自由文字
+19.12.2. worker 端保留下來的 synopsis schema 仍可作為未來實驗或離線分析材料，但不再屬於正式 API trace、evaluation preview 或 checkpoint contract；若後續要重新接回產品主線，正式規劃應延後到 `Phase 8C`，並且只能以 agent-side optional hints 形式存在
 19.12.3. 第一層 `task_type=fact_lookup` 的主線仍是 area-scoped `child recall -> rerank -> assembler`；但在 semantic-gap、數值 / 表格 query 或第一輪 child recall 信心不足時，允許於 `Phase 8B` 加入 `evidence-unit recall` 補強 recall，再回推到 `source_child_chunk_ids`
-19.12.4. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=document_overview` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；`document synopsis` 只作為 overview planning input，不得原封不動作為最終回答
-19.12.5. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=section_focused` 的主線應為 `document scope resolve or document synopsis recall -> section synopsis recall -> child recall`；僅在 semantic-gap 較高或 evidence-dense 的 section 才允許於 `Phase 8B` 加上 `evidence-unit recall` 補強
-19.12.6. 第一層 `task_type=document_summary` 時，第二層 `summary_strategy=multi_document_theme` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`
-19.12.7. 第一層 `task_type=cross_document_compare` 在 `Phase 8A` 的主線應為 `document synopsis recall -> section synopsis recall -> child recall -> rerank -> assembler -> synthesis`；進入 `Phase 8B` 後可再加入 `evidence-unit recall` 補強，此 route 也是 `evidence-centric layer` 的主要 ROI 場景
-19.12.7.1. `Phase 8A` 目前已為 `document_summary` / `cross_document_compare` 落地最小 deterministic map/reduce synthesis；summary 依 `summary_strategy` 聚合文件或章節 evidence，compare 固定輸出 `共通點 / 差異點 / 各文件立場或結論 / 不足證據或矛盾處`
+19.12.4. 第一層 `task_type=document_summary` 與 `task_type=cross_document_compare` 的最終回答不再走 runtime 專用 synthesis lane；正式主線是一致的 `Deep Agents` 主 agent path，由 agent 根據 `retrieve_area_contexts` 的 assembled contexts 自行完成摘要或比較
+19.12.5. `thinking_mode` 目前僅作為前後端與 checkpoint 的相容 metadata 保留，不再決定 answer lane；正式 trace 只保留固定 `answer_path="deepagents_unified"` 與 `thinking_mode_ignored` 狀態
+19.12.6. 第一層 `task_type=document_summary` 時，`document_overview`、`section_focused` 與 `multi_document_theme` 的 retrieval 骨架都統一為 `routing scope -> child recall -> rerank -> diversified selection -> assembler`
+19.12.7. 第一層 `task_type=cross_document_compare` 在 `Phase 8A` 的主線同樣是 `routing scope -> child recall -> rerank -> diversified selection -> assembler`；進入 `Phase 8B` 後才考慮疊加 `evidence-unit recall`
+19.12.7.1. `document_summary` 與 `cross_document_compare` 的最終回答正式由主 `Deep Agents` agent 根據 `retrieve_area_contexts` 的 assembled contexts 直接完成，不再維持 runtime 專用 synthesis lane
+19.12.7.2. `thinking_mode` 目前僅屬於前後端與 checkpoint 的相容 metadata；它不再影響 retrieval 與 answer path 的正式主線行為
 19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
 19.12.8.1. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
 19.12.8.2. `evidence recall` 的正式文字表示應使用 path-aware text，也就是 `heading_path / section_path_text + evidence_text` 共同參與 `FTS` 與 embedding 前處理

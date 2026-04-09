@@ -22,9 +22,8 @@ from app.chat.tools.retrieval import (
     retrieve_area_contexts_tool,
 )
 from app.core.settings import AppSettings
-from app.db.models import EvaluationQueryType
 from app.services.retrieval_assembler import AssembledContext
-from app.services.retrieval_routing import build_query_routing_decision
+from app.services.retrieval_routing import RetrievalStrategy, build_query_routing_decision
 
 try:
     from langchain_core.tools import tool
@@ -47,6 +46,8 @@ LOGGER = logging.getLogger(__name__)
 
 # 回答中的 citation marker，例如 `[[C1]]` 或 `[[C1,C2]]`。
 CITATION_MARKER_PATTERN = re.compile(r"\[\[(?P<labels>C\d+(?:\s*,\s*C\d+)*)\]\]")
+# summary/compare 與一般 context answer 屬於低複雜度整理任務，固定採最小 reasoning effort。
+OPENAI_REASONING_EFFORT_MINIMAL = "minimal"
 
 
 @dataclass(slots=True)
@@ -67,6 +68,14 @@ class AgentTrace:
     retrieval_invoked: bool
     # 實際啟用的 sub-agent 名稱。
     sub_agents_invoked: list[str]
+    # 本輪正式回答路徑。
+    answer_path: str = "deepagents_unified"
+    # 本輪是否明確啟用 thinking mode。
+    thinking_mode: bool = False
+    # 本輪 thinking mode 是否被忽略。
+    thinking_mode_ignored: bool = False
+    # 本輪整體 runtime latency，單位為毫秒。
+    runtime_latency_ms: float | None = None
     # summary/compare map-reduce 的最小 trace。
     map_reduce_trace: dict[str, object] | None = None
 
@@ -219,6 +228,7 @@ class DeepAgentsChatRuntime:
         settings: AppSettings,
         area_id: str,
         question: str,
+        thinking_mode: bool = False,
         conversation_messages: list[object] | None = None,
         writer: Callable[[dict[str, object]], None] | None = None,
     ) -> dict[str, object]:
@@ -230,6 +240,7 @@ class DeepAgentsChatRuntime:
         - `settings`：API 執行期設定。
         - `area_id`：目標 area。
         - `question`：使用者提問。
+        - `thinking_mode`：是否啟用 thinking mode；目前僅保留為相容 metadata。
         - `conversation_messages`：目前 thread 已累積的對話訊息；若無則回退為單輪輸入。
         - `writer`：LangGraph custom event writer。
 
@@ -333,7 +344,7 @@ class DeepAgentsChatRuntime:
                 return
             writer({"type": "references", "references": references})
 
-        routing_decision = build_query_routing_decision(
+        _routing_decision = build_query_routing_decision(
             settings=settings,
             query=question,
             session=session,
@@ -341,7 +352,10 @@ class DeepAgentsChatRuntime:
             area_id=area_id,
         )
 
-        def ensure_retrieval_result() -> RetrievalToolResult:
+        def ensure_retrieval_result(
+            *,
+            retrieval_strategy: RetrievalStrategy | str | None = None,
+        ) -> RetrievalToolResult:
             """確保本輪 retrieval 已執行並回傳快取結果。"""
 
             nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload
@@ -353,6 +367,8 @@ class DeepAgentsChatRuntime:
                 "area_id": area_id,
                 "question": question,
             }
+            if isinstance(retrieval_strategy, str) and retrieval_strategy.strip():
+                tool_input["retrieval_strategy"] = retrieval_strategy
             emit_phase(phase="tool_calling", status="started", message="正在呼叫知識庫工具")
             emit_phase(phase="searching", status="started", message="正在搜尋知識庫內容")
             emit_tool_call(name="retrieve_area_contexts", status="started", input_payload=tool_input)
@@ -362,6 +378,9 @@ class DeepAgentsChatRuntime:
                 settings=settings,
                 area_id=area_id,
                 question=str(tool_input["question"]),
+                retrieval_strategy=(
+                    str(retrieval_strategy).strip() if isinstance(retrieval_strategy, str) and retrieval_strategy.strip() else None
+                ),
             )
             citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
             assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
@@ -392,17 +411,23 @@ class DeepAgentsChatRuntime:
             return retrieval_result
 
         @tool
-        def retrieve_area_contexts(focus_query: str | None = None) -> str:
+        def retrieve_area_contexts(
+            focus_query: str | None = None,
+            retrieval_strategy: RetrievalStrategy | None = None,
+        ) -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。
 
             參數：
             - `focus_query`：保留相容的可選參數；本階段固定忽略，不允許改寫原始 query。
+            - `retrieval_strategy`：可選的單一 retrieval strategy；允許值為
+              `fact_lookup | document_overview | section_focused | multi_document_theme | cross_document_compare`，
+              提供時直接信任採用。
 
             回傳：
             - `str`：序列化後的 assembled context payload。
             """
             del focus_query
-            ensure_retrieval_result()
+            ensure_retrieval_result(retrieval_strategy=retrieval_strategy)
             emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
 
             return json.dumps(
@@ -412,63 +437,12 @@ class DeepAgentsChatRuntime:
                 ensure_ascii=False,
             )
 
-        if routing_decision.query_type != EvaluationQueryType.fact_lookup:
-            emit_phase(phase="preparing", status="started", message="正在建立摘要/比較流程")
-            emit_phase(phase="preparing", status="completed", message="摘要/比較流程準備完成")
-            emit_phase(phase="thinking", status="started", message="正在規劃摘要/比較證據")
-            ensured_retrieval_result = ensure_retrieval_result()
-            emit_phase(phase="drafting", status="started", message="正在生成摘要/比較內容")
-            answer, map_reduce_trace = _build_summary_compare_answer(
-                question=question,
-                routing_decision=routing_decision,
-                retrieval_result=ensured_retrieval_result,
-            )
-            emit_token(answer)
-            emit_phase(phase="drafting", status="completed", message="摘要/比較內容已完成")
-            emit_phase(phase="thinking", status="completed", message="摘要/比較整理完成")
-            answer, answer_blocks = _build_answer_blocks_from_markers(
-                answer=answer,
-                citations_payload=citations_payload,
-            )
-            used_knowledge_base = bool(citations_payload) or retrieval_invoked
-            trace = {
-                "retrieval": ensured_retrieval_result.trace["retrieval"],
-                "assembler": ensured_retrieval_result.trace["assembler"],
-                "agent": asdict(
-                    AgentTrace(
-                        provider=self.provider_name,
-                        model=self.model,
-                        contexts_count=len(ensured_retrieval_result.assembled_contexts),
-                        used_fallback=False,
-                        agent_tasks=[],
-                        retrieval_invoked=retrieval_invoked,
-                        sub_agents_invoked=[],
-                        map_reduce_trace=map_reduce_trace,
-                    )
-                ),
-            }
-            return {
-                "answer": answer,
-                "answer_blocks": [item.model_dump(mode="json") for item in answer_blocks],
-                "citations": citations_payload,
-                "assembled_contexts": assembled_contexts_payload,
-                "used_knowledge_base": used_knowledge_base,
-                "message_artifact": ChatMessageArtifact(
-                    assistant_turn_index=_count_assistant_turns(conversation_messages),
-                    answer=answer,
-                    answer_blocks=answer_blocks,
-                    citations=citations_payload,
-                    used_knowledge_base=used_knowledge_base,
-                ).model_dump(mode="json"),
-                "trace": trace,
-                "raw_result": {"mode": "summary_compare_synthesis", "routing": routing_decision.selected_profile},
-            }
-
         llm = ChatOpenAI(
             model=self.model,
             api_key=self._api_key,
             timeout=self._timeout_seconds,
             max_tokens=self._max_output_tokens,
+            reasoning_effort=OPENAI_REASONING_EFFORT_MINIMAL,
             streaming=True,
         )
         tracing_manager = nullcontext()
@@ -561,6 +535,9 @@ class DeepAgentsChatRuntime:
                     agent_tasks=[],
                     retrieval_invoked=retrieval_invoked,
                     sub_agents_invoked=[],
+                    answer_path="deepagents_unified",
+                    thinking_mode=thinking_mode,
+                    thinking_mode_ignored=bool(thinking_mode),
                 )
             ),
         }
@@ -672,141 +649,6 @@ def _count_assistant_turns(conversation_messages: list[object] | None) -> int:
             if message_type == "ai" or role == "assistant":
                 assistant_turns += 1
     return assistant_turns
-
-
-def _build_summary_compare_answer(
-    *,
-    question: str,
-    routing_decision,
-    retrieval_result: RetrievalToolResult,
-) -> tuple[str, dict[str, object]]:
-    """為 summary/compare lane 建立 deterministic map-reduce 回答。"""
-
-    grouped_contexts = _group_contexts_by_document(retrieval_result)
-    map_groups = [
-        {
-            "document_id": document_id,
-            "document_name": group["document_name"],
-            "context_labels": group["context_labels"],
-            "headings": group["headings"],
-            "excerpt_summary": _summarize_group_excerpts(group["excerpts"]),
-        }
-        for document_id, group in grouped_contexts.items()
-    ]
-
-    if routing_decision.query_type == EvaluationQueryType.cross_document_compare:
-        answer = _render_compare_answer(question=question, map_groups=map_groups)
-    else:
-        answer = _render_summary_answer(
-            question=question,
-            summary_strategy=routing_decision.summary_strategy,
-            map_groups=map_groups,
-        )
-
-    return (
-        answer,
-        {
-            "query_type": routing_decision.query_type.value,
-            "summary_strategy": routing_decision.summary_strategy,
-            "map_group_count": len(map_groups),
-            "map_groups": map_groups,
-            "reduce_output_preview": answer[:400],
-        },
-    )
-
-
-def _group_contexts_by_document(retrieval_result: RetrievalToolResult) -> dict[str, dict[str, object]]:
-    """將 assembled contexts 與 citations 依文件分組。"""
-
-    citation_by_document: dict[str, list[dict[str, object]]] = {}
-    for citation in retrieval_result.citations:
-        citation_by_document.setdefault(citation.document_id, []).append(citation.model_dump(mode="json"))
-
-    grouped: dict[str, dict[str, object]] = {}
-    for context in retrieval_result.assembled_contexts:
-        group = grouped.setdefault(
-            str(context.document_id),
-            {
-                "document_name": "",
-                "context_labels": [],
-                "headings": [],
-                "excerpts": [],
-            },
-        )
-        citations = citation_by_document.get(str(context.document_id), [])
-        if not group["document_name"] and citations:
-            group["document_name"] = citations[0].get("document_name", "")
-        if context.heading and context.heading not in group["headings"]:
-            group["headings"].append(context.heading)
-        group["excerpts"].append(context.assembled_text)
-        for citation in citations:
-            label = str(citation.get("context_label", ""))
-            if label and label not in group["context_labels"]:
-                group["context_labels"].append(label)
-    return grouped
-
-
-def _summarize_group_excerpts(excerpts: list[str]) -> str:
-    """將多段 context 摘成單行預覽。"""
-
-    merged = " ".join(part.replace("\n", " ").strip() for part in excerpts if part.strip()).strip()
-    if len(merged) <= 180:
-        return merged
-    return merged[:179].rstrip() + "…"
-
-
-def _render_summary_answer(*, question: str, summary_strategy: str | None, map_groups: list[dict[str, object]]) -> str:
-    """依 summary strategy 輸出固定結構的摘要答案。"""
-
-    if not map_groups:
-        return "目前可用的已授權文件內容不足，無法完成這個摘要。"
-
-    labels = _render_citation_marker(map_groups)
-    intro = {
-        "section_focused": "聚焦章節整理如下：",
-        "multi_document_theme": "綜合多份文件後，主要共同主題如下：",
-    }.get(summary_strategy or "", "根據目前文件內容，摘要重點如下：")
-
-    lines = [f"{intro} {labels}".strip()]
-    for group in map_groups:
-        document_name = str(group["document_name"] or "Unknown document")
-        headings = "、".join(group["headings"][:3]) if group["headings"] else "未標示章節"
-        labels = _render_citation_marker([group])
-        lines.append(f"- {document_name}：重點章節為 {headings}；{group['excerpt_summary']} {labels}".strip())
-    return "\n\n".join(lines)
-
-
-def _render_compare_answer(*, question: str, map_groups: list[dict[str, object]]) -> str:
-    """輸出固定 compare 骨架答案。"""
-
-    if not map_groups:
-        return "目前可用的已授權文件內容不足，無法完成這個比較。"
-
-    all_labels = _render_citation_marker(map_groups)
-    common_line = f"共通點：目前可用內容都圍繞相近主題或流程，但細節仍需回到各文件段落確認。 {all_labels}".strip()
-    diff_lines = ["差異點："]
-    stance_lines = ["各文件立場 / 結論："]
-    for group in map_groups:
-        labels = _render_citation_marker([group])
-        document_name = str(group["document_name"] or "Unknown document")
-        headings = "、".join(group["headings"][:3]) if group["headings"] else "未標示章節"
-        diff_lines.append(f"- {document_name} 側重 {headings}；{group['excerpt_summary']} {labels}".strip())
-        stance_lines.append(f"- {document_name}：目前可引用內容主要來自 {headings}。 {labels}".strip())
-    insufficiency = f"不足證據或矛盾處：若需要更細的逐點差異，仍應回看原始引用段落逐項核對。 {all_labels}".strip()
-    return "\n\n".join([common_line, "\n".join(diff_lines), "\n".join(stance_lines), insufficiency])
-
-
-def _render_citation_marker(groups: list[dict[str, object]]) -> str:
-    """將多組 context labels 轉成回答 marker。"""
-
-    labels: list[str] = []
-    for group in groups:
-        for label in group.get("context_labels", []):
-            if label not in labels:
-                labels.append(str(label))
-    if not labels:
-        return ""
-    return f"[[{','.join(labels[:4])}]]"
 
 
 def build_chat_runtime(settings: AppSettings) -> DeterministicChatRuntime | DeepAgentsChatRuntime:

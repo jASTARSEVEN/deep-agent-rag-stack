@@ -1,0 +1,6 @@
+{
+  "benchmark_name": "phase8a-summary-compare-v1",
+  "version": "1.0.0",
+  "description": "Fixed Phase 8A summary and compare checkpoint dataset with quote-first gold evidence references.",
+  "item_count": 16
+}

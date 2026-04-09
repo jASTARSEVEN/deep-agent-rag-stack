@@ -812,42 +812,11 @@ export function EvaluationDrawer({
                         <div>Routing Confidence: {candidatePreview.query_routing.confidence.toFixed(2)}</div>
                         <div>Summary Strategy: {candidatePreview.query_routing.summary_strategy ?? "-"}</div>
                         <div>Summary Strategy Source: {candidatePreview.query_routing.summary_strategy_source ?? "-"}</div>
-                        <div>Selected Synopsis Level: {candidatePreview.selected_synopsis_level}</div>
                         <div>Selected Profile: {candidatePreview.query_routing.selected_profile}</div>
                         <div>
                           Query Focus: {candidatePreview.query_focus?.applied ? "enabled" : "disabled"}
                         </div>
                       </div>
-                      {candidatePreview.document_recall ? (
-                        <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-xs text-sky-900" data-testid="evaluation-document-recall">
-                          <div className="font-semibold text-sky-950">Document Recall</div>
-                          <div className="mt-2">Applied: {candidatePreview.document_recall.applied ? "yes" : "no"}</div>
-                          <div>Strategy: {candidatePreview.document_recall.strategy}</div>
-                          <div>Top K: {candidatePreview.document_recall.top_k}</div>
-                          <div>
-                            Selected Documents: {formatDocumentRecallDocuments(candidatePreview.document_recall, candidatePreview.document_recall.selected_document_ids)}
-                          </div>
-                          <div>
-                            Dropped Documents: {formatDocumentRecallDocuments(candidatePreview.document_recall, candidatePreview.document_recall.dropped_document_ids)}
-                          </div>
-                          <div className="mt-2">
-                            Candidates: {formatDocumentRecallCandidates(candidatePreview.document_recall)}
-                          </div>
-                        </div>
-                      ) : null}
-                      {candidatePreview.section_recall ? (
-                        <div className="mt-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-3 text-xs text-indigo-900" data-testid="evaluation-section-recall">
-                          <div className="font-semibold text-indigo-950">Section Recall</div>
-                          <div className="mt-2">Applied: {candidatePreview.section_recall.applied ? "yes" : "no"}</div>
-                          <div>Strategy: {candidatePreview.section_recall.strategy}</div>
-                          <div>Top K: {candidatePreview.section_recall.top_k}</div>
-                          <div>Selected Parents: {candidatePreview.section_recall.selected_parent_ids.join(", ") || "None"}</div>
-                          <div>Dropped Parents: {candidatePreview.section_recall.dropped_parent_ids.join(", ") || "None"}</div>
-                          <div className="mt-2">
-                            Candidates: {candidatePreview.section_recall.candidates.map((candidate) => candidate.heading_path ?? candidate.section_path_text ?? candidate.parent_chunk_id).join(" | ") || "None"}
-                          </div>
-                        </div>
-                      ) : null}
                       {candidatePreview.selection ? (
                         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900" data-testid="evaluation-selection">
                           <div className="font-semibold text-amber-950">Selection</div>
@@ -1319,26 +1288,9 @@ export function EvaluationDrawer({
                               <div>Routing Source: {item.query_routing.source}</div>
                               <div>Routing Confidence: {item.query_routing.confidence.toFixed(2)}</div>
                               <div>Summary Strategy: {item.query_routing.summary_strategy ?? "-"}</div>
-                              <div>Selected Synopsis Level: {item.selected_synopsis_level}</div>
                               <div>Selected Profile: {item.query_routing.selected_profile}</div>
                               <div>Query Focus: {item.query_focus?.applied ? "enabled" : "disabled"}</div>
                             </div>
-                            {item.document_recall ? (
-                              <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="evaluation-per-query-document-recall">
-                                <div>Document Recall Applied: {item.document_recall.applied ? "yes" : "no"}</div>
-                                <div>Strategy: {item.document_recall.strategy}</div>
-                                <div>Selected Documents: {formatDocumentRecallDocuments(item.document_recall, item.document_recall.selected_document_ids)}</div>
-                                <div>Dropped Documents: {formatDocumentRecallDocuments(item.document_recall, item.document_recall.dropped_document_ids)}</div>
-                                <div>Candidates: {formatDocumentRecallCandidates(item.document_recall)}</div>
-                              </div>
-                            ) : null}
-                            {item.section_recall ? (
-                              <div className="mt-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900" data-testid="evaluation-per-query-section-recall">
-                                <div>Section Recall Applied: {item.section_recall.applied ? "yes" : "no"}</div>
-                                <div>Strategy: {item.section_recall.strategy}</div>
-                                <div>Selected Parents: {item.section_recall.selected_parent_ids.join(", ") || "None"}</div>
-                              </div>
-                            ) : null}
                             {item.selection ? (
                               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                                 <div>Selection Strategy: {item.selection.strategy}</div>

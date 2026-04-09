@@ -40,6 +40,10 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         ASSEMBLER_MAX_CONTEXTS="",
         ASSEMBLER_MAX_CHARS_PER_CONTEXT="",
         ASSEMBLER_MAX_CHILDREN_PER_PARENT="",
+        SUMMARY_COMPARE_EVAL_JUDGE_MODEL="",
+        SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS="",
+        SUMMARY_COMPARE_EVAL_MAX_TOTAL_TOKENS_PER_ITEM="",
+        SUMMARY_COMPARE_EVAL_PASS_MIN_AVG_SCORE="",
     )
 
     assert settings.minio_secure is False
@@ -76,3 +80,7 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.assembler_max_contexts == 9
     assert settings.assembler_max_chars_per_context == 3000
     assert settings.assembler_max_children_per_parent == 7
+    assert settings.summary_compare_eval_judge_model == "gpt-5-mini"
+    assert settings.summary_compare_eval_max_p95_latency_seconds == 30.0
+    assert settings.summary_compare_eval_max_total_tokens_per_item == 12000
+    assert settings.summary_compare_eval_pass_min_avg_score == 4.2

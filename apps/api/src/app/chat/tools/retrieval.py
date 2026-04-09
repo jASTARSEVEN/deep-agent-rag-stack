@@ -11,7 +11,7 @@ from app.chat.contracts.types import ChatCitation, ChatCitationRegion
 from app.core.settings import AppSettings
 from app.db.models import Document, EvaluationQueryType
 from app.services.retrieval import retrieve_area_candidates
-from app.services.retrieval_routing import build_query_routing_decision
+from app.services.retrieval_routing import RetrievalStrategy, build_query_routing_decision
 from app.services.retrieval_assembler import AssembledContext, AssembledRetrievalResult, assemble_retrieval_result
 
 
@@ -34,6 +34,7 @@ def retrieve_area_contexts_tool(
     settings: AppSettings,
     area_id: str,
     question: str,
+    retrieval_strategy: RetrievalStrategy | str | None = None,
 ) -> RetrievalToolResult:
     """將 retrieval、rerank 與 assembler 包成單一 tool-shaped capability。
 
@@ -43,6 +44,9 @@ def retrieve_area_contexts_tool(
     - `settings`：API 執行期設定。
     - `area_id`：檢索所屬 area。
     - `question`：使用者提問。
+    - `retrieval_strategy`：可選的單一 retrieval strategy；允許值為
+      `fact_lookup | document_overview | section_focused | multi_document_theme | cross_document_compare`，
+      提供時直接信任採用。
 
     回傳：
     - `RetrievalToolResult`：contexts、citations 與 trace。
@@ -57,10 +61,12 @@ def retrieve_area_contexts_tool(
         settings=settings,
         area_id=area_id,
         query=question,
+        retrieval_strategy=retrieval_strategy,
     )
     effective_settings = build_query_routing_decision(
         settings=settings,
         query=question,
+        explicit_retrieval_strategy=retrieval_strategy,
         explicit_query_type=EvaluationQueryType(retrieval_result.trace.query_type),
         session=session,
         principal=principal,
@@ -206,18 +212,29 @@ def build_tool_call_output_summary(
         "query_type_source": retrieval_trace.get("query_type_source"),
         "query_type_confidence": retrieval_trace.get("query_type_confidence"),
         "query_type_matched_rules": retrieval_trace.get("query_type_matched_rules", []),
+        "query_type_rule_hits": retrieval_trace.get("query_type_rule_hits", []),
+        "query_type_embedding_scores": retrieval_trace.get("query_type_embedding_scores", []),
+        "query_type_top_label": retrieval_trace.get("query_type_top_label"),
+        "query_type_runner_up_label": retrieval_trace.get("query_type_runner_up_label"),
+        "query_type_embedding_margin": retrieval_trace.get("query_type_embedding_margin"),
+        "query_type_fallback_used": retrieval_trace.get("query_type_fallback_used"),
+        "query_type_fallback_reason": retrieval_trace.get("query_type_fallback_reason"),
         "summary_scope": retrieval_trace.get("summary_scope"),
         "summary_strategy": retrieval_trace.get("summary_strategy"),
         "summary_strategy_source": retrieval_trace.get("summary_strategy_source"),
         "summary_strategy_confidence": retrieval_trace.get("summary_strategy_confidence"),
+        "summary_strategy_rule_hits": retrieval_trace.get("summary_strategy_rule_hits", []),
+        "summary_strategy_embedding_scores": retrieval_trace.get("summary_strategy_embedding_scores", []),
+        "summary_strategy_top_label": retrieval_trace.get("summary_strategy_top_label"),
+        "summary_strategy_runner_up_label": retrieval_trace.get("summary_strategy_runner_up_label"),
+        "summary_strategy_embedding_margin": retrieval_trace.get("summary_strategy_embedding_margin"),
+        "summary_strategy_fallback_used": retrieval_trace.get("summary_strategy_fallback_used"),
+        "summary_strategy_fallback_reason": retrieval_trace.get("summary_strategy_fallback_reason"),
         "resolved_document_ids": retrieval_trace.get("resolved_document_ids", []),
         "document_mention_source": retrieval_trace.get("document_mention_source"),
         "document_mention_confidence": retrieval_trace.get("document_mention_confidence"),
         "document_mention_candidates": retrieval_trace.get("document_mention_candidates", []),
         "selected_profile": retrieval_trace.get("selected_profile"),
-        "document_recall": retrieval_trace.get("document_recall"),
-        "section_recall": retrieval_trace.get("section_recall"),
-        "selected_synopsis_level": retrieval_trace.get("selected_synopsis_level"),
         "fallback_reason": retrieval_trace.get("fallback_reason"),
         "selection_applied": retrieval_trace.get("selection_applied"),
         "selection_strategy": retrieval_trace.get("selection_strategy"),

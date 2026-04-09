@@ -50,6 +50,9 @@ export interface AuthSessionState {
   principal: AuthContextPayload | null;
 }
 
+/** Chat 的可選思考模式。 */
+export type ChatSynthesisMode = "disabled" | "summary_compare";
+
 
 /** 使用者搜尋結果。 */
 export interface UserSearchResult {
@@ -466,9 +469,6 @@ export interface EvaluationCandidatePreviewPayload {
   dataset: EvaluationDatasetSummary;
   item: EvaluationItemSummary;
   query_routing: EvaluationQueryRoutingDetail;
-  document_recall: EvaluationDocumentRecallDetail | null;
-  section_recall: EvaluationSectionRecallDetail | null;
-  selected_synopsis_level: string;
   selection: EvaluationSelectionDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationCandidateStage;
@@ -510,12 +510,26 @@ export interface EvaluationQueryRoutingDetail {
   query_type: EvaluationQueryType;
   language: EvaluationLanguage;
   confidence: number;
-  source: "explicit" | "classified" | "fallback";
+  source: "explicit" | "rule" | "embedding" | "llm_fallback" | "fallback" | "not_applicable";
   matched_rules: string[];
+  query_type_rule_hits?: Array<Record<string, unknown>>;
+  query_type_embedding_scores?: Array<Record<string, unknown>>;
+  query_type_top_label?: string | null;
+  query_type_runner_up_label?: string | null;
+  query_type_embedding_margin?: number;
+  query_type_fallback_used?: boolean;
+  query_type_fallback_reason?: string | null;
   summary_scope?: string | null;
   summary_strategy?: string | null;
   summary_strategy_source?: string;
   summary_strategy_confidence?: number;
+  summary_strategy_rule_hits?: Array<Record<string, unknown>>;
+  summary_strategy_embedding_scores?: Array<Record<string, unknown>>;
+  summary_strategy_top_label?: string | null;
+  summary_strategy_runner_up_label?: string | null;
+  summary_strategy_embedding_margin?: number;
+  summary_strategy_fallback_used?: boolean;
+  summary_strategy_fallback_reason?: string | null;
   resolved_document_ids?: string[];
   document_mention_source?: string;
   document_mention_confidence?: number;
@@ -608,9 +622,6 @@ export interface EvaluationPerQueryDetail {
   retrieval_miss: boolean;
   gold_spans: EvaluationItemSpan[];
   query_routing: EvaluationQueryRoutingDetail;
-  document_recall: EvaluationDocumentRecallDetail | null;
-  section_recall: EvaluationSectionRecallDetail | null;
-  selected_synopsis_level: string;
   selection: EvaluationSelectionDetail | null;
   query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationPerQueryStageDetail;
@@ -675,6 +686,10 @@ export interface ChatMessageViewModel {
   isError: boolean;
   /** 本輪是否使用知識庫 references。 */
   usedKnowledgeBase: boolean | null;
+  /** 本輪是否啟用 thinking mode。 */
+  thinkingMode?: boolean | null;
+  /** 本輪使用的 synthesis mode。 */
+  synthesisMode?: ChatSynthesisMode | null;
   /** 目前被選取的 citation context。 */
   selectedCitationContextIndex: number | null;
 }

@@ -24,6 +24,7 @@ from app.services.retrieval_query import (
     get_query_focus_boost_terms,
 )
 from app.services.retrieval_routing import build_query_routing_decision
+from app.services.retrieval_routing import RetrievalStrategy
 from app.services.retrieval_selection import apply_scope_aware_selection
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
@@ -136,10 +137,24 @@ class RetrievalTrace:
     query_type_source: str = "fallback"
     query_type_confidence: float = 0.0
     query_type_matched_rules: list[str] | None = None
+    query_type_rule_hits: list[dict[str, object]] | None = None
+    query_type_embedding_scores: list[dict[str, object]] | None = None
+    query_type_top_label: str | None = None
+    query_type_runner_up_label: str | None = None
+    query_type_embedding_margin: float = 0.0
+    query_type_fallback_used: bool = False
+    query_type_fallback_reason: str | None = None
     summary_scope: str | None = None
     summary_strategy: str | None = None
     summary_strategy_source: str = "not_applicable"
     summary_strategy_confidence: float = 0.0
+    summary_strategy_rule_hits: list[dict[str, object]] | None = None
+    summary_strategy_embedding_scores: list[dict[str, object]] | None = None
+    summary_strategy_top_label: str | None = None
+    summary_strategy_runner_up_label: str | None = None
+    summary_strategy_embedding_margin: float = 0.0
+    summary_strategy_fallback_used: bool = False
+    summary_strategy_fallback_reason: str | None = None
     resolved_document_ids: list[str] | None = None
     document_mention_source: str = "none"
     document_mention_confidence: float = 0.0
@@ -162,9 +177,6 @@ class RetrievalTrace:
     evidence_synopsis_variant: str = ""
     focus_query: str = ""
     rerank_query: str = ""
-    document_recall: DocumentRecallTrace | None = None
-    section_recall: SectionRecallTrace | None = None
-    selected_synopsis_level: str = "child"
     fallback_reason: str | None = None
 
 
@@ -422,6 +434,7 @@ def retrieve_area_candidates(
     settings: AppSettings,
     area_id: str,
     query: str,
+    retrieval_strategy: RetrievalStrategy | str | None = None,
     query_type: EvaluationQueryType | None = None,
 ) -> RetrievalResult:
     """在指定 area 內取得 hybrid recall、Python RRF 與 rerank candidates。
@@ -432,6 +445,7 @@ def retrieve_area_candidates(
     - `settings`：API 執行期設定。
     - `area_id`：要檢索的 area 識別碼。
     - `query`：使用者查詢文字。
+    - `retrieval_strategy`：若由外部直接指定最終 retrieval strategy，優先信任採用。
     - `query_type`：若已由上層明確指定的 query type；否則由 classifier 自動判定。
 
     回傳：
@@ -443,6 +457,7 @@ def retrieve_area_candidates(
     routing_decision = build_query_routing_decision(
         settings=settings,
         query=query,
+        explicit_retrieval_strategy=retrieval_strategy,
         explicit_query_type=query_type,
         session=session,
         principal=principal,
@@ -450,31 +465,13 @@ def retrieve_area_candidates(
     )
     effective_settings = routing_decision.effective_settings
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=query)
-    document_recall_result = _resolve_document_recall_result(
-        session=session,
-        settings=effective_settings,
-        area_id=area_id,
-        query=query,
-        query_type=routing_decision.query_type,
-        summary_scope=routing_decision.summary_scope,
-        resolved_document_ids=routing_decision.resolved_document_ids,
-    )
-    section_recall_result = _resolve_section_recall_result(
-        session=session,
-        settings=effective_settings,
-        area_id=area_id,
-        query=query,
-        query_type=routing_decision.query_type,
-        summary_strategy=routing_decision.summary_strategy,
-        allowed_document_ids=document_recall_result.selected_document_ids or None,
-    )
     recalled_matches = _recall_ranked_candidates(
         session=session,
         settings=effective_settings,
         area_id=area_id,
         query=query_focus_plan.focus_query if query_focus_plan.applied else query,
-        allowed_document_ids=document_recall_result.selected_document_ids or None,
-        allowed_parent_ids=section_recall_result.selected_parent_ids or None,
+        allowed_document_ids=routing_decision.resolved_document_ids or None,
+        allowed_parent_ids=None,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
     ranked_matches = _apply_ranking_policy(
@@ -511,10 +508,50 @@ def retrieve_area_candidates(
             query_type_source=routing_decision.source,
             query_type_confidence=routing_decision.confidence,
             query_type_matched_rules=list(routing_decision.matched_rules),
+            query_type_rule_hits=[
+                {
+                    "label": hit.label,
+                    "reason": hit.reason,
+                    "confidence": hit.confidence,
+                }
+                for hit in routing_decision.query_type_rule_hits
+            ],
+            query_type_embedding_scores=[
+                {
+                    "label": score.label,
+                    "score": score.score,
+                }
+                for score in routing_decision.query_type_embedding_scores
+            ],
+            query_type_top_label=routing_decision.query_type_top_label,
+            query_type_runner_up_label=routing_decision.query_type_runner_up_label,
+            query_type_embedding_margin=routing_decision.query_type_embedding_margin,
+            query_type_fallback_used=routing_decision.query_type_fallback_used,
+            query_type_fallback_reason=routing_decision.query_type_fallback_reason,
             summary_scope=routing_decision.summary_scope,
             summary_strategy=routing_decision.summary_strategy,
             summary_strategy_source=routing_decision.summary_strategy_source,
             summary_strategy_confidence=routing_decision.summary_strategy_confidence,
+            summary_strategy_rule_hits=[
+                {
+                    "label": hit.label,
+                    "reason": hit.reason,
+                    "confidence": hit.confidence,
+                }
+                for hit in routing_decision.summary_strategy_rule_hits
+            ],
+            summary_strategy_embedding_scores=[
+                {
+                    "label": score.label,
+                    "score": score.score,
+                }
+                for score in routing_decision.summary_strategy_embedding_scores
+            ],
+            summary_strategy_top_label=routing_decision.summary_strategy_top_label,
+            summary_strategy_runner_up_label=routing_decision.summary_strategy_runner_up_label,
+            summary_strategy_embedding_margin=routing_decision.summary_strategy_embedding_margin,
+            summary_strategy_fallback_used=routing_decision.summary_strategy_fallback_used,
+            summary_strategy_fallback_reason=routing_decision.summary_strategy_fallback_reason,
             resolved_document_ids=list(routing_decision.resolved_document_ids),
             document_mention_source=routing_decision.document_mention_source,
             document_mention_confidence=routing_decision.document_mention_confidence,
@@ -545,17 +582,7 @@ def retrieve_area_candidates(
             evidence_synopsis_variant=effective_settings.retrieval_evidence_synopsis_variant,
             focus_query=query_focus_plan.focus_query,
             rerank_query=query_focus_plan.rerank_query,
-            document_recall=document_recall_result.trace,
-            section_recall=section_recall_result.trace,
-            selected_synopsis_level=(
-                "section"
-                if section_recall_result.trace.applied and section_recall_result.selected_parent_ids
-                else ("document" if document_recall_result.trace.applied and document_recall_result.selected_document_ids else "child")
-            ),
-            fallback_reason=_resolve_retrieval_fallback_reason(
-                document_recall_result=document_recall_result,
-                section_recall_result=section_recall_result,
-            ),
+            fallback_reason=None,
             candidates=[
                 RetrievalTraceEntry(
                     chunk_id=candidate.chunk_id,

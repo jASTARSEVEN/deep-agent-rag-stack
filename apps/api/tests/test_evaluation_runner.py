@@ -763,8 +763,8 @@ def test_evaluation_preview_and_run_expose_rerank_fallback_reason(client, db_ses
     assert run_payload["per_query"][0]["rerank"]["fallback_reason"] == "provider_error"
 
 
-def test_evaluation_preview_and_run_expose_document_recall_details(client, db_session, app_settings) -> None:
-    """document_summary preview 與 run report 都應暴露 document recall 明細。"""
+def test_evaluation_preview_and_run_hide_document_recall_details(client, db_session, app_settings) -> None:
+    """document_summary preview 與 run report 不再暴露 document/section recall 明細。"""
 
     area = Area(id=_uuid(), name="Evaluation Document Recall Area")
     db_session.add(area)
@@ -894,8 +894,9 @@ def test_evaluation_preview_and_run_expose_document_recall_details(client, db_se
     assert preview_response.status_code == 200
     preview_payload = preview_response.json()
     assert preview_payload["query_routing"]["summary_scope"] == "single_document"
-    assert preview_payload["document_recall"]["strategy"] == "mention_resolved_single_document_v1"
-    assert preview_payload["document_recall"]["selected_document_ids"] == [alpha_document.id]
+    assert "document_recall" not in preview_payload
+    assert "section_recall" not in preview_payload
+    assert "selected_synopsis_level" not in preview_payload
 
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",
@@ -904,8 +905,9 @@ def test_evaluation_preview_and_run_expose_document_recall_details(client, db_se
     )
     assert run_response.status_code == 201
     run_payload = run_response.json()
-    assert run_payload["per_query"][0]["document_recall"]["strategy"] == "mention_resolved_single_document_v1"
-    assert run_payload["per_query"][0]["document_recall"]["selected_document_ids"] == [alpha_document.id]
+    assert "document_recall" not in run_payload["per_query"][0]
+    assert "section_recall" not in run_payload["per_query"][0]
+    assert "selected_synopsis_level" not in run_payload["per_query"][0]
 
 
 def test_evaluation_adding_same_span_twice_updates_existing_record(client, db_session, app_settings) -> None:
