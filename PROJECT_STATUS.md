@@ -324,6 +324,7 @@
 
 ### Current Focus
 - `Phase 8B` 已開始實作；目前 focus 是 evidence recall uplift 的 benchmark 驗證與 regression guardrails，而不是再調 `Phase 8A` 分數
+- `Phase 8C` 的 synopsis-as-hint 優先順序已後調；在啟動 `8C` 前，需先完成 `Phase 8B` retrieval-side hardening，包括 `child recall confidence`、conditional evidence lane、`path_quality_score` 實際加權與 evidence contribution 控制
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -334,8 +335,9 @@
 ### 最適合立即進行的工作
 1. 跑完 `QASPER 100`、`NQ 100`、`DRCD 100` 與 `phase8a-summary-compare-v1`，驗證 `phase8b_evidence_units_*` lane 是否具備 promotion 條件
 2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`，且 evidence enrichment observability 正常更新
-3. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-4. 依 benchmark 結果決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
+3. 先完成 `Phase 8B` retrieval-side hardening：實作 `child recall confidence`、只在 low-confidence / semantic-gap query 啟用 evidence lane、讓 `path_quality_score` 進入實際 merge 權重，並補上 evidence contribution cap / dedupe 與對應 trace
+4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+5. 待 `Phase 8B` promotion gate 與 retrieval-side hardening 完成後，再決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
 
 ## 尚未開始的功能
 

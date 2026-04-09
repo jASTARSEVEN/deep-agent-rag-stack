@@ -240,7 +240,7 @@
 2. `Phase 8A` 已以 closeout accepted 方式結束；summary/compare 的 unified Deep Agents 主線與其 checkpoint artifacts 保留作為後續 phase 的 baseline
 3. 進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 前，先保持 `Phase 8A` 主線凍結，避免再把 8A/8B 問題混在一起
 4. `Phase 8B` 以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
-5. `document synopsis` / `section synopsis` 的再利用不納入 `Phase 8A` 或 `Phase 8B` 核心交付；若後續仍有價值，統一延後到 `Phase 8C` 再評估是否以 agent-side optional hints 形式接回
+5. `document synopsis` / `section synopsis` 的再利用不納入 `Phase 8A` 或 `Phase 8B` 核心交付；若後續仍有價值，須先完成 `Phase 8B` 的 evidence merge hardening 與 promotion gate，再延後到 `Phase 8C` 評估是否以 agent-side optional hints 形式接回
 6. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
 7. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
 8. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
@@ -568,6 +568,13 @@ LLM 輸入規則：
   - worker evidence enrichment
   - runtime evidence recall merge
   - additive evaluation / checkpoint trace 擴充
+- 在進入 `Phase 8C` 前，`Phase 8B` 必須先完成 retrieval-side hardening gate，避免 synopsis-as-hint 與 evidence merge 問題交錯。此 gate 至少包含：
+  - 補上 `child recall confidence` 分數，作為是否啟動 evidence lane 的正式判斷依據，而不是只靠人工 benchmark 判讀
+  - 僅在 `child recall` 信心低或 `semantic-gap` 高的 query 上啟動 evidence lane，不得將 evidence merge 視為所有 query 的廣泛預設加分
+  - `path_quality_score` 必須進入實際 merge 權重，而不只停留在 trace / observability
+  - evidence contribution 必須同時看 evidence 品質與 query 類型做選擇性加權，不得對所有命中的 evidence units 無條件等權加分
+  - 同一個 child chunk 的 evidence 加分必須設上限，並對高度重疊的 evidence units 做 dedupe / decay，避免 evidence-dense section 因重複計票而失真
+  - evidence lane 失敗時必須維持 child-only fail-open；trace 需可明確區分 `child_only_hit`、`evidence_injected_hit` 與 `double_supported_hit`
 - deterministic fallback 必須是正式支援路徑，不是只存在測試環境：
   - 設定可顯式指定 `llm | deterministic | auto`
   - `auto` 預設先嘗試 `llm`，失敗時回退 `deterministic`
@@ -616,10 +623,11 @@ LLM 輸入規則：
 - 若確認有價值，將 synopsis 定位為主 `Deep Agents` agent 的 optional hints，而不是 recall gate、selection gate 或 citation 單位。
 
 內容：
+- 本 phase 的啟動前提是：`Phase 8B` 已完成 evidence merge hardening gate，至少包含 `child recall confidence`、conditional evidence lane、`path_quality_score` 實際加權，以及 evidence contribution cap / dedupe 的主線驗證。
 - 僅在長文件 `document_overview`、多文件 `multi_document_theme` 或其他經驗證確實受益的情境下，將 selected / compressed synopsis hints 作為 agent-side 輔助資訊。
 - synopsis hints 的主責任是 orientation / planning，不得參與 SQL scope、candidate 去留或最終 citation 產生。
 - 送進 LLM 的主體仍必須是 assembled `parent/child` evidence contexts；synopsis hints 只能是次要欄位。
 - 若驗證顯示 synopsis hints 沒有穩定提升 summary/compare 品質，應維持不接回主線，並考慮後續停用 worker 生成或改為純離線分析資產。
 
 狀態：
-- `未開始`
+- `未開始（優先順序後調；待 Phase 8B retrieval-side hardening 與 promotion gate 完成後再啟動）`
