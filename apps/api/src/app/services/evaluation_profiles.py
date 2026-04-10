@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.core.settings import AppSettings
-from app.services.retrieval_query import QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1
 from app.services.retrieval_text import EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1
 
 
@@ -23,10 +22,6 @@ GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1 = "generic_guarded_evidence_synopsis_v1"
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2 = "generic_guarded_evidence_synopsis_v2"
 # 通用 evidence synopsis lane 第三輪 profile 名稱。
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3 = "generic_guarded_evidence_synopsis_v3"
-# 通用 query focus lane 第一輪 profile 名稱。
-GENERIC_GUARDED_QUERY_FOCUS_V1 = "generic_guarded_query_focus_v1"
-# 通用 query focus 成本優先 profile：6 contexts x 3000 chars。
-GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000 = "generic_guarded_query_focus_budget_6x3000"
 # 通用 assembler lane 第一輪 deterministic gate profile 名稱。
 GENERIC_GUARDED_ASSEMBLER_V1_GATE = "generic_guarded_assembler_v1_gate"
 # 通用 assembler lane 第二輪 deterministic gate profile 名稱。
@@ -37,17 +32,12 @@ GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE = "generic_guarded_evidence_synopsis_v
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "generic_guarded_evidence_synopsis_v2_gate"
 # 通用 evidence synopsis lane 第三輪 deterministic gate profile 名稱。
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "generic_guarded_evidence_synopsis_v3_gate"
-# 通用 query focus lane 第一輪 deterministic gate profile 名稱。
-GENERIC_GUARDED_QUERY_FOCUS_V1_GATE = "generic_guarded_query_focus_v1_gate"
 # 無需進入 iteration 的 effect-check 假設名稱。
 HYPOTHESIS_NONE = "no_iteration_needed"
 # rerank hit 但 assembled drop 的假設名稱。
 HYPOTHESIS_ASSEMBLER = "assembler_retention_guard"
 # 補強 rerank text 的通用 evidence synopsis 假設名稱。
 HYPOTHESIS_EVIDENCE_SYNOPSIS = "generic_evidence_synopsis_for_fact_windows"
-# 補強 query-side semantic gap 對齊的通用 query focus 假設名稱。
-HYPOTHESIS_QUERY_FOCUS = "generic_query_focus_for_semantic_gap"
-
 # guarded profile 的安全上限，避免 benchmark-only 調參失控。
 MAX_GUARDED_RECALL_DEPTH = 100
 
@@ -153,47 +143,6 @@ def _generic_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) ->
     }
 
 
-def _generic_guarded_query_focus_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_query_focus_v1` 的覆寫欄位。
-
-    參數：
-    - `settings`：目前應用程式設定。
-
-    回傳：
-    - `dict[str, int | str | bool]`：在不改變 env toggle 的前提下覆寫 query focus knobs。
-    """
-
-    return {
-        **_generic_guarded_evidence_synopsis_v3_overrides(settings=settings),
-        "retrieval_query_focus_variant": QUERY_FOCUS_VARIANT_GENERIC_FIELD_V1,
-        "retrieval_query_focus_confidence_threshold": 0.7,
-    }
-
-
-def _query_focus_budget_sweep_overrides(
-    *,
-    settings: AppSettings,
-    max_contexts: int,
-    max_chars_per_context: int,
-) -> dict[str, int | str | bool]:
-    """建立 query focus budget sweep profile 的覆寫欄位。
-
-    參數：
-    - `settings`：目前應用程式設定。
-    - `max_contexts`：assembler 最多保留的 context 數量。
-    - `max_chars_per_context`：每個 context 的最大字元數。
-
-    回傳：
-    - `dict[str, int | str | bool]`：在 query focus v1 基礎上僅改 assembler budget 的覆寫欄位。
-    """
-
-    return {
-        **_generic_guarded_query_focus_v1_overrides(settings=settings),
-        "assembler_max_contexts": max_contexts,
-        "assembler_max_chars_per_context": max_chars_per_context,
-    }
-
-
 # evaluation profile registry；新增策略時優先在此處新增資料定義，而非分散到多處 if/else。
 EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     PRODUCTION_LIKE_V1: EvaluationProfileSpec(
@@ -224,14 +173,6 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3: EvaluationProfileSpec(
         name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
         lane_name="evidence_synopsis",
-    ),
-    GENERIC_GUARDED_QUERY_FOCUS_V1: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_QUERY_FOCUS_V1,
-        lane_name="query_focus",
-    ),
-    GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
-        lane_name="query_focus_budget",
     ),
     GENERIC_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
         name=GENERIC_GUARDED_ASSEMBLER_V1_GATE,
@@ -268,13 +209,6 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
         is_gate=True,
         lane_name="evidence_synopsis",
     ),
-    GENERIC_GUARDED_QUERY_FOCUS_V1_GATE: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_QUERY_FOCUS_V1_GATE,
-        base_profile=GENERIC_GUARDED_QUERY_FOCUS_V1,
-        overrides={"rerank_provider": "deterministic"},
-        is_gate=True,
-        lane_name="query_focus",
-    ),
 }
 
 # benchmark strategy lane registry；新增策略時應以新增 lane 定義為主。
@@ -293,12 +227,6 @@ BENCHMARK_STRATEGY_LANES: dict[str, BenchmarkStrategyLaneSpec] = {
             GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
             GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
         ),
-        rollback_target_hypothesis=HYPOTHESIS_QUERY_FOCUS,
-    ),
-    HYPOTHESIS_QUERY_FOCUS: BenchmarkStrategyLaneSpec(
-        name="query_focus",
-        main_hypothesis=HYPOTHESIS_QUERY_FOCUS,
-        profile_sequence=(GENERIC_GUARDED_QUERY_FOCUS_V1,),
         rollback_target_hypothesis=None,
     ),
 }
@@ -311,10 +239,6 @@ GENERIC_GUARDED_ASSEMBLER_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_ASSEMBL
 
 # evidence synopsis lane 的固定 profile 順序。
 GENERIC_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_EVIDENCE_SYNOPSIS].profile_sequence
-
-# query focus lane 的固定 profile 順序。
-GENERIC_GUARDED_QUERY_FOCUS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_QUERY_FOCUS].profile_sequence
-
 
 def resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
     """依 evaluation profile 產生本次 run 的固定設定。
@@ -361,14 +285,6 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
         return _generic_guarded_evidence_synopsis_v2_overrides(settings=settings)
     if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3:
         return _generic_guarded_evidence_synopsis_v3_overrides(settings=settings)
-    if evaluation_profile == GENERIC_GUARDED_QUERY_FOCUS_V1:
-        return _generic_guarded_query_focus_v1_overrides(settings=settings)
-    if evaluation_profile == GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000:
-        return _query_focus_budget_sweep_overrides(
-            settings=settings,
-            max_contexts=6,
-            max_chars_per_context=3000,
-        )
     spec = EVALUATION_PROFILE_SPECS[evaluation_profile]
     merged_overrides: dict[str, int | str | bool] = {}
     if spec.base_profile is not None:

@@ -236,7 +236,7 @@
 
 ## 近期建議順序
 
-1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + query_focus off + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
+1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
 2. `Phase 8A` 已以 closeout accepted 方式結束；summary/compare 的 unified Deep Agents 主線與其 checkpoint artifacts 保留作為後續 phase 的 baseline
 3. 進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 前，先保持 `Phase 8A` 主線凍結，避免再把 8A/8B 問題混在一起
 4. `Phase 8B` 以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
@@ -307,7 +307,7 @@
 - 單機自測：`api + worker + web` 本機啟動，SQLite + filesystem + deterministic providers，可直接執行 Playwright E2E reviewer flow
 
 目前 benchmark 現況：
-- 目前長期 benchmark 已收斂為七個正式 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + query_focus off + assembler 9x3000`，舊小樣本 package 與 query-focus-on 分數只保留歷史參考價值，不再作為 current mainline baseline。
+- 目前長期 benchmark 已收斂為七個正式 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + assembler 9x3000`，舊小樣本 package 與舊查詢改寫實驗分數只保留歷史參考價值，不再作為 current mainline baseline。
 - `QASPER 100`、`UDA 100` 與 `DRCD 100` 的原始資料集 contract 都包含指定文件上下文；目前 benchmark runner 已改為對這三類 dataset 使用 gold span 的 `document_id` 作為指定文件 scope，再執行 child recall / rerank / assembler。這些指定文件結果不得與舊的 area-wide ambiguous query 分數混讀。
 - external `100Q` 六資料集的最新 assembled 指標如下：
   - `DuReader-robust 100`：`Recall@10=1.0000`、`nDCG@10=0.9677`、`MRR@10=0.9570`
@@ -352,7 +352,7 @@
   - rerank top-n
   - assembler contexts 上限
 - 每個新 profile lane 都必須直接對 current baseline 比較，且至少同時觀測 `QASPER 100`、`NQ 100` 與 `DRCD 100`；若造成 assembler 或中文 rerank 哨兵退化，應回退。
-- retrieval trace metadata 需補上 query type、routing source/confidence、所套用 profile，以及相容保留的 `query_focus` 欄位；`query_focus` 是否實際套用仍由環境變數 / settings 控制。
+- retrieval trace metadata 需補上 query type、routing source/confidence 與所套用 profile；查詢改寫欄位與環境設定已自正式 contract 移除。
 
 狀態：
 - `已完成（routing/profile/trace skeleton）`
@@ -505,13 +505,14 @@ LLM 輸入規則：
 
 狀態：
 - `已完成（closeout accepted；已保留 unified answer path、兩層 routing 與 CLI-first checkpoint artifacts 作為後續 baseline。最新 accepted 驗收 run 雖未滿足原先全部 gate，但經產品決策接受目前 ceiling，8A 不再繼續調參收分）`
+- `2026-04-10` 以目前 task routing / unified Deep Agents 主線重跑 `phase8a-summary-compare-v1`：`task_type_accuracy=1.0000` 已滿分，但整體仍為 `passed=false`，`summary_strategy_accuracy=0.9375`，未過 gate 主要來自 hard blockers 與 `p95_latency_seconds=31.4785` 超過 `30.0000` 門檻；因此此 run 作為 post-closeout regression 記錄，不改變 8A 已結案且不繼續調分的判定
 
 ## Phase 8B — Canceled Retrieval Enrichment Lane
 
 目標：
 - 取消先前規劃的 enrichment lane，將正式 retrieval 主線維持在 `child hybrid recall -> rerank -> diversified selection -> assembler`。
 - 移除已落地的 worker 生成流程、query-time merge、evaluation trace、設定與 schema，降低 ingest 成本與 runtime 複雜度。
-- 後續 retrieval 改善必須優先基於既有 child chunks、document scope、query focus、rerank 與 selection，不得依賴已移除的 enrichment tables。
+- 後續 retrieval 改善必須優先基於既有 child chunks、document scope、rerank 與 selection，不得依賴已移除的 enrichment tables 或查詢改寫 lane。
 
 內容：
 - 移除 worker enrichment module 與相關環境設定。

@@ -27,9 +27,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
         RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
-        RETRIEVAL_QUERY_FOCUS_ENABLED="",
-        RETRIEVAL_QUERY_FOCUS_VARIANT="",
-        RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD="",
         RETRIEVAL_DOCUMENT_RECALL_ENABLED="",
         RETRIEVAL_DOCUMENT_RECALL_TOP_K="",
         SELF_HOSTED_RERANK_BASE_URL="",
@@ -65,9 +62,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.self_hosted_embedding_timeout_seconds == 60.0
     assert settings.retrieval_evidence_synopsis_enabled is True
     assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
-    assert settings.retrieval_query_focus_enabled is False
-    assert settings.retrieval_query_focus_variant == "generic_field_focus_v1"
-    assert settings.retrieval_query_focus_confidence_threshold == 0.7
     assert settings.retrieval_document_recall_enabled is False
     assert settings.retrieval_document_recall_top_k == 6
     assert settings.rerank_provider == "self-hosted"

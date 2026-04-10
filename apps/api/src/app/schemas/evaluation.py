@@ -220,20 +220,6 @@ class EvaluationCandidateStageResponse(BaseModel):
     items: list[EvaluationStageCandidate]
 
 
-class EvaluationQueryFocusDetail(BaseModel):
-    """單題 query focus planner 明細。"""
-
-    applied: bool
-    language: str
-    confidence: float
-    intents: list[str]
-    slots: dict[str, str]
-    variant: str
-    rule_family: str
-    focus_query: str
-    rerank_query: str
-
-
 class EvaluationQueryRoutingDetail(BaseModel):
     """單題 query routing 明細。"""
 
@@ -287,7 +273,6 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     item: EvaluationItemSummary
     query_routing: EvaluationQueryRoutingDetail
     selection: EvaluationSelectionDetail | None = None
-    query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationCandidateStageResponse
     rerank: EvaluationCandidateStageResponse
     assembled: EvaluationCandidateStageResponse
@@ -347,7 +332,6 @@ class EvaluationPerQueryDetail(BaseModel):
     # benchmark-only 文件範圍；特定外部資料集會用 gold document id 模擬原始指定文件上下文。
     benchmark_document_scope: dict[str, object] | None = None
     selection: EvaluationSelectionDetail | None = None
-    query_focus: EvaluationQueryFocusDetail | None = None
     recall: EvaluationPerQueryStageDetail
     rerank: EvaluationPerQueryStageDetail
     assembled: EvaluationPerQueryStageDetail

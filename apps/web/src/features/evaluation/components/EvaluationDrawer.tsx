@@ -813,9 +813,6 @@ export function EvaluationDrawer({
                         <div>Summary Strategy: {candidatePreview.query_routing.summary_strategy ?? "-"}</div>
                         <div>Summary Strategy Source: {candidatePreview.query_routing.summary_strategy_source ?? "-"}</div>
                         <div>Selected Profile: {candidatePreview.query_routing.selected_profile}</div>
-                        <div>
-                          Query Focus: {candidatePreview.query_focus?.applied ? "enabled" : "disabled"}
-                        </div>
                       </div>
                       {candidatePreview.selection ? (
                         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-900" data-testid="evaluation-selection">
@@ -1289,7 +1286,6 @@ export function EvaluationDrawer({
                               <div>Routing Confidence: {item.query_routing.confidence.toFixed(2)}</div>
                               <div>Summary Strategy: {item.query_routing.summary_strategy ?? "-"}</div>
                               <div>Selected Profile: {item.query_routing.selected_profile}</div>
-                              <div>Query Focus: {item.query_focus?.applied ? "enabled" : "disabled"}</div>
                             </div>
                             {item.selection ? (
                               <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">

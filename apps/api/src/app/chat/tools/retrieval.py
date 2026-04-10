@@ -271,7 +271,6 @@ def build_tool_call_output_summary(
         "selected_parent_ids": retrieval_trace.get("selected_parent_ids", []),
         "dropped_by_diversity": retrieval_trace.get("dropped_by_diversity", []),
         "profile_settings": retrieval_trace.get("profile_settings", {}),
-        "query_focus_applied": retrieval_trace.get("query_focus_applied"),
         "contexts": [
             {
                 "context_index": item["context_index"],

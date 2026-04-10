@@ -520,7 +520,6 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "selected_document_ids": [],
         "selected_parent_ids": [],
         "dropped_by_diversity": [],
-        "query_focus_applied": None,
         "profile_settings": {},
         "contexts": [],
     }
@@ -1272,7 +1271,6 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert completed_tool_event["output"]["selected_document_ids"] == [document.id]
     assert completed_tool_event["output"]["selected_parent_ids"] == [parent.id]
     assert completed_tool_event["output"]["dropped_by_diversity"] == []
-    assert completed_tool_event["output"]["query_focus_applied"] is False
     assert completed_tool_event["output"]["summary_strategy"] is None
     assert completed_tool_event["output"]["summary_strategy_source"] == "not_applicable"
     assert completed_tool_event["output"]["summary_strategy_confidence"] == 0.0

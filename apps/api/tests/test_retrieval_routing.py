@@ -205,7 +205,7 @@ def test_classifier_uses_llm_fallback_when_embedding_low_confidence(monkeypatch)
 
 
 def test_build_query_routing_decision_respects_explicit_query_type() -> None:
-    """明示題型時應直接採用該題型，且 query focus 維持停用。"""
+    """明示題型時應直接採用該題型。"""
 
     settings = _routing_settings()
 
@@ -342,24 +342,6 @@ def test_build_query_routing_decision_accepts_orthogonal_task_type_and_scope_hin
     assert decision.summary_scope == "multi_document"
     assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
     assert decision.resolved_document_ids == (second_document.id, first_document.id)
-
-
-def test_build_query_routing_decision_keeps_query_focus_env_toggle() -> None:
-    """routing/profile 應保留由 env settings 控制的 query focus 開關。"""
-
-    settings = _routing_settings(RETRIEVAL_QUERY_FOCUS_ENABLED=True)
-
-    decision = build_query_routing_decision(
-        settings=settings,
-        query="summary this document",
-    )
-
-    assert decision.query_type == EvaluationQueryType.document_summary
-    assert decision.summary_scope == "multi_document"
-    assert decision.summary_strategy == "multi_document_theme"
-    assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
-    assert decision.effective_settings.retrieval_query_focus_enabled is True
-    assert decision.resolved_settings["query_focus_enabled"] is True
 
 
 def test_build_query_routing_decision_uses_section_focused_for_single_document_section_query(db_session) -> None:

@@ -470,7 +470,6 @@ export interface EvaluationCandidatePreviewPayload {
   item: EvaluationItemSummary;
   query_routing: EvaluationQueryRoutingDetail;
   selection: EvaluationSelectionDetail | null;
-  query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationCandidateStage;
   rerank: EvaluationCandidateStage;
   assembled: EvaluationCandidateStage;
@@ -592,19 +591,6 @@ export interface EvaluationSelectionDetail {
   dropped_by_diversity: Array<Record<string, unknown>>;
 }
 
-/** 單題 query focus 明細。 */
-export interface EvaluationQueryFocusDetail {
-  applied: boolean;
-  language: string;
-  confidence: number;
-  intents: string[];
-  slots: Record<string, string>;
-  variant: string;
-  rule_family: string;
-  focus_query: string;
-  rerank_query: string;
-}
-
 /** 單題單階段明細。 */
 export interface EvaluationPerQueryStageDetail {
   first_hit_rank: number | null;
@@ -623,7 +609,6 @@ export interface EvaluationPerQueryDetail {
   gold_spans: EvaluationItemSpan[];
   query_routing: EvaluationQueryRoutingDetail;
   selection: EvaluationSelectionDetail | null;
-  query_focus: EvaluationQueryFocusDetail | null;
   recall: EvaluationPerQueryStageDetail;
   rerank: EvaluationPerQueryStageDetail;
   assembled: EvaluationPerQueryStageDetail;

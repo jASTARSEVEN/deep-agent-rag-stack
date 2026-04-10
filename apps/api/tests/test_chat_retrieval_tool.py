@@ -460,7 +460,6 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
     assert summary_payload["selected_document_ids"] == [document.id]
     assert summary_payload["selected_parent_ids"] == [parent.id]
     assert summary_payload["dropped_by_diversity"] == []
-    assert summary_payload["query_focus_applied"] is False
     assert summary_payload["profile_settings"]["vector_top_k"] == settings.retrieval_vector_top_k
     assert summary_payload["profile_settings"]["task_type_embedding_scores"]
     assert summary_payload["profile_settings"]["task_type_embedding_margin"] >= 0.0
@@ -534,7 +533,6 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
         "selected_document_ids": [],
         "selected_parent_ids": [],
         "dropped_by_diversity": [],
-        "query_focus_applied": None,
         "profile_settings": {},
         "contexts": [],
     }

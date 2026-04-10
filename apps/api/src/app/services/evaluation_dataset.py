@@ -37,7 +37,6 @@ from app.schemas.evaluation import (
     EvaluationItemSpanResponse,
     EvaluationItemSummary,
     EvaluationPreviewDebugRequest,
-    EvaluationQueryFocusDetail,
     EvaluationQueryRoutingDetail,
     EvaluationRunReportResponse,
     EvaluationRunSummary,
@@ -46,7 +45,6 @@ from app.schemas.evaluation import (
 )
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
-from app.services.retrieval_query import QueryFocusPlan, build_query_focus_plan_from_settings
 from app.services.retrieval_routing import QueryRoutingDecision, build_query_routing_decision
 from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
 from app.services.retrieval import (
@@ -68,7 +66,6 @@ class ItemStageEvaluationResult:
     gold_spans: list[GoldSpan]
     query_routing: EvaluationQueryRoutingDetail
     selection: EvaluationSelectionDetail
-    query_focus: EvaluationQueryFocusDetail
     recall_stage: EvaluationCandidateStageResponse
     rerank_stage: EvaluationCandidateStageResponse
     assembled_stage: EvaluationCandidateStageResponse
@@ -387,7 +384,6 @@ def preview_evaluation_candidates(
         item=build_item_summary(item=item, spans=spans),
         query_routing=stage_result.query_routing,
         selection=stage_result.selection,
-        query_focus=stage_result.query_focus,
         recall=stage_result.recall_stage,
         rerank=stage_result.rerank_stage,
         assembled=stage_result.assembled_stage,
@@ -438,9 +434,7 @@ def evaluate_item_stage_outputs(
         area_id=area_id,
     )
     effective_settings = routing_decision.effective_settings
-    query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=item.query_text)
     retrieval_query = item.query_text
-    rerank_query = item.query_text
     scoped_document_ids = allowed_document_ids_override or routing_decision.resolved_document_ids or None
 
     recall_matches = _apply_ranking_policy(
@@ -457,11 +451,9 @@ def evaluate_item_stage_outputs(
         ),
         query=item.query_text,
         settings=effective_settings,
-        focus_query=query_focus_plan.focus_query if query_focus_plan.applied else None,
-        query_focus_plan=query_focus_plan,
     )
     rerank_matches = (
-        _apply_rerank(matches=recall_matches, query=rerank_query, settings=effective_settings)
+        _apply_rerank(matches=recall_matches, query=item.query_text, settings=effective_settings)
         if apply_rerank
         else recall_matches
     )
@@ -479,7 +471,6 @@ def evaluate_item_stage_outputs(
             settings=effective_settings,
             total_candidates=len(rerank_matches),
             routing_decision=routing_decision,
-            query_focus_plan=query_focus_plan,
             selection_result=selection_result,
         ),
     )
@@ -500,7 +491,6 @@ def evaluate_item_stage_outputs(
         gold_spans=gold_spans,
         query_routing=_build_query_routing_detail(routing_decision=routing_decision),
         selection=_build_selection_detail(selection_result=selection_result),
-        query_focus=_build_query_focus_detail(query_focus_plan=query_focus_plan),
         recall_stage=_build_recall_stage(
             matches=recall_matches,
             gold_spans=gold_spans,
@@ -836,7 +826,6 @@ def _build_empty_trace(
     settings: AppSettings,
     total_candidates: int,
     routing_decision: QueryRoutingDecision,
-    query_focus_plan: QueryFocusPlan,
     selection_result: RetrievalSelectionResult,
 ) -> dict[str, object]:
     """建立 assembler 需要的最小 trace 物件。
@@ -846,7 +835,6 @@ def _build_empty_trace(
     - `settings`：應用程式設定。
     - `total_candidates`：候選總數。
     - `routing_decision`：本次 query routing 決策。
-    - `query_focus_plan`：本次 query focus planner 輸出。
     - `selection_result`：本次 diversified selection 結果。
 
     回傳：
@@ -929,15 +917,7 @@ def _build_empty_trace(
             }
             for entry in selection_result.dropped_by_diversity
         ],
-        "query_focus_applied": query_focus_plan.applied,
-        "query_focus_language": query_focus_plan.language,
-        "query_focus_intents": list(query_focus_plan.intents),
-        "query_focus_slots": dict(query_focus_plan.slots),
-        "query_focus_variant": query_focus_plan.variant,
-        "query_focus_rule_family": query_focus_plan.rule_family,
         "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
-        "focus_query": query_focus_plan.focus_query,
-        "rerank_query": query_focus_plan.rerank_query,
         "candidates": [],
     }
 
@@ -1010,29 +990,6 @@ def _build_query_routing_detail(
         document_mention_candidates=[dict(candidate) for candidate in routing_decision.document_mention_candidates],
         selected_profile=routing_decision.selected_profile,
         resolved_settings=routing_decision.resolved_settings,
-    )
-
-
-def _build_query_focus_detail(*, query_focus_plan: QueryFocusPlan) -> EvaluationQueryFocusDetail:
-    """將 planner 輸出轉為 evaluation API detail。
-
-    參數：
-    - `query_focus_plan`：本次 query focus planner 輸出。
-
-    回傳：
-    - `EvaluationQueryFocusDetail`：可供 preview 與 benchmark 共用的 query focus detail。
-    """
-
-    return EvaluationQueryFocusDetail(
-        applied=query_focus_plan.applied,
-        language=query_focus_plan.language,
-        confidence=query_focus_plan.confidence,
-        intents=list(query_focus_plan.intents),
-        slots=dict(query_focus_plan.slots),
-        variant=query_focus_plan.variant,
-        rule_family=query_focus_plan.rule_family,
-        focus_query=query_focus_plan.focus_query,
-        rerank_query=query_focus_plan.rerank_query,
     )
 
 

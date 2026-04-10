@@ -10,12 +10,8 @@ from app.services.evaluation_profiles import (
     GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
     GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
     GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE,
-    GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
-    GENERIC_GUARDED_QUERY_FOCUS_V1,
-    GENERIC_GUARDED_QUERY_FOCUS_V1_GATE,
     HYPOTHESIS_ASSEMBLER,
     HYPOTHESIS_EVIDENCE_SYNOPSIS,
-    HYPOTHESIS_QUERY_FOCUS,
     SUPPORTED_EVALUATION_PROFILES,
     get_candidate_profiles_for_hypothesis,
     get_evaluation_profile_overrides,
@@ -32,22 +28,6 @@ def test_profile_registry_exposes_supported_profiles() -> None:
     assert GENERIC_GUARDED_ASSEMBLER_V1_GATE in SUPPORTED_EVALUATION_PROFILES
     assert GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3 in SUPPORTED_EVALUATION_PROFILES
     assert GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE in SUPPORTED_EVALUATION_PROFILES
-    assert GENERIC_GUARDED_QUERY_FOCUS_V1 in SUPPORTED_EVALUATION_PROFILES
-    assert GENERIC_GUARDED_QUERY_FOCUS_V1_GATE in SUPPORTED_EVALUATION_PROFILES
-    assert GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000 in SUPPORTED_EVALUATION_PROFILES
-
-
-def test_production_like_profile_disables_query_focus_for_stable_baseline() -> None:
-    """production_like_v1 不應覆寫 query focus env toggle。"""
-
-    settings = AppSettings()
-
-    overrides = get_evaluation_profile_overrides(
-        settings=settings,
-        evaluation_profile="production_like_v1",
-    )
-
-    assert "retrieval_query_focus_enabled" not in overrides
 
 
 def test_gate_profile_inherits_live_profile_overrides() -> None:
@@ -91,29 +71,6 @@ def test_v3_profile_keeps_generic_variant_with_sweet_spot_budget() -> None:
     assert gate_overrides["rerank_provider"] == "deterministic"
 
 
-def test_query_focus_profile_extends_generic_v3_with_query_focus_knobs() -> None:
-    """query focus profile 應在 generic v3 基礎上覆寫 query focus knobs，但不直接控制 env 開關。"""
-
-    settings = AppSettings()
-
-    overrides = get_evaluation_profile_overrides(
-        settings=settings,
-        evaluation_profile=GENERIC_GUARDED_QUERY_FOCUS_V1,
-    )
-    gate_overrides = get_evaluation_profile_overrides(
-        settings=settings,
-        evaluation_profile=GENERIC_GUARDED_QUERY_FOCUS_V1_GATE,
-    )
-
-    assert overrides["retrieval_evidence_synopsis_variant"] == "generic_v1"
-    assert overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
-    assert overrides["retrieval_query_focus_confidence_threshold"] == 0.7
-    assert overrides["assembler_max_contexts"] == 9
-    assert overrides["assembler_max_chars_per_context"] == 3000
-    assert gate_overrides["rerank_provider"] == "deterministic"
-    assert gate_overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
-
-
 def test_strategy_lane_registry_provides_profile_sequence_and_rollback_target() -> None:
     """strategy lane 應由 registry 提供 profile 順序與 rollback 目標。"""
 
@@ -126,28 +83,6 @@ def test_strategy_lane_registry_provides_profile_sequence_and_rollback_target() 
         "generic_guarded_evidence_synopsis_v2",
         "generic_guarded_evidence_synopsis_v3",
     ]
-    assert get_candidate_profiles_for_hypothesis(main_hypothesis=HYPOTHESIS_QUERY_FOCUS) == [
-        "generic_guarded_query_focus_v1",
-    ]
     assert get_gate_profile_for_profile(profile_name=GENERIC_GUARDED_ASSEMBLER_V1) == GENERIC_GUARDED_ASSEMBLER_V1_GATE
     assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_ASSEMBLER) == HYPOTHESIS_EVIDENCE_SYNOPSIS
-    assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS) == HYPOTHESIS_QUERY_FOCUS
-    assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_QUERY_FOCUS) is None
-
-
-def test_query_focus_budget_profiles_only_tighten_assembler_budget() -> None:
-    """query focus 成本 profile 應只改 assembler budget，並保留 query focus 主線設定。"""
-
-    settings = AppSettings()
-    overrides = get_evaluation_profile_overrides(
-        settings=settings,
-        evaluation_profile=GENERIC_GUARDED_QUERY_FOCUS_BUDGET_6X3000,
-    )
-
-    assert overrides["retrieval_query_focus_variant"] == "generic_field_focus_v1"
-    assert overrides["retrieval_query_focus_confidence_threshold"] == 0.7
-    assert overrides["retrieval_evidence_synopsis_variant"] == "generic_v1"
-    assert overrides["assembler_max_contexts"] == 6
-    assert overrides["assembler_max_chars_per_context"] == 3000
-    assert overrides["assembler_max_children_per_parent"] == 7
-    assert overrides["rerank_top_n"] == settings.rerank_top_n
+    assert get_rollback_target_hypothesis(main_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS) is None

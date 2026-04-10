@@ -156,11 +156,7 @@ flowchart TD
     L2 -->|cross_document_compare| RTS
     SS --> RTS
 
-    RTS --> QF{"query_focus enabled?"}
-    QF -->|No| RQ["Retrieval Query"]
-    QF -->|Yes| FQ["Generic focus / rerank query"]
-    FQ --> RQ
-
+    RTS --> RQ["Retrieval Query"]
     RQ --> CH["Child Hybrid Recall<br/>vector + PGroonga FTS + RRF<br/>SQL allowed_document_ids when resolved"]
     CH --> RR["Parent-level Rerank<br/>provider fail-open to RRF"]
     RR --> SEL{"scope-aware selection"}
@@ -286,7 +282,7 @@ flowchart TD
 6. PostgreSQL vector recall 目前使用 `hnsw` index 路徑；`1536` 維主線仍位於 `pgvector` 的 ANN 維度限制內
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
 8. retrieval 目前的主線實作包含 hybrid recall、候選合併、rerank 與 context assembly，但這些 stage 的具體組合不再視為固定不可變的唯一路徑；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
-8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + query_focus=false + assembler 9 x 3000`
+8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + assembler 9 x 3000`
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為自架 `/v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `Hugging Face Rerank`（`BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`）、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
 11. parent-level rerank 若啟用，會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；document-side 補充文字仍應走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
@@ -298,11 +294,11 @@ flowchart TD
 16. `table` chunks 在 assembler 與 parent-level rerank 文字組裝內都維持 Markdown table 文字；同一 context 內多個 row-group child 合併時只保留一次表頭
 17. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限，而 `ASSEMBLER_MAX_CHARS_PER_CONTEXT` 同時決定 full-parent 與 expanded-window 的 materialization budget
 18. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意；此約束同樣適用於 Cohere 與 Easypinex-host hosted provider
-19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_type`、routing source/confidence、selected profile、resolved settings、`summary_scope`、`resolved_document_ids`、document mention 與 selection metadata，以及相容保留的 `query_focus` 欄位，供 chat debug 與 evaluation reviewer 逐題分析
+19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_type`、routing source/confidence、selected profile、resolved settings、`summary_scope`、`resolved_document_ids`、document mention 與 selection metadata，供 chat debug 與 evaluation reviewer 逐題分析
 19.5. `Phase 8.1` 已建立 query-aware routing skeleton；`Phase 8.2` 再把 `document_summary` 補成 `single_document | multi_document` 第二層 routing，並在 `rerank -> assembler` 間加入 scope-aware diversified selection。`Phase 8.3` 已補上最小可運作的 document synopsis 與 document-level recall
 19.6. `document_summary` 的 single/multi scope 不依賴 UI/runtime hint，也不讓 deep-agent 直接提供 `document_id`；正式來源為 area-scoped、ready-only 的 deterministic document mention resolver，只能在已通過 SQL gate 的文件集合內運作
 19.7. `cross_document_compare` 採 coverage-first diversified selection：先完成每文件代表 parent 的 coverage pass，再依 rerank 排名補位；不得以硬上限截斷掉尚有 budget 且仍具高分證據的 compare 候選
-19.8. `query_focus` 是否實際套用，仍以 `AppSettings` / 環境變數開關為主；query-aware routing profile 不得自行覆寫此總開關，只能在開啟時補充 variant / threshold 等相容 knobs
+19.8. 查詢改寫功能已自 runtime、settings、trace 與 evaluation profile lane 移除；query-aware routing profile 不得重新引入 query rewrite 或 rerank-query rewrite 作為隱式捷徑。
 19.9. `documents` 正式新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`；`ready` 的成立條件除 chunk tree 與 child embeddings 外，還包含 document synopsis 與 synopsis embedding 成功寫入
 19.10. document synopsis 的正式來源不是 query-time 全文直出，而是 upload / reindex 時對全 `parent chunks` 做 deterministic coverage 壓縮後，再交由 LLM 生成固定結構 synopsis；`section synopsis` 目前已改為 repo-wide opt-in，不再是正式預設產物
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`

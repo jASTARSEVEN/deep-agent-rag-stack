@@ -12,10 +12,9 @@
 本輪 `production_like_v1` 的重要前提：
 
 - `retrieval_evidence_synopsis_variant = generic_v1`
-- `retrieval_query_focus_enabled = false`
 - `assembler = 10 x 3600`
 
-因此，這份文件不再沿用舊版「`generic_field_focus_v1` 已在主線啟用」的假設。
+因此，這份文件不再沿用舊版查詢改寫實驗已在主線啟用的假設。
 
 ## 總結
 
@@ -37,7 +36,7 @@
 
 1. `QASPER 100` 的主問題仍是英文 generic evidence-field semantic gap。
 2. `UDA 100` 的主問題仍是 same-document locality / list-table / later-section localization。
-3. 這一輪 `production_like_v1` 沒有啟用 query focus，因此 planner coverage 為：
+3. 這一輪 `production_like_v1` 沒有啟用查詢改寫，因此 planner coverage 為：
    - `QASPER 100`：`0 / 100`
    - `UDA 100`：`0 / 100`
 4. 舊版文件裡「planner coverage 太窄」的結論，現在要改寫成：
@@ -183,7 +182,7 @@
 
 因此舊版「planner 只打到少數題」的說法，現在要改成：
 
-> current baseline 沒有啟用 query focus；若下一輪要處理英文 semantic-gap，必須把 planner / field-focus 當成顯式 guarded lane 來驗證。
+> current baseline 沒有啟用查詢改寫；若下一輪要處理英文 semantic-gap，必須以顯式 guarded lane 驗證，不得混入主線 baseline。
 
 ## 最有價值的改善方案
 

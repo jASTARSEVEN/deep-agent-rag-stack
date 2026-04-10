@@ -1532,7 +1532,6 @@ def build_resolved_settings_trace(
         "assembler_max_contexts": settings.assembler_max_contexts,
         "assembler_max_chars_per_context": settings.assembler_max_chars_per_context,
         "assembler_max_children_per_parent": settings.assembler_max_children_per_parent,
-        "query_focus_enabled": settings.retrieval_query_focus_enabled,
     }
     if task_type_decision is not None:
         payload["task_type_embedding_scores"] = [

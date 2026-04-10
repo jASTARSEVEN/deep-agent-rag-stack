@@ -216,9 +216,6 @@ def _build_evaluation_config_snapshot(
                 "document_recall_top_k": settings.retrieval_document_recall_top_k,
                 "evidence_synopsis_enabled": settings.retrieval_evidence_synopsis_enabled,
                 "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
-                "query_focus_enabled": settings.retrieval_query_focus_enabled,
-                "query_focus_variant": settings.retrieval_query_focus_variant,
-                "query_focus_confidence_threshold": settings.retrieval_query_focus_confidence_threshold,
                 "rrf_k": settings.retrieval_rrf_k,
                 "hnsw_ef_search": settings.retrieval_hnsw_ef_search,
             },
@@ -406,7 +403,6 @@ def _evaluate_single_item(
             "document_ids": list(benchmark_document_scope_ids or ()),
         },
         "selection": stage_result.selection.model_dump(mode="json"),
-        "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "recall": _build_stage_detail(recall_relevances).model_dump(mode="json"),
         "rerank": _build_stage_detail(
             rerank_relevances,

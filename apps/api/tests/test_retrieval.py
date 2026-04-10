@@ -682,10 +682,6 @@ def test_retrieve_area_candidates_filters_non_ready_and_parent_chunks(db_session
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[0].rerank_applied is True
     assert result.trace.query == "中文檢索"
-    assert result.trace.query_focus_applied is False
-    assert result.trace.query_focus_language == "zh-TW"
-    assert result.trace.focus_query == "中文檢索"
-    assert result.trace.rerank_query == "中文檢索"
     assert result.trace.candidates[0].chunk_id == ready_child.id
 
 
@@ -1444,109 +1440,6 @@ def test_retrieve_area_candidates_includes_traditional_chinese_evidence_synopsis
     assert "Evidence synopsis:" in captured_documents[0].text
     assert "此段落包含數量" in captured_documents[0].text
     assert "此段落列出評估指標" in captured_documents[0].text
-
-
-def test_retrieve_area_candidates_applies_query_focus_to_rerank_query_and_trace(
-    db_session, app_settings, monkeypatch
-) -> None:
-    """query focus 啟用時，rerank query 與 trace 應帶入 planner 結果。"""
-
-    settings = app_settings.model_copy(
-        update={"retrieval_query_focus_enabled": True, "retrieval_evidence_synopsis_variant": "generic_v1"}
-    )
-    area = Area(id=_uuid(), name="Retrieval Query Focus")
-    db_session.add(area)
-    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
-    document = Document(
-        id=_uuid(),
-        area_id=area.id,
-        file_name="query-focus.md",
-        content_type="text/markdown",
-        file_size=100,
-        storage_key="area/document-query-focus/query-focus.md",
-        status=DocumentStatus.ready,
-    )
-    parent = DocumentChunk(
-        id=_uuid(),
-        document_id=document.id,
-        parent_chunk_id=None,
-        chunk_type=ChunkType.parent,
-        structure_kind=ChunkStructureKind.table,
-        position=0,
-        section_index=0,
-        child_index=None,
-        heading="三、 文件申請資格",
-        content="文件申請 研究助理 專案成員",
-        content_preview="文件申請 研究助理 專案成員",
-        char_count=len("文件申請 研究助理 專案成員"),
-        start_offset=0,
-        end_offset=len("文件申請 研究助理 專案成員"),
-    )
-    child = DocumentChunk(
-        id=_uuid(),
-        document_id=document.id,
-        parent_chunk_id=parent.id,
-        chunk_type=ChunkType.child,
-        structure_kind=ChunkStructureKind.table,
-        position=1,
-        section_index=0,
-        child_index=0,
-        heading="三、 文件申請資格",
-        content="文件申請 研究助理 專案成員",
-        content_preview="文件申請 研究助理 專案成員",
-        char_count=len("文件申請 研究助理 專案成員"),
-        start_offset=0,
-        end_offset=len("文件申請 研究助理 專案成員"),
-        embedding=[0.1] * settings.embedding_dimensions,
-    )
-    db_session.add_all([document, parent, child])
-    db_session.commit()
-
-    captured_queries: list[str] = []
-
-    class CapturingRerankProvider:
-        """記錄 query focus rerank query 的測試替身。"""
-
-        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
-            """保存 rerank query 並回傳固定分數。
-
-            參數：
-            - `query`：送進 rerank 的 query。
-            - `documents`：送入 rerank 的 parent-level 文件。
-            - `top_n`：最多回傳筆數。
-
-            回傳：
-            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
-            """
-
-            del top_n
-            captured_queries.append(query)
-            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
-
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
-
-    result = retrieve_area_candidates(
-        session=db_session,
-        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
-        settings=settings,
-        area_id=area.id,
-        query="文件申請資格有哪些？",
-    )
-
-    assert captured_queries
-    assert captured_queries[0].startswith("文件申請資格有哪些？\nNeed:")
-    assert result.trace.query_focus_applied is True
-    assert result.trace.query_type == "fact_lookup"
-    assert result.trace.query_type_source == "fallback"
-    assert result.trace.selected_profile == "fact_lookup_precision_v1"
-    assert result.trace.query_focus_language == "zh-TW"
-    assert result.trace.query_focus_intents == ["eligibility_or_actor", "enumeration_or_inventory"]
-    assert result.trace.query_focus_slots["target_field"] == "資格或責任對象 / 項目清單或列舉內容"
-    assert result.trace.query_focus_variant == "generic_field_focus_v1"
-    assert result.trace.query_focus_rule_family == "generic"
-    assert result.trace.evidence_synopsis_variant == "generic_v1"
-    assert "資格或責任對象" in result.trace.focus_query
-    assert result.trace.rerank_query == captured_queries[0]
 
 
 def test_retrieve_area_candidates_resolves_single_document_summary_scope_and_filters_other_documents(

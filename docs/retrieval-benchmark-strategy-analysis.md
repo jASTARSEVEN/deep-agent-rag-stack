@@ -41,14 +41,13 @@
 - rerank top N：`30`
 - rerank max chars per doc：`2000`
 - evidence synopsis：`enabled=true`，variant=`generic_v1`
-- query focus：`enabled=false`，variant=`generic_field_focus_v1`
 - vector / FTS / max candidates：`30 / 30 / 30`
 - assembler budget：`9 x 3000`
 - assembler max children per parent：`7`
 
 這一點很重要：
 
-> 目前 `production_like_v1` 已固定為 `query_focus=false + 9x3000`。舊的 query-focus-on 數字只能視為歷史比較，不可再當成 current mainline baseline。
+> 目前 `production_like_v1` 已固定為 `generic_v1 + 9x3000`。舊的查詢改寫實驗數字只能視為歷史比較，不可再當成 current mainline baseline。
 
 > `QASPER`、`UDA` 與 `DRCD` 的原始任務皆有每題指定文件上下文；目前 benchmark runner 已改為對 `qasper-*`、`uda-*` 與 `drcd-*` datasets 使用 gold span 的 `document_id` 作為指定文件 scope。這些分數不得與舊的 area-wide ambiguous query 分數混讀。
 
@@ -128,7 +127,7 @@
 
 | 類別 | 應保留項目 | 保留理由 |
 | --- | --- | --- |
-| current mainline baseline | `production_like_v1`（實際 snapshot：`generic_v1 + query_focus off + 9x3000`） | 這是目前真正會被拿來回歸檢查的 baseline；`QASPER`、`UDA`、`DRCD` 需同時保留指定文件 scope 語意。 |
+| current mainline baseline | `production_like_v1`（實際 snapshot：`generic_v1 + 9x3000`） | 這是目前真正會被拿來回歸檢查的 baseline；`QASPER`、`UDA`、`DRCD` 需同時保留指定文件 scope 語意。 |
 | internal stability set | `tw-insurance-rag-benchmark-v1` | 這份最適合檢查主線策略是否在既有自家 benchmark 上失穩。 |
 | external pressure-test sextet | `dureader-robust-curated-v1-100`、`msmarco-curated-v1-100`、`drcd-curated-v1-100`、`nq-curated-v1-100`、`uda-curated-v1-100`、`qasper-curated-v1-100` | 六者合併後可以同時觀察中文 extractive sanity check、snippet-bundle sanity check、繁體中文 lexical retrieval / rerank、wiki page answer localization / assembly、same-document localization 與英文 semantic-gap。 |
 | hard external lane | `qasper-curated-v1-100` | 若要找下一輪最高 ROI 的 hard case，仍應優先看這份。 |
@@ -148,7 +147,7 @@
 
 ### 最新 miss 分布
 
-| Dataset | miss 總數 | `recall_only` | `rerank_only` | `assembled_only` | `rerank_hit_but_assembled_miss` | `all_miss` | query focus applied |
+| Dataset | miss 總數 | `recall_only` | `rerank_only` | `assembled_only` | `rerank_hit_but_assembled_miss` | `all_miss` | 查詢改寫套用 |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `DuReader-robust 100` | `0` | `0` | `0` | `0` | `0` | `0` | `0` |
 | `MS MARCO 100` | `0` | `0` | `0` | `0` | `0` | `0` | `0` |

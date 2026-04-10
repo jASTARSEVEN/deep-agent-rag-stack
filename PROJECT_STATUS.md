@@ -66,11 +66,11 @@
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 收斂為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1` + `retrieval_query_focus_enabled=false` + `retrieval_query_focus_variant=generic_field_focus_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 收斂為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
-- benchmark 治理已同步改為 generic-first：guarded query-focus lane 使用 `generic_guarded_query_focus_v1`，不再保留舊的 benchmark-specific profile naming
-- retrieval trace、evaluation preview 與 benchmark per-query detail 現已可觀測 `query_focus_applied`、language、intents、slots、focus query 與 rerank query，便於後續針對 semantic-gap miss 做逐題診斷
-- 已以 `Docker Compose` fresh rebuild + benchmark package 實測 generic-first query-focus lane；舊小樣本 package 已自 current benchmark 集合移除，後續比較以正式 `100Q` 與自家 benchmark 為準
+- benchmark 治理已同步改為 generic-first，不再保留查詢改寫 profile lane 或 benchmark-specific profile naming
+- retrieval trace、evaluation preview 與 benchmark per-query detail 已移除查詢改寫相關欄位，後續語意落差診斷回到原始 query、routing、rerank 與 assembled contexts
+- 舊小樣本 package 已自 current benchmark 集合移除，後續比較以正式 `100Q` 與自家 benchmark 為準
 - 已新增 `apps/api/src/app/scripts/review_external_benchmark_with_openai.py`，可對 external benchmark workspace 直接執行 `OpenAI API` review，輸出 `review_overrides.jsonl` 與 `openai_review_log.jsonl`
 - 已新增 `apps/api/src/app/scripts/prepare_uda_full_source.py`，可將官方 `UDA-Benchmark` `extended_qa_info_bench` 與 full-source docs 正規化為現有 `prepare_external_benchmark --dataset uda` 可直接使用的 JSONL row contract
 - 已將 `apps/api/src/app/scripts/prepare_external_benchmark.py` 擴充為支援 `msmarco`、`nq`、`drcd` 與 `dureader`，可直接吃 `hf://microsoft/ms_marco/v1.1/validation`、`hf://google-research-datasets/natural_questions/default/validation`、`hf://voidful/DRCD/default/dev` 這類 Hugging Face dataset-server 參照，也可吃官方 `DuReader-robust` `dev.json` / `DuReader 2.0` 類本機 row contract，並沿用既有 `filter -> align -> OpenAI review -> build snapshot` 流程
@@ -81,12 +81,12 @@
   - `benchmarks/nq-curated-v1-100`：官方 `Natural Questions` validation rows、`260` prepared items、`250` filtered items、`250` auto-matched、`0` 個 `OpenAI` review overrides，最終 `100` 題 / `100` 份文件 / `100` 個 gold spans，最新 reference run assembled `Recall@10=0.7500`、`nDCG@10=0.7443`、`MRR@10=0.7425`
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review；目前 benchmark runner 會依 gold span 指定文件查詢，最新指定文件 run assembled `Recall@10=0.7900`、`nDCG@10=0.6537`、`MRR@10=0.6104`
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides；目前 benchmark runner 會依 gold span 指定文件查詢，最新指定文件 run assembled `Recall@10=0.9300`、`nDCG@10=0.5905`、`MRR@10=0.4813`
-- 已將 `production_like_v1` benchmark profile 固定為 `query_focus=false`，避免 profile 分數受 runtime env 漂移影響；目前 current baseline 為 `generic_v1 + query_focus off + 9x3000`
+- 已將 `production_like_v1` benchmark profile 固定為目前主線設定；目前 current baseline 為 `generic_v1 + 9x3000`
 - 已將 `task_type + summary_strategy` routing 收斂為統一 classifier framework：兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`，並保留 `source / confidence / embedding margin / fallback_used / fallback_reason` 可觀測欄位
 - `Phase 8A` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
 - 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
 - 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
-- `query_focus` 是否實際套用仍由環境變數 / settings 控制；本輪保留相容欄位與 profile knobs，但不再由 routing skeleton 強制覆寫總開關
+- 查詢改寫功能已自 runtime、settings、trace 與 evaluation profile lane 移除；routing skeleton 不再保留其相容欄位或 knobs
 - 已為 `document_summary` 新增 `single_document | multi_document` 第二層 routing，透過 `documents.file_name` 的 deterministic mention resolver 解析單文件摘要與多文件摘要 scope，且只在已授權 `ready` 文件集合內運作
 - 已在 `rerank -> assembler` 間新增 scope-aware diversified selection layer：`fact_lookup` 維持 bypass，`document_summary` 採 coverage-first + fill 策略，`cross_document_compare` 採雙輪 coverage pass 後再依 rerank 補位
 - retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
@@ -111,6 +111,8 @@
 - repo 已新增固定 benchmark package `benchmarks/phase8a-summary-compare-v1`，包含 `16` 題 summary/compare checkpoint fixtures 與對應 source documents
 - `Phase 8A` 已完成最新一輪正式驗收 checkpoint；最新 accepted artifact 為 `parallel-6` runner 輸出，雖未通過原先 `passed=true` gate，但專案已判定目前優化接近現階段上限，因此接受當前 ceiling 並以現況結案
 - 最新 accepted checkpoint 觀測值為：`task_type_accuracy=0.75`、`summary_strategy_accuracy=0.5`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_completeness=4.8125`、`avg_faithfulness_to_citations=4.375`、`avg_structure_quality=4.875`、`avg_compare_coverage=4.625`、`avg_overall_score=4.6719`、`p95_latency_seconds=21.0378`
+- `2026-04-10` 已用目前 task routing / unified Deep Agents 主線重跑 `phase8a-summary-compare-v1` 正式 checkpoint，artifact 位於 `artifacts/phase8a-summary-compare-report-20260410-task-routing.json`。最新結果確認 `task_type_accuracy=1.0000` 已滿分，但整體 `passed=false`，`summary_strategy_accuracy=0.9375`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_faithfulness_to_citations=4.5625`、`avg_overall_score=4.6562`、`p95_latency_seconds=31.4785`；未過 gate 的主因為 `hard_blocker_failures=6` 與 `p95_latency_seconds` 超過 `30.0000` 門檻
+- 此輪 `phase8a-summary-compare-v1` 未達「滿分」：失敗分布為 `summary_strategy_mismatch=1`、`required_document_not_cited=3`、`insufficient_evidence_not_acknowledged=2`，另有 judge 低分分類 `judge_low_faithfulness=5`、`judge_low_completeness=1`、`judge_low_coverage=1`
 - 已完成 `Phase 8.3` closeout 所需的三條 sentinel rerun：
   - `DRCD 100`：assembled `nDCG@10` 由 `0.8650` 提升到 `0.9900`，`Recall@10` 由 `0.9700` 提升到 `0.9900`
   - `NQ 100`：assembled 指標與 reference 持平，`nDCG@10=0.7443`、`Recall@10=0.7500`
@@ -327,12 +329,12 @@
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
-- 保留 `phase8a-summary-compare-v1` checkpoint 作為已接受 closeout artifact，不再把 8A 分數提升視為當前主線目標
+- 保留 `phase8a-summary-compare-v1` checkpoint 作為已接受 closeout artifact；`2026-04-10` 重跑已確認 task type routing 達 `1.0000`，但整體 checkpoint 仍因 hard blockers 與 p95 latency 未通過，因此不把 8A 調分重新升為當前主線目標
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 跑完 `QASPER 100`、`NQ 100`、`DRCD 100` 與 `phase8a-summary-compare-v1`，確認移除 enrichment lane 後的 child-based retrieval 主線沒有 benchmark regression
+1. 繼續跑完 `QASPER 100`、`NQ 100` 與 `DRCD 100`，確認移除 enrichment lane 後的 child-based retrieval 主線沒有 benchmark regression；`phase8a-summary-compare-v1` 已於 `2026-04-10` 重跑，最新結果為 `passed=false`、`task_type_accuracy=1.0000`、`summary_strategy_accuracy=0.9375`
 2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
 3. 以 `child recall confidence` 或其他 child-based 訊號做後續 retrieval hardening；不得重新引入已移除的 enrichment schema 或 query-time merge lane
 4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
