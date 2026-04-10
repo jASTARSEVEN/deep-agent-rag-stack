@@ -156,7 +156,7 @@ flowchart TD
     SCOPE --> L1["Layer 1 Routing<br/>task_type<br/>deterministic anchors -> embedding -> LLM fallback"]
     L1 --> L2{"task_type"}
 
-    L2 -->|fact_lookup| RTS["Routing State<br/>summary_strategy = none"]
+    L2 -->|fact_lookup| RTS["Resolved Routing State<br/>task_type + document_scope<br/>summary_strategy optional"]
     L2 -->|document_summary| SS["Layer 2 Routing<br/>summary_strategy<br/>document_overview | section_focused | multi_document_theme"]
     L2 -->|cross_document_compare| RTS
     SS --> RTS
