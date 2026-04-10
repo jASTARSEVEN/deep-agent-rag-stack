@@ -41,6 +41,15 @@ from app.services.retrieval_text import build_evidence_synopsis, build_rerank_do
 
 LOGGER = logging.getLogger(__name__)
 
+# evidence recall 對 child candidate 的固定弱加分權重，避免 evidence lane 與 child recall 等權投票。
+EVIDENCE_BOOST_WEIGHT = 0.55
+# 單一 child 在一次 merge 中最多可取得的 evidence 加分。
+EVIDENCE_CHILD_BOOST_CAP = 0.014
+# path quality 低於此門檻時，只降低 boost cap，不直接改變 raw boost。
+EVIDENCE_LOW_PATH_QUALITY_THRESHOLD = 0.3
+# 低 path quality evidence 對應的 child boost cap 乘數。
+EVIDENCE_LOW_PATH_QUALITY_CAP_MULTIPLIER = 0.75
+
 
 @dataclass(slots=True)
 class RetrievalCandidate:
@@ -1224,6 +1233,8 @@ def _merge_evidence_recall(
 
     merged_by_chunk_id = {match.chunk.id: match for match in matches}
     mapped_child_ids: list[str] = []
+    evidence_hit_count_by_child: dict[str, int] = {}
+    accumulated_evidence_boost_by_child: dict[str, float] = {}
     build_strategy_used = evidence_hits[0].evidence_unit.build_strategy.value
     for evidence_hit in evidence_hits:
         for child_chunk_id in evidence_hit.mapped_child_chunk_ids[: settings.retrieval_evidence_units_max_mapped_children]:
@@ -1239,8 +1250,17 @@ def _merge_evidence_recall(
                 (value for value in (match.evidence_rank, evidence_hit.rrf_rank) if value is not None),
                 default=evidence_hit.rrf_rank,
             )
-            match.evidence_rrf_score += evidence_hit.rrf_score
-            match.rrf_score += evidence_hit.rrf_score
+            applied_boost = _compute_capped_evidence_boost(
+                evidence_hit=evidence_hit,
+                hit_count=evidence_hit_count_by_child.get(child_chunk_id, 0),
+                accumulated_boost=accumulated_evidence_boost_by_child.get(child_chunk_id, 0.0),
+            )
+            evidence_hit_count_by_child[child_chunk_id] = evidence_hit_count_by_child.get(child_chunk_id, 0) + 1
+            accumulated_evidence_boost_by_child[child_chunk_id] = (
+                accumulated_evidence_boost_by_child.get(child_chunk_id, 0.0) + applied_boost
+            )
+            match.evidence_rrf_score += applied_boost
+            match.rrf_score += applied_boost
             match.evidence_unit_id = evidence_hit.evidence_unit.id
             match.evidence_type = evidence_hit.evidence_unit.evidence_type.value
             match.path_quality_score = evidence_hit.evidence_unit.path_quality_score
@@ -1264,6 +1284,46 @@ def _merge_evidence_recall(
         mapped_child_ids=sorted(set(mapped_child_ids)),
         fallback_reason=None,
     )
+
+
+def _compute_capped_evidence_boost(
+    *,
+    evidence_hit: _EvidenceRecallMatch,
+    hit_count: int,
+    accumulated_boost: float,
+) -> float:
+    """計算單一 evidence hit 實際可套用到 child candidate 的 capped boost。
+
+    參數：
+    - `evidence_hit`：本次 evidence recall 命中。
+    - `hit_count`：同一 child 在本次 merge 中已被 evidence 加分的次數。
+    - `accumulated_boost`：同一 child 在本次 merge 中已累積的 evidence boost。
+
+    回傳：
+    - `float`：實際要加到 child candidate 的 boost。
+    """
+
+    decay = 1.0 / (1.0 + max(hit_count, 0))
+    child_cap = _resolve_evidence_child_boost_cap(path_quality_score=evidence_hit.evidence_unit.path_quality_score)
+    remaining_cap = max(0.0, child_cap - accumulated_boost)
+    raw_boost = evidence_hit.rrf_score * EVIDENCE_BOOST_WEIGHT * decay
+    return min(raw_boost, remaining_cap)
+
+
+def _resolve_evidence_child_boost_cap(*, path_quality_score: float | None) -> float:
+    """依 path quality 決定單一 child 可取得的 evidence boost 上限。
+
+    參數：
+    - `path_quality_score`：evidence unit 的 path 品質分數。
+
+    回傳：
+    - `float`：本次 child evidence boost cap。
+    """
+
+    score = path_quality_score if path_quality_score is not None else 0.0
+    if score < EVIDENCE_LOW_PATH_QUALITY_THRESHOLD:
+        return EVIDENCE_CHILD_BOOST_CAP * EVIDENCE_LOW_PATH_QUALITY_CAP_MULTIPLIER
+    return EVIDENCE_CHILD_BOOST_CAP
 
 
 def _apply_ranking_policy(

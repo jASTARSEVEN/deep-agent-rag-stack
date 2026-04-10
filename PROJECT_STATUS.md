@@ -98,6 +98,7 @@
 - retrieval routing 已將文件 mention scope 調整為與 `task_type` 正交：`fact_lookup` 若高信心提及已授權且 `ready` 文件，也會保留 `resolved_document_ids` 並用於 recall / evidence recall 收斂，不再只把 scope 視為 summary / compare 的附屬資訊
 - Deep Agents 可見的 retrieval tool contract 已移除舊的單一 `retrieval_strategy`，且不再讓 agent 提供 `task_type`、`document_scope` 或 `summary_strategy`；三者保留為後端 router 的正交 trace / evaluation contract，實際文件白名單只由後端 mention resolver 在已授權且 `ready` 文件中解析
 - `Phase 8B` 已完成第一批 schema 與 runtime 接線：新增 `document_chunk_evidence_units`、child/parent source mapping tables，以及 `documents.evidence_enrichment_*` observability 欄位
+- `Phase 8B` evidence enrichment 已收斂失敗語意：`auto` / `llm` 模式若 LLM 產生 evidence units 失敗，會依失敗次數平方秒數退避重試，最多重試 `10` 次；重試耗盡後視為受控失敗，不再以 deterministic fallback 寫入成功結果。`deterministic` 仍保留為顯式指定策略。
 - `Phase 8B` runtime 已新增 feature-flag 控制的 `evidence recall -> mapped child chunks -> rerank/selection/assembler` merge lane；trace、candidate preview 與 chat tool summary 已可觀測 evidence hits、mapped child ids、path quality 與 cluster strategy
 - `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
 - `Phase 8A` routing 現已不再是單層 rule-only 決策；第一層 `task_type` 與第二層 `summary_strategy` 皆共用相同 routing engine，低信心時會正式啟用 `LLM fallback`

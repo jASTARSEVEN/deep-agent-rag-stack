@@ -113,6 +113,7 @@ This module contains the project's Celery worker. It currently provides the mini
 - `ready` now means chunking, child embeddings, document synopsis, and synopsis embedding have all been completed.
 - The worker is now responsible for child-chunk embeddings.
 - The worker now builds document-level synopsis from full parent coverage during ingest/reindex, stores `synopsis_text`, and then writes a synopsis embedding for Phase 8.3 document recall.
+- Phase 8B evidence units are controlled by `EVIDENCE_UNITS_ENABLED` and `EVIDENCE_UNITS_BUILD_STRATEGY=auto|llm|deterministic`. When `auto` or `llm` uses the LLM path, LLM failures retry with `failure_count^2` seconds of backoff up to 10 retries; if all retries fail, the ingest/reindex job fails instead of silently writing deterministic fallback results.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the storage schema expects `1536` dimensions.
 - `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the worker downloads the model on first use when needed, reuses the local Hugging Face cache afterwards, and zero-pads the model's `1024`-dim output into the current `1536`-dim schema.
 - The optional self-hosted path uses `POST /v1/embeddings` with Bearer auth and dedicated `SELF_HOSTED_EMBEDDING_*` settings; the recommended self-hosted model is `Qwen/Qwen3-Embedding-0.6B`.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -32,6 +33,15 @@ PAGE_NUMBER_PATTERN = re.compile(r"(?:^|\s)\d{1,4}(?:\s|$)")
 SENTENCE_SPLIT_PATTERN = re.compile(r"(?<=[。！？!?;；\n])\s+")
 # 用於估算 path 與內容重疊的 token pattern。
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+|[\u3400-\u4dbf\u4e00-\u9fff]{1,6}")
+# deterministic fallback 不應把 evidence cluster 的控制欄位當作 evidence 內容。
+SOURCE_METADATA_LINE_PREFIXES = (
+    "Heading Path:",
+    "Section Path:",
+    "Cluster Strategy:",
+    "Path Quality:",
+)
+# LLM evidence 失敗時最多重試次數；若全數失敗，文件索引應進入 failed，而不是改用 deterministic。
+EVIDENCE_UNITS_LLM_MAX_RETRIES = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,31 +369,13 @@ def generate_evidence_units_for_document(
     if not clusters:
         return EvidenceGenerationResult(drafts=(), effective_strategy=requested_strategy, fallback_reason="no_clusters")
 
-    if requested_strategy == EvidenceBuildStrategy.auto:
-        try:
-            drafts = _generate_with_strategy(
-                settings=settings,
-                strategy=EvidenceBuildStrategy.llm,
-                file_name=file_name,
-                clusters=clusters,
-            )
-            return EvidenceGenerationResult(
-                drafts=tuple(drafts),
-                effective_strategy=EvidenceBuildStrategy.llm,
-                fallback_reason=None,
-            )
-        except Exception as exc:
-            drafts = _generate_with_strategy(
-                settings=settings,
-                strategy=EvidenceBuildStrategy.deterministic,
-                file_name=file_name,
-                clusters=clusters,
-            )
-            return EvidenceGenerationResult(
-                drafts=tuple(drafts),
-                effective_strategy=EvidenceBuildStrategy.deterministic,
-                fallback_reason=f"llm_failed:{exc}",
-            )
+    if requested_strategy in {EvidenceBuildStrategy.auto, EvidenceBuildStrategy.llm}:
+        drafts = _generate_llm_with_retry(settings=settings, file_name=file_name, clusters=clusters)
+        return EvidenceGenerationResult(
+            drafts=tuple(drafts),
+            effective_strategy=EvidenceBuildStrategy.llm,
+            fallback_reason=None,
+        )
 
     drafts = _generate_with_strategy(
         settings=settings,
@@ -392,6 +384,61 @@ def generate_evidence_units_for_document(
         clusters=clusters,
     )
     return EvidenceGenerationResult(drafts=tuple(drafts), effective_strategy=requested_strategy, fallback_reason=None)
+
+
+def _generate_llm_with_retry(
+    *,
+    settings: WorkerSettings,
+    file_name: str,
+    clusters: list[EvidenceCluster],
+) -> list[EvidenceUnitDraft]:
+    """以 LLM 產生 evidence units，失敗時依失敗次數平方秒數退避重試。
+
+    參數：
+    - `settings`：worker 執行期設定。
+    - `file_name`：目前文件檔名。
+    - `clusters`：待處理的 evidence clusters。
+
+    回傳：
+    - `list[EvidenceUnitDraft]`：LLM 成功產生的 evidence 草稿。
+
+    例外：
+    - `ValueError`：LLM 在最大重試次數後仍失敗，或設定錯誤不適合重試。
+    """
+
+    last_error: Exception | None = None
+    retries_performed = 0
+    for retry_index in range(EVIDENCE_UNITS_LLM_MAX_RETRIES + 1):
+        try:
+            return _generate_with_strategy(
+                settings=settings,
+                strategy=EvidenceBuildStrategy.llm,
+                file_name=file_name,
+                clusters=clusters,
+            )
+        except Exception as exc:
+            last_error = exc
+            if not _is_retryable_llm_evidence_error(exc=exc) or retry_index >= EVIDENCE_UNITS_LLM_MAX_RETRIES:
+                break
+            failure_count = retry_index + 1
+            retries_performed = failure_count
+            time.sleep(failure_count**2)
+    raise ValueError(
+        f"evidence unit LLM 生成失敗，已重試 {retries_performed} 次：{last_error}"
+    ) from last_error
+
+
+def _is_retryable_llm_evidence_error(*, exc: Exception) -> bool:
+    """判斷 LLM evidence 失敗是否適合重試。
+
+    參數：
+    - `exc`：LLM evidence generation 拋出的例外。
+
+    回傳：
+    - `bool`：可透過等待後重試修復時回傳真。
+    """
+
+    return "OPENAI_API_KEY" not in str(exc)
 
 
 def build_evidence_clusters(
@@ -653,6 +700,8 @@ def _extract_candidate_snippets(*, source_text: str) -> list[str]:
     snippets: list[str] = []
     for section in source_text.splitlines():
         normalized_section = _normalize_text(section)
+        if normalized_section.startswith(SOURCE_METADATA_LINE_PREFIXES):
+            continue
         if not normalized_section or normalized_section.startswith("[Child") or normalized_section.startswith("[Parent"):
             content = normalized_section.split(":", 1)[-1].strip()
         else:

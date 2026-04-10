@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from worker.core.settings import WorkerSettings
-from worker.db import EvidenceBuildStrategy, EvidencePathQualityReason
+from worker.db import EvidenceBuildStrategy, EvidencePathQualityReason, EvidenceType
 from worker.evidence_units import (
+    EvidenceUnitDraft,
     build_evidence_clusters,
     generate_evidence_units_for_document,
     score_path_quality,
@@ -145,8 +148,8 @@ def test_build_evidence_clusters_uses_adjacency_fallback_when_path_is_missing() 
     assert clusters[0].path_quality_score < 0.4
 
 
-def test_generate_evidence_units_auto_falls_back_to_deterministic(monkeypatch) -> None:
-    """`auto` 模式在 LLM 失敗時應回退 deterministic。"""
+def test_generate_evidence_units_auto_retries_llm_then_succeeds(monkeypatch) -> None:
+    """`auto` 模式在 LLM 暫時失敗時應重試，而不是回退 deterministic。"""
 
     settings = WorkerSettings(
         _env_file=None,
@@ -169,17 +172,153 @@ def test_generate_evidence_units_auto_falls_back_to_deterministic(monkeypatch) -
         heading="Results",
         content="Accuracy reaches 91.3 percent after the new policy.",
     )
+    sleep_calls: list[int] = []
+    attempts = 0
+
+    class FlakyLlmProvider:
+        """測試用的 LLM provider，前兩次失敗後成功。"""
+
+        def generate_units(self, **kwargs):
+            """依測試計數回傳 LLM evidence 或丟出暫時性錯誤。
+
+            參數：
+            - `kwargs`：provider contract 傳入的 cluster 與其他呼叫參數。
+
+            回傳：
+            - `list[EvidenceUnitDraft]`：成功時回傳單一 LLM evidence 草稿。
+            """
+
+            nonlocal attempts
+            attempts += 1
+            cluster = kwargs["cluster"]
+            if attempts <= 2:
+                raise ValueError("temporary llm json error")
+            return [
+                EvidenceUnitDraft(
+                    evidence_type=EvidenceType.metric,
+                    evidence_text="Accuracy reaches 91.3 percent after the new policy.",
+                    build_strategy=EvidenceBuildStrategy.llm,
+                    confidence=0.8,
+                    cluster_strategy=cluster.cluster_strategy,
+                    path_quality_score=cluster.path_quality_score,
+                    path_quality_reason=cluster.path_quality_reason,
+                    heading_path=cluster.heading_path,
+                    section_path_text=cluster.section_path_text,
+                    parent_chunk_ids=tuple(str(parent_chunk.id) for parent_chunk in cluster.parent_chunks),
+                    child_chunk_ids=tuple(str(child_chunk.id) for child_chunk in cluster.child_chunks),
+                )
+            ]
+
+    def build_flaky_llm_provider(*, settings: WorkerSettings, strategy: EvidenceBuildStrategy):
+        """只允許建立 LLM provider，避免測試誤走 deterministic。
+
+        參數：
+        - `settings`：worker 測試設定。
+        - `strategy`：測試中要求建立的 evidence strategy。
+
+        回傳：
+        - `FlakyLlmProvider`：測試用的暫時性失敗 provider。
+        """
+
+        del settings
+        assert strategy == EvidenceBuildStrategy.llm
+        return FlakyLlmProvider()
+
+    monkeypatch.setattr("worker.evidence_units.build_evidence_unit_provider", build_flaky_llm_provider)
+    monkeypatch.setattr("worker.evidence_units.time.sleep", lambda seconds: sleep_calls.append(seconds))
+
+    result = generate_evidence_units_for_document(
+        settings=settings,
+        file_name="results.md",
+        parent_chunks=[parent],
+        child_chunks=[child],
+    )
+
+    assert result.effective_strategy == EvidenceBuildStrategy.llm
+    assert result.fallback_reason is None
+    assert [draft.build_strategy for draft in result.drafts] == [EvidenceBuildStrategy.llm]
+    assert attempts == 3
+    assert sleep_calls == [1, 4]
+
+
+def test_generate_evidence_units_auto_fails_after_llm_retry_exhausted(monkeypatch) -> None:
+    """`auto` 模式重試耗盡後應失敗，不得把 deterministic 當成功結果。"""
+
+    settings = WorkerSettings(
+        _env_file=None,
+        EVIDENCE_UNITS_ENABLED=True,
+        EVIDENCE_UNITS_BUILD_STRATEGY="auto",
+        OPENAI_API_KEY="test-key",
+    )
+    parent = _build_parent(
+        chunk_id="parent-1",
+        position=0,
+        heading="Results",
+        heading_path="Results",
+        section_path_text="Results",
+        content="Accuracy reaches 91.3 percent after the new policy.",
+    )
+    child = _build_child(
+        chunk_id="child-1",
+        parent_chunk_id="parent-1",
+        position=1,
+        heading="Results",
+        content="Accuracy reaches 91.3 percent after the new policy.",
+    )
+    sleep_calls: list[int] = []
 
     def fail_llm_provider(*, settings: WorkerSettings, strategy: EvidenceBuildStrategy):
-        """讓 LLM provider 明確失敗，逼出 deterministic fallback。"""
+        """讓 LLM provider 明確失敗，驗證不會回退 deterministic。
 
-        from worker.evidence_units import DeterministicEvidenceUnitProvider
+        參數：
+        - `settings`：worker 測試設定。
+        - `strategy`：測試中要求建立的 evidence strategy。
 
-        if strategy == EvidenceBuildStrategy.llm:
-            raise ValueError("llm unavailable")
-        return DeterministicEvidenceUnitProvider()
+        回傳：
+        - 不回傳；此 helper 永遠丟出例外。
+        """
+
+        del settings
+        assert strategy == EvidenceBuildStrategy.llm
+        raise ValueError("temporary llm json error")
 
     monkeypatch.setattr("worker.evidence_units.build_evidence_unit_provider", fail_llm_provider)
+    monkeypatch.setattr("worker.evidence_units.time.sleep", lambda seconds: sleep_calls.append(seconds))
+
+    with pytest.raises(ValueError, match="已重試 10 次"):
+        generate_evidence_units_for_document(
+            settings=settings,
+            file_name="results.md",
+            parent_chunks=[parent],
+            child_chunks=[child],
+        )
+
+    assert sleep_calls == [failure_count**2 for failure_count in range(1, 11)]
+
+
+def test_generate_evidence_units_deterministic_skips_source_metadata_lines() -> None:
+    """deterministic 模式不應把 cluster 控制欄位當作 evidence 內容。"""
+
+    settings = WorkerSettings(
+        _env_file=None,
+        EVIDENCE_UNITS_ENABLED=True,
+        EVIDENCE_UNITS_BUILD_STRATEGY="deterministic",
+    )
+    parent = _build_parent(
+        chunk_id="parent-1",
+        position=0,
+        heading="Results",
+        heading_path="Results",
+        section_path_text="Results",
+        content="Accuracy reaches 91.3 percent after the new policy.",
+    )
+    child = _build_child(
+        chunk_id="child-1",
+        parent_chunk_id="parent-1",
+        position=1,
+        heading="Results",
+        content="Accuracy reaches 91.3 percent after the new policy.",
+    )
 
     result = generate_evidence_units_for_document(
         settings=settings,
@@ -189,5 +328,8 @@ def test_generate_evidence_units_auto_falls_back_to_deterministic(monkeypatch) -
     )
 
     assert result.effective_strategy == EvidenceBuildStrategy.deterministic
-    assert result.fallback_reason is not None
     assert result.drafts
+    assert all(
+        not draft.evidence_text.startswith(("Heading Path:", "Section Path:", "Cluster Strategy:", "Path Quality:"))
+        for draft in result.drafts
+    )

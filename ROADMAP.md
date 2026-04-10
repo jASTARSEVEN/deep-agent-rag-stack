@@ -515,13 +515,13 @@ LLM 輸入規則：
 
 目標：
 - 在 `Phase 8A` 穩定後，再導入 evidence-centric retrieval layer，讓系統不只知道「這份文件在講什麼」，也能更容易透過 `FTS + vector search + RRF` 找到可引用的事實、結論、數值、步驟或比較依據。
-- evidence-centric enrichment 預設可使用 LLM 建立，但必須提供 deterministic fallback，避免 provider 不可用、成本超標或批次重建時整條 ingest / reindex 路徑失敗。
+- evidence-centric enrichment 可使用 LLM 或 deterministic 明確策略建立；當設定為 `auto` 或 `llm` 時，LLM 失敗不得被 deterministic 結果偽裝成成功，必須依失敗次數平方秒數退避重試，最多重試 `10` 次，仍失敗時讓 evidence stage / ingest job 進入受控失敗。
 - `Phase 8B` 合併舊 `8.7 + 8.8`：同一批次內完成 evidence layer、其 retrieval-side consumption 與專屬 evaluation checkpoint。
 - 新增的 evidence layer 必須維持 SQL-first、可觀測、可回退，且不得取代原始 `child chunk` 作為最終 citation 來源。
 
 內容：
 - 在 ingest / reindex pipeline 新增 evidence-centric enrichment stage，正式時機固定在 chunk tree 與 synopsis 建立之後、文件進入 `ready` 之前。
-- 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、fallback、retrieval-side consumption 與其專屬評估。
+- 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、受控失敗語意、retrieval-side consumption 與其專屬評估。
 - `section synopsis` 已在 repo-wide 預設改為關閉；`document synopsis` 保留。`Phase 8B` 不再把 `section synopsis` 視為正式前置條件，而是改以 `heading_path / section_path_text` 與 evidence unit 自身的 path quality / clustering metadata 承接 path-aware 能力。
 - evidence unit 的正式輸入不得只看 local parent heading；至少應包含：
   - `document title`
@@ -575,13 +575,14 @@ LLM 輸入規則：
   - evidence contribution 必須同時看 evidence 品質與 query 類型做選擇性加權，不得對所有命中的 evidence units 無條件等權加分
   - 同一個 child chunk 的 evidence 加分必須設上限，並對高度重疊的 evidence units 做 dedupe / decay，避免 evidence-dense section 因重複計票而失真
   - evidence lane 失敗時必須維持 child-only fail-open；trace 需可明確區分 `child_only_hit`、`evidence_injected_hit` 與 `double_supported_hit`
-- deterministic fallback 必須是正式支援路徑，不是只存在測試環境：
+- deterministic 必須是正式支援的顯式策略，不是只存在測試環境；但不得作為 `auto` / `llm` 的靜默成功 fallback：
   - 設定可顯式指定 `llm | deterministic | auto`
-  - `auto` 預設先嘗試 `llm`，失敗時回退 `deterministic`
-  - trace / observability 必須保留實際採用的 build strategy 與 fallback reason
+  - `auto` 預設先嘗試 `llm`，LLM 暫時性失敗時依 `失敗次數 ^ 2` 秒退避重試，最多重試 `10` 次
+  - `deterministic` 只能在顯式指定時寫入成功結果，不能在 LLM 失敗時被用來掩蓋失敗
+  - trace / observability 必須保留實際採用的 build strategy 與失敗訊息
 - 失敗語意需明確：
-  - 若 `auto` 模式下 LLM enrichment 失敗但 deterministic 成功，文件可進入 `ready`
-  - 若兩條路徑都失敗，才視為 evidence-centric stage 失敗
+  - 若 `auto` / `llm` 模式下 LLM enrichment 重試耗盡後仍失敗，文件不得因 deterministic fallback 而進入 `ready`
+  - 若顯式 `deterministic` 路徑失敗，才視為 deterministic evidence-centric stage 失敗
   - 若產品決策認定 evidence layer 屬於 optional enhancement，需明確記錄 `evidence_enrichment_skipped`，但不得默默混淆成成功產出
 - benchmark 與 regression 需至少觀測：
   - `QASPER 100` 的 evidence-dense section recall 是否改善

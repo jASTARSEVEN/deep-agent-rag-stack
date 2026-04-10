@@ -115,6 +115,7 @@ flowchart TD
     PC --> DS["Document Synopsis<br/>正式 ingest / reindex stage"]
     PC -. opt-in .-> SS["Section Synopsis<br/>repo-wide opt-in / 非預設"]
     PC -. feature flag .-> EU["Evidence Enrichment<br/>Phase 8B evidence units"]
+    EU -. auto/llm retry exhausted .-> EFAIL["Evidence Enrichment Failed<br/>no deterministic fallback"]
 
     CC --> CE["Child Embeddings"]
     DS --> DE["Document Synopsis Embedding"]
@@ -128,6 +129,7 @@ flowchart TD
     DE --> READY
     SE -. opt-in .-> READY
     EE --> READY
+    EFAIL --> READY
     ESKIP --> READY
     DT --> READY
 ```
@@ -336,6 +338,7 @@ flowchart TD
 19.12.8.2. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local parent/child content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
 19.12.8.3. `heading_path / section_path_text` 在 `Phase 8B` 的正式角色是 `soft hint`，不是硬邊界；path 缺失、空白、命中 `目錄 / table of contents / contents`、帶 leader dots 或局部不穩定時，必須以 `path_quality_score` 降權，並退回 `adjacency/content similarity/table-text coupling` clustering
 19.12.8.4. `evidence recall` 的正式文字表示使用 `heading_path / section_path_text + evidence_text`；但 path 權重需受 `path_quality_score` 與 `cluster_strategy` 約束，不得假設 parser path 永遠可靠
+19.12.8.5. `EVIDENCE_UNITS_BUILD_STRATEGY=auto|llm` 代表正式使用 LLM 產生 evidence units；LLM 失敗時必須依 `失敗次數 ^ 2` 秒退避重試，最多重試 `10` 次。重試耗盡後應讓 evidence enrichment / ingest 進入受控失敗，不得改用 deterministic 結果作為成功產出；`deterministic` 僅能在顯式指定時使用。
 19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
