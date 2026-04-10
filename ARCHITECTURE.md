@@ -310,7 +310,7 @@ flowchart TD
 19.12.1.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學，避免一層 rule-only、一層 model-only 造成維護與觀測不一致
 19.12.1.2. `LLM fallback` 已是正式 ready-path 的一部分，但輸入必須嚴格受限為 query、language、document mention summary 與 label options；不得讀全文、不得改寫 query、不得輸出自由文字
 19.12.1.3. Deep Agents 可見的 retrieval tool contract 不應讓 agent 提供 routing 參數；`task_type`、`document_scope` 與 `summary_strategy` 皆由後端 router 根據原始 query 與已授權且 `ready` 文件集合自動判斷。內部 router 可維持這三個正交欄位作為 trace / evaluation contract，但不得讓 agent 直接提供 document ids 或覆寫 routing 決策
-19.12.2. worker 端保留下來的 synopsis schema 仍可作為未來實驗或離線分析材料，但不再屬於正式 API trace、evaluation preview 或 checkpoint contract；若後續要重新接回產品主線，正式規劃應延後到 `Phase 8C`，並且只能以 agent-side optional hints 形式存在
+19.12.2. worker 端保留下來的 synopsis schema 仍可作為未來實驗或離線分析材料，但不再屬於 `Phase 8A` / `Phase 8B` 的正式 API trace、evaluation preview 或 checkpoint contract；`Phase 8C` 若接回 synopsis，僅能放在 agentic evidence-seeking loop 內作為文件選擇與補檢索 planning hint，不得作為 citation payload、最終回答證據或 SQL gate 替代品
 19.12.3. 第一層 `task_type=fact_lookup` 的主線預設是 area-scoped `child recall -> rerank -> assembler`；若 query 高信心提及已授權且 `ready` 的單一或多份文件，文件 scope 應作為與 `task_type` 正交的檢索收斂條件保留，並以 `allowed_document_ids` 限縮 recall，而不是因 `fact_lookup` 題型被丟棄。
 19.12.4. 第一層 `task_type=document_summary` 與 `task_type=cross_document_compare` 的最終回答不再走 runtime 專用 synthesis lane；正式主線是一致的 `Deep Agents` 主 agent path，由 agent 根據 `retrieve_area_contexts` 的 assembled contexts 自行完成摘要或比較
 19.12.5. `thinking_mode` 目前僅作為前後端與 checkpoint 的相容 metadata 保留，不再決定 answer lane；正式 trace 只保留固定 `answer_path="deepagents_unified"` 與 `thinking_mode_ignored` 狀態
@@ -319,7 +319,9 @@ flowchart TD
 19.12.7.1. `document_summary` 與 `cross_document_compare` 的最終回答正式由主 `Deep Agents` agent 根據 `retrieve_area_contexts` 的 assembled contexts 直接完成，不再維持 runtime 專用 synthesis lane
 19.12.7.2. `thinking_mode` 目前僅屬於前後端與 checkpoint 的相容 metadata；它不再影響 retrieval 與 answer path 的正式主線行為
 19.12.8. `Phase 8B` 的 enrichment lane 已取消並自 runtime / worker / schema 主線移除；正式檢索不得依賴已移除的 enrichment table、query-time recall lane 或 trace contract。
-19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis` 與 `section synopsis` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體。
+19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis` 與 `section synopsis` 若要送入，只能以 selected / compressed hints 形式作為 orientation / planning hints，不得與 citation-ready contexts 混成同權重主體。
+19.12.10. `Phase 8C` 的 agentic evidence-seeking loop 可新增 agent 可見工具，但每個工具都必須保留 SQL gate、deny-by-default、same-404 與 ready-only 語意。文件清單工具只能回傳已授權 `ready` 文件名稱與短期 handle；synopsis inspection / ranking 工具只能查詢已授權 `ready` 文件且輸出長度受控；scoped retrieval 工具必須在後端重新驗證 handle 對應的 area、使用者權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`。agent 不得直接提供原始 `document_id` 繞過後端解析，也不得用 synopsis hints 補成沒有 citation-ready evidence 的結論。
+19.12.11. `Phase 8C` 的每回合 loop 必須具備明確上限：最大 retrieval 呼叫次數、最大 synopsis inspection 次數、每次 scoped retrieval 最大文件數、全回合 token budget、context budget 與 latency budget。若補查沒有新增文件 / section / citation coverage，agent 必須停止補查並在回答中標示證據不足。
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state

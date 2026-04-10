@@ -238,9 +238,9 @@
 
 1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
 2. `Phase 8A` 已以 closeout accepted 方式結束；summary/compare 的 unified Deep Agents 主線與其 checkpoint artifacts 保留作為後續 phase 的 baseline
-3. 進入 `Phase 8B — Evidence-Centric Enrichment & Evaluation` 前，先保持 `Phase 8A` 主線凍結，避免再把 8A/8B 問題混在一起
-4. `Phase 8B` 以 feature-flag / optional lane 方式導入 evidence-centric 中介表示與其專屬評估
-5. `document synopsis` / `section synopsis` 的再利用不納入 `Phase 8A` 或 `Phase 8B` 核心交付；若後續仍有價值，須先完成 `Phase 8B` 的 evidence merge hardening 與 promotion gate，再延後到 `Phase 8C` 評估是否以 agent-side optional hints 形式接回
+3. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
+4. `Phase 8C` 改為 agentic evidence-seeking loop：讓主 `Deep Agents` agent 在初次 retrieval 證據不足時，可受控查看已授權 `ready` 文件名稱、讀取 selected synopsis hints，再以文件 scope 多次補 retrieval
+5. 8C 的 synopsis 只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
 6. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
 7. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
 8. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
@@ -524,18 +524,48 @@ LLM 輸入規則：
 狀態：
 - `已取消並移除（後續工作回到 child-based retrieval hardening 與 benchmark regression guardrails）`
 
-## Phase 8C — Synopsis Reuse as Agent-Side Optional Hints
+## Phase 8C — Agentic Evidence-Seeking Loop for Summary / Compare
 
 目標：
-- 重新評估既有 `document synopsis` / `section synopsis` 是否仍具產品價值，但不把它們重新塞回正式 retrieval 主線。
-- 若確認有價值，將 synopsis 定位為主 `Deep Agents` agent 的 optional hints，而不是 recall gate、selection gate 或 citation 單位。
+- 讓 `document_summary` 與 `cross_document_compare` 在初次 retrieval 證據不足時，能由主 `Deep Agents` agent 以受控方式補查文件範圍與證據。
+- 將既有 `document synopsis` / opt-in `section synopsis` 定位為文件選擇與 retrieval planning hints，而不是 recall gate、selection gate、citation 單位或最終回答證據。
+- 改善 `phase8a-summary-compare-v1` 中仍存在的 required document coverage、insufficient evidence acknowledgement 與 faithfulness 問題，同時避免 p95 latency 與 token budget 繼續惡化。
 
 內容：
-- 本 phase 的啟動前提是：child-based retrieval hardening 與 benchmark regression guardrails 已穩定，且不重新引入已移除的 enrichment lane。
-- 僅在長文件 `document_overview`、多文件 `multi_document_theme` 或其他經驗證確實受益的情境下，將 selected / compressed synopsis hints 作為 agent-side 輔助資訊。
-- synopsis hints 的主責任是 orientation / planning，不得參與 SQL scope、candidate 去留或最終 citation 產生。
-- 送進 LLM 的主體仍必須是 assembled `parent/child` evidence contexts；synopsis hints 只能是次要欄位。
-- 若驗證顯示 synopsis hints 沒有穩定提升 summary/compare 品質，應維持不接回主線，並考慮後續停用 worker 生成或改為純離線分析資產。
+- 新增 agent 可見但安全受控的文件清單工具，例如 `list_authorized_ready_documents`：
+  - 僅回傳目前使用者在該 area 已授權且 `status=ready` 的文件名稱與短期 handle
+  - 不回傳全文、不回傳非 ready 文件、不暴露未授權文件是否存在
+  - 仍以 SQL gate / deny-by-default / same-404 為保護邊界
+- 新增 agent 可見的 synopsis inspection / ranking 工具，例如 `inspect_document_synopses` 或 `rank_document_synopses`：
+  - 只允許查詢已授權且 `ready` 的文件
+  - synopsis 僅作為 orientation / planning hint
+  - synopsis 不得產生 citation，不得直接餵成最終答案依據
+  - 輸出需控制長度、文件數與呼叫次數
+- 將 `retrieve_area_contexts` 從單次零參數快取模型演進為 bounded multi-call retrieval：
+  - agent 第一次仍以原始問題做 area-scoped retrieval
+  - 若 assembled contexts 對必要文件、章節或比較軸覆蓋不足，可依工具回傳的短期 handle 指定一份或多份文件做 scoped retrieval
+  - scoped retrieval 必須在後端重新驗證 handle 對應的 area、使用者權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`
+  - 不允許 agent 直接提供原始 `document_id` 作為權限繞路
+- 加入 loop guardrails：
+  - 每回合最大 retrieval 呼叫次數
+  - 每回合最大 synopsis inspection 次數
+  - 每次 scoped retrieval 的最大文件數
+  - 全回合 token budget、context budget 與 latency budget
+  - 無新增 evidence 時停止補查，並要求回答明確標示證據不足
+- 最終回答規則：
+  - 最終 citation 一律來自 scoped retrieval 回傳的 assembled contexts
+  - synopsis hints、文件名稱清單與 agent planning trace 不得成為 citation
+  - 若某個比較面向或文件沒有 citation-ready evidence，回答必須明確說明證據不足，不得用 synopsis 補結論
+- trace / evaluation 需補上：
+  - 初次 retrieval 與每次 scoped retrieval 的 tool call summary
+  - 文件清單工具是否被呼叫、回傳文件數與被選文件 handles
+  - synopsis hint 是否被使用、其來源文件與壓縮長度
+  - 每次補查帶來的新文件 / section / citation coverage
+  - 停止補查原因
+- 驗證方式：
+  - 先以 `phase8a-summary-compare-v1` 建立 before / after，比較 `required_document_not_cited`、`insufficient_evidence_not_acknowledged`、faithfulness、overall score 與 p95 latency
+  - 同步跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵，避免 summary/compare 的 agentic loop 破壞 generic-first retrieval 主線
+  - 若品質沒有穩定提升，或 latency / token 成本超過 gate，應回退 runtime 改動，只保留分析文件
 
 狀態：
-- `未開始（優先順序後調；待 Phase 8B retrieval-side hardening 與 promotion gate 完成後再啟動）`
+- `未開始（已改為 agentic evidence-seeking loop 路線；下一步是設計工具契約、guardrails 與 checkpoint before / after 驗證）`

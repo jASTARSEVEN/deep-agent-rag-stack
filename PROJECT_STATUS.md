@@ -107,7 +107,7 @@
 - checkpoint 會以固定 dataset 直接跑真實 chat runtime，再用 `LLM-as-judge` 評 `completeness / faithfulness / structure / compare_coverage`，並以 deterministic hard blockers 擋 `task_type`、`summary_strategy`、`ready-only citations`、必需文件覆蓋、timeout 與 token budget
 - checkpoint run metadata 已新增固定 `answer_path="deepagents_unified"`，用來明確標示目前正式驗證的是主 Deep Agents answer path
 - `Phase 8A` 目前的正式驗收定義已不再要求 query-time synopsis recall 或 summary/compare 專用 synthesis lane；驗收核心改為 unified Deep Agents path 是否能在固定 checkpoint 上穩定過線
-- synopsis 的再利用目前不屬於 `Phase 8A` 或 `Phase 8B` 正式交付；若後續仍保留價值，規劃將延後到 `Phase 8C` 再評估是否以 agent-side optional hints 形式接回
+- synopsis 的再利用目前不屬於 `Phase 8A` 或 `Phase 8B` 正式交付；`Phase 8C` 已改為 agentic evidence-seeking loop，synopsis 僅能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
 - repo 已新增固定 benchmark package `benchmarks/phase8a-summary-compare-v1`，包含 `16` 題 summary/compare checkpoint fixtures 與對應 source documents
 - `Phase 8A` 已完成最新一輪正式驗收 checkpoint；最新 accepted artifact 為 `parallel-6` runner 輸出，雖未通過原先 `passed=true` gate，但專案已判定目前優化接近現階段上限，因此接受當前 ceiling 並以現況結案
 - 最新 accepted checkpoint 觀測值為：`task_type_accuracy=0.75`、`summary_strategy_accuracy=0.5`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_completeness=4.8125`、`avg_faithfulness_to_citations=4.375`、`avg_structure_quality=4.875`、`avg_compare_coverage=4.625`、`avg_overall_score=4.6719`、`p95_latency_seconds=21.0378`
@@ -325,7 +325,7 @@
 
 ### Current Focus
 - `Phase 8B` enrichment lane 已取消；目前 focus 回到既有 `child hybrid recall -> rerank -> selection -> assembler` 主線的 benchmark 驗證與 regression guardrails
-- `Phase 8C` 的 synopsis-as-hint 優先順序仍後調；在重新啟動前，需先確認既有 child-based retrieval 與 unified Deep Agents answer path 的穩定性
+- `Phase 8C` 路線已改為 agentic evidence-seeking loop：主 `Deep Agents` agent 可在初次 retrieval 證據不足時，受控查看已授權 `ready` 文件名稱、讀取 selected synopsis hints，並以文件 scope 多次補 retrieval
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -334,11 +334,11 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 繼續跑完 `QASPER 100`、`NQ 100` 與 `DRCD 100`，確認移除 enrichment lane 後的 child-based retrieval 主線沒有 benchmark regression；`phase8a-summary-compare-v1` 已於 `2026-04-10` 重跑，最新結果為 `passed=false`、`task_type_accuracy=1.0000`、`summary_strategy_accuracy=0.9375`
+1. 設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
 2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
-3. 以 `child recall confidence` 或其他 child-based 訊號做後續 retrieval hardening；不得重新引入已移除的 enrichment schema 或 query-time merge lane
+3. 以 `phase8a-summary-compare-v1` 建立 8C 前後對照，優先觀測 `required_document_not_cited`、`insufficient_evidence_not_acknowledged`、faithfulness、overall score 與 p95 latency；同時跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵
 4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-5. 待 child-based retrieval hardening 與 regression guardrails 穩定後，再決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
+5. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
 
 ## 尚未開始的功能
 
