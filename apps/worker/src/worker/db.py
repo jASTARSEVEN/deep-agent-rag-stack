@@ -80,54 +80,6 @@ class ChunkStructureKind(str, Enum):
     table = "table"
 
 
-class EvidenceEnrichmentStatus(str, Enum):
-    """Evidence enrichment 階段狀態。"""
-
-    skipped = "skipped"
-    processing = "processing"
-    ready = "ready"
-    failed = "failed"
-
-
-class EvidenceBuildStrategy(str, Enum):
-    """Evidence units 的生成策略。"""
-
-    deterministic = "deterministic"
-    llm = "llm"
-    auto = "auto"
-
-
-class EvidenceType(str, Enum):
-    """Evidence unit 的語意類型。"""
-
-    claim = "claim"
-    metric = "metric"
-    procedure = "procedure"
-    table_finding = "table_finding"
-    comparison_point = "comparison_point"
-
-
-class EvidenceClusterStrategy(str, Enum):
-    """Evidence unit 的聚合策略。"""
-
-    single_parent = "single_parent"
-    path_aware = "path_aware"
-    adjacency_fallback = "adjacency_fallback"
-    content_similarity_fallback = "content_similarity_fallback"
-    table_text_coupling = "table_text_coupling"
-
-
-class EvidencePathQualityReason(str, Enum):
-    """Evidence unit path quality 的主要原因碼。"""
-
-    ok = "ok"
-    missing_path = "missing_path"
-    generic_heading = "generic_heading"
-    toc_noise = "toc_noise"
-    unstable_path = "unstable_path"
-    low_content_overlap = "low_content_overlap"
-
-
 class Document(Base):
     """Worker 更新文件狀態時使用的最小 documents model。"""
 
@@ -159,21 +111,6 @@ class Document(Base):
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 最近一次成功更新 document synopsis 的時間。
     synopsis_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # evidence enrichment 階段狀態。
-    evidence_enrichment_status: Mapped[EvidenceEnrichmentStatus] = mapped_column(
-        SqlEnum(EvidenceEnrichmentStatus, native_enum=False),
-        nullable=False,
-        default=EvidenceEnrichmentStatus.skipped,
-    )
-    # 最近一次 evidence enrichment 實際採用的 build strategy。
-    evidence_enrichment_strategy: Mapped[EvidenceBuildStrategy | None] = mapped_column(
-        SqlEnum(EvidenceBuildStrategy, native_enum=False),
-        nullable=True,
-    )
-    # evidence enrichment 失敗或 fallback 的可讀訊息。
-    evidence_enrichment_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    # 最近一次成功或失敗完成 evidence enrichment 的時間。
-    evidence_enrichment_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # 文件建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     # 文件最後更新時間。
@@ -294,130 +231,6 @@ class DocumentChunkRegion(Base):
     bbox_right: Mapped[float] = mapped_column(Float(), nullable=False)
     # 上邊界座標。
     bbox_top: Mapped[float] = mapped_column(Float(), nullable=False)
-    # 建立時間。
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-
-
-class DocumentChunkEvidenceUnit(Base):
-    """Worker 寫入的 evidence unit。"""
-
-    __tablename__ = "document_chunk_evidence_units"
-    __table_args__ = (
-        UniqueConstraint(
-            "document_id",
-            "primary_parent_chunk_id",
-            "position",
-            name="uq_document_chunk_evidence_units_parent_position",
-        ),
-    )
-
-    # evidence unit 唯一識別碼。
-    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
-    # 所屬文件。
-    document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
-    # 主要 parent chunk。
-    primary_parent_chunk_id: Mapped[str] = mapped_column(
-        ForeignKey("document_chunks.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    # evidence 類型。
-    evidence_type: Mapped[EvidenceType] = mapped_column(SqlEnum(EvidenceType, native_enum=False), nullable=False)
-    # evidence 主文字內容。
-    evidence_text: Mapped[str] = mapped_column(Text(), nullable=False)
-    # evidence 對應 embedding。
-    evidence_embedding: Mapped[list[float] | None] = mapped_column(build_embedding_type(), nullable=True)
-    # build strategy。
-    build_strategy: Mapped[EvidenceBuildStrategy] = mapped_column(
-        SqlEnum(EvidenceBuildStrategy, native_enum=False),
-        nullable=False,
-    )
-    # 在文件內的穩定排序。
-    position: Mapped[int] = mapped_column(Integer(), nullable=False)
-    # evidence 可信度。
-    confidence: Mapped[float] = mapped_column(Float(), nullable=False, default=0.0)
-    # path quality 分數。
-    path_quality_score: Mapped[float] = mapped_column(Float(), nullable=False, default=0.0)
-    # path quality 主要原因碼。
-    path_quality_reason: Mapped[EvidencePathQualityReason] = mapped_column(
-        SqlEnum(EvidencePathQualityReason, native_enum=False),
-        nullable=False,
-        default=EvidencePathQualityReason.ok,
-    )
-    # cluster strategy。
-    cluster_strategy: Mapped[EvidenceClusterStrategy] = mapped_column(
-        SqlEnum(EvidenceClusterStrategy, native_enum=False),
-        nullable=False,
-    )
-    # heading path soft hint。
-    heading_path: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    # section path text soft hint。
-    section_path_text: Mapped[str | None] = mapped_column(Text(), nullable=True)
-    # 建立時間。
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-    # 更新時間。
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
-
-
-class DocumentChunkEvidenceUnitChildSource(Base):
-    """Evidence unit 與 child chunk 的來源映射。"""
-
-    __tablename__ = "document_chunk_evidence_unit_child_sources"
-    __table_args__ = (
-        UniqueConstraint(
-            "evidence_unit_id",
-            "child_chunk_id",
-            name="uq_document_chunk_evidence_unit_child_sources_unit_child",
-        ),
-        UniqueConstraint(
-            "evidence_unit_id",
-            "position",
-            name="uq_document_chunk_evidence_unit_child_sources_unit_position",
-        ),
-    )
-
-    # 關聯列唯一識別碼。
-    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
-    # 所屬 evidence unit。
-    evidence_unit_id: Mapped[str] = mapped_column(
-        ForeignKey("document_chunk_evidence_units.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    # 對應 child chunk。
-    child_chunk_id: Mapped[str] = mapped_column(ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False)
-    # 穩定順序。
-    position: Mapped[int] = mapped_column(Integer(), nullable=False)
-    # 建立時間。
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
-
-
-class DocumentChunkEvidenceUnitParentSource(Base):
-    """Evidence unit 與 parent chunk 的來源映射。"""
-
-    __tablename__ = "document_chunk_evidence_unit_parent_sources"
-    __table_args__ = (
-        UniqueConstraint(
-            "evidence_unit_id",
-            "parent_chunk_id",
-            name="uq_document_chunk_evidence_unit_parent_sources_unit_parent",
-        ),
-        UniqueConstraint(
-            "evidence_unit_id",
-            "position",
-            name="uq_document_chunk_evidence_unit_parent_sources_unit_position",
-        ),
-    )
-
-    # 關聯列唯一識別碼。
-    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
-    # 所屬 evidence unit。
-    evidence_unit_id: Mapped[str] = mapped_column(
-        ForeignKey("document_chunk_evidence_units.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    # 對應 parent chunk。
-    parent_chunk_id: Mapped[str] = mapped_column(ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False)
-    # 穩定順序。
-    position: Mapped[int] = mapped_column(Integer(), nullable=False)
     # 建立時間。
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 

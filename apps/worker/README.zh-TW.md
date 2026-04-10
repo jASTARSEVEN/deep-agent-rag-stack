@@ -113,7 +113,6 @@
 - `ready` 現在代表 chunking、child embedding、document synopsis 與 synopsis embedding 都已完成。
 - worker 目前已負責 child chunk 的 embedding。
 - worker 現在會在 ingest / reindex 期間以全 parent coverage 生成 document-level synopsis，寫入 `synopsis_text`，再建立 synopsis embedding，供 Phase 8.3 document recall 使用。
-- Phase 8B evidence units 由 `EVIDENCE_UNITS_ENABLED` 與 `EVIDENCE_UNITS_BUILD_STRATEGY=auto|llm|deterministic` 控制。當 `auto` 或 `llm` 使用 LLM 路徑時，LLM 失敗會依 `失敗次數 ^ 2` 秒退避重試，最多重試 `10` 次；若全部重試失敗，ingest / reindex job 會失敗，不會默默寫入 deterministic fallback 結果。
 - 目前預設 embedding 路徑仍為 `EMBEDDING_PROVIDER=openai` 與 `EMBEDDING_MODEL=text-embedding-3-small`，而儲存 schema 固定使用 `1536` 維。
 - `EMBEDDING_PROVIDER=huggingface` 可作為本機 / 自架 embedding 路徑，建議模型為 `Qwen/Qwen3-Embedding-0.6B`；worker 會在首次使用時視需要下載模型，之後重用本機 Hugging Face cache，並將模型原生 `1024` 維向量零補齊到目前 `1536` 維 schema。
 - 可選的 self-hosted 路徑會走 `POST /v1/embeddings` 與 Bearer auth，並使用獨立的 `SELF_HOSTED_EMBEDDING_*` 設定；建議模型為 `Qwen/Qwen3-Embedding-0.6B`。

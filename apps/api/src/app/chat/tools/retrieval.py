@@ -272,11 +272,6 @@ def build_tool_call_output_summary(
         "dropped_by_diversity": retrieval_trace.get("dropped_by_diversity", []),
         "profile_settings": retrieval_trace.get("profile_settings", {}),
         "query_focus_applied": retrieval_trace.get("query_focus_applied"),
-        "evidence_units_enabled": retrieval_trace.get("evidence_units_enabled"),
-        "evidence_build_strategy_used": retrieval_trace.get("evidence_build_strategy_used"),
-        "evidence_recall_hits": retrieval_trace.get("evidence_recall_hits", []),
-        "mapped_child_ids": retrieval_trace.get("mapped_child_ids", []),
-        "evidence_fallback_reason": retrieval_trace.get("evidence_fallback_reason"),
         "contexts": [
             {
                 "context_index": item["context_index"],

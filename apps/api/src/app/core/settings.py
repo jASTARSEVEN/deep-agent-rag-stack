@@ -147,11 +147,6 @@ class AppSettings(BaseSettings):
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 30
     retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = True
     retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "generic_v1"
-    retrieval_evidence_units_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_UNITS_ENABLED")] = False
-    retrieval_evidence_units_top_k: Annotated[int, Field(alias="RETRIEVAL_EVIDENCE_UNITS_TOP_K")] = 12
-    retrieval_evidence_units_max_mapped_children: Annotated[
-        int, Field(alias="RETRIEVAL_EVIDENCE_UNITS_MAX_MAPPED_CHILDREN")
-    ] = 6
     retrieval_query_focus_enabled: Annotated[bool, Field(alias="RETRIEVAL_QUERY_FOCUS_ENABLED")] = False
     retrieval_query_focus_variant: Annotated[str, Field(alias="RETRIEVAL_QUERY_FOCUS_VARIANT")] = "generic_field_focus_v1"
     retrieval_query_focus_confidence_threshold: Annotated[float, Field(alias="RETRIEVAL_QUERY_FOCUS_CONFIDENCE_THRESHOLD")] = 0.7

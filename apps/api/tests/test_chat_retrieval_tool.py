@@ -536,11 +536,6 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
         "dropped_by_diversity": [],
         "query_focus_applied": None,
         "profile_settings": {},
-        "evidence_units_enabled": None,
-        "evidence_build_strategy_used": None,
-        "evidence_recall_hits": [],
-        "mapped_child_ids": [],
-        "evidence_fallback_reason": None,
         "contexts": [],
     }
 

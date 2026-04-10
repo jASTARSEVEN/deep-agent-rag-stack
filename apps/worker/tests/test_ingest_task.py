@@ -218,8 +218,6 @@ def test_process_document_ingest_updates_ready_and_writes_chunks(monkeypatch, tm
         assert all(chunk.section_synopsis_text is None for chunk in parent_chunks)
         assert all(chunk.section_synopsis_embedding is None for chunk in parent_chunks)
         assert all(chunk.section_synopsis_updated_at is None for chunk in parent_chunks)
-        assert refreshed_document.evidence_enrichment_status == "skipped"
-        assert refreshed_document.evidence_enrichment_strategy is None
         child_chunks = [chunk for chunk in refreshed_chunks if chunk.chunk_type == ChunkType.child]
         assert child_chunks
         assert all(chunk.embedding is not None for chunk in child_chunks)

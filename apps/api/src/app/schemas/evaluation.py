@@ -205,10 +205,6 @@ class EvaluationStageCandidate(BaseModel):
     rrf_rank: int | None = None
     rerank_rank: int | None = None
     matched_relevance: int | None
-    evidence_unit_id: UUID | None = None
-    evidence_type: str | None = None
-    path_quality_score: float | None = None
-    cluster_strategy: str | None = None
 
 
 class EvaluationCandidateStageResponse(BaseModel):
@@ -292,7 +288,6 @@ class EvaluationCandidatePreviewResponse(BaseModel):
     query_routing: EvaluationQueryRoutingDetail
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
-    evidence_recall: EvaluationCandidateStageResponse | None = None
     recall: EvaluationCandidateStageResponse
     rerank: EvaluationCandidateStageResponse
     assembled: EvaluationCandidateStageResponse
@@ -353,7 +348,6 @@ class EvaluationPerQueryDetail(BaseModel):
     benchmark_document_scope: dict[str, object] | None = None
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
-    evidence_recall: EvaluationPerQueryStageDetail | None = None
     recall: EvaluationPerQueryStageDetail
     rerank: EvaluationPerQueryStageDetail
     assembled: EvaluationPerQueryStageDetail

@@ -16,7 +16,6 @@ from worker.db import (
     DocumentChunk,
     DocumentChunkRegion,
     DocumentStatus,
-    EvidenceEnrichmentStatus,
     IngestJob,
     IngestJobStatus,
     create_database_engine,
@@ -157,10 +156,6 @@ def _mark_processing(*, session, document: Document, job: IngestJob) -> None:
     document.synopsis_text = None
     document.synopsis_embedding = None
     document.synopsis_updated_at = None
-    document.evidence_enrichment_status = EvidenceEnrichmentStatus.skipped
-    document.evidence_enrichment_strategy = None
-    document.evidence_enrichment_error = None
-    document.evidence_enrichment_updated_at = None
     session.commit()
 
 

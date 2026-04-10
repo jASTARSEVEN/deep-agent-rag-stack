@@ -36,16 +36,6 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
         DOCUMENT_SYNOPSIS_PARALLELISM="",
         DOCUMENT_SYNOPSIS_REASONING_EFFORT="",
         DOCUMENT_SYNOPSIS_TEXT_VERBOSITY="",
-        EVIDENCE_UNITS_ENABLED="",
-        EVIDENCE_UNITS_BUILD_STRATEGY="",
-        EVIDENCE_UNITS_MODEL="",
-        EVIDENCE_UNITS_MAX_UNITS_PER_PARENT="",
-        EVIDENCE_UNITS_MAX_INPUT_CHARS="",
-        EVIDENCE_UNITS_MAX_OUTPUT_CHARS="",
-        EVIDENCE_UNITS_MAX_OUTPUT_TOKENS="",
-        EVIDENCE_UNITS_LLM_PARALLELISM="",
-        EVIDENCE_UNITS_REASONING_EFFORT="",
-        EVIDENCE_UNITS_TEXT_VERBOSITY="",
         OPENROUTER_HTTP_REFERER="",
         OPENROUTER_TITLE="",
         OPENDATALOADER_USE_STRUCT_TREE="",
@@ -87,16 +77,6 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.document_synopsis_parallelism == 6
     assert settings.document_synopsis_reasoning_effort == "minimal"
     assert settings.document_synopsis_text_verbosity == "low"
-    assert settings.evidence_units_enabled is False
-    assert settings.evidence_units_build_strategy == "auto"
-    assert settings.evidence_units_model == "gpt-5-mini"
-    assert settings.evidence_units_max_units_per_parent == 3
-    assert settings.evidence_units_max_input_chars == 4000
-    assert settings.evidence_units_max_output_chars == 900
-    assert settings.evidence_units_max_output_tokens == 1200
-    assert settings.evidence_units_llm_parallelism == 6
-    assert settings.evidence_units_reasoning_effort == "minimal"
-    assert settings.evidence_units_text_verbosity == "low"
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True
     assert settings.llamaparse_do_not_cache is True

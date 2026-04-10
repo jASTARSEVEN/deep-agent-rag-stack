@@ -114,23 +114,16 @@ flowchart TD
     PC --> CC["建立 Child Chunks"]
     PC --> DS["Document Synopsis<br/>正式 ingest / reindex stage"]
     PC -. opt-in .-> SS["Section Synopsis<br/>repo-wide opt-in / 非預設"]
-    PC -. feature flag .-> EU["Evidence Enrichment<br/>Phase 8B evidence units"]
-    EU -. auto/llm retry exhausted .-> EFAIL["Evidence Enrichment Failed<br/>no deterministic fallback"]
 
     CC --> CE["Child Embeddings"]
     DS --> DE["Document Synopsis Embedding"]
     SS -. opt-in .-> SE["Section Synopsis Embedding"]
-    EU --> EE["Evidence Embeddings<br/>document_chunk_evidence_units"]
-    EU -. skipped .-> ESKIP["documents.evidence_enrichment_skipped"]
 
     PD --> DT["documents.display_text / offsets"]
 
     CE --> READY["document ready / failed"]
     DE --> READY
     SE -. opt-in .-> READY
-    EE --> READY
-    EFAIL --> READY
-    ESKIP --> READY
     DT --> READY
 ```
 
@@ -169,12 +162,7 @@ flowchart TD
     FQ --> RQ
 
     RQ --> CH["Child Hybrid Recall<br/>vector + PGroonga FTS + RRF<br/>SQL allowed_document_ids when resolved"]
-    RQ -. feature flag / conditional .-> EH["Evidence Unit Hybrid Recall<br/>vector + FTS + RRF"]
-    EH --> MAP["Map evidence units<br/>to parent + source_child_chunk_ids"]
-    CH --> MERGE["Merge child candidates"]
-    MAP --> MERGE
-
-    MERGE --> RR["Parent-level Rerank<br/>provider fail-open to RRF"]
+    CH --> RR["Parent-level Rerank<br/>provider fail-open to RRF"]
     RR --> SEL{"scope-aware selection"}
     SEL -->|fact_lookup| PASS["pass-through / precision-first"]
     SEL -->|document_summary| SUMSEL["summary diversity<br/>single-doc or multi-doc coverage"]
@@ -220,7 +208,7 @@ flowchart TD
 3. `align-spans` 必須讀取目標 area 內 `ready` 文件的 `display_text`，以 `display_text-first` 對齊 evidence；gold truth 不信任外部資料集原始 offsets。
 4. 對齊結果分成 `auto_matched`、`needs_review` 與 `rejected`，並輸出 `alignment_candidates.jsonl` 與 `alignment_review_queue.jsonl`；若 queue 非空，可先用 `review_external_benchmark_with_openai.py` 做 `OpenAI` review 補 span，再視需要回到 `EvaluationDrawer + documents preview` 做人工複核。
 5. `build-snapshot` 只會將 `auto_matched` 與 reviewer 明確核准的 spans 轉成正式 snapshot；未具穩定 gold span 的題目不得包裝成正式 benchmark 分數來源。
-6. `QASPER`、`UDA` 與 `DRCD` 的原始任務都帶有每題指定文件上下文；正式 benchmark runner 對 dataset name 以 `qasper-`、`uda-` 或 `drcd-` 開頭的資料集，會以該題 gold spans 的 `document_id` 作為指定文件 scope，再執行 recall / evidence recall / rerank / assembler。此規則只屬於 benchmark contract，不得套用到產品 chat runtime，也不得把 oracle 文件 scope 分數與舊的 area-wide ambiguous query 分數混讀；若 baseline run 與 candidate run 的文件 scope 模式不同，baseline compare 必須明確標記 skip。
+6. `QASPER`、`UDA` 與 `DRCD` 的原始任務都帶有每題指定文件上下文；正式 benchmark runner 對 dataset name 以 `qasper-`、`uda-` 或 `drcd-` 開頭的資料集，會以該題 gold spans 的 `document_id` 作為指定文件 scope，再執行 recall / rerank / assembler。此規則只屬於 benchmark contract，不得套用到產品 chat runtime，也不得把 oracle 文件 scope 分數與舊的 area-wide ambiguous query 分數混讀；若 baseline run 與 candidate run 的文件 scope 模式不同，baseline compare 必須明確標記 skip。
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁
@@ -320,27 +308,22 @@ flowchart TD
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
 19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
 19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；但它現在只保留為 opt-in 實驗資料，正式預設已關閉
-19.11. worker 目前正式預設只保留 `document synopsis` 與 `Phase 8B` evidence enrichment；API/runtime 的正式 query-time 主線不依賴 synopsis recall。summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
+19.11. worker 目前正式預設只保留 `document synopsis`，`section synopsis` 為 repo-wide opt-in；API/runtime 的正式 query-time 主線不依賴 synopsis recall。summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
 19.12. `document_summary` 與 `cross_document_compare` 的 scope 收斂目前只允許來自 mention resolver 與 routing scope；若已解析出文件範圍，必須透過 SQL `allowed_document_ids` filter 套用，不得以記憶體過濾取代
 19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層統一 classifier framework；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`
 19.12.1.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學，避免一層 rule-only、一層 model-only 造成維護與觀測不一致
 19.12.1.2. `LLM fallback` 已是正式 ready-path 的一部分，但輸入必須嚴格受限為 query、language、document mention summary 與 label options；不得讀全文、不得改寫 query、不得輸出自由文字
 19.12.1.3. Deep Agents 可見的 retrieval tool contract 不應讓 agent 提供 routing 參數；`task_type`、`document_scope` 與 `summary_strategy` 皆由後端 router 根據原始 query 與已授權且 `ready` 文件集合自動判斷。內部 router 可維持這三個正交欄位作為 trace / evaluation contract，但不得讓 agent 直接提供 document ids 或覆寫 routing 決策
 19.12.2. worker 端保留下來的 synopsis schema 仍可作為未來實驗或離線分析材料，但不再屬於正式 API trace、evaluation preview 或 checkpoint contract；若後續要重新接回產品主線，正式規劃應延後到 `Phase 8C`，並且只能以 agent-side optional hints 形式存在
-19.12.3. 第一層 `task_type=fact_lookup` 的主線預設是 area-scoped `child recall -> rerank -> assembler`；若 query 高信心提及已授權且 `ready` 的單一或多份文件，文件 scope 應作為與 `task_type` 正交的檢索收斂條件保留，並以 `allowed_document_ids` 限縮 recall / evidence recall，而不是因 `fact_lookup` 題型被丟棄；在 semantic-gap、數值 / 表格 query 或第一輪 child recall 信心不足時，允許於 `Phase 8B` 加入 `evidence-unit recall` 補強 recall，再回推到 `source_child_chunk_ids`
+19.12.3. 第一層 `task_type=fact_lookup` 的主線預設是 area-scoped `child recall -> rerank -> assembler`；若 query 高信心提及已授權且 `ready` 的單一或多份文件，文件 scope 應作為與 `task_type` 正交的檢索收斂條件保留，並以 `allowed_document_ids` 限縮 recall，而不是因 `fact_lookup` 題型被丟棄。
 19.12.4. 第一層 `task_type=document_summary` 與 `task_type=cross_document_compare` 的最終回答不再走 runtime 專用 synthesis lane；正式主線是一致的 `Deep Agents` 主 agent path，由 agent 根據 `retrieve_area_contexts` 的 assembled contexts 自行完成摘要或比較
 19.12.5. `thinking_mode` 目前僅作為前後端與 checkpoint 的相容 metadata 保留，不再決定 answer lane；正式 trace 只保留固定 `answer_path="deepagents_unified"` 與 `thinking_mode_ignored` 狀態
 19.12.6. 第一層 `task_type=document_summary` 時，`document_overview`、`section_focused` 與 `multi_document_theme` 的 retrieval 骨架都統一為 `routing scope -> child recall -> rerank -> diversified selection -> assembler`
-19.12.7. 第一層 `task_type=cross_document_compare` 在 `Phase 8A` 的主線同樣是 `routing scope -> child recall -> rerank -> diversified selection -> assembler`；進入 `Phase 8B` 後才考慮疊加 `evidence-unit recall`
+19.12.7. 第一層 `task_type=cross_document_compare` 的正式主線同樣是 `routing scope -> child recall -> rerank -> diversified selection -> assembler`。
 19.12.7.1. `document_summary` 與 `cross_document_compare` 的最終回答正式由主 `Deep Agents` agent 根據 `retrieve_area_contexts` 的 assembled contexts 直接完成，不再維持 runtime 專用 synthesis lane
 19.12.7.2. `thinking_mode` 目前僅屬於前後端與 checkpoint 的相容 metadata；它不再影響 retrieval 與 answer path 的正式主線行為
-19.12.8. `evidence units` 的正式責任是 recall uplift layer，而不是 citation layer；命中 evidence units 後，必須先回推到 `primary_parent_chunk_id + source_child_chunk_ids`，再與 child candidates 合併，不得直接作為最終 citation
-19.12.8.1. `Phase 8B` 已新增獨立 evidence schema：`document_chunk_evidence_units`、`document_chunk_evidence_unit_child_sources`、`document_chunk_evidence_unit_parent_sources`，以及 `documents.evidence_enrichment_*` observability 欄位
-19.12.8.2. `evidence unit` 的正式輸入不得只看 local parent heading；至少應包含 `document title + heading_path + section_path_text + local parent/child content`。若 evidence 實際上跨越同一路徑下的多個 sibling parents，模型設計應允許從單一 `parent_chunk_id` 擴充到 `primary_parent_chunk_id + source_parent_chunk_ids`
-19.12.8.3. `heading_path / section_path_text` 在 `Phase 8B` 的正式角色是 `soft hint`，不是硬邊界；path 缺失、空白、命中 `目錄 / table of contents / contents`、帶 leader dots 或局部不穩定時，必須以 `path_quality_score` 降權，並退回 `adjacency/content similarity/table-text coupling` clustering
-19.12.8.4. `evidence recall` 的正式文字表示使用 `heading_path / section_path_text + evidence_text`；但 path 權重需受 `path_quality_score` 與 `cluster_strategy` 約束，不得假設 parser path 永遠可靠
-19.12.8.5. `EVIDENCE_UNITS_BUILD_STRATEGY=auto|llm` 代表正式使用 LLM 產生 evidence units；LLM 失敗時必須依 `失敗次數 ^ 2` 秒退避重試，最多重試 `10` 次。重試耗盡後應讓 evidence enrichment / ingest 進入受控失敗，不得改用 deterministic 結果作為成功產出；`deterministic` 僅能在顯式指定時使用。
-19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis`、`section synopsis` 與 `evidence units` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體
+19.12.8. `Phase 8B` 的 enrichment lane 已取消並自 runtime / worker / schema 主線移除；正式檢索不得依賴已移除的 enrichment table、query-time recall lane 或 trace contract。
+19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis` 與 `section synopsis` 若要送入，只能以 selected / compressed hints 形式作為 optional hints，不得與 citation-ready contexts 混成同權重主體。
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state

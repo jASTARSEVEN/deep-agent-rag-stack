@@ -308,7 +308,7 @@
 
 目前 benchmark 現況：
 - 目前長期 benchmark 已收斂為七個正式 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + query_focus off + assembler 9x3000`，舊小樣本 package 與 query-focus-on 分數只保留歷史參考價值，不再作為 current mainline baseline。
-- `QASPER 100`、`UDA 100` 與 `DRCD 100` 的原始資料集 contract 都包含指定文件上下文；目前 benchmark runner 已改為對這三類 dataset 使用 gold span 的 `document_id` 作為指定文件 scope，再執行 child recall / evidence recall / rerank / assembler。這些指定文件結果不得與舊的 area-wide ambiguous query 分數混讀。
+- `QASPER 100`、`UDA 100` 與 `DRCD 100` 的原始資料集 contract 都包含指定文件上下文；目前 benchmark runner 已改為對這三類 dataset 使用 gold span 的 `document_id` 作為指定文件 scope，再執行 child recall / rerank / assembler。這些指定文件結果不得與舊的 area-wide ambiguous query 分數混讀。
 - external `100Q` 六資料集的最新 assembled 指標如下：
   - `DuReader-robust 100`：`Recall@10=1.0000`、`nDCG@10=0.9677`、`MRR@10=0.9570`
   - `MS MARCO 100`：`Recall@10=1.0000`、`nDCG@10=0.9674`、`MRR@10=0.9550`
@@ -411,11 +411,11 @@
 
 ### Phase 8 Query Flow Overview
 
-本段落用來收斂 `Phase 8A ~ 8B` 的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
+本段落用來收斂 Phase 8 之後的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
 
 共同原則：
 - 正式 retrieval 主線目前以 `child hybrid recall -> rerank -> diversified selection -> assembler` 為準，並以 routing scope / mention scope 做 SQL-first 收斂。
-- `document synopsis`、`section synopsis` 與未來 `evidence units` 都不是最終 citation 單位；它們若存在，最多只屬於 ingest-side 表示或未來 optional enhancement。
+- `document synopsis` 與 `section synopsis` 都不是最終 citation 單位；它們若存在，最多只屬於 ingest-side 表示或未來 optional enhancement。
 - 最終 citation 一律回到 `child chunk / source span`；`parent` 只作為 materialization 邊界。
 - 送進 LLM 的正式主體必須是 assembled `parent/child` evidence contexts；任何 hints 都只能是次要輔助。
 - 正式 routing 模型採 2 層，而不是平面 5 類：
@@ -425,26 +425,20 @@
 建議 route-by-route 主線如下：
 - 第一層 `task_type=fact_lookup`
   - 主線：`child hybrid recall -> parent-level rerank -> assembler`
-  - 補強：若 semantic-gap、表格/數值 query 或第一輪 child recall 信心偏低，可在 `Phase 8B` 加上 `evidence-unit hybrid recall`
-  - evidence-unit 命中後需先回推到 `source_child_chunk_ids` 再與 child candidates 合併，不得直接作為 citation
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=document_overview`
   - 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
   - overview 的摘要責任由主 `Deep Agents` agent 根據 assembled contexts 完成，不再依賴 query-time synopsis recall
-  - `evidence units` 僅在 `Phase 8B` 作為 optional enhancement，不是 `8A` 的預設主路徑
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=section_focused`
   - 主線：`document scope resolve -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
-  - 對 semantic-gap 較高或 evidence-dense 的 query，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall` 補強
 - 第一層 `task_type=document_summary` + 第二層 `summary_strategy=multi_document_theme`
   - 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
-  - 若主題屬於 claim / metric / findings-heavy，可在 `Phase 8B` 選擇加 `evidence-unit hybrid recall`
 - 第一層 `task_type=cross_document_compare`
-  - `Phase 8A` 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
-  - `Phase 8B` 可再疊加 `evidence-unit hybrid recall`，此 route 也是 evidence-centric layer 最應優先產生 ROI 的場景
+  - 主線：`routing scope -> child hybrid recall -> rerank -> diversified selection -> assembler -> unified Deep Agents answer`
 
 LLM 輸入規則：
 - 預設只送 assembled `parent/child` evidence contexts 給 LLM。
-- `document synopsis`、`section synopsis` 與 `evidence units` 若未來重新接回 runtime，也只應以 selected / compressed hints 形式送入，不得與 citation-ready contexts 混成同權重主體。
-- 不得將 `document synopsis`、`section synopsis` 或 `evidence units` 直接當作最終 citation payload。
+- `document synopsis` 與 `section synopsis` 若未來重新接回 runtime，也只應以 selected / compressed hints 形式送入，不得與 citation-ready contexts 混成同權重主體。
+- 不得將 `document synopsis` 或 `section synopsis` 直接當作最終 citation payload。
 
 目標：
 - 以較少 phase 快速穩定 `document_summary` / `cross_document_compare` 的 unified Deep Agents answer path。
@@ -463,8 +457,8 @@ LLM 輸入規則：
 - rollout 優先順序以快速交付為原則：
   - 先穩定 `document_summary`
   - `document_overview` 與 `section_focused` 優先於 `multi_document_theme`
-  - `cross_document_compare` 在 `8A` 先以保守 coverage-first 版本落地，不導入 evidence-unit 依賴
-- 本 phase 不新增 evidence-centric enrichment schema、evidence-unit table 或新的 ingest stage；evidence-centric layer 留給 `Phase 8B`。
+  - `cross_document_compare` 在 `8A` 先以保守 coverage-first 版本落地，不導入額外 enrichment 依賴
+- 本 phase 不新增 enrichment schema、獨立 enrichment table 或新的 ingest stage。
 - citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
 - trace metadata 需至少補上：
   - `task_type`
@@ -512,111 +506,22 @@ LLM 輸入規則：
 狀態：
 - `已完成（closeout accepted；已保留 unified answer path、兩層 routing 與 CLI-first checkpoint artifacts 作為後續 baseline。最新 accepted 驗收 run 雖未滿足原先全部 gate，但經產品決策接受目前 ceiling，8A 不再繼續調參收分）`
 
-## Phase 8B — Evidence-Centric Enrichment & Evaluation
+## Phase 8B — Canceled Retrieval Enrichment Lane
 
 目標：
-- 在 `Phase 8A` 穩定後，再導入 evidence-centric retrieval layer，讓系統不只知道「這份文件在講什麼」，也能更容易透過 `FTS + vector search + RRF` 找到可引用的事實、結論、數值、步驟或比較依據。
-- evidence-centric enrichment 可使用 LLM 或 deterministic 明確策略建立；當設定為 `auto` 或 `llm` 時，LLM 失敗不得被 deterministic 結果偽裝成成功，必須依失敗次數平方秒數退避重試，最多重試 `10` 次，仍失敗時讓 evidence stage / ingest job 進入受控失敗。
-- `Phase 8B` 合併舊 `8.7 + 8.8`：同一批次內完成 evidence layer、其 retrieval-side consumption 與專屬 evaluation checkpoint。
-- 新增的 evidence layer 必須維持 SQL-first、可觀測、可回退，且不得取代原始 `child chunk` 作為最終 citation 來源。
+- 取消先前規劃的 enrichment lane，將正式 retrieval 主線維持在 `child hybrid recall -> rerank -> diversified selection -> assembler`。
+- 移除已落地的 worker 生成流程、query-time merge、evaluation trace、設定與 schema，降低 ingest 成本與 runtime 複雜度。
+- 後續 retrieval 改善必須優先基於既有 child chunks、document scope、query focus、rerank 與 selection，不得依賴已移除的 enrichment tables。
 
 內容：
-- 在 ingest / reindex pipeline 新增 evidence-centric enrichment stage，正式時機固定在 chunk tree 與 synopsis 建立之後、文件進入 `ready` 之前。
-- 本 phase 不負責新的 route taxonomy、section match policy 或 summary/compare UX；它的責任僅限於 evidence-centric layer 的生成、持久化、受控失敗語意、retrieval-side consumption 與其專屬評估。
-- `section synopsis` 已在 repo-wide 預設改為關閉；`document synopsis` 保留。`Phase 8B` 不再把 `section synopsis` 視為正式前置條件，而是改以 `heading_path / section_path_text` 與 evidence unit 自身的 path quality / clustering metadata 承接 path-aware 能力。
-- evidence unit 的正式輸入不得只看 local parent heading；至少應包含：
-  - `document title`
-  - `heading_path`
-  - `section_path_text`
-  - local parent / child content
-- 以 parent 為抽取範圍時，`heading_path / section_path_text` 僅屬 `soft hint`；若 parser path 缺失、空白、命中 `目錄 / table of contents / contents` 或整體 path quality 偏低，必須改走 `position adjacency + page adjacency + content similarity + table/text coupling` fallback，而不是直接放棄 evidence。
-- 若 evidence 需要跨同一路徑下的多個 sibling parents，應允許擴充為 `primary_parent_chunk_id + source_parent_chunk_ids` 模型，而不是被單一最近層 heading 綁死。
-- evidence-centric enrichment 的正式來源可為：
-  - `llm`：由 LLM 根據 parent section / parent cluster / table context 萃取 evidence-oriented 結構
-  - `deterministic`：由 heading、list/table 模式、句界視窗、數值/日期/專名等規則組合出較保守的 evidence 表示
-- schema 採 SQL-first；優先規劃新增獨立 table，而不是把多值 evidence 結構硬塞進既有 `document_chunks`。建議最小模型為：
-  - `document_chunk_evidence_units`
-  - `id`
-  - `document_id`
-  - `parent_chunk_id`
-  - `source_child_chunk_ids`
-  - `evidence_type`
-  - `evidence_text`
-  - `evidence_embedding`
-  - `build_strategy`
-  - `confidence`
-  - `position`
-  - `created_at / updated_at`
-- 若第一版需要更低 migration 成本，可先在 `document_chunks(parent)` 或未來 `document_sections` 加上 summary 欄位作為過渡，但長期仍應回到獨立 table，以支援一個 section 對應多個 evidence units。
-- evidence units 至少應覆蓋：
-  - 核心事實 / claim
-  - 關鍵數值 / 指標
-  - 流程 / 步驟
-  - 表格結論
-  - 可比較的立場 / 結論
-- runtime 使用方式以 recall uplift 為主、rerank / selection hint 為次，不是直接作為最終回答引用：
-  - `fact_lookup` 可在 semantic-gap 較高時，先用 evidence units 做 evidence-level hybrid recall，再回推到 child chunks；rerank hint 屬次要用途
-  - `document_summary` 可先用 evidence units 找到 evidence-dense sections，再下探 child chunks
-  - `cross_document_compare` 可先用 evidence units 找到可比較的 evidence，再進 section / child materialization
-- evidence-unit recall 的正式主線應採 hybrid search：
-  - `heading_path / section_path_text + evidence_text` 應共同參與 recall text 表示
-  - `evidence_text` 走 `FTS`
-  - `evidence_embedding` 走 vector search
-  - 兩者以 `RRF` 合併
-  - 命中 evidence units 後，再回推到 `parent_chunk_id + source_child_chunk_ids`
-- 第一批正式交付採 `feature flag / optional lane`，並同步完成四塊：
-  - evidence units schema 與 documents observability
-  - worker evidence enrichment
-  - runtime evidence recall merge
-  - additive evaluation / checkpoint trace 擴充
-- 在進入 `Phase 8C` 前，`Phase 8B` 必須先完成 retrieval-side hardening gate，避免 synopsis-as-hint 與 evidence merge 問題交錯。此 gate 至少包含：
-  - 補上 `child recall confidence` 分數，作為是否啟動 evidence lane 的正式判斷依據，而不是只靠人工 benchmark 判讀
-  - 僅在 `child recall` 信心低或 `semantic-gap` 高的 query 上啟動 evidence lane，不得將 evidence merge 視為所有 query 的廣泛預設加分
-  - `path_quality_score` 必須進入實際 merge 權重，而不只停留在 trace / observability
-  - evidence contribution 必須同時看 evidence 品質與 query 類型做選擇性加權，不得對所有命中的 evidence units 無條件等權加分
-  - 同一個 child chunk 的 evidence 加分必須設上限，並對高度重疊的 evidence units 做 dedupe / decay，避免 evidence-dense section 因重複計票而失真
-  - evidence lane 失敗時必須維持 child-only fail-open；trace 需可明確區分 `child_only_hit`、`evidence_injected_hit` 與 `double_supported_hit`
-- deterministic 必須是正式支援的顯式策略，不是只存在測試環境；但不得作為 `auto` / `llm` 的靜默成功 fallback：
-  - 設定可顯式指定 `llm | deterministic | auto`
-  - `auto` 預設先嘗試 `llm`，LLM 暫時性失敗時依 `失敗次數 ^ 2` 秒退避重試，最多重試 `10` 次
-  - `deterministic` 只能在顯式指定時寫入成功結果，不能在 LLM 失敗時被用來掩蓋失敗
-  - trace / observability 必須保留實際採用的 build strategy 與失敗訊息
-- 失敗語意需明確：
-  - 若 `auto` / `llm` 模式下 LLM enrichment 重試耗盡後仍失敗，文件不得因 deterministic fallback 而進入 `ready`
-  - 若顯式 `deterministic` 路徑失敗，才視為 deterministic evidence-centric stage 失敗
-  - 若產品決策認定 evidence layer 屬於 optional enhancement，需明確記錄 `evidence_enrichment_skipped`，但不得默默混淆成成功產出
-- benchmark 與 regression 需至少觀測：
-  - `QASPER 100` 的 evidence-dense section recall 是否改善
-  - `NQ 100` 的長段落 evidence materialization 是否更穩定
-  - `DRCD 100` 的中文數值 / 表格 evidence 是否退化
-- 本 phase 應避免引入 corpus-specific heuristic；任何 evidence type taxonomy 與 prompt wording 都必須維持 generic-first，不得為單一 benchmark 硬調。
-- `Phase 8B` 的 exit criteria 需內建 evidence-layer 專屬評估，確認新 evidence layer 真的透過 `FTS + vector search + RRF` 改善 retrieval / synthesis，而不是只增加 schema、成本與複雜度：
-  - evidence-unit coverage
-  - evidence-unit -> citation traceability
-  - `llm | deterministic | auto` fallback quality
-  - evidence-centric enrichment 對 recall / rerank / synthesis latency 與成本的影響
-- 必須額外驗證 hierarchical path 帶來的增益，而不是只看 local content：
-  - path-aware section recall uplift
-  - path-aware evidence-unit precision / recall uplift
-  - compare 對齊是否因 `heading_path / section_path_text` 而更穩定
-- 需明確比較至少三條 lane：
-  - 無 evidence layer 的 baseline
-  - `deterministic` evidence layer
-  - `llm` / `auto` evidence layer
-- 需明確量測 evidence-unit hybrid recall uplift，而不是只看最終回答品質：
-  - evidence-level `Recall@k`
-  - evidence-level `Precision@k`
-  - first relevant evidence rank
-  - 對最終 child/source-span citation hit rate 的增益
-- 明確區分：
-  - evidence layer 幫助找到更多可引用 evidence
-  - evidence layer 只是重複既有 child/parent 命中，沒有實質增益
-  - evidence layer 引入新的 false-positive 或 compare 對齊錯誤
-- 評估結果需回饋到 evidence taxonomy、build strategy、fallback policy 與 retrieval-side consumption 規則。
-- rollout 預設採 feature flag / optional lane；若 evidence-centric enrichment 未能穩定改善 `QASPER 100`、或反而讓 `NQ 100` / `DRCD 100` 哨兵退化，應保持預設關閉、回退主線或兩者擇一。
+- 移除 worker enrichment module 與相關環境設定。
+- 移除 API retrieval 的 query-time merge lane、trace 欄位、evaluation preview stage 與 profile lane。
+- 移除 ORM model、schema guard 要求與 documents observability 欄位。
+- 以 Alembic migration 回收已建立的資料表與欄位。
+- 保留 `document synopsis` 與 opt-in `section synopsis` 既有能力；它們不得成為 citation payload。
 
 狀態：
-- `進行中（schema、worker enrichment、runtime evidence merge 與 additive evaluation trace 已落地；正式 promotion gate 與 benchmark compare 尚在驗證）`
+- `已取消並移除（後續工作回到 child-based retrieval hardening 與 benchmark regression guardrails）`
 
 ## Phase 8C — Synopsis Reuse as Agent-Side Optional Hints
 
@@ -625,7 +530,7 @@ LLM 輸入規則：
 - 若確認有價值，將 synopsis 定位為主 `Deep Agents` agent 的 optional hints，而不是 recall gate、selection gate 或 citation 單位。
 
 內容：
-- 本 phase 的啟動前提是：`Phase 8B` 已完成 evidence merge hardening gate，至少包含 `child recall confidence`、conditional evidence lane、`path_quality_score` 實際加權，以及 evidence contribution cap / dedupe 的主線驗證。
+- 本 phase 的啟動前提是：child-based retrieval hardening 與 benchmark regression guardrails 已穩定，且不重新引入已移除的 enrichment lane。
 - 僅在長文件 `document_overview`、多文件 `multi_document_theme` 或其他經驗證確實受益的情境下，將 selected / compressed synopsis hints 作為 agent-side 輔助資訊。
 - synopsis hints 的主責任是 orientation / planning，不得參與 SQL scope、candidate 去留或最終 citation 產生。
 - 送進 LLM 的主體仍必須是 assembled `parent/child` evidence contexts；synopsis hints 只能是次要欄位。

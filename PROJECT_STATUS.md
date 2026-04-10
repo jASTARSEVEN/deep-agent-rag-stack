@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Phase 8B — Path-Robust Evidence Units & Evaluation (In Progress)`
+當前主階段：`Post-Phase 8A — Child-Based Retrieval Hardening (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -94,11 +94,9 @@
 - worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
 - worker ingest / reindex 目前正式預設只生成 `document synopsis`；`section synopsis` 已改為 repo-wide opt-in，避免在主線與 benchmark 預設路徑增加成本
 - `document_summary` 與 `cross_document_compare` 的 retrieval 正式主線已回到 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler`；`fact_lookup` 維持同一路徑
-- retrieval routing 已將文件 mention scope 調整為與 `task_type` 正交：`fact_lookup` 若高信心提及已授權且 `ready` 文件，也會保留 `resolved_document_ids` 並用於 recall / evidence recall 收斂，不再只把 scope 視為 summary / compare 的附屬資訊
+- retrieval routing 已將文件 mention scope 調整為與 `task_type` 正交：`fact_lookup` 若高信心提及已授權且 `ready` 文件，也會保留 `resolved_document_ids` 並用於 recall 收斂，不再只把 scope 視為 summary / compare 的附屬資訊
 - Deep Agents 可見的 retrieval tool contract 已移除舊的單一 `retrieval_strategy`，且不再讓 agent 提供 `task_type`、`document_scope` 或 `summary_strategy`；三者保留為後端 router 的正交 trace / evaluation contract，實際文件白名單只由後端 mention resolver 在已授權且 `ready` 文件中解析
-- `Phase 8B` 已完成第一批 schema 與 runtime 接線：新增 `document_chunk_evidence_units`、child/parent source mapping tables，以及 `documents.evidence_enrichment_*` observability 欄位
-- `Phase 8B` evidence enrichment 已收斂失敗語意：`auto` / `llm` 模式若 LLM 產生 evidence units 失敗，會依失敗次數平方秒數退避重試，最多重試 `10` 次；重試耗盡後視為受控失敗，不再以 deterministic fallback 寫入成功結果。`deterministic` 仍保留為顯式指定策略。
-- `Phase 8B` runtime 已新增 feature-flag 控制的 `evidence recall -> mapped child chunks -> rerank/selection/assembler` merge lane；trace、candidate preview 與 chat tool summary 已可觀測 evidence hits、mapped child ids、path quality 與 cluster strategy
+- `Phase 8B` 的 enrichment lane 已取消並移除：worker 不再生成該 enrichment，API 不再執行 query-time merge，evaluation / chat trace 不再輸出其欄位，schema 由 migration 回收
 - `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
 - `Phase 8A` routing 現已不再是單層 rule-only 決策；第一層 `task_type` 與第二層 `summary_strategy` 皆共用相同 routing engine，低信心時會正式啟用 `LLM fallback`
 - `Phase 8A` routing 仍維持 `task_type + summary_strategy` 的兩層統一 classifier framework，但其下游正式主線已改為 unified `Deep Agents` answer path
@@ -324,8 +322,8 @@
 ## 目前階段重點
 
 ### Current Focus
-- `Phase 8B` 已開始實作；目前 focus 是 evidence recall uplift 的 benchmark 驗證與 regression guardrails，而不是再調 `Phase 8A` 分數
-- `Phase 8C` 的 synopsis-as-hint 優先順序已後調；在啟動 `8C` 前，需先完成 `Phase 8B` retrieval-side hardening，包括 `child recall confidence`、conditional evidence lane、`path_quality_score` 實際加權與 evidence contribution 控制
+- `Phase 8B` enrichment lane 已取消；目前 focus 回到既有 `child hybrid recall -> rerank -> selection -> assembler` 主線的 benchmark 驗證與 regression guardrails
+- `Phase 8C` 的 synopsis-as-hint 優先順序仍後調；在重新啟動前，需先確認既有 child-based retrieval 與 unified Deep Agents answer path 的穩定性
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -334,11 +332,11 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 跑完 `QASPER 100`、`NQ 100`、`DRCD 100` 與 `phase8a-summary-compare-v1`，驗證 `phase8b_evidence_units_*` lane 是否具備 promotion 條件
-2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`，且 evidence enrichment observability 正常更新
-3. 先完成 `Phase 8B` retrieval-side hardening：實作 `child recall confidence`、只在 low-confidence / semantic-gap query 啟用 evidence lane、讓 `path_quality_score` 進入實際 merge 權重，並補上 evidence contribution cap / dedupe 與對應 trace
+1. 跑完 `QASPER 100`、`NQ 100`、`DRCD 100` 與 `phase8a-summary-compare-v1`，確認移除 enrichment lane 後的 child-based retrieval 主線沒有 benchmark regression
+2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
+3. 以 `child recall confidence` 或其他 child-based 訊號做後續 retrieval hardening；不得重新引入已移除的 enrichment schema 或 query-time merge lane
 4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-5. 待 `Phase 8B` promotion gate 與 retrieval-side hardening 完成後，再決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
+5. 待 child-based retrieval hardening 與 regression guardrails 穩定後，再決定 `Phase 8C` 的 synopsis-as-hint 是否仍值得保留
 
 ## 尚未開始的功能
 

@@ -13,10 +13,6 @@ REQUIRED_DOCUMENT_COLUMNS = frozenset(
         "synopsis_text",
         "synopsis_embedding",
         "synopsis_updated_at",
-        "evidence_enrichment_status",
-        "evidence_enrichment_strategy",
-        "evidence_enrichment_error",
-        "evidence_enrichment_updated_at",
     }
 )
 
@@ -30,16 +26,6 @@ REQUIRED_EVALUATION_TABLES = frozenset(
         "retrieval_eval_run_artifacts",
     }
 )
-
-# Phase 8B evidence layer 必須存在的資料表。
-REQUIRED_EVIDENCE_TABLES = frozenset(
-    {
-        "document_chunk_evidence_units",
-        "document_chunk_evidence_unit_child_sources",
-        "document_chunk_evidence_unit_parent_sources",
-    }
-)
-
 
 def ensure_schema_compatibility(engine: Engine) -> None:
     """確認目前資料庫 schema 與 API 程式碼相容。
@@ -72,16 +58,6 @@ def ensure_schema_compatibility(engine: Engine) -> None:
         missing_label = ", ".join(f"`{name}`" for name in missing_tables)
         raise RuntimeError(
             "資料庫 schema 與目前 API 程式碼不相容，缺少 evaluation 資料表："
-            f"{missing_label}。請先執行 migration runner；compose 環境可重新 "
-            "`docker compose up` 讓 migration runner 自動補齊，非 compose 環境請在 "
-            "`apps/api` 執行 `python -m app.db.migration_runner`。"
-        )
-
-    missing_evidence_tables = sorted(REQUIRED_EVIDENCE_TABLES - table_names)
-    if missing_evidence_tables:
-        missing_label = ", ".join(f"`{name}`" for name in missing_evidence_tables)
-        raise RuntimeError(
-            "資料庫 schema 與目前 API 程式碼不相容，缺少 evidence 資料表："
             f"{missing_label}。請先執行 migration runner；compose 環境可重新 "
             "`docker compose up` 讓 migration runner 自動補齊，非 compose 環境請在 "
             "`apps/api` 執行 `python -m app.db.migration_runner`。"

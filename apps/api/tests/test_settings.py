@@ -48,7 +48,7 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
 
     assert settings.minio_secure is False
     assert settings.max_upload_size_bytes == 5 * 1024 * 1024
-    assert settings.chunk_min_parent_section_length == 300
+    assert settings.chunk_min_parent_section_length == 800
     assert settings.chunk_target_child_size == 800
     assert settings.chunk_child_overlap == 120
     assert settings.chunk_content_preview_length == 120

@@ -522,11 +522,6 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "dropped_by_diversity": [],
         "query_focus_applied": None,
         "profile_settings": {},
-        "evidence_units_enabled": None,
-        "evidence_build_strategy_used": None,
-        "evidence_recall_hits": [],
-        "mapped_child_ids": [],
-        "evidence_fallback_reason": None,
         "contexts": [],
     }
     reference_events = [event for event in emitted_events if event["type"] == "references"]
