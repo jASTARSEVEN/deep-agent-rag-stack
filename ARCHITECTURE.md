@@ -102,9 +102,9 @@ flowchart TD
     PA -->|Yes| PD["重建 ParsedDocument"]
     PA -->|No| PR["Parse Routing"]
 
-    PR --> PDF["PDF provider parse"]
-    PR --> OFFICE["DOCX / PPTX / XLSX parse"]
-    PR --> TEXT["TXT / Markdown / HTML parse"]
+    PR --> PDF["PDF provider parse<br/>opendataloader / local / llamaparse"]
+    PR --> OFFICE["DOCX / PPTX / XLSX parse<br/>Unstructured -> block-aware contract"]
+    PR --> TEXT["TXT / Markdown / HTML parse<br/>block-aware parser"]
 
     PDF --> PD
     OFFICE --> PD
@@ -112,21 +112,23 @@ flowchart TD
 
     PD["ParsedDocument / blocks"] --> PC["建立 Parent Chunks"]
     PC --> CC["建立 Child Chunks"]
-    PC --> DS["Document Synopsis"]
-    PC --> SS["Section Synopsis (Phase 8A planned)"]
-    PC --> EU["Evidence Units (Phase 8B planned)"]
+    PC --> DS["Document Synopsis<br/>正式 ingest / reindex stage"]
+    PC -. opt-in .-> SS["Section Synopsis<br/>repo-wide opt-in / 非預設"]
+    PC -. feature flag .-> EU["Evidence Enrichment<br/>Phase 8B evidence units"]
 
     CC --> CE["Child Embeddings"]
     DS --> DE["Document Synopsis Embedding"]
-    SS --> SE["Section Synopsis Embedding"]
-    EU --> EE["Evidence Embeddings"]
+    SS -. opt-in .-> SE["Section Synopsis Embedding"]
+    EU --> EE["Evidence Embeddings<br/>document_chunk_evidence_units"]
+    EU -. skipped .-> ESKIP["documents.evidence_enrichment_skipped"]
 
     PD --> DT["documents.display_text / offsets"]
 
     CE --> READY["document ready / failed"]
     DE --> READY
-    SE --> READY
+    SE -. opt-in .-> READY
     EE --> READY
+    ESKIP --> READY
     DT --> READY
 ```
 
@@ -145,62 +147,45 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Q["User Query"] --> AUTH["Auth / SQL Gate"]
-    AUTH --> L1["Layer 1 Routing<br/>task_type<br/>deterministic + embedding"]
+    Q["User Query"] --> AGENT["Deep Agents 主 agent<br/>只呼叫 retrieve_area_contexts<br/>不提供 routing 參數"]
+    AGENT --> TOOL["retrieve_area_contexts tool"]
+    TOOL --> AUTH["Auth / SQL Gate<br/>deny-by-default + ready-only"]
 
-    L1 --> RT{"task_type"}
+    AUTH --> DOCS["列出已授權 ready 文件"]
+    DOCS --> SCOPE["Document Mention / Scope Resolver<br/>area | single_document | multi_document | unresolved"]
+    SCOPE --> L1["Layer 1 Routing<br/>task_type<br/>deterministic anchors -> embedding -> LLM fallback"]
+    L1 --> L2{"task_type"}
 
-    RT -->|fact_lookup| FL["Fact Lookup"]
-    RT -->|document_summary| L2["Layer 2 Routing<br/>summary_strategy"]
-    RT -->|cross_document_compare| CDC["Cross-Document Compare"]
+    L2 -->|fact_lookup| RTS["Routing State<br/>summary_strategy = none"]
+    L2 -->|document_summary| SS["Layer 2 Routing<br/>summary_strategy<br/>document_overview | section_focused | multi_document_theme"]
+    L2 -->|cross_document_compare| RTS
+    SS --> RTS
 
-    L2 -->|document_overview| DOS["Document Overview Summary"]
-    L2 -->|section_focused| SFS["Section Focused Summary"]
-    L2 -->|multi_document_theme| MDS["Multi-Document Theme Summary"]
+    RTS --> QF{"query_focus enabled?"}
+    QF -->|No| RQ["Retrieval Query"]
+    QF -->|Yes| FQ["Generic focus / rerank query"]
+    FQ --> RQ
 
-    FL --> CH0["Child Hybrid Recall<br/>FTS + vector + RRF"]
-    FL -. conditional .-> EH0["Evidence Hybrid Recall<br/>FTS + vector + RRF"]
-    EH0 --> MAP0["回推 source_child_chunk_ids"]
-    CH0 --> MERGE0["Merge Child Candidates"]
-    MAP0 --> MERGE0
+    RQ --> CH["Child Hybrid Recall<br/>vector + PGroonga FTS + RRF<br/>SQL allowed_document_ids when resolved"]
+    RQ -. feature flag / conditional .-> EH["Evidence Unit Hybrid Recall<br/>vector + FTS + RRF"]
+    EH --> MAP["Map evidence units<br/>to parent + source_child_chunk_ids"]
+    CH --> MERGE["Merge child candidates"]
+    MAP --> MERGE
 
-    DOS --> DR1["Document Hybrid Recall"]
-    DR1 --> SR1["Section Hybrid Recall"]
-    SR1 --> CH1["Child Hybrid Recall"]
+    MERGE --> RR["Parent-level Rerank<br/>provider fail-open to RRF"]
+    RR --> SEL{"scope-aware selection"}
+    SEL -->|fact_lookup| PASS["pass-through / precision-first"]
+    SEL -->|document_summary| SUMSEL["summary diversity<br/>single-doc or multi-doc coverage"]
+    SEL -->|cross_document_compare| CMPSEL["compare coverage-first<br/>then score-first fill"]
 
-    SFS --> DR2["Document Scope Resolve / Document Recall"]
-    DR2 --> SR2["Section Hybrid Recall"]
-    SR2 --> CH2["Child Hybrid Recall"]
-    SR2 -. "Phase 8B optional" .-> EH2["Evidence Hybrid Recall"]
-    EH2 --> CH2
+    PASS --> ASM["Assembler by Parent<br/>budget-aware materialization"]
+    SUMSEL --> ASM
+    CMPSEL --> ASM
 
-    MDS --> DR3["Document Hybrid Recall"]
-    DR3 --> SR3["Section Hybrid Recall"]
-    SR3 --> CH3["Child Hybrid Recall"]
-    SR3 -. "Phase 8B optional" .-> EH3["Evidence Hybrid Recall"]
-    EH3 --> CH3
-
-    CDC --> DR4["Document Hybrid Recall"]
-    DR4 --> SR4["Section Hybrid Recall"]
-    SR4 --> CH4["Child Hybrid Recall"]
-    SR4 -. "Phase 8B optional" .-> EH4["Evidence Hybrid Recall"]
-    EH4 --> CH4
-
-    MERGE0 --> RR["Parent-level Rerank"]
-    CH1 --> RR
-    CH2 --> RR
-    CH3 --> RR
-    CH4 --> RR
-
-    RR --> ASM["Assembler by Parent"]
     ASM --> CTX["Primary LLM Contexts<br/>assembled parent / child evidence"]
-    EH2 -. selected / compressed hints .-> HINT["Optional Evidence Hints"]
-    EH3 -. selected / compressed hints .-> HINT
-    EH4 -. selected / compressed hints .-> HINT
-
-    CTX --> SYN["Synthesis / Answer"]
-    HINT --> SYN
-    ASM --> CIT["Citations -> child chunk / source span"]
+    ASM --> CIT["Citations<br/>child chunk / source span"]
+    CTX --> SYN["Deep Agents Answer<br/>[[C1]] citation markers"]
+    CIT --> SYN
 ```
 
 ### 文件管理預覽流程
