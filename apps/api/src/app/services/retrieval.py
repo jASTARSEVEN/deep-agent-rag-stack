@@ -33,7 +33,8 @@ from app.services.retrieval_query import (
     get_query_focus_boost_terms,
 )
 from app.services.retrieval_routing import build_query_routing_decision
-from app.services.retrieval_routing import RetrievalStrategy
+from app.services.retrieval_routing import DocumentScope
+from app.services.retrieval_routing import SummaryStrategy
 from app.services.retrieval_selection import apply_scope_aware_selection
 from app.services.reranking import RerankInputDocument, build_rerank_provider
 from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
@@ -176,6 +177,7 @@ class RetrievalTrace:
     summary_strategy_embedding_margin: float = 0.0
     summary_strategy_fallback_used: bool = False
     summary_strategy_fallback_reason: str | None = None
+    document_scope: str = "area"
     resolved_document_ids: list[str] | None = None
     document_mention_source: str = "none"
     document_mention_confidence: float = 0.0
@@ -576,7 +578,8 @@ def retrieve_area_candidates(
     settings: AppSettings,
     area_id: str,
     query: str,
-    retrieval_strategy: RetrievalStrategy | str | None = None,
+    document_scope: DocumentScope | str | None = None,
+    summary_strategy: SummaryStrategy | str | None = None,
     query_type: EvaluationQueryType | None = None,
 ) -> RetrievalResult:
     """在指定 area 內取得 hybrid recall、Python RRF 與 rerank candidates。
@@ -587,7 +590,8 @@ def retrieve_area_candidates(
     - `settings`：API 執行期設定。
     - `area_id`：要檢索的 area 識別碼。
     - `query`：使用者查詢文字。
-    - `retrieval_strategy`：若由外部直接指定最終 retrieval strategy，優先信任採用。
+    - `document_scope`：若由外部提供文件範圍提示，只影響 scope 判斷，不允許直接指定 document ids。
+    - `summary_strategy`：若由外部提供摘要策略提示，只在 `document_summary` 下使用。
     - `query_type`：若已由上層明確指定的 query type；否則由 classifier 自動判定。
 
     回傳：
@@ -599,7 +603,8 @@ def retrieve_area_candidates(
     routing_decision = build_query_routing_decision(
         settings=settings,
         query=query,
-        explicit_retrieval_strategy=retrieval_strategy,
+        explicit_document_scope=document_scope,
+        explicit_summary_strategy=summary_strategy,
         explicit_query_type=query_type,
         session=session,
         principal=principal,
@@ -702,6 +707,7 @@ def retrieve_area_candidates(
             summary_strategy_embedding_margin=routing_decision.summary_strategy_embedding_margin,
             summary_strategy_fallback_used=routing_decision.summary_strategy_fallback_used,
             summary_strategy_fallback_reason=routing_decision.summary_strategy_fallback_reason,
+            document_scope=routing_decision.document_scope,
             resolved_document_ids=list(routing_decision.resolved_document_ids),
             document_mention_source=routing_decision.document_mention_source,
             document_mention_confidence=routing_decision.document_mention_confidence,

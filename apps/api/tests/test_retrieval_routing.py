@@ -14,7 +14,6 @@ from app.services.retrieval_routing import (
     QUERY_ROUTING_SOURCE_EXPLICIT,
     QUERY_ROUTING_SOURCE_LLM_FALLBACK,
     QUERY_ROUTING_SOURCE_RULE,
-    RetrievalStrategy,
     RoutingClassifierDecision,
     RoutingEmbeddingScore,
     RoutingRuleHit,
@@ -221,46 +220,128 @@ def test_build_query_routing_decision_respects_explicit_query_type() -> None:
     assert decision.selected_profile == "cross_document_compare_diversified_v1"
 
 
-def test_build_query_routing_decision_respects_explicit_retrieval_strategy(db_session) -> None:
-    """單一 retrieval strategy 入口提供時應直接信任採用該策略。"""
+def test_build_query_routing_decision_keeps_document_scope_for_fact_lookup(db_session, monkeypatch) -> None:
+    """多文件 scope 不應被第一層 fact lookup 題型丟棄。"""
 
-    area = Area(id=_uuid(), name="Explicit Retrieval Strategy")
-    document = Document(
+    area = Area(id=_uuid(), name="Fact Lookup Scope Area")
+    first_document = Document(
         id=_uuid(),
         area_id=area.id,
-        file_name="benefits-overview.mixed.md",
+        file_name="alpha-policy.md",
         content_type="text/markdown",
-        file_size=100,
-        storage_key="explicit/benefits-overview.mixed.md",
+        file_size=10,
+        storage_key="routing/alpha-policy.md",
+        status=DocumentStatus.ready,
+    )
+    second_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="beta-manual.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="routing/beta-manual.md",
         status=DocumentStatus.ready,
     )
     db_session.add_all(
         [
             area,
             AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
-            document,
+            first_document,
+            second_document,
+        ]
+    )
+    db_session.commit()
+
+    def fake_classify_labels_with_embeddings(**kwargs) -> RoutingClassifierDecision:
+        """回傳固定高信心 fact lookup，驗證 scope 與 task type 正交保留。"""
+
+        del kwargs
+        return RoutingClassifierDecision(
+            label=EvaluationQueryType.fact_lookup.value,
+            confidence=0.91,
+            source=QUERY_ROUTING_SOURCE_EMBEDDING,
+            rule_hits=(),
+            embedding_scores=(
+                RoutingEmbeddingScore(label=EvaluationQueryType.fact_lookup.value, score=0.82),
+                RoutingEmbeddingScore(label=EvaluationQueryType.document_summary.value, score=0.68),
+                RoutingEmbeddingScore(label=EvaluationQueryType.cross_document_compare.value, score=0.6),
+            ),
+            top_label=EvaluationQueryType.fact_lookup.value,
+            runner_up_label=EvaluationQueryType.document_summary.value,
+            margin=0.14,
+            fallback_used=False,
+            fallback_reason=None,
+        )
+
+    monkeypatch.setattr(
+        "app.services.retrieval_routing._classify_labels_with_embeddings",
+        fake_classify_labels_with_embeddings,
+    )
+
+    decision = build_query_routing_decision(
+        settings=_routing_settings(),
+        query="What are the deadlines in alpha policy and beta manual?",
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=()),
+        area_id=area.id,
+    )
+
+    assert decision.query_type == EvaluationQueryType.fact_lookup
+    assert decision.source == QUERY_ROUTING_SOURCE_EMBEDDING
+    assert decision.document_scope == "multi_document"
+    assert set(decision.resolved_document_ids) == {first_document.id, second_document.id}
+    assert decision.summary_scope is None
+    assert decision.selected_profile == "fact_lookup_precision_v1"
+
+
+def test_build_query_routing_decision_accepts_orthogonal_task_type_and_scope_hints(db_session) -> None:
+    """task type 與 document scope hint 應可正交提供，且不直接指定 document ids。"""
+
+    area = Area(id=_uuid(), name="Orthogonal Routing Area")
+    first_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="claims-guide.zh-TW.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="routing/claims-guide.zh-TW.md",
+        status=DocumentStatus.ready,
+    )
+    second_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="benefits-overview.mixed.md",
+        content_type="text/markdown",
+        file_size=10,
+        storage_key="routing/benefits-overview.mixed.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            first_document,
+            second_document,
         ]
     )
     db_session.commit()
 
     decision = build_query_routing_decision(
         settings=_routing_settings(),
-        query="Summarize the key points of Benefits Overview, including the Chinese onboarding note.",
-        explicit_retrieval_strategy=RetrievalStrategy.DOCUMENT_OVERVIEW,
+        query="Summarize what the claims guide and Benefits Overview say about claims-related timelines.",
+        explicit_query_type=EvaluationQueryType.document_summary,
+        explicit_document_scope="multi_document",
         session=db_session,
         principal=CurrentPrincipal(sub="user-reader", groups=()),
         area_id=area.id,
     )
 
     assert decision.query_type == EvaluationQueryType.document_summary
-    assert decision.source == QUERY_ROUTING_SOURCE_EXPLICIT
-    assert decision.summary_strategy == "document_overview"
-    assert decision.summary_strategy_source == QUERY_ROUTING_SOURCE_EXPLICIT
-    assert decision.summary_strategy_confidence == 1.0
-    assert decision.summary_scope == "single_document"
-    assert decision.selected_profile == "document_summary_single_document_diversified_v1"
-    assert decision.effective_settings.retrieval_query_focus_enabled is False
-    assert decision.resolved_settings["query_focus_enabled"] is False
+    assert decision.document_scope == "multi_document"
+    assert decision.summary_strategy == "multi_document_theme"
+    assert decision.summary_scope == "multi_document"
+    assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
+    assert decision.resolved_document_ids == (second_document.id, first_document.id)
 
 
 def test_build_query_routing_decision_keeps_query_focus_env_toggle() -> None:

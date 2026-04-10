@@ -23,7 +23,7 @@ from app.chat.tools.retrieval import (
 )
 from app.core.settings import AppSettings
 from app.services.retrieval_assembler import AssembledContext
-from app.services.retrieval_routing import RetrievalStrategy, build_query_routing_decision
+from app.services.retrieval_routing import build_query_routing_decision
 
 try:
     from langchain_core.tools import tool
@@ -352,10 +352,7 @@ class DeepAgentsChatRuntime:
             area_id=area_id,
         )
 
-        def ensure_retrieval_result(
-            *,
-            retrieval_strategy: RetrievalStrategy | str | None = None,
-        ) -> RetrievalToolResult:
+        def ensure_retrieval_result() -> RetrievalToolResult:
             """確保本輪 retrieval 已執行並回傳快取結果。"""
 
             nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload
@@ -367,8 +364,6 @@ class DeepAgentsChatRuntime:
                 "area_id": area_id,
                 "question": question,
             }
-            if isinstance(retrieval_strategy, str) and retrieval_strategy.strip():
-                tool_input["retrieval_strategy"] = retrieval_strategy
             emit_phase(phase="tool_calling", status="started", message="正在呼叫知識庫工具")
             emit_phase(phase="searching", status="started", message="正在搜尋知識庫內容")
             emit_tool_call(name="retrieve_area_contexts", status="started", input_payload=tool_input)
@@ -378,9 +373,6 @@ class DeepAgentsChatRuntime:
                 settings=settings,
                 area_id=area_id,
                 question=str(tool_input["question"]),
-                retrieval_strategy=(
-                    str(retrieval_strategy).strip() if isinstance(retrieval_strategy, str) and retrieval_strategy.strip() else None
-                ),
             )
             citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
             assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
@@ -411,23 +403,16 @@ class DeepAgentsChatRuntime:
             return retrieval_result
 
         @tool
-        def retrieve_area_contexts(
-            focus_query: str | None = None,
-            retrieval_strategy: RetrievalStrategy | None = None,
-        ) -> str:
+        def retrieve_area_contexts() -> str:
             """回傳目前 area 與問題的 assembled contexts、references 與 trace。
 
             參數：
-            - `focus_query`：保留相容的可選參數；本階段固定忽略，不允許改寫原始 query。
-            - `retrieval_strategy`：可選的單一 retrieval strategy；允許值為
-              `fact_lookup | document_overview | section_focused | multi_document_theme | cross_document_compare`，
-              提供時直接信任採用。
+            - 無；routing 由後端根據原始問題與已授權 ready 文件範圍自動決定。
 
             回傳：
             - `str`：序列化後的 assembled context payload。
             """
-            del focus_query
-            ensure_retrieval_result(retrieval_strategy=retrieval_strategy)
+            ensure_retrieval_result()
             emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
 
             return json.dumps(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 import json
@@ -65,18 +66,27 @@ SUMMARY_STRATEGY_LABELS = (
 )
 
 
-class RetrievalStrategy(StrEnum):
-    """提供給外部 contract 的單一 retrieval strategy 列舉。"""
+class DocumentScope(StrEnum):
+    """提供給 routing contract 的文件範圍提示列舉。"""
 
-    FACT_LOOKUP = EvaluationQueryType.fact_lookup.value
+    AREA = "area"
+    SINGLE_DOCUMENT = "single_document"
+    MULTI_DOCUMENT = "multi_document"
+    UNRESOLVED = "unresolved"
+
+
+class SummaryStrategy(StrEnum):
+    """提供給 routing contract 的摘要策略提示列舉。"""
+
     DOCUMENT_OVERVIEW = SUMMARY_STRATEGY_DOCUMENT_OVERVIEW
     SECTION_FOCUSED = SUMMARY_STRATEGY_SECTION_FOCUSED
     MULTI_DOCUMENT_THEME = SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME
-    CROSS_DOCUMENT_COMPARE = EvaluationQueryType.cross_document_compare.value
 
 
-# 提供給 agent/tool 的單一 retrieval strategy 入口；壓縮第一層 task type 與第二層 summary strategy。
-RETRIEVAL_STRATEGY_LABELS = tuple(item.value for item in RetrievalStrategy)
+# 提供給 agent/tool 的文件範圍提示入口；不得直接攜帶 document ids。
+DOCUMENT_SCOPE_LABELS = tuple(item.value for item in DocumentScope)
+# 提供給 agent/tool 的摘要策略提示入口；只在 document_summary 下有效。
+SUMMARY_STRATEGY_HINT_LABELS = tuple(item.value for item in SummaryStrategy)
 
 # `zh-TW` 摘要型 query 關鍵詞。
 SUMMARY_TRIGGER_PHRASES_ZH_TW = ("摘要", "總結", "整理", "概述", "重點")
@@ -185,6 +195,8 @@ SUMMARY_STRATEGY_EMBEDDING_MARGIN_THRESHOLD = 0.06
 OPENAI_REASONING_EFFORT_TASK_TYPE = "minimal"
 # 第二層 `summary_strategy` fallback 需要較細的摘要意圖判斷，固定採低階 reasoning effort。
 OPENAI_REASONING_EFFORT_SUMMARY_STRATEGY = "low"
+# agent 明示 multi-document scope 時，候選文件可用較低門檻補入，但仍只限 SQL-gated ready 文件。
+MULTI_DOCUMENT_SCOPE_HINT_CANDIDATE_THRESHOLD = 0.55
 
 # prototype embedding cache，避免每次 routing 都重算固定語義模板。
 _ROUTING_PROTOTYPE_EMBEDDING_CACHE: dict[tuple[object, ...], tuple[tuple[str, tuple[float, ...]], ...]] = {}
@@ -268,6 +280,7 @@ class QueryRoutingDecision:
     summary_strategy_embedding_margin: float
     summary_strategy_fallback_used: bool
     summary_strategy_fallback_reason: str | None
+    document_scope: str
     resolved_document_ids: tuple[str, ...]
     document_mention_source: str
     document_mention_confidence: float
@@ -275,14 +288,6 @@ class QueryRoutingDecision:
     selected_profile: str
     resolved_settings: dict[str, int | bool | str | float | list[str] | list[dict[str, object]]]
     effective_settings: AppSettings
-
-
-@dataclass(frozen=True, slots=True)
-class ExplicitRetrievalStrategy:
-    """由外部直接指定的單一 retrieval strategy。"""
-
-    query_type: EvaluationQueryType
-    summary_strategy: str | None
 
 
 def classify_query_type(*, query: str, settings: AppSettings | None = None) -> QueryTypeClassification:
@@ -304,7 +309,6 @@ def classify_query_type(*, query: str, settings: AppSettings | None = None) -> Q
         query=normalized_query,
         language=language,
         raw_mention_resolution=_empty_document_mention_resolution(),
-        explicit_strategy=None,
         explicit_query_type=None,
     )
     return QueryTypeClassification(
@@ -327,7 +331,8 @@ def build_query_routing_decision(
     *,
     settings: AppSettings,
     query: str,
-    explicit_retrieval_strategy: RetrievalStrategy | str | None = None,
+    explicit_document_scope: DocumentScope | str | None = None,
+    explicit_summary_strategy: SummaryStrategy | str | None = None,
     explicit_query_type: EvaluationQueryType | None = None,
     session: Session | None = None,
     principal: CurrentPrincipal | None = None,
@@ -338,7 +343,8 @@ def build_query_routing_decision(
     參數：
     - `settings`：目前應用程式設定。
     - `query`：原始使用者問題。
-    - `explicit_retrieval_strategy`：若由外部 contract 直接指定最終 retrieval strategy，優先信任採用。
+    - `explicit_document_scope`：若由外部提供文件範圍提示，只影響 scope 判斷，不允許直接指定 document ids。
+    - `explicit_summary_strategy`：若由外部提供摘要策略提示，只在 `document_summary` 下使用。
     - `explicit_query_type`：若由外部 contract 指定 query type，優先使用。
     - `session`：目前資料庫 session；供文件名稱解析使用。
     - `principal`：目前已驗證使用者；供文件名稱解析使用。
@@ -356,20 +362,28 @@ def build_query_routing_decision(
         area_id=area_id,
         query=normalized_query,
     )
-    explicit_strategy = _resolve_explicit_retrieval_strategy(
-        explicit_retrieval_strategy=explicit_retrieval_strategy,
+    explicit_scope = _resolve_explicit_document_scope(explicit_document_scope=explicit_document_scope)
+    explicit_summary_strategy_value = _resolve_explicit_summary_strategy(
+        explicit_summary_strategy=explicit_summary_strategy,
+    )
+    effective_explicit_query_type = explicit_query_type or (
+        EvaluationQueryType.document_summary if explicit_summary_strategy_value is not None else None
     )
     task_type_decision = resolve_task_type(
         settings=settings,
         query=normalized_query,
         language=language,
         raw_mention_resolution=raw_mention_resolution,
-        explicit_strategy=explicit_strategy,
-        explicit_query_type=explicit_query_type,
+        explicit_query_type=effective_explicit_query_type,
     )
     mention_resolution = _resolve_document_mentions_for_query_type(
         raw_mention_resolution=raw_mention_resolution,
         query_type=EvaluationQueryType(task_type_decision.label),
+        explicit_scope=explicit_scope,
+    )
+    document_scope = _resolve_document_scope(
+        mention_resolution=mention_resolution,
+        explicit_scope=explicit_scope,
     )
     summary_strategy_decision = resolve_summary_strategy(
         settings=settings,
@@ -377,11 +391,13 @@ def build_query_routing_decision(
         language=language,
         query_type=EvaluationQueryType(task_type_decision.label),
         mention_resolution=mention_resolution,
-        explicit_strategy=explicit_strategy,
+        document_scope=document_scope,
+        explicit_summary_strategy=explicit_summary_strategy_value,
     )
     summary_scope = _resolve_final_summary_scope(
         query_type=EvaluationQueryType(task_type_decision.label),
         mention_resolution=mention_resolution,
+        document_scope=document_scope,
         summary_strategy=summary_strategy_decision.label,
     )
     profile_name, overrides = _resolve_runtime_profile_overrides(
@@ -415,6 +431,7 @@ def build_query_routing_decision(
         summary_strategy_embedding_margin=summary_strategy_decision.margin,
         summary_strategy_fallback_used=summary_strategy_decision.fallback_used,
         summary_strategy_fallback_reason=summary_strategy_decision.fallback_reason,
+        document_scope=document_scope.value,
         resolved_document_ids=mention_resolution.resolved_document_ids,
         document_mention_source=mention_resolution.source,
         document_mention_confidence=mention_resolution.confidence,
@@ -437,41 +454,60 @@ def build_query_routing_decision(
     )
 
 
-def _resolve_explicit_retrieval_strategy(
+def _resolve_explicit_document_scope(
     *,
-    explicit_retrieval_strategy: RetrievalStrategy | str | None,
-) -> ExplicitRetrievalStrategy | None:
-    """解析外部直接指定的單一 retrieval strategy。
+    explicit_document_scope: DocumentScope | str | None,
+) -> DocumentScope | None:
+    """解析外部提供的文件範圍提示。
+
+    前置條件與風險：
+    - 此函式只解析 scope hint；不得接受或信任外部傳入的 document ids。
+    - 真正可用的文件集合仍必須由 SQL-gated ready 文件 mention resolver 產生。
 
     參數：
-    - `explicit_retrieval_strategy`：外部提供的 strategy 字串。
+    - `explicit_document_scope`：外部提供的 scope 字串。
 
     回傳：
-    - `ExplicitRetrievalStrategy | None`：成功解析後的 query type 與 summary strategy。
+    - `DocumentScope | None`：成功解析的 scope；未提供時回傳空值。
     """
 
-    if explicit_retrieval_strategy is None:
+    if explicit_document_scope is None:
         return None
+    if isinstance(explicit_document_scope, DocumentScope):
+        return explicit_document_scope
+    normalized = str(explicit_document_scope).strip()
+    if not normalized:
+        return None
+    if normalized not in DOCUMENT_SCOPE_LABELS:
+        allowed_text = "、".join(DOCUMENT_SCOPE_LABELS)
+        raise ValueError(f"不支援的 explicit_document_scope：{normalized}；僅支援 {allowed_text}。")
+    return DocumentScope(normalized)
 
-    normalized = str(explicit_retrieval_strategy).strip()
-    if normalized not in RETRIEVAL_STRATEGY_LABELS:
-        allowed_text = "、".join(RETRIEVAL_STRATEGY_LABELS)
-        raise ValueError(f"不支援的 explicit_retrieval_strategy：{normalized}；僅支援 {allowed_text}。")
 
-    if normalized == EvaluationQueryType.fact_lookup.value:
-        return ExplicitRetrievalStrategy(
-            query_type=EvaluationQueryType.fact_lookup,
-            summary_strategy=None,
-        )
-    if normalized == EvaluationQueryType.cross_document_compare.value:
-        return ExplicitRetrievalStrategy(
-            query_type=EvaluationQueryType.cross_document_compare,
-            summary_strategy=None,
-        )
-    return ExplicitRetrievalStrategy(
-        query_type=EvaluationQueryType.document_summary,
-        summary_strategy=normalized,
-    )
+def _resolve_explicit_summary_strategy(
+    *,
+    explicit_summary_strategy: SummaryStrategy | str | None,
+) -> SummaryStrategy | None:
+    """解析外部提供的摘要策略提示。
+
+    參數：
+    - `explicit_summary_strategy`：外部提供的 summary strategy 字串。
+
+    回傳：
+    - `SummaryStrategy | None`：成功解析的摘要策略；未提供時回傳空值。
+    """
+
+    if explicit_summary_strategy is None:
+        return None
+    if isinstance(explicit_summary_strategy, SummaryStrategy):
+        return explicit_summary_strategy
+    normalized = str(explicit_summary_strategy).strip()
+    if not normalized:
+        return None
+    if normalized not in SUMMARY_STRATEGY_HINT_LABELS:
+        allowed_text = "、".join(SUMMARY_STRATEGY_HINT_LABELS)
+        raise ValueError(f"不支援的 explicit_summary_strategy：{normalized}；僅支援 {allowed_text}。")
+    return SummaryStrategy(normalized)
 
 
 def resolve_task_type(
@@ -480,7 +516,6 @@ def resolve_task_type(
     query: str,
     language: str,
     raw_mention_resolution: DocumentMentionResolution,
-    explicit_strategy: ExplicitRetrievalStrategy | None,
     explicit_query_type: EvaluationQueryType | None,
 ) -> RoutingClassifierDecision:
     """使用共享 classifier framework 決定第一層 `task_type`。
@@ -490,26 +525,11 @@ def resolve_task_type(
     - `query`：原始使用者問題。
     - `language`：query 語言。
     - `raw_mention_resolution`：未受 query type 限制的文件 mention 解析結果。
-    - `explicit_strategy`：若由外部直接指定最終 retrieval strategy。
     - `explicit_query_type`：若由外部指定的 query type。
 
     回傳：
     - `RoutingClassifierDecision`：第一層決策結果。
     """
-
-    if explicit_strategy is not None:
-        return RoutingClassifierDecision(
-            label=explicit_strategy.query_type.value,
-            confidence=1.0,
-            source=QUERY_ROUTING_SOURCE_EXPLICIT,
-            rule_hits=(),
-            embedding_scores=(),
-            top_label=explicit_strategy.query_type.value,
-            runner_up_label=None,
-            margin=1.0,
-            fallback_used=False,
-            fallback_reason=None,
-        )
 
     if explicit_query_type is not None:
         return RoutingClassifierDecision(
@@ -551,9 +571,11 @@ def resolve_task_type(
                 for candidate in raw_mention_resolution.candidates[:3]
             ],
         },
-        conflict_reason=_resolve_task_type_conflict_reason(
-            top_label=None,
-            mention_resolution=raw_mention_resolution,
+        conflict_reason_resolver=(
+            lambda top_label: _resolve_task_type_conflict_reason(
+                top_label=top_label,
+                mention_resolution=raw_mention_resolution,
+            )
         ),
         classifier_name="task_type",
     )
@@ -566,7 +588,8 @@ def resolve_summary_strategy(
     language: str,
     query_type: EvaluationQueryType,
     mention_resolution: DocumentMentionResolution,
-    explicit_strategy: ExplicitRetrievalStrategy | None,
+    document_scope: DocumentScope,
+    explicit_summary_strategy: SummaryStrategy | None,
 ) -> RoutingClassifierDecision:
     """使用共享 classifier framework 決定第二層 `summary_strategy`。
 
@@ -576,38 +599,12 @@ def resolve_summary_strategy(
     - `language`：query 語言。
     - `query_type`：已完成解析的第一層 task type。
     - `mention_resolution`：文件 mention 解析結果。
-    - `explicit_strategy`：若由外部直接指定最終 retrieval strategy。
+    - `document_scope`：目前解析出的文件範圍。
+    - `explicit_summary_strategy`：外部提供的摘要策略提示；可為空值。
 
     回傳：
     - `RoutingClassifierDecision`：第二層決策結果；若不適用則回傳空決策。
     """
-
-    if explicit_strategy is not None:
-        if explicit_strategy.summary_strategy is None:
-            return RoutingClassifierDecision(
-                label="",
-                confidence=0.0,
-                source="not_applicable",
-                rule_hits=(),
-                embedding_scores=(),
-                top_label="",
-                runner_up_label=None,
-                margin=0.0,
-                fallback_used=False,
-                fallback_reason=None,
-            )
-        return RoutingClassifierDecision(
-            label=explicit_strategy.summary_strategy,
-            confidence=1.0,
-            source=QUERY_ROUTING_SOURCE_EXPLICIT,
-            rule_hits=(),
-            embedding_scores=(),
-            top_label=explicit_strategy.summary_strategy,
-            runner_up_label=None,
-            margin=1.0,
-            fallback_used=False,
-            fallback_reason=None,
-        )
 
     if query_type != EvaluationQueryType.document_summary:
         return RoutingClassifierDecision(
@@ -623,12 +620,30 @@ def resolve_summary_strategy(
             fallback_reason=None,
         )
 
+    if explicit_summary_strategy is not None:
+        return RoutingClassifierDecision(
+            label=explicit_summary_strategy.value,
+            confidence=1.0,
+            source=QUERY_ROUTING_SOURCE_EXPLICIT,
+            rule_hits=(),
+            embedding_scores=(),
+            top_label=explicit_summary_strategy.value,
+            runner_up_label=None,
+            margin=1.0,
+            fallback_used=False,
+            fallback_reason=None,
+        )
+
     rule_hits = apply_summary_strategy_rules(
         query=query,
         language=language,
         mention_resolution=mention_resolution,
+        document_scope=document_scope,
     )
-    allowed_labels = _resolve_summary_strategy_label_options(mention_resolution=mention_resolution)
+    allowed_labels = _resolve_summary_strategy_label_options(
+        mention_resolution=mention_resolution,
+        document_scope=document_scope,
+    )
     try:
         initial_embedding_decision = classify_summary_strategy_with_embeddings(
             settings=settings,
@@ -638,7 +653,7 @@ def resolve_summary_strategy(
     except Exception:
         safe_fallback_label = (
             SUMMARY_STRATEGY_DOCUMENT_OVERVIEW
-            if len(mention_resolution.resolved_document_ids) == 1
+            if document_scope == DocumentScope.SINGLE_DOCUMENT and len(mention_resolution.resolved_document_ids) == 1
             else SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME
         )
         return RoutingClassifierDecision(
@@ -713,7 +728,7 @@ def resolve_summary_strategy(
         )
     safe_fallback_label = (
         SUMMARY_STRATEGY_DOCUMENT_OVERVIEW
-        if len(mention_resolution.resolved_document_ids) == 1
+        if document_scope == DocumentScope.SINGLE_DOCUMENT and len(mention_resolution.resolved_document_ids) == 1
         else SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME
     )
     return RoutingClassifierDecision(
@@ -781,6 +796,7 @@ def apply_summary_strategy_rules(
     query: str,
     language: str,
     mention_resolution: DocumentMentionResolution,
+    document_scope: DocumentScope,
 ) -> tuple[RoutingRuleHit, ...]:
     """套用第二層 `summary_strategy` 的高 precision 規則。
 
@@ -788,13 +804,14 @@ def apply_summary_strategy_rules(
     - `query`：原始使用者問題。
     - `language`：query 語言。
     - `mention_resolution`：文件 mention 解析結果。
+    - `document_scope`：目前解析出的文件範圍。
 
     回傳：
     - `tuple[RoutingRuleHit, ...]`：命中的高 precision 規則。
     """
 
     lowered_query = query.casefold()
-    if len(mention_resolution.resolved_document_ids) >= 2:
+    if len(mention_resolution.resolved_document_ids) >= 2 or document_scope == DocumentScope.MULTI_DOCUMENT:
         return (
             RoutingRuleHit(
                 label=SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME,
@@ -1004,7 +1021,7 @@ def _resolve_label_with_classifier_framework(
     safe_fallback_confidence: float,
     safe_fallback_reason: str,
     llm_context: dict[str, object],
-    conflict_reason: str | None,
+    conflict_reason_resolver: Callable[[str], str | None] | None,
     classifier_name: Literal["task_type", "summary_strategy"],
 ) -> RoutingClassifierDecision:
     """依 `rule -> embedding -> llm fallback` 決定 label。
@@ -1023,7 +1040,7 @@ def _resolve_label_with_classifier_framework(
     - `safe_fallback_confidence`：保守 label 的 confidence。
     - `safe_fallback_reason`：保守 label 的 fallback reason。
     - `llm_context`：LLM fallback 可見的最小上下文。
-    - `conflict_reason`：若 rule-free 但存在 scope/mention conflict，填入原因。
+    - `conflict_reason_resolver`：依 embedding top label 判斷是否存在 scope/mention conflict。
     - `classifier_name`：目前是第一層或第二層 classifier。
 
     回傳：
@@ -1065,6 +1082,11 @@ def _resolve_label_with_classifier_framework(
             fallback_reason=None,
         )
 
+    conflict_reason = (
+        conflict_reason_resolver(embedding_decision.top_label)
+        if conflict_reason_resolver is not None
+        else None
+    )
     if (
         embedding_decision.confidence >= embedding_confidence_threshold
         and embedding_decision.margin >= embedding_margin_threshold
@@ -1533,29 +1555,71 @@ def _resolve_document_mentions_for_query_type(
     *,
     raw_mention_resolution: DocumentMentionResolution,
     query_type: EvaluationQueryType,
+    explicit_scope: DocumentScope | None,
 ) -> DocumentMentionResolution:
     """依 query type 決定是否輸出文件名稱提及解析結果。
 
     參數：
     - `raw_mention_resolution`：未受 query type 限制的 mention 解析結果。
     - `query_type`：目前 query type。
+    - `explicit_scope`：外部提供的 scope hint；可為空值。
 
     回傳：
-    - `DocumentMentionResolution`：若題型需要 scope 則保留 mention，否則回傳空結果。
+    - `DocumentMentionResolution`：可作為檢索 scope 的 mention 結果。
     """
 
-    if query_type not in {
-        EvaluationQueryType.document_summary,
-        EvaluationQueryType.cross_document_compare,
-    }:
-        return _empty_document_mention_resolution()
+    del query_type
+    if explicit_scope == DocumentScope.MULTI_DOCUMENT and len(raw_mention_resolution.resolved_document_ids) < 2:
+        promoted_candidates = tuple(
+            candidate
+            for candidate in raw_mention_resolution.candidates
+            if candidate.score >= MULTI_DOCUMENT_SCOPE_HINT_CANDIDATE_THRESHOLD
+        )
+        if len(promoted_candidates) >= 2:
+            return DocumentMentionResolution(
+                resolved_document_ids=tuple(candidate.document_id for candidate in promoted_candidates),
+                source="multi_document_scope_hint",
+                confidence=promoted_candidates[0].score,
+                candidates=raw_mention_resolution.candidates,
+            )
     return raw_mention_resolution
+
+
+def _resolve_document_scope(
+    *,
+    mention_resolution: DocumentMentionResolution,
+    explicit_scope: DocumentScope | None,
+) -> DocumentScope:
+    """依後端 mention 解析與外部 hint 決定文件範圍。
+
+    前置條件與風險：
+    - high-confidence mention 結果優先於外部 scope hint，避免 agent 把明確文件指稱錯誤擴大成 area-wide。
+    - `DocumentScope` 不攜帶 document ids；真正的檢索白名單仍只來自 `mention_resolution.resolved_document_ids`。
+
+    參數：
+    - `mention_resolution`：後端在已授權 ready 文件集合中解析出的文件 mention。
+    - `explicit_scope`：外部提供的 scope hint；可為空值。
+
+    回傳：
+    - `DocumentScope`：本次檢索應採用的文件範圍描述。
+    """
+
+    if len(mention_resolution.resolved_document_ids) == 1:
+        return DocumentScope.SINGLE_DOCUMENT
+    if len(mention_resolution.resolved_document_ids) >= 2:
+        return DocumentScope.MULTI_DOCUMENT
+    if explicit_scope is not None:
+        return explicit_scope
+    if mention_resolution.candidates:
+        return DocumentScope.UNRESOLVED
+    return DocumentScope.AREA
 
 
 def _resolve_final_summary_scope(
     *,
     query_type: EvaluationQueryType,
     mention_resolution: DocumentMentionResolution,
+    document_scope: DocumentScope,
     summary_strategy: str,
 ) -> str | None:
     """依最終策略與 mention 結果決定 summary scope。
@@ -1563,6 +1627,7 @@ def _resolve_final_summary_scope(
     參數：
     - `query_type`：目前 query type。
     - `mention_resolution`：文件 mention 解析結果。
+    - `document_scope`：目前解析出的文件範圍。
     - `summary_strategy`：最終 summary strategy。
 
     回傳：
@@ -1573,7 +1638,7 @@ def _resolve_final_summary_scope(
         return None
     if summary_strategy == SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME:
         return "multi_document"
-    if len(mention_resolution.resolved_document_ids) == 1:
+    if document_scope == DocumentScope.SINGLE_DOCUMENT and len(mention_resolution.resolved_document_ids) == 1:
         return "single_document"
     return "multi_document"
 
@@ -1581,17 +1646,19 @@ def _resolve_final_summary_scope(
 def _resolve_summary_strategy_label_options(
     *,
     mention_resolution: DocumentMentionResolution,
+    document_scope: DocumentScope,
 ) -> tuple[str, ...]:
     """依 mention 結果限制可用的 summary strategy labels。
 
     參數：
     - `mention_resolution`：文件 mention 解析結果。
+    - `document_scope`：目前解析出的文件範圍。
 
     回傳：
     - `tuple[str, ...]`：本次允許的 summary strategy labels。
     """
 
-    if len(mention_resolution.resolved_document_ids) >= 2:
+    if len(mention_resolution.resolved_document_ids) >= 2 or document_scope == DocumentScope.MULTI_DOCUMENT:
         return (SUMMARY_STRATEGY_MULTI_DOCUMENT_THEME,)
     if len(mention_resolution.resolved_document_ids) == 1:
         return (
@@ -1624,8 +1691,6 @@ def _resolve_task_type_conflict_reason(
     if top_label is None:
         return None
     resolved_count = len(mention_resolution.resolved_document_ids)
-    if resolved_count >= 2 and top_label == EvaluationQueryType.fact_lookup.value:
-        return "multi_document_mention_conflict"
     if resolved_count == 1 and top_label == EvaluationQueryType.cross_document_compare.value:
         return "single_document_mention_conflict"
     return None

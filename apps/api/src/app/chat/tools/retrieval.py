@@ -11,7 +11,7 @@ from app.chat.contracts.types import ChatCitation, ChatCitationRegion
 from app.core.settings import AppSettings
 from app.db.models import Document, EvaluationQueryType
 from app.services.retrieval import retrieve_area_candidates
-from app.services.retrieval_routing import RetrievalStrategy, build_query_routing_decision
+from app.services.retrieval_routing import DocumentScope, SummaryStrategy, build_query_routing_decision
 from app.services.retrieval_assembler import AssembledContext, AssembledRetrievalResult, assemble_retrieval_result
 
 
@@ -34,7 +34,9 @@ def retrieve_area_contexts_tool(
     settings: AppSettings,
     area_id: str,
     question: str,
-    retrieval_strategy: RetrievalStrategy | str | None = None,
+    task_type: EvaluationQueryType | str | None = None,
+    document_scope: DocumentScope | str | None = None,
+    summary_strategy: SummaryStrategy | str | None = None,
 ) -> RetrievalToolResult:
     """將 retrieval、rerank 與 assembler 包成單一 tool-shaped capability。
 
@@ -44,9 +46,9 @@ def retrieve_area_contexts_tool(
     - `settings`：API 執行期設定。
     - `area_id`：檢索所屬 area。
     - `question`：使用者提問。
-    - `retrieval_strategy`：可選的單一 retrieval strategy；允許值為
-      `fact_lookup | document_overview | section_focused | multi_document_theme | cross_document_compare`，
-      提供時直接信任採用。
+    - `task_type`：可選的任務類型提示；不提供時由後端自動 routing。
+    - `document_scope`：可選的文件範圍提示；不得攜帶 document ids，實際 ids 仍由後端解析。
+    - `summary_strategy`：可選的摘要策略提示；只在 `document_summary` 下有效。
 
     回傳：
     - `RetrievalToolResult`：contexts、citations 與 trace。
@@ -55,18 +57,22 @@ def retrieve_area_contexts_tool(
     - 此 tool 必須始終維持 SQL gate、same-404 與 ready-only。
     """
 
+    explicit_query_type = _coerce_optional_query_type(task_type=task_type)
     retrieval_result = retrieve_area_candidates(
         session=session,
         principal=principal,
         settings=settings,
         area_id=area_id,
         query=question,
-        retrieval_strategy=retrieval_strategy,
+        document_scope=document_scope,
+        summary_strategy=summary_strategy,
+        query_type=explicit_query_type,
     )
     effective_settings = build_query_routing_decision(
         settings=settings,
         query=question,
-        explicit_retrieval_strategy=retrieval_strategy,
+        explicit_document_scope=document_scope,
+        explicit_summary_strategy=summary_strategy,
         explicit_query_type=EvaluationQueryType(retrieval_result.trace.query_type),
         session=session,
         principal=principal,
@@ -89,6 +95,26 @@ def retrieve_area_contexts_tool(
             "assembler": asdict(assembled_result.trace.assembler),
         },
     )
+
+
+def _coerce_optional_query_type(*, task_type: EvaluationQueryType | str | None) -> EvaluationQueryType | None:
+    """將 tool task type hint 轉成正式 enum。
+
+    參數：
+    - `task_type`：agent 或內部呼叫提供的任務類型提示。
+
+    回傳：
+    - `EvaluationQueryType | None`：成功解析後的 query type；未提供時回傳空值。
+    """
+
+    if task_type is None:
+        return None
+    if isinstance(task_type, EvaluationQueryType):
+        return task_type
+    normalized = str(task_type).strip()
+    if not normalized:
+        return None
+    return EvaluationQueryType(normalized)
 
 
 def build_assembled_context_payload(
@@ -230,6 +256,7 @@ def build_tool_call_output_summary(
         "summary_strategy_embedding_margin": retrieval_trace.get("summary_strategy_embedding_margin"),
         "summary_strategy_fallback_used": retrieval_trace.get("summary_strategy_fallback_used"),
         "summary_strategy_fallback_reason": retrieval_trace.get("summary_strategy_fallback_reason"),
+        "document_scope": retrieval_trace.get("document_scope"),
         "resolved_document_ids": retrieval_trace.get("resolved_document_ids", []),
         "document_mention_source": retrieval_trace.get("document_mention_source"),
         "document_mention_confidence": retrieval_trace.get("document_mention_confidence"),

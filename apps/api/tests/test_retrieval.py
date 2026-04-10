@@ -9,7 +9,17 @@ import pytest
 from sqlalchemy import Integer, String, select
 
 from app.auth.verifier import CurrentPrincipal
-from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
+from app.db.models import (
+    Area,
+    AreaUserRole,
+    ChunkStructureKind,
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    EvaluationQueryType,
+    Role,
+)
 from app.db.sql_types import DEFAULT_EMBEDDING_DIMENSIONS, Vector
 from app.services.reranking import (
     CohereRerankProvider,
@@ -1647,6 +1657,114 @@ def test_retrieve_area_candidates_resolves_single_document_summary_scope_and_fil
     assert result.trace.selected_profile == "document_summary_single_document_diversified_v1"
     assert result.trace.resolved_document_ids == [first_document.id]
     assert result.trace.selected_document_ids == [first_document.id]
+    assert all(candidate.document_id == first_document.id for candidate in result.candidates)
+
+
+def test_retrieve_area_candidates_filters_fact_lookup_to_mentioned_document_scope(db_session, app_settings) -> None:
+    """fact lookup 若高信心提及文件名稱，也應收斂到該 ready 文件範圍。"""
+
+    area = Area(id=_uuid(), name="Fact Lookup Scoped Retrieval")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+
+    first_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="alpha-policy.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/alpha-policy.md",
+        status=DocumentStatus.ready,
+    )
+    second_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="beta-manual.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/beta-manual.md",
+        status=DocumentStatus.ready,
+    )
+    first_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=first_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="alpha policy",
+        content="alpha deadline is Monday",
+        content_preview="alpha deadline is Monday",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+    )
+    second_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=second_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=1,
+        child_index=None,
+        heading="beta manual",
+        content="beta deadline is Tuesday",
+        content_preview="beta deadline is Tuesday",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+    )
+    first_child = DocumentChunk(
+        id=_uuid(),
+        document_id=first_document.id,
+        parent_chunk_id=first_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="alpha policy",
+        content="alpha deadline is Monday",
+        content_preview="alpha deadline is Monday",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    second_child = DocumentChunk(
+        id=_uuid(),
+        document_id=second_document.id,
+        parent_chunk_id=second_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=3,
+        section_index=1,
+        child_index=0,
+        heading="beta manual",
+        content="beta deadline is Tuesday",
+        content_preview="beta deadline is Tuesday",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([first_document, second_document, first_parent, second_parent, first_child, second_child])
+    db_session.commit()
+
+    result = retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        query="What is the deadline in alpha policy?",
+    )
+
+    assert result.trace.query_type == EvaluationQueryType.fact_lookup.value
+    assert result.trace.resolved_document_ids == [first_document.id]
+    assert result.candidates
     assert all(candidate.document_id == first_document.id for candidate in result.candidates)
 
 

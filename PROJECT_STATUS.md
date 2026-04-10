@@ -95,6 +95,8 @@
 - worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
 - worker ingest / reindex 目前正式預設只生成 `document synopsis`；`section synopsis` 已改為 repo-wide opt-in，避免在主線與 benchmark 預設路徑增加成本
 - `document_summary` 與 `cross_document_compare` 的 retrieval 正式主線已回到 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler`；`fact_lookup` 維持同一路徑
+- retrieval routing 已將文件 mention scope 調整為與 `task_type` 正交：`fact_lookup` 若高信心提及已授權且 `ready` 文件，也會保留 `resolved_document_ids` 並用於 recall / evidence recall 收斂，不再只把 scope 視為 summary / compare 的附屬資訊
+- Deep Agents 可見的 retrieval tool contract 已移除舊的單一 `retrieval_strategy`，且不再讓 agent 提供 `task_type`、`document_scope` 或 `summary_strategy`；三者保留為後端 router 的正交 trace / evaluation contract，實際文件白名單只由後端 mention resolver 在已授權且 `ready` 文件中解析
 - `Phase 8B` 已完成第一批 schema 與 runtime 接線：新增 `document_chunk_evidence_units`、child/parent source mapping tables，以及 `documents.evidence_enrichment_*` observability 欄位
 - `Phase 8B` runtime 已新增 feature-flag 控制的 `evidence recall -> mapped child chunks -> rerank/selection/assembler` merge lane；trace、candidate preview 與 chat tool summary 已可觀測 evidence hits、mapped child ids、path quality 與 cluster strategy
 - `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`

@@ -10,7 +10,6 @@ from app.chat.tools.retrieval import (
     build_tool_call_output_summary,
     retrieve_area_contexts_tool,
 )
-from app.services.retrieval_routing import RetrievalStrategy
 from app.services.retrieval import RetrievalTrace
 from app.services.retrieval_assembler import (
     AssembledContext,
@@ -19,7 +18,17 @@ from app.services.retrieval_assembler import (
     AssemblerContextTrace,
     AssemblerTrace,
 )
-from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
+from app.db.models import (
+    Area,
+    AreaUserRole,
+    ChunkStructureKind,
+    ChunkType,
+    Document,
+    DocumentChunk,
+    DocumentStatus,
+    EvaluationQueryType,
+    Role,
+)
 
 
 def _uuid() -> str:
@@ -147,8 +156,8 @@ def test_retrieve_area_contexts_tool_returns_context_level_contract(db_session, 
     assert result.trace["assembler"]["contexts"][0]["truncated"] is False
 
 
-def test_retrieve_area_contexts_tool_trusts_explicit_retrieval_strategy(db_session, app_settings) -> None:
-    """tool 提供 retrieval strategy 時應直接採用該策略。"""
+def test_retrieve_area_contexts_tool_accepts_orthogonal_task_type_and_scope_hints(db_session, app_settings) -> None:
+    """tool 應接受 task type 與 document scope 兩個正交 hint。"""
 
     area = Area(id=_uuid(), name="Explicit Strategy Tool Contract")
     document = Document(
@@ -212,11 +221,14 @@ def test_retrieve_area_contexts_tool_trusts_explicit_retrieval_strategy(db_sessi
         settings=app_settings,
         area_id=area.id,
         question="Summarize the key points of Benefits Overview, including the Chinese onboarding note.",
-        retrieval_strategy=RetrievalStrategy.DOCUMENT_OVERVIEW,
+        task_type=EvaluationQueryType.document_summary,
+        document_scope="single_document",
+        summary_strategy="document_overview",
     )
 
     assert result.trace["retrieval"]["query_type"] == "document_summary"
     assert result.trace["retrieval"]["query_type_source"] == "explicit"
+    assert result.trace["retrieval"]["document_scope"] == "single_document"
     assert result.trace["retrieval"]["summary_strategy"] == "document_overview"
     assert result.trace["retrieval"]["summary_strategy_source"] == "explicit"
 
@@ -434,6 +446,7 @@ def test_retrieval_tool_payload_builders_follow_runtime_contract(db_session, app
     assert summary_payload["summary_strategy_embedding_margin"] == 0.0
     assert summary_payload["summary_strategy_fallback_used"] is False
     assert summary_payload["summary_strategy_fallback_reason"] is None
+    assert summary_payload["document_scope"] == "area"
     assert summary_payload["resolved_document_ids"] == []
     assert summary_payload["document_mention_source"] == "none"
     assert summary_payload["document_mention_confidence"] == 0.0
@@ -507,6 +520,7 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
         "summary_strategy_embedding_margin": None,
         "summary_strategy_fallback_used": None,
         "summary_strategy_fallback_reason": None,
+        "document_scope": None,
         "resolved_document_ids": [],
         "document_mention_source": None,
         "document_mention_confidence": None,

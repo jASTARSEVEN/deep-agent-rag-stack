@@ -416,7 +416,7 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
             """
 
             assert stream_mode == ["messages", "values"]
-            self.tools[0]("reader policy")
+            self.tools[0]()
             return iter(
                 [
                     ("messages", ({"content": "這是帶搜尋流程的回答。"}, {"tags": []})),
@@ -506,6 +506,7 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "summary_strategy_embedding_margin": None,
         "summary_strategy_fallback_used": None,
         "summary_strategy_fallback_reason": None,
+        "document_scope": None,
         "resolved_document_ids": [],
         "document_mention_source": None,
         "document_mention_confidence": None,
@@ -521,6 +522,11 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         "dropped_by_diversity": [],
         "query_focus_applied": None,
         "profile_settings": {},
+        "evidence_units_enabled": None,
+        "evidence_build_strategy_used": None,
+        "evidence_recall_hits": [],
+        "mapped_child_ids": [],
+        "evidence_fallback_reason": None,
         "contexts": [],
     }
     reference_events = [event for event in emitted_events if event["type"] == "references"]
@@ -557,7 +563,7 @@ def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch)
 
             captured_inputs.append(agent_input)
             assert stream_mode == ["messages", "values"]
-            self.tools[0]("summary question")
+            self.tools[0]()
             return iter(
                 [
                     ("messages", ({"content": "這是統一路徑摘要回答。"}, {"tags": []})),
@@ -762,7 +768,7 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
             """先執行 retrieval，再回傳固定回答。"""
 
             assert stream_mode == ["messages", "values"]
-            self.tools[0]("reader policy")
+            self.tools[0]()
             return iter(
                 [
                     ("messages", ({"content": "這是回答。"}, {"tags": []})),
@@ -939,7 +945,7 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             """先執行 retrieval，再回傳固定回答。"""
 
             assert stream_mode == ["messages", "values"]
-            captured_tool_result.update(json.loads(self.tools[0]("reader policy")))
+            captured_tool_result.update(json.loads(self.tools[0]()))
             return iter(
                 [
                     ("messages", ({"content": "這是回答。"}, {"tags": []})),
@@ -1116,7 +1122,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             """
 
             assert stream_mode == ["messages", "values"]
-            captured_tool_result.update(json.loads(self.tools[0]("alpha")))
+            captured_tool_result.update(json.loads(self.tools[0]()))
             return iter(
                 [
                     ("messages", ({"content": "這是帶真實檢索的回答。"}, {"tags": []})),
@@ -1258,6 +1264,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert completed_tool_event["output"]["query_type_fallback_used"] is False
     assert completed_tool_event["output"]["query_type_fallback_reason"] == "llm_fallback_unavailable"
     assert completed_tool_event["output"]["summary_scope"] is None
+    assert completed_tool_event["output"]["document_scope"] == "area"
     assert completed_tool_event["output"]["resolved_document_ids"] == []
     assert completed_tool_event["output"]["document_mention_source"] == "none"
     assert completed_tool_event["output"]["document_mention_confidence"] == 0.0
