@@ -307,21 +307,22 @@
 - 單機自測：`api + worker + web` 本機啟動，SQLite + filesystem + deterministic providers，可直接執行 Playwright E2E reviewer flow
 
 目前 benchmark 現況：
-- 目前長期 benchmark 已擴充為九個 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + query_focus off + assembler 9x3000`，舊的 query-focus-on 分數只保留歷史參考價值，不再作為 current mainline baseline。
+- 目前長期 benchmark 已收斂為七個正式 dataset，且共同 current baseline 以 `2026-04-05` 的 `production_like_v1` snapshot 為準；正式主線設定固定為 `generic_v1 + query_focus off + assembler 9x3000`，舊小樣本 package 與 query-focus-on 分數只保留歷史參考價值，不再作為 current mainline baseline。
+- `QASPER 100`、`UDA 100` 與 `DRCD 100` 的原始資料集 contract 都包含指定文件上下文；目前 benchmark runner 已改為對這三類 dataset 使用 gold span 的 `document_id` 作為指定文件 scope，再執行 child recall / evidence recall / rerank / assembler。這些指定文件結果不得與舊的 area-wide ambiguous query 分數混讀。
 - external `100Q` 六資料集的最新 assembled 指標如下：
   - `DuReader-robust 100`：`Recall@10=1.0000`、`nDCG@10=0.9677`、`MRR@10=0.9570`
   - `MS MARCO 100`：`Recall@10=1.0000`、`nDCG@10=0.9674`、`MRR@10=0.9550`
-  - `DRCD 100`：`Recall@10=0.9700`、`nDCG@10=0.8650`、`MRR@10=0.8308`
+  - `DRCD 100`（指定文件）：`Recall@10=1.0000`、`nDCG@10=0.8894`、`MRR@10=0.8517`
   - `NQ 100`：`Recall@10=0.7500`、`nDCG@10=0.7443`、`MRR@10=0.7425`
-  - `UDA 100`：`Recall@10=0.8300`、`nDCG@10=0.6818`、`MRR@10=0.6340`
-  - `QASPER 100`：`Recall@10=0.5900`、`nDCG@10=0.3797`、`MRR@10=0.3142`
+  - `UDA 100`（指定文件）：`Recall@10=0.7900`、`nDCG@10=0.6537`、`MRR@10=0.6104`
+  - `QASPER 100`（指定文件）：`Recall@10=0.9300`、`nDCG@10=0.5905`、`MRR@10=0.4813`
 - 目前依 assembled 指標來看，`DuReader-robust 100` 與 `MS MARCO 100` 已接近 ceiling，較適合作為 sanity check；真正仍在拉低 external hard lane 的主因仍是 `QASPER 100`。
 - `NQ 100` 已補出一條與 `QASPER` 不同的壓力測試 lane：`rerank` 幾乎接近 ceiling，但 `assembled` 仍顯著掉分，代表 wiki 長段落 evidence 的 materialization / budget 仍需特別關注。
 - `DRCD 100` 目前更適合作為繁體中文 rerank regression 哨兵，而不是下一輪主優化目標；`DuReader-robust 100` 則應維持近 ceiling 中文 sanity check 角色，不應拿來主導策略方向。
 - 後續所有 benchmark-driven 調整都必須先在目前 baseline 上建立 before / after；若新策略造成退化，除分析文件外其餘改動一律回退；若提升，則需重新分析最新 miss 題與當前 chunks，再決定下一輪假設。
 
 後續改善重點：
-- 主優先方向仍是以 generic-first 方式處理 `QASPER 100` 的 `recall_only` semantic-gap miss，但應先以 `Phase 8.1` 的 routing/profile skeleton 為基礎觀測 regression，再決定是否需要新的 generic-first candidate lane。
+- 主優先方向仍是以 generic-first 方式處理 `QASPER 100` 在指定文件後仍存在的 evidence-field semantic-gap miss；舊的 area-wide QASPER 低分主要反映缺少原始 paper scope，不再作為純 evidence retrieval 的主判斷。
 - 第二優先觀測點是 `NQ 100` 的 `rerank_hit_but_assembled_miss` 與 `assembled_only` 題目，用來驗證 assembler 是否在高品質 rerank 命中的 wiki 長段落上過度裁切。
 - 第三優先觀測點是 `DRCD 100` 的中文 rerank regression；任何新 lane 若讓近乎到頂的 lexical candidate set 反而掉分，應直接視為失敗。
 - `DuReader-robust 100` 與 `MS MARCO 100` 應維持為近 ceiling sanity check，不作為下一輪優化方向的主依據。

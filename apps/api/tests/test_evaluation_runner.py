@@ -161,6 +161,149 @@ def test_evaluation_preview_and_run_return_multistage_report(client, db_session,
     assert persisted_report["per_query"][0]["item_id"] == item_id
 
 
+def test_external_single_document_benchmark_uses_gold_document_scope(client, db_session, app_settings) -> None:
+    """QASPER/UDA/DRCD 類 benchmark run 應以 gold 文件作為指定文件 scope。
+
+    參數：
+    - `client`：測試用 HTTP client。
+    - `db_session`：測試資料庫 session。
+    - `app_settings`：測試用 API 設定。
+
+    回傳：
+    - `None`：此測試只驗證 benchmark-only 文件範圍。
+    """
+
+    area = Area(id=_uuid(), name="QASPER Oracle Scope Area")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-admin", role=Role.admin))
+    gold_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="gold-paper.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/gold-paper.md",
+        display_text="Gold paper contains the alpha answer.",
+        normalized_text="Gold paper contains the alpha answer.",
+        status=DocumentStatus.ready,
+    )
+    other_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="other-paper.md",
+        content_type="text/markdown",
+        file_size=128,
+        storage_key="evaluation/other-paper.md",
+        display_text="Other paper also mentions alpha answer.",
+        normalized_text="Other paper also mentions alpha answer.",
+        status=DocumentStatus.ready,
+    )
+    gold_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=gold_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=10,
+        section_index=0,
+        child_index=None,
+        heading="Gold",
+        content=gold_document.display_text or "",
+        content_preview=gold_document.display_text or "",
+        char_count=len(gold_document.display_text or ""),
+        start_offset=0,
+        end_offset=len(gold_document.display_text or ""),
+    )
+    gold_child = DocumentChunk(
+        id=_uuid(),
+        document_id=gold_document.id,
+        parent_chunk_id=gold_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=11,
+        section_index=0,
+        child_index=0,
+        heading="Gold",
+        content=gold_document.display_text or "",
+        content_preview=gold_document.display_text or "",
+        char_count=len(gold_document.display_text or ""),
+        start_offset=0,
+        end_offset=len(gold_document.display_text or ""),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    other_parent = DocumentChunk(
+        id=_uuid(),
+        document_id=other_document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Other",
+        content=other_document.display_text or "",
+        content_preview=other_document.display_text or "",
+        char_count=len(other_document.display_text or ""),
+        start_offset=0,
+        end_offset=len(other_document.display_text or ""),
+    )
+    other_child = DocumentChunk(
+        id=_uuid(),
+        document_id=other_document.id,
+        parent_chunk_id=other_parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Other",
+        content=other_document.display_text or "",
+        content_preview=other_document.display_text or "",
+        char_count=len(other_document.display_text or ""),
+        start_offset=0,
+        end_offset=len(other_document.display_text or ""),
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all([gold_document, other_document, gold_parent, gold_child, other_parent, other_child])
+    db_session.commit()
+
+    dataset_id = client.post(
+        f"/areas/{area.id}/evaluation/datasets",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"name": "qasper-curated-v1-100", "query_type": "fact_lookup"},
+    ).json()["id"]
+    item_id = client.post(
+        f"/evaluation/datasets/{dataset_id}/items",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"query_text": "alpha answer", "language": "en", "query_type": "fact_lookup"},
+    ).json()["id"]
+    client.post(
+        f"/evaluation/datasets/{dataset_id}/items/{item_id}/spans",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={
+            "document_id": gold_document.id,
+            "start_offset": 0,
+            "end_offset": len(gold_document.display_text or ""),
+            "relevance_grade": 3,
+        },
+    )
+
+    run_response = client.post(
+        f"/evaluation/datasets/{dataset_id}/runs",
+        headers={"Authorization": ADMIN_TOKEN},
+        json={"top_k": 5},
+    )
+
+    assert run_response.status_code == 201
+    run_payload = run_response.json()
+    assert run_payload["run"]["config_snapshot"]["benchmark_document_scope"]["mode"] == "gold_document_ids"
+    assert run_payload["per_query"][0]["benchmark_document_scope"] == {
+        "mode": "gold_document_ids",
+        "document_ids": [gold_document.id],
+    }
+    assert run_payload["per_query"][0]["recall"]["first_hit_rank"] == 1
+
+
 def test_evaluation_run_query_focus_profile_respects_env_toggle(client, db_session, app_settings) -> None:
     """query focus 是否實際套用，應由 env settings 控制。"""
 

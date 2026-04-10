@@ -220,6 +220,7 @@ flowchart TD
 3. `align-spans` 必須讀取目標 area 內 `ready` 文件的 `display_text`，以 `display_text-first` 對齊 evidence；gold truth 不信任外部資料集原始 offsets。
 4. 對齊結果分成 `auto_matched`、`needs_review` 與 `rejected`，並輸出 `alignment_candidates.jsonl` 與 `alignment_review_queue.jsonl`；若 queue 非空，可先用 `review_external_benchmark_with_openai.py` 做 `OpenAI` review 補 span，再視需要回到 `EvaluationDrawer + documents preview` 做人工複核。
 5. `build-snapshot` 只會將 `auto_matched` 與 reviewer 明確核准的 spans 轉成正式 snapshot；未具穩定 gold span 的題目不得包裝成正式 benchmark 分數來源。
+6. `QASPER`、`UDA` 與 `DRCD` 的原始任務都帶有每題指定文件上下文；正式 benchmark runner 對 dataset name 以 `qasper-`、`uda-` 或 `drcd-` 開頭的資料集，會以該題 gold spans 的 `document_id` 作為指定文件 scope，再執行 recall / evidence recall / rerank / assembler。此規則只屬於 benchmark contract，不得套用到產品 chat runtime，也不得把 oracle 文件 scope 分數與舊的 area-wide ambiguous query 分數混讀；若 baseline run 與 candidate run 的文件 scope 模式不同，baseline compare 必須明確標記 skip。
 
 ### Web 登入流程
 1. 匿名使用者可先進入首頁

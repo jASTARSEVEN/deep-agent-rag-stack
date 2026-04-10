@@ -349,6 +349,8 @@ class EvaluationPerQueryDetail(BaseModel):
     retrieval_miss: bool
     gold_spans: list[EvaluationItemSpanResponse]
     query_routing: EvaluationQueryRoutingDetail
+    # benchmark-only 文件範圍；特定外部資料集會用 gold document id 模擬原始指定文件上下文。
+    benchmark_document_scope: dict[str, object] | None = None
     selection: EvaluationSelectionDetail | None = None
     query_focus: EvaluationQueryFocusDetail | None = None
     evidence_recall: EvaluationPerQueryStageDetail | None = None

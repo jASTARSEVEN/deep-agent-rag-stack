@@ -41,6 +41,13 @@ from app.services.evaluation_dataset import build_dataset_summary, evaluate_item
 from app.services.evaluation_profiles import resolve_evaluation_settings
 from app.services.retrieval_routing import build_query_routing_decision
 
+# 這些外部資料集的原始任務皆帶有指定文件上下文；benchmark run 應用 gold 文件作為 oracle scope。
+GOLD_DOCUMENT_SCOPE_DATASET_PREFIXES = ("qasper-", "uda-", "drcd-")
+# benchmark 文件白名單未套用時的 trace 模式名稱。
+BENCHMARK_DOCUMENT_SCOPE_MODE_ROUTING = "routing"
+# benchmark 以 gold span 文件作為指定文件時的 trace 模式名稱。
+BENCHMARK_DOCUMENT_SCOPE_MODE_GOLD = "gold_document_ids"
+
 
 def run_evaluation_dataset(
     *,
@@ -90,6 +97,7 @@ def run_evaluation_dataset(
         query_type=dataset.query_type.value,
         selected_profile=routing_decision.selected_profile,
         summary_strategy=routing_decision.summary_strategy,
+        benchmark_document_scope_mode=_resolve_benchmark_document_scope_mode(dataset=dataset),
     )
 
     run = RetrievalEvalRun(
@@ -120,6 +128,7 @@ def run_evaluation_dataset(
             session=session,
             baseline_run_id=dataset.baseline_run_id,
             current_summary=report_payload["summary_metrics"],
+            current_config_snapshot=config_snapshot,
         )
         artifact = RetrievalEvalRunArtifact(
             run_id=run.id,
@@ -181,6 +190,7 @@ def _build_evaluation_config_snapshot(
     query_type: str,
     selected_profile: str,
     summary_strategy: str | None,
+    benchmark_document_scope_mode: str,
 ) -> dict[str, object]:
     """建立 benchmark run 的設定快照。"""
 
@@ -193,6 +203,10 @@ def _build_evaluation_config_snapshot(
                 "summary_scope": None,
                 "summary_strategy": summary_strategy,
                 "resolved_document_ids": [],
+            },
+            "benchmark_document_scope": {
+                "mode": benchmark_document_scope_mode,
+                "dataset_prefixes": list(GOLD_DOCUMENT_SCOPE_DATASET_PREFIXES),
             },
             "retrieval": {
                 "vector_top_k": settings.retrieval_vector_top_k,
@@ -269,9 +283,15 @@ def _build_run_report_payload(
     per_query: list[dict[str, object]] = []
     summary_bucket: dict[str, list[dict[str, float]]] = defaultdict(list)
     breakdown_bucket: dict[tuple[str, str], dict[str, list[dict[str, float]]]] = defaultdict(lambda: defaultdict(list))
+    benchmark_document_scope_mode = _resolve_benchmark_document_scope_mode(dataset=dataset)
 
     for item in items:
         spans = spans_by_item_id.get(item.id, [])
+        benchmark_document_scope_ids = (
+            _resolve_gold_document_scope_ids(spans=spans)
+            if benchmark_document_scope_mode == BENCHMARK_DOCUMENT_SCOPE_MODE_GOLD
+            else None
+        )
         detail = _evaluate_single_item(
             session=session,
             principal=principal,
@@ -280,6 +300,8 @@ def _build_run_report_payload(
             item=item,
             spans=spans,
             top_k=top_k,
+            benchmark_document_scope_mode=benchmark_document_scope_mode,
+            benchmark_document_scope_ids=benchmark_document_scope_ids,
         )
         per_query.append(detail)
         for stage_name in ("evidence_recall", "recall", "rerank", "assembled"):
@@ -320,6 +342,8 @@ def _evaluate_single_item(
     item: RetrievalEvalItem,
     spans: list[RetrievalEvalItemSpan],
     top_k: int,
+    benchmark_document_scope_mode: str = BENCHMARK_DOCUMENT_SCOPE_MODE_ROUTING,
+    benchmark_document_scope_ids: tuple[str, ...] | None = None,
 ) -> dict[str, object]:
     """執行單題評估並產出 per-query detail。
 
@@ -331,6 +355,8 @@ def _evaluate_single_item(
     - `item`：評估題目。
     - `spans`：該題的 gold spans。
     - `top_k`：指標截斷排名。
+    - `benchmark_document_scope_mode`：benchmark 指定文件模式。
+    - `benchmark_document_scope_ids`：若為 gold 文件模式，本題使用的文件白名單。
 
     回傳：
     - `dict[str, object]`：可序列化的 per-query 明細。
@@ -344,6 +370,7 @@ def _evaluate_single_item(
         item=item,
         spans=spans,
         top_k=top_k,
+        allowed_document_ids_override=benchmark_document_scope_ids,
     )
     gold_spans = stage_result.gold_spans
     recall_relevances = [candidate.matched_relevance for candidate in stage_result.recall_stage.items[:top_k]]
@@ -384,6 +411,10 @@ def _evaluate_single_item(
         "retrieval_miss": any(span.is_retrieval_miss for span in gold_spans),
         "gold_spans": [build_item_summary_span(span) for span in spans],
         "query_routing": stage_result.query_routing.model_dump(mode="json"),
+        "benchmark_document_scope": {
+            "mode": benchmark_document_scope_mode,
+            "document_ids": list(benchmark_document_scope_ids or ()),
+        },
         "selection": stage_result.selection.model_dump(mode="json"),
         "query_focus": stage_result.query_focus.model_dump(mode="json"),
         "evidence_recall": _build_stage_detail(evidence_recall_relevances).model_dump(mode="json"),
@@ -401,6 +432,43 @@ def _evaluate_single_item(
         },
         "_metrics": metrics,
     }
+
+
+def _resolve_benchmark_document_scope_mode(*, dataset: RetrievalEvalDataset) -> str:
+    """依 dataset 名稱決定 benchmark 是否使用 gold 文件作為指定文件 scope。
+
+    參數：
+    - `dataset`：目前 benchmark dataset。
+
+    回傳：
+    - `str`：benchmark document scope 模式。
+    """
+
+    dataset_name = dataset.name.strip().lower()
+    if dataset_name.startswith(GOLD_DOCUMENT_SCOPE_DATASET_PREFIXES):
+        return BENCHMARK_DOCUMENT_SCOPE_MODE_GOLD
+    return BENCHMARK_DOCUMENT_SCOPE_MODE_ROUTING
+
+
+def _resolve_gold_document_scope_ids(*, spans: list[RetrievalEvalItemSpan]) -> tuple[str, ...] | None:
+    """從 gold spans 取出本題指定文件 ids。
+
+    參數：
+    - `spans`：該題 gold spans。
+
+    回傳：
+    - `tuple[str, ...] | None`：本題可用文件白名單；沒有可用文件時回傳空值。
+    """
+
+    document_ids = sorted(
+        {
+            str(span.document_id)
+            for span in spans
+            if span.document_id is not None and not span.is_retrieval_miss
+        }
+    )
+    return tuple(document_ids) if document_ids else None
+
 
 def build_item_summary_span(span: RetrievalEvalItemSpan) -> dict[str, object]:
     """將 ORM span 轉為可序列化輸出。
@@ -508,6 +576,7 @@ def _build_baseline_compare(
     session: Session,
     baseline_run_id: str | None,
     current_summary: dict[str, object],
+    current_config_snapshot: dict[str, object],
 ) -> dict[str, object] | None:
     """建立與 baseline 的 summary compare。
 
@@ -515,6 +584,7 @@ def _build_baseline_compare(
     - `session`：目前資料庫 session。
     - `baseline_run_id`：baseline run id。
     - `current_summary`：目前 run 的 summary metrics。
+    - `current_config_snapshot`：目前 run 的設定快照。
 
     回傳：
     - `dict[str, object] | None`：baseline compare；無 baseline 時回傳空值。
@@ -522,6 +592,20 @@ def _build_baseline_compare(
 
     if baseline_run_id is None:
         return None
+    baseline_run = session.get(RetrievalEvalRun, baseline_run_id)
+    if baseline_run is None:
+        return None
+    baseline_config_snapshot = json.loads(baseline_run.config_snapshot) if baseline_run.config_snapshot else {}
+    current_scope_mode = _extract_benchmark_document_scope_mode(config_snapshot=current_config_snapshot)
+    baseline_scope_mode = _extract_benchmark_document_scope_mode(config_snapshot=baseline_config_snapshot)
+    if current_scope_mode != baseline_scope_mode:
+        return {
+            "baseline_run_id": baseline_run_id,
+            "skipped": True,
+            "reason": "benchmark_document_scope_mismatch",
+            "baseline_document_scope_mode": baseline_scope_mode,
+            "candidate_document_scope_mode": current_scope_mode,
+        }
     artifact = session.scalars(
         select(RetrievalEvalRunArtifact).where(RetrievalEvalRunArtifact.run_id == baseline_run_id)
     ).one_or_none()
@@ -537,3 +621,20 @@ def _build_baseline_compare(
             for key in metrics.keys()
         }
     return compare
+
+
+def _extract_benchmark_document_scope_mode(*, config_snapshot: dict[str, object]) -> str:
+    """從 benchmark config snapshot 取出文件 scope 模式。
+
+    參數：
+    - `config_snapshot`：benchmark run 的設定快照。
+
+    回傳：
+    - `str`：benchmark 文件 scope 模式；舊 run 缺欄位時視為 routing。
+    """
+
+    scope_payload = config_snapshot.get("benchmark_document_scope")
+    if not isinstance(scope_payload, dict):
+        return BENCHMARK_DOCUMENT_SCOPE_MODE_ROUTING
+    mode = scope_payload.get("mode")
+    return str(mode) if mode else BENCHMARK_DOCUMENT_SCOPE_MODE_ROUTING

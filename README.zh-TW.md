@@ -92,19 +92,19 @@ retrieval 品質不是只靠回答 demo 主觀判斷，而是透過內建 evalua
 
 benchmark 分數是本專案把 retrieval 品質視為一級工程成果，而不是附屬指標。
 
-目前固定 baseline 為 `2026-04-05` 的 `production_like_v1` snapshot。
+目前固定 baseline 起點為 `2026-04-05` 的 `production_like_v1` snapshot；若外部資料集原始任務需要文件上下文，指定文件 benchmark row 會隨重跑結果更新。
+
+針對 `qasper-*`、`uda-*` 與 `drcd-*` evaluation datasets，benchmark run 現在會使用 gold source document 作為指定文件 scope。這對齊這些資料集的原始任務契約：每題本來都綁定實際文件，而不是無 scope 的多文件查詢。
 
 | Dataset | 語系 | Recall@10 | nDCG@10 | MRR@10 | 角色定位 |
 | --- | --- | ---: | ---: | ---: | --- |
 | `dureader-robust-curated-v1-100` | `zh-TW` | `1.0000` | `0.9677` | `0.9570` | 近 ceiling 中文 sanity check |
 | `msmarco-curated-v1-100` | `en` | `1.0000` | `0.9674` | `0.9550` | 近 ceiling passage matching sanity check |
-| `drcd-curated-v1-100` | `zh-TW` | `0.9700` | `0.8650` | `0.8308` | 繁體中文 rerank 哨兵 |
+| `drcd-curated-v1-100` | `zh-TW` | `1.0000` | `0.8894` | `0.8517` | 指定文件繁體中文 rerank 哨兵 |
 | `nq-curated-v1-100` | `en` | `0.7500` | `0.7443` | `0.7425` | assembler 壓力測試 lane |
-| `uda-curated-v1-pilot` | `en` | `0.8462` | `0.7333` | `0.7051` | pilot 穩定度集合 |
 | `tw-insurance-rag-benchmark-v1` | `zh-TW` | `0.8667` | `0.7254` | `0.6792` | 自家領域 benchmark |
-| `uda-curated-v1-100` | `en` | `0.8300` | `0.6818` | `0.6340` | same-document localization lane |
-| `qasper-curated-v1-pilot` | `en` | `0.7778` | `0.5507` | `0.4844` | pilot hard set |
-| `qasper-curated-v1-100` | `en` | `0.5900` | `0.3797` | `0.3142` | 主要外部 hard lane |
+| `uda-curated-v1-100` | `en` | `0.7900` | `0.6537` | `0.6104` | 指定文件 same-document localization lane |
+| `qasper-curated-v1-100` | `en` | `0.9300` | `0.5905` | `0.4813` | 指定文件 scientific-paper hard lane |
 
 README 層級保留的 benchmark 判讀如下：
 

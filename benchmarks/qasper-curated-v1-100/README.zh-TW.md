@@ -1,6 +1,6 @@
 # qasper-curated-v1-100
 
-此目錄是一份可重現的 `QASPER` benchmark package，將先前 pilot 擴充為 `100` 題外部 retrieval benchmark，同時維持本 repo 既有的 evaluation contract。
+此目錄是一份可重現的 `QASPER` benchmark package，提供 `100` 題外部 retrieval benchmark，同時維持本 repo 既有的 evaluation contract。
 
 [English version](README.md)
 

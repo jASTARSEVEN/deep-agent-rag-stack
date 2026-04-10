@@ -1,6 +1,6 @@
 # qasper-curated-v1-100
 
-This directory is a reproducible `QASPER` benchmark package that expands the prior pilot into a `100`-question external retrieval set while keeping the repository's existing evaluation contract.
+This directory is a reproducible `QASPER` benchmark package for a `100`-question external retrieval set while keeping the repository's existing evaluation contract.
 
 [繁體中文版本](README.zh-TW.md)
 

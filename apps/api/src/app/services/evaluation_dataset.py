@@ -413,6 +413,7 @@ def evaluate_item_stage_outputs(
     spans: list[RetrievalEvalItemSpan],
     top_k: int,
     apply_rerank: bool = True,
+    allowed_document_ids_override: tuple[str, ...] | None = None,
 ) -> ItemStageEvaluationResult:
     """建立單題共用的 recall/rerank/assembled stage 結果。
 
@@ -424,6 +425,8 @@ def evaluate_item_stage_outputs(
     - `item`：目前題目。
     - `spans`：該題 gold spans。
     - `top_k`：stage 回傳上限。
+    - `apply_rerank`：是否套用 rerank stage。
+    - `allowed_document_ids_override`：benchmark-only 文件白名單；用於具備原始文件上下文的資料集。
 
     回傳：
     - `ItemStageEvaluationResult`：可供 preview 與 benchmark 共用的 stage 結果。
@@ -441,6 +444,7 @@ def evaluate_item_stage_outputs(
     query_focus_plan = build_query_focus_plan_from_settings(settings=effective_settings, query=item.query_text)
     retrieval_query = item.query_text
     rerank_query = item.query_text
+    scoped_document_ids = allowed_document_ids_override or routing_decision.resolved_document_ids or None
 
     recall_matches = _apply_ranking_policy(
         matches=_apply_python_rrf(
@@ -449,7 +453,7 @@ def evaluate_item_stage_outputs(
                 settings=effective_settings,
                 area_id=area_id,
                 query=retrieval_query,
-                allowed_document_ids=routing_decision.resolved_document_ids or None,
+                allowed_document_ids=scoped_document_ids,
                 allowed_parent_ids=None,
             ),
             settings=effective_settings,
@@ -465,7 +469,7 @@ def evaluate_item_stage_outputs(
         area_id=area_id,
         query=retrieval_query,
         matches=recall_matches,
-        allowed_document_ids=routing_decision.resolved_document_ids or None,
+        allowed_document_ids=scoped_document_ids,
     )
     rerank_matches = (
         _apply_rerank(matches=evidence_merge_result.matches, query=rerank_query, settings=effective_settings)
@@ -476,7 +480,7 @@ def evaluate_item_stage_outputs(
     selection_result = apply_scope_aware_selection(
         candidates=reranked_candidates,
         selected_profile=routing_decision.selected_profile,
-        resolved_document_ids=routing_decision.resolved_document_ids,
+        resolved_document_ids=scoped_document_ids or (),
         max_contexts=effective_settings.assembler_max_contexts,
     )
     retrieval_result = RetrievalResult(
