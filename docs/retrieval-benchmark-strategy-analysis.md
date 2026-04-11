@@ -1,4 +1,4 @@
-# Retrieval Benchmark Strategy Analysis（截至 2026-04-05）
+# Retrieval Benchmark Strategy Analysis（截至 2026-04-11）
 
 ## 文件目的
 
@@ -11,7 +11,7 @@
 5. `DuReader-robust 100`、`DRCD 100`、`NQ 100` 與 `MS MARCO 100` 應如何解讀，不要把高分 lane 誤判成整體 hard case 已解完。
 6. 下一輪 benchmark-driven 優化仍該把力氣放在哪裡。
 
-## 2026-04-05 目前基線範圍
+## 2026-04-11 目前基線範圍
 
 目前 current 基線由四批 `2026-04-05` run 組成：
 
@@ -27,45 +27,41 @@
 | `dureader-robust-curated-v1-100` | `6befc441-39ba-4580-9d9c-f5d795158f1b` |
 | `msmarco-curated-v1-100` | `5e9de20b-4781-4711-a69e-03157e61d68a` |
 | `drcd-curated-v1-100` | `2ab402c2-6390-4b6f-9e99-70df6c999806` |
-| `nq-curated-v1-100` | `3e07bb70-7068-483c-81d0-35ad43092dfb` |
-| `tw-insurance-rag-benchmark-v1` | `c8e2ab5a-e193-4147-ac0c-491fb06189c5` |
-| `uda-curated-v1-100` | `e9c9ed38-89de-4f26-8d24-c106eaf62fd7` |
-| `qasper-curated-v1-100` | `dd74e08b-2551-487b-8408-da821402c1b6` |
+| `nq-curated-v1-100` | `70f7f3fb-99b0-486b-9805-f8872b0eaef4` |
+| `tw-insurance-rag-benchmark-v1` | `4ec132d3-3abd-4398-8122-08cf64e5cda4` |
+| `uda-curated-v1-100` | `6f57b5ca-0609-4c95-9dae-929768f3b6b9` |
+| `qasper-curated-v1-100` | `2ab66532-fc2d-403f-aaf8-b2cfa6e2a3d7` |
 
 ## `production_like_v1` 目前真實設定快照
 
-這七個 run 的 `config_snapshot` 目前一致，代表 current HEAD 下 `production_like_v1` 的實際 baseline 為：
+這七個 run 的 `config_snapshot` 目前以同一條 mainline 為準；current HEAD 下 `production_like_v1` 的最新 baseline 為：
 
 - rerank provider：`self-hosted`
 - rerank model：`BAAI/bge-reranker-v2-m3`
 - rerank top N：`30`
 - rerank max chars per doc：`2000`
-- evidence synopsis：`enabled=true`，variant=`generic_v1`
 - vector / FTS / max candidates：`30 / 30 / 30`
 - assembler budget：`9 x 3000`
 - assembler max children per parent：`7`
 
 這一點很重要：
 
-> 目前 `production_like_v1` 已固定為 `generic_v1 + 9x3000`。舊的查詢改寫實驗數字只能視為歷史比較，不可再當成 current mainline baseline。
-
-> `QASPER`、`UDA` 與 `DRCD` 的原始任務皆有每題指定文件上下文；目前 benchmark runner 已改為對 `qasper-*`、`uda-*` 與 `drcd-*` datasets 使用 gold span 的 `document_id` 作為指定文件 scope。這些分數不得與舊的 area-wide ambiguous query 分數混讀。
+> 目前 `production_like_v1` 已固定為 current mainline baseline；舊的 evidence synopsis / 查詢改寫實驗數字只能視為歷史比較，不可再當成 current mainline baseline。
 
 ## 最新 assembled 指標
 
 ### 七個正式 dataset 的最新總表
 
-| Dataset | 主要語系 | 題數 | 文件數 | Gold Spans | 平均 Spans / 題 | 多 Span 題比例 | Recall@10 | nDCG@10 | MRR@10 | Precision@10 | Doc Coverage@10 | 難度 |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| `dureader-robust-curated-v1-100` | `zh-TW` | `100` | `100` | `100` | `1.00` | `0%` | `1.0000` | `0.9677` | `0.9570` | `0.1000` | `1.0000` | `1/5` |
-| `msmarco-curated-v1-100` | `en` | `100` | `100` | `114` | `1.14` | `11%` | `1.0000` | `0.9674` | `0.9550` | `0.1050` | `1.0000` | `1/5` |
-| `drcd-curated-v1-100` | `zh-TW` | `100` | `6` | `100` | `1.00` | `0%` | `1.0000` | `0.8894` | `0.8517` | `0.1000` | `1.0000` | `2/5` |
-| `nq-curated-v1-100` | `en` | `100` | `100` | `100` | `1.00` | `0%` | `0.7500` | `0.7443` | `0.7425` | `0.0750` | `1.0000` | `3/5` |
-| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `30` | `4` | `30` | `1.00` | `0%` | `0.8667` | `0.7254` | `0.6792` | `0.0867` | `1.0000` | `3/5` |
-| `uda-curated-v1-100` | `en` | `100` | `45` | `100` | `1.00` | `0%` | `0.7900` | `0.6537` | `0.6104` | `0.0790` | `1.0000` | `3/5` |
-| `qasper-curated-v1-100` | `en` | `100` | `42` | `164` | `1.64` | `30%` | `0.9300` | `0.5905` | `0.4813` | `0.1100` | `1.0000` | `4/5` |
+| Dataset | 主要語系 | 查詢範圍 | 題數 | 文件數 | Gold Spans | 平均 Spans / 題 | 多 Span 題比例 | Recall@10 | nDCG@10 | MRR@10 | Precision@10 | Doc Coverage@10 | 難度 |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `dureader-robust-curated-v1-100` | `zh-TW` | `多文件查詢` | `100` | `100` | `100` | `1.00` | `0%` | `1.0000` | `0.9677` | `0.9570` | `0.1000` | `1.0000` | `1/5` |
+| `msmarco-curated-v1-100` | `en` | `多文件查詢` | `100` | `100` | `114` | `1.14` | `11%` | `1.0000` | `0.9674` | `0.9550` | `0.1050` | `1.0000` | `1/5` |
+| `drcd-curated-v1-100` | `zh-TW` | `指定文件查詢` | `100` | `6` | `100` | `1.00` | `0%` | `1.0000` | `0.8894` | `0.8517` | `0.1000` | `1.0000` | `2/5` |
+| `nq-curated-v1-100` | `en` | `多文件查詢` | `100` | `100` | `100` | `1.00` | `0%` | `0.7600` | `0.7600` | `0.7600` | `0.0760` | `1.0000` | `3/5` |
+| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `多文件查詢` | `30` | `4` | `30` | `1.00` | `0%` | `0.9333` | `0.7578` | `0.7136` | `0.1033` | `1.0000` | `3/5` |
+| `uda-curated-v1-100` | `en` | `指定文件查詢` | `100` | `45` | `100` | `1.00` | `0%` | `0.7900` | `0.6492` | `0.6044` | `0.0790` | `1.0000` | `3/5` |
+| `qasper-curated-v1-100` | `en` | `指定文件查詢` | `100` | `42` | `164` | `1.64` | `30%` | `0.9200` | `0.6105` | `0.5127` | `0.1090` | `1.0000` | `4/5` |
 
-備註：`DRCD 100`、`UDA 100` 與 `QASPER 100` 已在目前 container DB 以指定文件 scope 重跑。
 
 ## 客觀 corpus profile
 
@@ -116,10 +112,10 @@
 
 1. 目前依 assembled `nDCG@10` 由相對簡單到困難排序，可近似看成：`DuReader-robust 100 -> MS MARCO 100 -> DRCD 100 -> NQ 100 -> self -> UDA 100 -> QASPER 100`；其中 `QASPER 100`、`UDA 100` 與 `DRCD 100` 已是指定文件 scope 分數。
 2. `DuReader-robust 100` 目前是新的最高分 external lane，assembled `Recall@10=1.0000`、`nDCG@10=0.9677`；它比較像「中文 paragraph-level extractive QA + rerank sanity check」，不應誤判成整體中文 retrieval frontier 已解完。
-3. `QASPER 100` 在指定文件 scope 後 assembled `Recall@10=0.9300`，證明舊 area-wide 低分主要混入 document disambiguation；但 assembled `nDCG@10=0.5905` 仍顯示 scientific evidence-field semantic gap 尚未完全解完。
+3. `QASPER 100` 在指定文件 scope 後 assembled `Recall@10=0.9200`、`nDCG@10=0.6105`；這表示舊 area-wide 低分主要混入 document disambiguation，而 current mainline 在 scientific evidence-field semantic gap 上仍有進步空間。
 4. `DRCD 100` 這條線仍保留原本訊號：`recall` 高於 rerank / assembled，代表它更像「繁體中文 lexical retrieval + rerank regression sentinel」，而不是 candidate generation 或 assembler budget 問題。
-5. `NQ 100` 仍保留它原本的訊號：`rerank nDCG@10=0.9569` 幾乎接近 ceiling，assembled 卻掉到 `0.7443`，代表它比較像「full-page wiki answer localization + assembler budget / materialization」壓力測試，而不是單純 candidate generation 問題。
-6. `UDA 100` 仍顯著比 `QASPER 100` 友善，assembled `nDCG@10=0.6537`、`MRR@10=0.6104`，顯示 same-document wiki 類 evidence 仍是 current mainline 相對穩定的區段。
+5. `NQ 100` 仍保留它原本的訊號：assembled 已回升到 `0.7600`，但它仍主要像「full-page wiki answer localization + assembler budget / materialization」壓力測試，而不是單純 candidate generation 問題。
+6. `UDA 100` 仍顯著比 `QASPER 100` 友善，但 latest mainline assembled `nDCG@10=0.6492`、`MRR@10=0.6044`，代表 same-document wiki 類 evidence 雖穩定，仍會受 rerank 文本組裝策略影響。
 7. `MS MARCO 100` 這次 assembled 仍接近天花板，但不能把它解讀成「通用 web retrieval 問題已解完」；它在此 repo 內的 contract 仍是每題一份 snippet-bundle 文件，壓力測試重心比較接近 query-to-passage matching 與 answer localization sanity check。
 8. 因此，真正仍在拉低 external hard lane 的主因依然是 `QASPER 100`；`NQ 100` 補出 assembler 壓力點，`DRCD 100` 補出中文 rerank regression 觀測點，而 `DuReader-robust 100` 則更適合作為近 ceiling 中文 sanity check。
 
@@ -127,7 +123,7 @@
 
 | 類別 | 應保留項目 | 保留理由 |
 | --- | --- | --- |
-| current mainline baseline | `production_like_v1`（實際 snapshot：`generic_v1 + 9x3000`） | 這是目前真正會被拿來回歸檢查的 baseline；`QASPER`、`UDA`、`DRCD` 需同時保留指定文件 scope 語意。 |
+| current mainline baseline | `production_like_v1` | 這是目前真正會被拿來回歸檢查的 baseline；`QASPER`、`UDA`、`DRCD` 需同時保留指定文件 scope 語意。 |
 | internal stability set | `tw-insurance-rag-benchmark-v1` | 這份最適合檢查主線策略是否在既有自家 benchmark 上失穩。 |
 | external pressure-test sextet | `dureader-robust-curated-v1-100`、`msmarco-curated-v1-100`、`drcd-curated-v1-100`、`nq-curated-v1-100`、`uda-curated-v1-100`、`qasper-curated-v1-100` | 六者合併後可以同時觀察中文 extractive sanity check、snippet-bundle sanity check、繁體中文 lexical retrieval / rerank、wiki page answer localization / assembly、same-document localization 與英文 semantic-gap。 |
 | hard external lane | `qasper-curated-v1-100` | 若要找下一輪最高 ROI 的 hard case，仍應優先看這份。 |
@@ -141,9 +137,9 @@
 | `dureader-robust-curated-v1-100` | `1.0000` | `0.9677` | `0.9570` |
 | `msmarco-curated-v1-100` | `1.0000` | `0.9674` | `0.9550` |
 | `drcd-curated-v1-100` | `1.0000` | `0.8894` | `0.8517` |
-| `nq-curated-v1-100` | `0.7500` | `0.7443` | `0.7425` |
-| `uda-curated-v1-100` | `0.7900` | `0.6537` | `0.6104` |
-| `qasper-curated-v1-100` | `0.9300` | `0.5905` | `0.4813` |
+| `nq-curated-v1-100` | `0.7600` | `0.7600` | `0.7600` |
+| `uda-curated-v1-100` | `0.7900` | `0.6492` | `0.6044` |
+| `qasper-curated-v1-100` | `0.9200` | `0.6105` | `0.5127` |
 
 ### 最新 miss 分布
 

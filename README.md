@@ -96,15 +96,15 @@ The fixed current baseline started from the `production_like_v1` snapshot from `
 
 For `qasper-*`, `uda-*`, and `drcd-*` evaluation datasets, benchmark runs now use the gold source document as a specified-document scope. This matches those datasets' source task contracts, where each question is tied to an actual document instead of being an unscoped multi-document query.
 
-| Dataset | Lang | Recall@10 | nDCG@10 | MRR@10 | Role |
-| --- | --- | ---: | ---: | ---: | --- |
-| `dureader-robust-curated-v1-100` | `zh-TW` | `1.0000` | `0.9677` | `0.9570` | Near-ceiling Chinese sanity check |
-| `msmarco-curated-v1-100` | `en` | `1.0000` | `0.9674` | `0.9550` | Near-ceiling passage matching sanity check |
-| `drcd-curated-v1-100` | `zh-TW` | `1.0000` | `0.8894` | `0.8517` | Specified-document Traditional Chinese rerank sentinel |
-| `nq-curated-v1-100` | `en` | `0.7500` | `0.7443` | `0.7425` | Assembler pressure-test lane |
-| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `0.8667` | `0.7254` | `0.6792` | Internal domain benchmark |
-| `uda-curated-v1-100` | `en` | `0.7900` | `0.6537` | `0.6104` | Specified-document same-document localization lane |
-| `qasper-curated-v1-100` | `en` | `0.9300` | `0.5905` | `0.4813` | Specified-document scientific-paper hard lane |
+| Dataset | Lang | Query Scope | Recall@10 | nDCG@10 | MRR@10 | Role |
+| --- | --- | --- | ---: | ---: | ---: | --- |
+| `dureader-robust-curated-v1-100` | `zh-TW` | `Multi-doc` | `1.0000` | `0.9677` | `0.9570` | Near-ceiling Chinese sanity check |
+| `msmarco-curated-v1-100` | `en` | `Multi-doc` | `1.0000` | `0.9674` | `0.9550` | Near-ceiling passage matching sanity check |
+| `drcd-curated-v1-100` | `zh-TW` | `Specified-doc` | `1.0000` | `0.8894` | `0.8517` | Specified-document Traditional Chinese rerank sentinel |
+| `nq-curated-v1-100` | `en` | `Multi-doc` | `0.7600` | `0.7600` | `0.7600` | Assembler pressure-test lane |
+| `tw-insurance-rag-benchmark-v1` | `zh-TW` | `Multi-doc` | `0.9333` | `0.7578` | `0.7136` | Internal domain benchmark |
+| `uda-curated-v1-100` | `en` | `Specified-doc` | `0.7900` | `0.6492` | `0.6044` | Specified-document same-document localization lane |
+| `qasper-curated-v1-100` | `en` | `Specified-doc` | `0.9200` | `0.6105` | `0.5127` | Specified-document scientific-paper hard lane |
 
 Current benchmark interpretation at the README level:
 

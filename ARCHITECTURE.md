@@ -293,10 +293,10 @@ flowchart TD
 8. retrieval 目前正式 query-time 主線為 `document mention / scope -> task_type routing -> summary_strategy routing (僅 document_summary) -> child hybrid recall -> Python RRF -> minimal ranking policy -> parent-level rerank -> scope-aware selection -> assembler`；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
 8.1. `match_chunks` RPC 目前只回傳已套用 area / ready 邊界的 child recall 候選與 `vector_rank` / `fts_rank`；最終 `RRF`、ranking policy、rerank、selection 與 assembler 都留在 Python 層
 8.2. query-time 主線目前不接 `document synopsis recall` 或 `section synopsis recall`；`documents.synopsis_*` 與 `document_chunks.section_synopsis_*` 目前屬於 ingest/ready gating、離線分析與未來 `Phase 8C` planning hint 的預留能力，而不是正式 recall stage
-8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + assembler 9 x 3000`
+8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照維持 `assembler 9 x 3000`
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為自架 `/v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `Hugging Face Rerank`（`BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`）、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
-11. parent-level rerank 若啟用，會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；document-side 補充文字仍應走「語言無關 evidence categories + language profile registry」架構，正式至少支援 `en` 與 `zh-TW`，未來新增語言應以新增 profile 為主，而不是複製整條判斷流程
+11. parent-level rerank 若啟用，會先以 `(document_id, parent_chunk_id, structure_kind)` 聚合同一 parent 下已命中的 child chunks，並以 `Header:` / `Content:` 前綴建立送入 rerank provider 的文字；多 hit parent 目前會走 budget-aware child bundle，而非額外的 document-side synopsis layer
 11.5. 本機 Hugging Face rerank / embedding provider 採 lazy load + process-local cache；首次使用可能下載權重並增加延遲，但任何 provider 建立/推論失敗都必須回退到既有 RRF fail-open 路徑；相關 `torch` / `transformers` 依賴必須維持 optional install，不可成為預設安裝成本
 12. assembler 會以 `document_id + parent_chunk_id` 作為 materialization 邊界，將 rerank 後的 child hits 展開為 chat-ready parent-level context 與 context-level reference metadata；最終 context `structure_kind` 以 parent 為準
 13. assembler 不得擴張 SQL gate 後的資料集合，但可在同一 parent 內做 precision-first context materialization：小 parent 直接回完整 `parent.content`，大 parent 才以命中 child 為中心做 budget-aware sibling expansion
