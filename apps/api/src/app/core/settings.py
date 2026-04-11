@@ -34,8 +34,6 @@ EMPTY_STRING_ENV_KEYS = {
     "RETRIEVAL_VECTOR_TOP_K",
     "RETRIEVAL_FTS_TOP_K",
     "RETRIEVAL_MAX_CANDIDATES",
-    "RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED",
-    "RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT",
     "RETRIEVAL_DOCUMENT_RECALL_ENABLED",
     "RETRIEVAL_DOCUMENT_RECALL_TOP_K",
     "RETRIEVAL_RRF_K",
@@ -142,8 +140,6 @@ class AppSettings(BaseSettings):
     retrieval_vector_top_k: Annotated[int, Field(alias="RETRIEVAL_VECTOR_TOP_K")] = 30
     retrieval_fts_top_k: Annotated[int, Field(alias="RETRIEVAL_FTS_TOP_K")] = 30
     retrieval_max_candidates: Annotated[int, Field(alias="RETRIEVAL_MAX_CANDIDATES")] = 30
-    retrieval_evidence_synopsis_enabled: Annotated[bool, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED")] = True
-    retrieval_evidence_synopsis_variant: Annotated[str, Field(alias="RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT")] = "generic_v1"
     retrieval_document_recall_enabled: Annotated[bool, Field(alias="RETRIEVAL_DOCUMENT_RECALL_ENABLED")] = False
     retrieval_document_recall_top_k: Annotated[int, Field(alias="RETRIEVAL_DOCUMENT_RECALL_TOP_K")] = 6
     retrieval_rrf_k: Annotated[int, Field(alias="RETRIEVAL_RRF_K")] = 60

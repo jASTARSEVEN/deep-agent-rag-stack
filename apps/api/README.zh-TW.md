@@ -96,24 +96,6 @@
 - `LANGSMITH_PROJECT`
 - `LANGSMITH_ENDPOINT`
 - `LANGSMITH_WORKSPACE_ID`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT`
-
-## Evidence Synopsis 支援模式
-
-`src/app/services/retrieval_text.py` 現在已將「語言無關的 evidence 類別」與「語言 profile / benchmark-gated phrasing 變體」分開管理。
-
-- 支援的輸出語言 profile：
-  - `en`
-  - `zh-TW`
-- 支援的 evidence synopsis 變體：
-  - `generic_v1`：作為基線的通用型 phrasing
-- 執行期開關：
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true`：在 rerank 文件組裝時啟用 synopsis
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>`：指定 synopsis phrasing 變體；預設為 `generic_v1`
-- Guardrails：
-  - 變體只可影響 benchmark/profile-gated wording，不得旁路 SQL gate、ready-only 過濾或 production defaults
-  - 目前主線只保留 generic-first wording；benchmark-specific bridge phrasing 已退出正式 runtime 路徑
 
 ## Rerank Provider 支援模式
 

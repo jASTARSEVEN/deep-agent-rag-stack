@@ -96,24 +96,6 @@ This module contains the project's FastAPI service. It currently provides:
 - `LANGSMITH_PROJECT`
 - `LANGSMITH_ENDPOINT`
 - `LANGSMITH_WORKSPACE_ID`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED`
-- `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT`
-
-## Evidence Synopsis Support Modes
-
-`src/app/services/retrieval_text.py` now separates language-agnostic evidence categories from localized language profiles and benchmark-gated phrasing variants.
-
-- Supported output language profiles:
-  - `en`
-  - `zh-TW`
-- Supported evidence synopsis variants:
-  - `generic_v1`: the baseline production-safe synopsis phrasing
-- Runtime knobs:
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED=true` enables synopsis generation for rerank text assembly
-  - `RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT=<variant>` selects the phrasing variant; the default is `generic_v1`
-- Guardrails:
-  - variants only affect benchmark/profile-gated wording and must not bypass SQL gate, ready-only filtering, or production defaults
-  - the current mainline uses generic-first wording; benchmark-specific bridge phrasing is no longer part of the formal runtime path
 
 ## Rerank Provider Support Modes
 

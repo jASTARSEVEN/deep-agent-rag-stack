@@ -159,7 +159,7 @@ flowchart TD
     RTS --> RQ["Retrieval Query"]
     RQ --> CH["Child Hybrid Recall<br/>match_chunks RPC 回傳 vector_rank + fts_rank<br/>SQL allowed_document_ids when resolved"]
     CH --> FUSE["Python Fusion Layer<br/>RRF + minimal ranking policy"]
-    FUSE --> RR["Parent-level Rerank<br/>Header / Content + evidence synopsis<br/>provider fail-open to fused order"]
+    FUSE --> RR["Parent-level Rerank<br/>Header / Content + multi-hit bundle<br/>provider fail-open to fused order"]
     RR --> SEL{"scope-aware selection"}
     SEL -->|fact_lookup| PASS["pass-through / precision-first"]
     SEL -->|document_summary| SUMSEL["summary diversity<br/>single-doc or multi-doc coverage"]

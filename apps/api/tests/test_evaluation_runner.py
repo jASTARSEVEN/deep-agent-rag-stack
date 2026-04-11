@@ -407,8 +407,8 @@ def test_evaluation_run_supports_deterministic_profile_snapshot(client, db_sessi
     assert run_payload["run"]["config_snapshot"]["assembler"]["max_children_per_parent"] <= app_settings.assembler_max_children_per_parent
 
 
-def test_evaluation_run_supports_qasper_evidence_synopsis_profile_snapshot(client, db_session, app_settings) -> None:
-    """QASPER evidence synopsis profile 應只開啟目前保留的受控 synopsis lane。"""
+def test_evaluation_run_supports_guarded_assembler_profile_snapshot(client, db_session, app_settings) -> None:
+    """guarded assembler profile 應反映在 config snapshot。"""
 
     area = Area(id=_uuid(), name="QASPER Recall Depth Area")
     db_session.add(area)
@@ -447,7 +447,7 @@ def test_evaluation_run_supports_qasper_evidence_synopsis_profile_snapshot(clien
     dataset_id = client.post(
         f"/areas/{area.id}/evaluation/datasets",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"name": "QASPER Evidence Synopsis Dataset"},
+        json={"name": "QASPER Guarded Assembler Dataset"},
     ).json()["id"]
     item_id = client.post(
         f"/evaluation/datasets/{dataset_id}/items",
@@ -468,12 +468,12 @@ def test_evaluation_run_supports_qasper_evidence_synopsis_profile_snapshot(clien
     run_response = client.post(
         f"/evaluation/datasets/{dataset_id}/runs",
         headers={"Authorization": ADMIN_TOKEN},
-        json={"top_k": 5, "evaluation_profile": "generic_guarded_evidence_synopsis_v1"},
+        json={"top_k": 5, "evaluation_profile": "generic_guarded_assembler_v1"},
     )
 
     assert run_response.status_code == 201
     run_payload = run_response.json()
-    assert run_payload["run"]["evaluation_profile"] == "generic_guarded_evidence_synopsis_v1"
+    assert run_payload["run"]["evaluation_profile"] == "generic_guarded_assembler_v1"
     assert run_payload["run"]["config_snapshot"]["retrieval"]["vector_top_k"] == app_settings.retrieval_vector_top_k
     assert run_payload["run"]["config_snapshot"]["retrieval"]["fts_top_k"] == app_settings.retrieval_fts_top_k
     assert run_payload["run"]["config_snapshot"]["retrieval"]["max_candidates"] == app_settings.retrieval_max_candidates

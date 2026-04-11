@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from app.core.settings import AppSettings
-from app.services.retrieval_text import EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1
 
 
 # 正式 production-like benchmark profile 名稱。
@@ -16,28 +15,14 @@ DETERMINISTIC_GATE_V1 = "deterministic_gate_v1"
 GENERIC_GUARDED_ASSEMBLER_V1 = "generic_guarded_assembler_v1"
 # 通用 assembler lane 第二輪 profile 名稱。
 GENERIC_GUARDED_ASSEMBLER_V2 = "generic_guarded_assembler_v2"
-# 通用 evidence synopsis lane 第一輪 profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1 = "generic_guarded_evidence_synopsis_v1"
-# 通用 evidence synopsis lane 第二輪 profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2 = "generic_guarded_evidence_synopsis_v2"
-# 通用 evidence synopsis lane 第三輪 profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3 = "generic_guarded_evidence_synopsis_v3"
 # 通用 assembler lane 第一輪 deterministic gate profile 名稱。
 GENERIC_GUARDED_ASSEMBLER_V1_GATE = "generic_guarded_assembler_v1_gate"
 # 通用 assembler lane 第二輪 deterministic gate profile 名稱。
 GENERIC_GUARDED_ASSEMBLER_V2_GATE = "generic_guarded_assembler_v2_gate"
-# 通用 evidence synopsis lane 第一輪 deterministic gate profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE = "generic_guarded_evidence_synopsis_v1_gate"
-# 通用 evidence synopsis lane 第二輪 deterministic gate profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE = "generic_guarded_evidence_synopsis_v2_gate"
-# 通用 evidence synopsis lane 第三輪 deterministic gate profile 名稱。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE = "generic_guarded_evidence_synopsis_v3_gate"
 # 無需進入 iteration 的 effect-check 假設名稱。
 HYPOTHESIS_NONE = "no_iteration_needed"
 # rerank hit 但 assembled drop 的假設名稱。
 HYPOTHESIS_ASSEMBLER = "assembler_retention_guard"
-# 補強 rerank text 的通用 evidence synopsis 假設名稱。
-HYPOTHESIS_EVIDENCE_SYNOPSIS = "generic_evidence_synopsis_for_fact_windows"
 # guarded profile 的安全上限，避免 benchmark-only 調參失控。
 MAX_GUARDED_RECALL_DEPTH = 100
 
@@ -85,7 +70,14 @@ def _deterministic_gate_overrides(*, settings: AppSettings) -> dict[str, int | s
 
 
 def _generic_guarded_assembler_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_assembler_v1` 的覆寫欄位。"""
+    """建立 `generic_guarded_assembler_v1` 的覆寫欄位。
+
+    參數：
+    - `settings`：目前應用程式設定。
+
+    回傳：
+    - `dict[str, int | str | bool]`：assembler v1 的設定覆寫。
+    """
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 8), MAX_GUARDED_RECALL_DEPTH),
@@ -96,7 +88,14 @@ def _generic_guarded_assembler_v1_overrides(*, settings: AppSettings) -> dict[st
 
 
 def _generic_guarded_assembler_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_assembler_v2` 的覆寫欄位。"""
+    """建立 `generic_guarded_assembler_v2` 的覆寫欄位。
+
+    參數：
+    - `settings`：目前應用程式設定。
+
+    回傳：
+    - `dict[str, int | str | bool]`：assembler v2 的設定覆寫。
+    """
 
     return {
         "rerank_top_n": min(max(settings.rerank_top_n, 10), MAX_GUARDED_RECALL_DEPTH),
@@ -106,44 +105,6 @@ def _generic_guarded_assembler_v2_overrides(*, settings: AppSettings) -> dict[st
     }
 
 
-def _generic_guarded_evidence_synopsis_v1_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_evidence_synopsis_v1` 的覆寫欄位。"""
-
-    return {
-        "rerank_top_n": min(max(settings.rerank_top_n, 20), MAX_GUARDED_RECALL_DEPTH),
-        "retrieval_evidence_synopsis_enabled": True,
-        "retrieval_evidence_synopsis_variant": EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
-        "assembler_max_contexts": max(settings.assembler_max_contexts, 8),
-        "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3200),
-        "assembler_max_children_per_parent": max(settings.assembler_max_children_per_parent, 5),
-    }
-
-
-def _generic_guarded_evidence_synopsis_v2_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_evidence_synopsis_v2` 的覆寫欄位。"""
-
-    return {
-        "rerank_top_n": min(max(settings.rerank_top_n, 30), MAX_GUARDED_RECALL_DEPTH),
-        "retrieval_evidence_synopsis_enabled": True,
-        "retrieval_evidence_synopsis_variant": EVIDENCE_SYNOPSIS_VARIANT_GENERIC_V1,
-        "assembler_max_contexts": max(settings.assembler_max_contexts, 10),
-        "assembler_max_chars_per_context": max(settings.assembler_max_chars_per_context, 3600),
-        "assembler_max_children_per_parent": max(settings.assembler_max_children_per_parent, 7),
-    }
-
-
-def _generic_guarded_evidence_synopsis_v3_overrides(*, settings: AppSettings) -> dict[str, int | str | bool]:
-    """建立 `generic_guarded_evidence_synopsis_v3` 的覆寫欄位。"""
-
-    return {
-        **_generic_guarded_evidence_synopsis_v2_overrides(settings=settings),
-        "assembler_max_contexts": 9,
-        "assembler_max_chars_per_context": 3000,
-        "assembler_max_children_per_parent": 7,
-    }
-
-
-# evaluation profile registry；新增策略時優先在此處新增資料定義，而非分散到多處 if/else。
 EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     PRODUCTION_LIKE_V1: EvaluationProfileSpec(
         name=PRODUCTION_LIKE_V1,
@@ -152,7 +113,6 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     DETERMINISTIC_GATE_V1: EvaluationProfileSpec(
         name=DETERMINISTIC_GATE_V1,
         overrides={},
-        base_profile=None,
     ),
     GENERIC_GUARDED_ASSEMBLER_V1: EvaluationProfileSpec(
         name=GENERIC_GUARDED_ASSEMBLER_V1,
@@ -161,18 +121,6 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
     GENERIC_GUARDED_ASSEMBLER_V2: EvaluationProfileSpec(
         name=GENERIC_GUARDED_ASSEMBLER_V2,
         lane_name="assembler",
-    ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
-        lane_name="evidence_synopsis",
-    ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
-        lane_name="evidence_synopsis",
-    ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
-        lane_name="evidence_synopsis",
     ),
     GENERIC_GUARDED_ASSEMBLER_V1_GATE: EvaluationProfileSpec(
         name=GENERIC_GUARDED_ASSEMBLER_V1_GATE,
@@ -188,48 +136,18 @@ EVALUATION_PROFILE_SPECS: dict[str, EvaluationProfileSpec] = {
         is_gate=True,
         lane_name="assembler",
     ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1_GATE,
-        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
-        overrides={"rerank_provider": "deterministic"},
-        is_gate=True,
-        lane_name="evidence_synopsis",
-    ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2_GATE,
-        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
-        overrides={"rerank_provider": "deterministic"},
-        is_gate=True,
-        lane_name="evidence_synopsis",
-    ),
-    GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE: EvaluationProfileSpec(
-        name=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3_GATE,
-        base_profile=GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
-        overrides={"rerank_provider": "deterministic"},
-        is_gate=True,
-        lane_name="evidence_synopsis",
-    ),
 }
 
-# benchmark strategy lane registry；新增策略時應以新增 lane 定義為主。
+
 BENCHMARK_STRATEGY_LANES: dict[str, BenchmarkStrategyLaneSpec] = {
     HYPOTHESIS_ASSEMBLER: BenchmarkStrategyLaneSpec(
         name="assembler",
         main_hypothesis=HYPOTHESIS_ASSEMBLER,
         profile_sequence=(GENERIC_GUARDED_ASSEMBLER_V1, GENERIC_GUARDED_ASSEMBLER_V2),
-        rollback_target_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS,
-    ),
-    HYPOTHESIS_EVIDENCE_SYNOPSIS: BenchmarkStrategyLaneSpec(
-        name="evidence_synopsis",
-        main_hypothesis=HYPOTHESIS_EVIDENCE_SYNOPSIS,
-        profile_sequence=(
-            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1,
-            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2,
-            GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3,
-        ),
         rollback_target_hypothesis=None,
     ),
 }
+
 
 # 所有允許的 evaluation profile 名稱。
 SUPPORTED_EVALUATION_PROFILES = tuple(EVALUATION_PROFILE_SPECS.keys())
@@ -237,8 +155,6 @@ SUPPORTED_EVALUATION_PROFILES = tuple(EVALUATION_PROFILE_SPECS.keys())
 # assembler lane 的固定 profile 順序。
 GENERIC_GUARDED_ASSEMBLER_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_ASSEMBLER].profile_sequence
 
-# evidence synopsis lane 的固定 profile 順序。
-GENERIC_GUARDED_EVIDENCE_SYNOPSIS_SEQUENCE = BENCHMARK_STRATEGY_LANES[HYPOTHESIS_EVIDENCE_SYNOPSIS].profile_sequence
 
 def resolve_evaluation_settings(*, settings: AppSettings, evaluation_profile: str) -> AppSettings:
     """依 evaluation profile 產生本次 run 的固定設定。
@@ -279,12 +195,7 @@ def get_evaluation_profile_overrides(*, settings: AppSettings, evaluation_profil
         return _generic_guarded_assembler_v1_overrides(settings=settings)
     if evaluation_profile == GENERIC_GUARDED_ASSEMBLER_V2:
         return _generic_guarded_assembler_v2_overrides(settings=settings)
-    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V1:
-        return _generic_guarded_evidence_synopsis_v1_overrides(settings=settings)
-    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V2:
-        return _generic_guarded_evidence_synopsis_v2_overrides(settings=settings)
-    if evaluation_profile == GENERIC_GUARDED_EVIDENCE_SYNOPSIS_V3:
-        return _generic_guarded_evidence_synopsis_v3_overrides(settings=settings)
+
     spec = EVALUATION_PROFILE_SPECS[evaluation_profile]
     merged_overrides: dict[str, int | str | bool] = {}
     if spec.base_profile is not None:

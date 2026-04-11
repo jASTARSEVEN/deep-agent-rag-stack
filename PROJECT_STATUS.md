@@ -66,7 +66,7 @@
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位
 - benchmark strategy governance 已將「不得造成 domain overfit」落成第一核心 guardrail：先檢查 generic-first，再看 benchmark 分數是否提升
 - 已新增並更新 `docs/retrieval-benchmark-strategy-analysis.md`，整理 retrieval benchmark 的策略對照、三資料集綜合判讀與目前最高 ROI 改善建議
-- 專案已將主線 retrieval default 收斂為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3` + `retrieval_evidence_synopsis_enabled=true` + `retrieval_evidence_synopsis_variant=generic_v1`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
+- 專案已將主線 retrieval default 收斂為 generic-first 策略組合：runtime 預設為 `self-hosted / BAAI/bge-reranker-v2-m3`，並同步將 assembler budget 收斂到 sweet spot：`max_contexts=9` / `max_chars_per_context=3000` / `max_children_per_parent=7`
 - benchmark 改善策略已改為：先實際跑分建立 baseline；若新策略退化，只保留分析文件，其餘改動一律回退；若新策略提升，則在保留改動的前提下重新分析 miss 題與當前 chunks，再決定下一輪最有價值策略
 - benchmark 治理已同步改為 generic-first，不再保留查詢改寫 profile lane 或 benchmark-specific profile naming
 - retrieval trace、evaluation preview 與 benchmark per-query detail 已移除查詢改寫相關欄位，後續語意落差診斷回到原始 query、routing、rerank 與 assembled contexts
@@ -121,8 +121,7 @@
 - 已於 `2026-04-05` 將長期 benchmark 文件收斂為七個正式 dataset：六個 external `100Q` package 加上自家 `tw-insurance-rag-benchmark-v1`；舊的 `UDA` / `QASPER` 小樣本 package 已移出 current benchmark 集合。目前 `QASPER 100`、`UDA 100` 與 `DRCD 100` 的 benchmark contract 已改為使用 gold span `document_id` 作為指定文件 scope，避免把原始資料集的文件上下文誤當成 area-wide ambiguous query。
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為七資料集 current 基線，並把 `External 100Q` 壓力測試集合維持為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：指定文件後 `QASPER 100` assembled `Recall@10=0.9300`、`nDCG@10=0.5905`、`MRR@10=0.4813`，證明舊 area-wide 低分主要混入 document disambiguation；`DRCD 100` 指定文件後 assembled `Recall@10=1.0000`、`nDCG@10=0.8894`、`MRR@10=0.8517`；`UDA 100` 指定文件後 assembled `Recall@10=0.7900`、`nDCG@10=0.6537`、`MRR@10=0.6104`。`NQ` 仍是 assembler 壓力測試 lane，`DuReader-robust` 與 `MS MARCO` 維持 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留舊版 `QASPER + UDA` 詳細 miss 清單
-- `retrieval_text` 的 evidence synopsis 已升級為「語言無關 evidence categories + language profile registry」架構，正式支援 `en` 與 `zh-TW`，並保留未來新增其他語言時以新增 profile 擴充的路徑
-- 目前最佳 deterministic gate 已更新為 `generic_guarded_evidence_synopsis_v2_gate`，assembled `Recall@10=0.7778`、`nDCG@10=0.5246`、`MRR@10=0.4481`
+- `Evidence synopsis` 已自 runtime、benchmark profile 與設定面完整移除；後續 rerank 僅保留 `Header / Content` 與 multi-hit child bundle 組裝
 - 舊的 depth / fact-alignment / parent-group / parent-recall / recall-quality / coverage 實驗 lane 已自程式移除，僅保留於 run artifacts 與紀錄文件
 - 專案已具備以 `[[C1]]` marker 解析的 `answer_blocks`、citation chips、LangGraph `message_artifacts` 持久化，以及 reload 後可恢復的右側全文預覽欄
 - 專案已具備將 chunk-aware 全文預覽前移到 `DocumentsDrawer` 的能力，可在文件管理中直接檢視 ready 文件的 child chunk 清單與全文高亮

@@ -25,8 +25,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         SELF_HOSTED_EMBEDDING_BASE_URL="",
         SELF_HOSTED_EMBEDDING_API_KEY="",
         SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS="",
-        RETRIEVAL_EVIDENCE_SYNOPSIS_ENABLED="",
-        RETRIEVAL_EVIDENCE_SYNOPSIS_VARIANT="",
         RETRIEVAL_DOCUMENT_RECALL_ENABLED="",
         RETRIEVAL_DOCUMENT_RECALL_TOP_K="",
         SELF_HOSTED_RERANK_BASE_URL="",
@@ -60,8 +58,6 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.self_hosted_embedding_base_url is None
     assert settings.self_hosted_embedding_api_key is None
     assert settings.self_hosted_embedding_timeout_seconds == 60.0
-    assert settings.retrieval_evidence_synopsis_enabled is True
-    assert settings.retrieval_evidence_synopsis_variant == "generic_v1"
     assert settings.retrieval_document_recall_enabled is False
     assert settings.retrieval_document_recall_top_k == 6
     assert settings.rerank_provider == "self-hosted"

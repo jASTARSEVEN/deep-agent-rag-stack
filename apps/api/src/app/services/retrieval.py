@@ -30,7 +30,7 @@ from app.services.retrieval_routing import DocumentScope
 from app.services.retrieval_routing import SummaryStrategy
 from app.services.retrieval_selection import apply_scope_aware_selection
 from app.services.reranking import RerankInputDocument, build_rerank_provider
-from app.services.retrieval_text import build_evidence_synopsis, build_rerank_document_text, merge_chunk_contents
+from app.services.retrieval_text import build_rerank_document_text, merge_chunk_contents
 
 LOGGER = logging.getLogger(__name__)
 
@@ -171,7 +171,6 @@ class RetrievalTrace:
     selected_document_ids: list[str] | None = None
     selected_parent_ids: list[str] | None = None
     dropped_by_diversity: list[dict[str, object]] | None = None
-    evidence_synopsis_variant: str = ""
     fallback_reason: str | None = None
 
 
@@ -570,7 +569,6 @@ def retrieve_area_candidates(
                 }
                 for entry in selection_result.dropped_by_diversity
             ],
-            evidence_synopsis_variant=effective_settings.retrieval_evidence_synopsis_variant,
             fallback_reason=None,
             candidates=[
                 RetrievalTraceEntry(
@@ -1372,15 +1370,6 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
                 heading=group.heading,
                 content=group.content,
                 max_chars=settings.rerank_max_chars_per_doc,
-                evidence_synopsis=(
-                    build_evidence_synopsis(
-                        heading=group.heading,
-                        content=group.content,
-                        variant=settings.retrieval_evidence_synopsis_variant,
-                    )
-                    if settings.retrieval_evidence_synopsis_enabled
-                    else None
-                ),
                 matched_child_contents=group.matched_child_contents,
             ),
         )

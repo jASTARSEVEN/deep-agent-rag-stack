@@ -214,8 +214,6 @@ def _build_evaluation_config_snapshot(
                 "max_candidates": settings.retrieval_max_candidates,
                 "document_recall_enabled": settings.retrieval_document_recall_enabled,
                 "document_recall_top_k": settings.retrieval_document_recall_top_k,
-                "evidence_synopsis_enabled": settings.retrieval_evidence_synopsis_enabled,
-                "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
                 "rrf_k": settings.retrieval_rrf_k,
                 "hnsw_ef_search": settings.retrieval_hnsw_ef_search,
             },

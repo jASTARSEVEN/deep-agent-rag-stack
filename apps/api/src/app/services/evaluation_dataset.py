@@ -917,7 +917,6 @@ def _build_empty_trace(
             }
             for entry in selection_result.dropped_by_diversity
         ],
-        "evidence_synopsis_variant": settings.retrieval_evidence_synopsis_variant,
         "candidates": [],
     }
 
