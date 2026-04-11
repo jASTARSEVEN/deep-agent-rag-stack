@@ -197,6 +197,14 @@ flowchart TD
 3. 判定流程採兩層：先做 deterministic hard blockers，再做 `LLM-as-judge` 的 `completeness / faithfulness_to_citations / structure_quality / compare_coverage` 評分。
 4. hard blockers 至少包含：`task_type` 命中、`summary_strategy` 命中、citations 只來自 `ready` 文件、必需文件被引用、允許證據不足的題目不得硬編結論、不得 timeout、不得超過 token budget。
 5. checkpoint report 固定輸出 `run_metadata`、`aggregate_metrics`、`gate_results`、`per_item_results`、`judge_scores`、`hard_blocker_failures` 與 `recommendations`；`run_metadata.answer_path` 固定標示 `deepagents_unified`。原始設計上 `Phase 8A` 需在 report `passed=true` 時才視為真正過線，但本專案已在 closeout 決策中接受最新 ceiling 與 artifact，故目前 8A 視為結束並凍結主線。
+6. summary / compare 的正式 metric registry 必須對每個指標標示 `source_method` 與 `standard_level`，其中 `standard_level` 固定只允許 `standard | semi_standard | project_contract`。
+7. retrieval 排名品質的正式代表主指標為 `nDCG@10`，方法來源標示 `DCG / nDCG family (Järvelin & Kekäläinen, 2002)`；`Recall@10` 作為漏召回 guardrail，方法來源標示 `classic information retrieval recall`。
+8. `document_summary` 若具 reference summary，外部代表主指標優先採 `BERTScore (Zhang et al., 2019)`；summary faithfulness 的外部代表 guardrail 優先採 `QAFactEval (Fabbri et al., 2021)`。若 dataset 不具備該方法前提，report 必須標示 `not_applicable`，不得以內部分數冒充。
+9. `cross_document_compare` 沒有單一可替代的 overlap 型公定指標；正式外部代表方法採 `pairwise_rubric_judge`，其方法來源標示為 `LLM-as-a-judge rubric / pairwise evaluation（參考 G-Eval 與 MT-Bench lineage）`。
+10. `required_document_coverage`、`citation_coverage`、`section_coverage`、`required_document_not_cited` 與 `insufficient_evidence_not_acknowledged` 屬於產品 evidence contract，正式標示為 `project_contract`，不得對外宣稱為公定標準。
+11. `avg_overall_score` 僅可作為彙總觀測值，不得單獨作為 release gate，也不得取代分面的代表主指標與 groundedness guardrails。
+12. 未來正式調教的 summary / compare 外部資料集最小可行組合固定為：`QMSum`（query-conditioned summary）、`Multi-News`（multi-document summary）與 `CoCoTrip`（cross-document compare）；`phase8a-summary-compare-v1` 持續作為唯一產品 release gate。
+13. `Multi-XScience`、`MS²` 與 `ORCHID` 等資料集在第一輪只屬於第二梯隊擴充候選，不得在 MVP 正式調教 lane 與主 gate 中搶先取代上述最小組合。
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` / `MS MARCO` / `Natural Questions` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式；其中 `MS MARCO` 與 `NQ` 可直接使用 `hf://...` dataset-server 參照。

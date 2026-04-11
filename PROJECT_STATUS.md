@@ -339,6 +339,7 @@
 3. 以 `phase8a-summary-compare-v1` 建立 8C 前後對照，優先觀測 `required_document_not_cited`、`insufficient_evidence_not_acknowledged`、faithfulness、overall score 與 p95 latency；同時跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵
 4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
 5. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
+6. 依最新 roadmap 收斂未來正式調教資料集 MVP 組合：內部 gate 維持 `phase8a-summary-compare-v1`，外部主資料集依序為 `QMSum`、`CoCoTrip`、`Multi-News`
 
 ## 尚未開始的功能
 

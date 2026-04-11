@@ -507,6 +507,89 @@ LLM 輸入規則：
 - `已完成（closeout accepted；已保留 unified answer path、兩層 routing 與 CLI-first checkpoint artifacts 作為後續 baseline。最新 accepted 驗收 run 雖未滿足原先全部 gate，但經產品決策接受目前 ceiling，8A 不再繼續調參收分）`
 - `2026-04-10` 以目前 task routing / unified Deep Agents 主線重跑 `phase8a-summary-compare-v1`：`task_type_accuracy=1.0000` 已滿分，但整體仍為 `passed=false`，`summary_strategy_accuracy=0.9375`，未過 gate 主要來自 hard blockers 與 `p95_latency_seconds=31.4785` 超過 `30.0000` 門檻；因此此 run 作為 post-closeout regression 記錄，不改變 8A 已結案且不繼續調分的判定
 
+### Summary / Compare Metric Registry Governance
+
+目標：
+- 為 `document_summary` 與 `cross_document_compare` 建立一套可持續維護的指標治理規格：每個評估面向只選一個最具代表性的主指標，並在報表中標示其方法來源與標準層級。
+- 明確區分「外界通用 / 半通用」與「本產品契約」指標，避免將專案自訂 guardrail 偽裝成公定標準。
+- 讓後續 `Phase 8C` 的 before / after、checkpoint 與 regression report 都能用相同 registry 輸出，而不是每次臨時定義欄位。
+
+內容：
+- 所有 summary / compare 評估指標都必須在 registry 中標示：
+  - `facet`
+  - `metric_name`
+  - `source_method`
+  - `standard_level`：`standard | semi_standard | project_contract`
+  - `role`：`primary | guardrail | observational`
+- retrieval 面向的正式代表主指標固定為：
+  - `nDCG@10`：方法來源標示 `DCG / nDCG family (Järvelin & Kekäläinen, 2002)`，角色為 `primary`
+  - `Recall@10`：方法來源標示 `classic information retrieval recall`，角色為 `guardrail`
+- summary 面向的外部代表指標固定為：
+  - `BERTScore`：方法來源標示 `BERTScore (Zhang et al., 2019)`，角色為 `primary`；僅在具 reference summary 或可穩定對照 gold summary 的 dataset 上啟用
+  - `QAFactEval`：方法來源標示 `QAFactEval (Fabbri et al., 2021)`，角色為 `guardrail`；用於補充 summary faithfulness，不以字面重疊取代 groundedness
+- compare 面向的外部代表方法固定為：
+  - `pairwise_rubric_judge`：方法來源標示 `LLM-as-a-judge rubric / pairwise evaluation（參考 G-Eval 與 MT-Bench lineage）`，角色為 `primary`
+  - compare 題不得用單一 overlap metric 取代整體評估；必須保留 pairwise / rubric judge 作為正式主方法
+- runtime 與成本面向的正式代表指標固定為：
+  - `p95_latency_seconds`：方法來源標示 `system SLO / runtime latency percentile`，角色為 `guardrail`
+- RAG groundedness 與產品約束面向的正式 guardrails 固定為：
+  - `required_document_coverage`
+  - `citation_coverage`
+  - `section_coverage`
+  - `insufficient_evidence_not_acknowledged`
+  - 以上一律標示 `source_method=product evidence contract` 與 `standard_level=project_contract`
+- 既有 `avg_overall_score` 只作為觀測與彙總參考，不得宣稱是外界公定標準，也不得單獨取代分面指標做 release 決策
+- 每份 summary / compare report 至少需同時輸出：
+  - `primary metrics`
+  - `guardrails`
+  - `observational metrics`
+  - `source_method registry`
+- 若某 dataset 缺少 reference summary 或不適用外部指標，報表必須明確標示 `not_applicable`，不得以產品自訂分數冒充該外部方法
+
+交付順序：
+1. 先為現有 `phase8a-summary-compare-v1` report schema 補 `source_method` 與 `standard_level` 標註欄位
+2. 再補 summary / compare metric registry 實體設定，收斂每個 facet 的 `primary / guardrail / observational`
+3. 最後才將 `Phase 8C` 的 loop metrics 納入同一份 registry，避免 agentic 指標另起一套命名
+
+### Future Formal Tuning Dataset Selection (MVP)
+
+目標：
+- 為未來正式的 summary / compare 調教建立最小可行資料集組合，避免一開始就同時承接過多外部資料集與治理成本。
+- 外部資料集只負責校準通用能力邊界；正式 release gate 仍必須保留產品內部 checkpoint。
+
+MVP 組合：
+- `phase8a-summary-compare-v1`
+  - 角色：`product_gate`
+  - 題型：`document_summary` + `cross_document_compare`
+  - 用途：作為正式 release gate 與 before / after 的主 checkpoint；檢查 citations、required document coverage、evidence insufficiency acknowledgement 與 latency
+- `QMSum`
+  - 角色：`summary_primary`
+  - 題型：`document_summary`
+  - 用途：作為 query-conditioned summary 的外部主資料集；優先校準長文件 / query-based summary 能力
+- `Multi-News`
+  - 角色：`summary_multi_document_primary`
+  - 題型：`document_summary`
+  - 用途：作為多文件共同主題摘要的外部主資料集；補足單一 query-conditioned summary 無法代表的 multi-document synthesis 能力
+- `CoCoTrip`
+  - 角色：`compare_primary`
+  - 題型：`cross_document_compare`
+  - 用途：作為 compare 任務的外部主資料集；優先校準 common points / differences / contrastive coverage 的能力
+
+選用原則：
+- `summary` 的正式外部 MVP 不同時引入 `QMSum`、`Multi-News` 之外的第三套主資料集；`Multi-XScience` 與 `MS²` 保留為第二階段擴充，不納入第一輪正式調教集合
+- `compare` 的正式外部 MVP 先只採 `CoCoTrip`；`ORCHID` 保留為中文 compare 第二階段擴充，不納入第一輪正式調教集合
+- `phase8a-summary-compare-v1` 不得被外部資料集取代；外部資料集用於校準通用能力，內部資料集用於驗證產品契約
+- 若某外部資料集不具 reference summary 或無法穩定套用既定 metric registry，必須先標記 `not_applicable` 或降級為觀測用途，不得直接升為正式 gate
+
+建議 rollout 順序：
+1. `phase8a-summary-compare-v1` 維持唯一正式 gate，不變
+2. 先接 `QMSum`
+3. 再接 `CoCoTrip`
+4. 最後接 `Multi-News`
+
+補充：
+- 第一輪正式調教完成前，不擴充 `Multi-XScience`、`MS²`、`ORCHID` 等第二梯隊資料集，避免 signal 尚未穩定就增加 benchmark 面向
+
 ## Phase 8B — Canceled Retrieval Enrichment Lane
 
 目標：
