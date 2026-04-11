@@ -37,6 +37,7 @@ EMPTY_STRING_ENV_KEYS = {
     "SELF_HOSTED_EMBEDDING_BASE_URL",
     "SELF_HOSTED_EMBEDDING_API_KEY",
     "SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS",
+    "DOCUMENT_SYNOPSIS_ENABLED",
     "DOCUMENT_SYNOPSIS_PROVIDER",
     "DOCUMENT_SECTION_SYNOPSIS_ENABLED",
     "DOCUMENT_SYNOPSIS_MODEL",
@@ -48,6 +49,7 @@ EMPTY_STRING_ENV_KEYS = {
     "DOCUMENT_SYNOPSIS_TEXT_VERBOSITY",
     "OPENDATALOADER_USE_STRUCT_TREE",
     "OPENDATALOADER_QUIET",
+    "OPENDATALOADER_JSON_BLOCK_INPUTS_ENABLED",
     "LLAMAPARSE_DO_NOT_CACHE",
     "LLAMAPARSE_MERGE_CONTINUED_TABLES",
 }
@@ -108,6 +110,9 @@ class WorkerSettings(BaseSettings):
     pdf_parser_provider: Annotated[str, Field(alias="PDF_PARSER_PROVIDER")] = "opendataloader"
     opendataloader_use_struct_tree: Annotated[bool, Field(alias="OPENDATALOADER_USE_STRUCT_TREE")] = True
     opendataloader_quiet: Annotated[bool, Field(alias="OPENDATALOADER_QUIET")] = True
+    opendataloader_json_block_inputs_enabled: Annotated[
+        bool, Field(alias="OPENDATALOADER_JSON_BLOCK_INPUTS_ENABLED")
+    ] = False
     llamaparse_api_key: Annotated[str | None, Field(alias="LLAMAPARSE_API_KEY")] = None
     llamaparse_do_not_cache: Annotated[bool, Field(alias="LLAMAPARSE_DO_NOT_CACHE")] = True
     llamaparse_merge_continued_tables: Annotated[bool, Field(alias="LLAMAPARSE_MERGE_CONTINUED_TABLES")] = False
@@ -126,6 +131,7 @@ class WorkerSettings(BaseSettings):
     self_hosted_embedding_timeout_seconds: Annotated[
         float | None, Field(alias="SELF_HOSTED_EMBEDDING_TIMEOUT_SECONDS")
     ] = 60.0
+    document_synopsis_enabled: Annotated[bool, Field(alias="DOCUMENT_SYNOPSIS_ENABLED")] = True
     document_synopsis_provider: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_PROVIDER")] = "openai"
     document_section_synopsis_enabled: Annotated[bool, Field(alias="DOCUMENT_SECTION_SYNOPSIS_ENABLED")] = False
     document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-5-mini"

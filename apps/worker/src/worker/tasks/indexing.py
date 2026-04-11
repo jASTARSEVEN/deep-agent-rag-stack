@@ -92,21 +92,26 @@ def index_document_chunks(*, session, document: Document, settings: WorkerSettin
             parent_chunk.section_synopsis_embedding = None
             parent_chunk.section_synopsis_updated_at = None
 
-    synopsis_provider = build_document_synopsis_provider(settings)
-    synopsis_source_text = build_document_synopsis_source_text(
-        file_name=document.file_name,
-        parent_chunks=parent_chunks,
-        max_input_chars=settings.document_synopsis_max_input_chars,
-    )
-    synopsis_text = synopsis_provider.generate_synopsis(
-        file_name=document.file_name,
-        source_text=synopsis_source_text,
-        output_language=detect_synopsis_language(parent_chunks=parent_chunks, file_name=document.file_name),
-        max_output_chars=settings.document_synopsis_max_output_chars,
-    )
-    document.synopsis_text = synopsis_text
-    document.synopsis_embedding = provider.embed_texts([synopsis_text])[0]
-    document.synopsis_updated_at = datetime.now(UTC)
+    if settings.document_synopsis_enabled:
+        synopsis_provider = build_document_synopsis_provider(settings)
+        synopsis_source_text = build_document_synopsis_source_text(
+            file_name=document.file_name,
+            parent_chunks=parent_chunks,
+            max_input_chars=settings.document_synopsis_max_input_chars,
+        )
+        synopsis_text = synopsis_provider.generate_synopsis(
+            file_name=document.file_name,
+            source_text=synopsis_source_text,
+            output_language=detect_synopsis_language(parent_chunks=parent_chunks, file_name=document.file_name),
+            max_output_chars=settings.document_synopsis_max_output_chars,
+        )
+        document.synopsis_text = synopsis_text
+        document.synopsis_embedding = provider.embed_texts([synopsis_text])[0]
+        document.synopsis_updated_at = datetime.now(UTC)
+    else:
+        document.synopsis_text = None
+        document.synopsis_embedding = None
+        document.synopsis_updated_at = None
 
     session.flush()
 
