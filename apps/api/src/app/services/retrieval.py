@@ -205,6 +205,7 @@ class _RerankParentGroup:
     candidate_id: str
     heading: str | None
     content: str
+    matched_child_contents: list[str]
     matches: list[RankedChunkMatch]
     order: int
 
@@ -1380,6 +1381,7 @@ def _apply_rerank(*, matches: list[RankedChunkMatch], query: str, settings: AppS
                     if settings.retrieval_evidence_synopsis_enabled
                     else None
                 ),
+                matched_child_contents=group.matched_child_contents,
             ),
         )
         for group in rerank_groups[:rerank_limit]
@@ -1481,6 +1483,7 @@ def _group_matches_for_parent_rerank(*, matches: list[RankedChunkMatch]) -> list
                 candidate_id=_build_parent_rerank_candidate_id(matches=sorted_records),
                 heading=heading,
                 content=content,
+                matched_child_contents=[match.chunk.content for match in sorted_records],
                 matches=sorted_records,
                 order=order,
             )

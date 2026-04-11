@@ -132,7 +132,7 @@ flowchart TD
 2. LangGraph Server 先透過 custom auth 驗證 Bearer token
 3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id`、`question` 與顯式 `thinking_mode`
 4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
-5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 必須維持 SQL gate、deny-by-default 與 ready-only 邊界，但實際採用的 recall / fusion / rerank / assembly 組合可隨主線策略演進
+5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 必須維持 SQL gate、deny-by-default 與 ready-only 邊界。以目前正式主線而言，後端會依序執行 document mention / scope 解析、兩層 routing、child hybrid recall、Python `RRF`、minimal ranking policy、parent-level rerank、scope-aware selection 與 assembler；query-time 主線目前不接 `document synopsis recall` 或 `section synopsis recall`
 6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 `citations`、`assembled_contexts`、`answer_blocks` 與 `used_knowledge_base`；其中回答引用由 `[[C1]]` marker 解析為 UI 可用的 `answer_blocks`
 7. LangGraph thread state 除 `messages` 外，另保存 `message_artifacts`；每個 assistant turn 會持久化 `answer_blocks`、`citations` 與 `used_knowledge_base`，供前端 reload 後還原 chips 與預覽互動
 8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
@@ -157,8 +157,9 @@ flowchart TD
     SS --> RTS
 
     RTS --> RQ["Retrieval Query"]
-    RQ --> CH["Child Hybrid Recall<br/>vector + PGroonga FTS + RRF<br/>SQL allowed_document_ids when resolved"]
-    CH --> RR["Parent-level Rerank<br/>provider fail-open to RRF"]
+    RQ --> CH["Child Hybrid Recall<br/>match_chunks RPC 回傳 vector_rank + fts_rank<br/>SQL allowed_document_ids when resolved"]
+    CH --> FUSE["Python Fusion Layer<br/>RRF + minimal ranking policy"]
+    FUSE --> RR["Parent-level Rerank<br/>Header / Content + evidence synopsis<br/>provider fail-open to fused order"]
     RR --> SEL{"scope-aware selection"}
     SEL -->|fact_lookup| PASS["pass-through / precision-first"]
     SEL -->|document_summary| SUMSEL["summary diversity<br/>single-doc or multi-doc coverage"]
@@ -289,7 +290,9 @@ flowchart TD
 5. PostgreSQL 正式路徑使用 `pgvector` 與 `PGroonga`；SQLite 測試路徑使用 deterministic fallback，僅供離線驗證
 6. PostgreSQL vector recall 目前使用 `hnsw` index 路徑；`1536` 維主線仍位於 `pgvector` 的 ANN 維度限制內
 7. FTS 固定使用 `PGroonga` 進行繁體中文分詞檢索
-8. retrieval 目前的主線實作包含 hybrid recall、候選合併、rerank 與 context assembly，但這些 stage 的具體組合不再視為固定不可變的唯一路徑；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
+8. retrieval 目前正式 query-time 主線為 `document mention / scope -> task_type routing -> summary_strategy routing (僅 document_summary) -> child hybrid recall -> Python RRF -> minimal ranking policy -> parent-level rerank -> scope-aware selection -> assembler`；正式 Web chat transport 改走 LangGraph SDK 預設 thread/run 端點
+8.1. `match_chunks` RPC 目前只回傳已套用 area / ready 邊界的 child recall 候選與 `vector_rank` / `fts_rank`；最終 `RRF`、ranking policy、rerank、selection 與 assembler 都留在 Python 層
+8.2. query-time 主線目前不接 `document synopsis recall` 或 `section synopsis recall`；`documents.synopsis_*` 與 `document_chunks.section_synopsis_*` 目前屬於 ingest/ready gating、離線分析與未來 `Phase 8C` planning hint 的預留能力，而不是正式 recall stage
 8.5. `production_like_v1` 的實際 baseline 應以當前 benchmark artifact 的 `config_snapshot` 為準；目前最新主線快照為 `generic_v1 + assembler 9 x 3000`
 9. rerank 目前僅作為 API 內部 capability，不公開為 HTTP route；production 預設 provider 為自架 `/v1/rerank`，預設 model 為 `BAAI/bge-reranker-v2-m3`，另支援本機 `Hugging Face Rerank`（`BAAI/bge-reranker-v2-m3`、`Qwen/Qwen3-Reranker-0.6B`）、`Cohere` 與測試用 `deterministic`
 10. rerank 只允許重排 RRF 後前 `RERANK_TOP_N` 個 parent-level 候選，且每筆送入文字受 `RERANK_MAX_CHARS_PER_DOC` 限制
@@ -303,7 +306,7 @@ flowchart TD
 17. assembler 受 `ASSEMBLER_MAX_CONTEXTS`、`ASSEMBLER_MAX_CHARS_PER_CONTEXT` 與 `ASSEMBLER_MAX_CHILDREN_PER_PARENT` 控制；其中 `ASSEMBLER_MAX_CONTEXTS` 就是送進 LLM 的 context 單位上限，也是前端顯示的 assembled context 上限，而 `ASSEMBLER_MAX_CHARS_PER_CONTEXT` 同時決定 full-parent 與 expanded-window 的 materialization budget
 18. rerank runtime failure 採 fail-open fallback 回退到 `RRF` 結果，但不得改變 SQL gate、same-404 與 ready-only 的保護語意；此約束同樣適用於 Cohere 與 Easypinex-host hosted provider
 19. retrieval / assembler trace metadata 目前只存在記憶體回傳結構，不落資料庫；其中 retrieval trace 需保留 `query_type`、routing source/confidence、selected profile、resolved settings、`summary_scope`、`resolved_document_ids`、document mention 與 selection metadata，供 chat debug 與 evaluation reviewer 逐題分析
-19.5. `Phase 8.1` 已建立 query-aware routing skeleton；`Phase 8.2` 再把 `document_summary` 補成 `single_document | multi_document` 第二層 routing，並在 `rerank -> assembler` 間加入 scope-aware diversified selection。`Phase 8.3` 已補上最小可運作的 document synopsis 與 document-level recall
+19.5. `Phase 8.1` 已建立 query-aware routing skeleton；`Phase 8.2` 再把 `document_summary` 補成 `single_document | multi_document` 第二層 routing，並在 `rerank -> assembler` 間加入 scope-aware diversified selection。`Phase 8.3` 已補上 `document synopsis` 與 `section synopsis` 的持久化 schema / 生成能力，但 query-time 主線目前未接入 synopsis recall
 19.6. `document_summary` 的 single/multi scope 不依賴 UI/runtime hint，也不讓 deep-agent 直接提供 `document_id`；正式來源為 area-scoped、ready-only 的 deterministic document mention resolver，只能在已通過 SQL gate 的文件集合內運作
 19.7. `cross_document_compare` 採 coverage-first diversified selection：先完成每文件代表 parent 的 coverage pass，再依 rerank 排名補位；不得以硬上限截斷掉尚有 budget 且仍具高分證據的 compare 候選
 19.8. 查詢改寫功能已自 runtime、settings、trace 與 evaluation profile lane 移除；query-aware routing profile 不得重新引入 query rewrite 或 rerank-query rewrite 作為隱式捷徑。
@@ -312,18 +315,18 @@ flowchart TD
 19.10.1. `Phase 8A` 起的 section-level 表示必須補上 hierarchical section context；至少在 parent / section 層保存 `heading_path`、`section_path_text` 與 `heading_level`
 19.10.2. `section synopsis` 的正式輸入不得只看最近一層 heading；應以 `document title + heading_path / section_path_text + local content` 為主，避免遺失上層章節語境
 19.10.3. `Phase 8A` 已將 `section synopsis` 落在既有 `document_chunks` parent rows，而非新增獨立 table；但它現在只保留為 opt-in 實驗資料，正式預設已關閉
-19.11. worker 目前正式預設只保留 `document synopsis`，`section synopsis` 為 repo-wide opt-in；API/runtime 的正式 query-time 主線不依賴 synopsis recall。summary/compare 與 fact lookup 共享同一條 `child recall -> rerank -> selection -> assembler` 檢索骨架
+19.11. worker 目前正式預設只保留 `document synopsis`，`section synopsis` 為 repo-wide opt-in；API/runtime 的正式 query-time 主線不依賴 synopsis recall。summary/compare 與 fact lookup 共享同一條 `child hybrid recall -> Python RRF -> ranking policy -> rerank -> selection -> assembler` 檢索骨架
 19.12. `document_summary` 與 `cross_document_compare` 的 scope 收斂目前只允許來自 mention resolver 與 routing scope；若已解析出文件範圍，必須透過 SQL `allowed_document_ids` filter 套用，不得以記憶體過濾取代
 19.12.1. `Phase 8A` 起的 `task routing` 正式主線採 2 層統一 classifier framework；第一層 `task_type` 至少包含 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`
 19.12.1.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學，避免一層 rule-only、一層 model-only 造成維護與觀測不一致
 19.12.1.2. `LLM fallback` 已是正式 ready-path 的一部分，但輸入必須嚴格受限為 query、language、document mention summary 與 label options；不得讀全文、不得改寫 query、不得輸出自由文字
 19.12.1.3. Deep Agents 可見的 retrieval tool contract 不應讓 agent 提供 routing 參數；`task_type`、`document_scope` 與 `summary_strategy` 皆由後端 router 根據原始 query 與已授權且 `ready` 文件集合自動判斷。內部 router 可維持這三個正交欄位作為 trace / evaluation contract，但不得讓 agent 直接提供 document ids 或覆寫 routing 決策
 19.12.2. worker 端保留下來的 synopsis schema 仍可作為未來實驗或離線分析材料，但不再屬於 `Phase 8A` / `Phase 8B` 的正式 API trace、evaluation preview 或 checkpoint contract；`Phase 8C` 若接回 synopsis，僅能放在 agentic evidence-seeking loop 內作為文件選擇與補檢索 planning hint，不得作為 citation payload、最終回答證據或 SQL gate 替代品
-19.12.3. 第一層 `task_type=fact_lookup` 的主線預設是 area-scoped `child recall -> rerank -> assembler`；若 query 高信心提及已授權且 `ready` 的單一或多份文件，文件 scope 應作為與 `task_type` 正交的檢索收斂條件保留，並以 `allowed_document_ids` 限縮 recall，而不是因 `fact_lookup` 題型被丟棄。
+19.12.3. 第一層 `task_type=fact_lookup` 的主線預設是 area-scoped `child hybrid recall -> Python RRF -> ranking policy -> parent-level rerank -> assembler`；若 query 高信心提及已授權且 `ready` 的單一或多份文件，文件 scope 應作為與 `task_type` 正交的檢索收斂條件保留，並以 `allowed_document_ids` 限縮 recall，而不是因 `fact_lookup` 題型被丟棄。
 19.12.4. 第一層 `task_type=document_summary` 與 `task_type=cross_document_compare` 的最終回答不再走 runtime 專用 synthesis lane；正式主線是一致的 `Deep Agents` 主 agent path，由 agent 根據 `retrieve_area_contexts` 的 assembled contexts 自行完成摘要或比較
 19.12.5. `thinking_mode` 目前僅作為前後端與 checkpoint 的相容 metadata 保留，不再決定 answer lane；正式 trace 只保留固定 `answer_path="deepagents_unified"` 與 `thinking_mode_ignored` 狀態
-19.12.6. 第一層 `task_type=document_summary` 時，`document_overview`、`section_focused` 與 `multi_document_theme` 的 retrieval 骨架都統一為 `routing scope -> child recall -> rerank -> diversified selection -> assembler`
-19.12.7. 第一層 `task_type=cross_document_compare` 的正式主線同樣是 `routing scope -> child recall -> rerank -> diversified selection -> assembler`。
+19.12.6. 第一層 `task_type=document_summary` 時，`document_overview`、`section_focused` 與 `multi_document_theme` 的 retrieval 骨架都統一為 `routing scope -> child hybrid recall -> Python RRF -> ranking policy -> parent-level rerank -> diversified selection -> assembler`
+19.12.7. 第一層 `task_type=cross_document_compare` 的正式主線同樣是 `routing scope -> child hybrid recall -> Python RRF -> ranking policy -> parent-level rerank -> diversified selection -> assembler`。
 19.12.7.1. `document_summary` 與 `cross_document_compare` 的最終回答正式由主 `Deep Agents` agent 根據 `retrieve_area_contexts` 的 assembled contexts 直接完成，不再維持 runtime 專用 synthesis lane
 19.12.7.2. `thinking_mode` 目前僅屬於前後端與 checkpoint 的相容 metadata；它不再影響 retrieval 與 answer path 的正式主線行為
 19.12.8. `Phase 8B` 的 enrichment lane 已取消並自 runtime / worker / schema 主線移除；正式檢索不得依賴已移除的 enrichment table、query-time recall lane 或 trace contract。

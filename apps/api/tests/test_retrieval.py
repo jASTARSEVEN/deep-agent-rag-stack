@@ -962,6 +962,61 @@ def test_build_rerank_document_text_adds_prefixes_and_truncates_to_cost_guardrai
     assert build_rerank_document_text(heading="Intro", content="abcdef", max_chars=10) == "Header: In"
 
 
+def test_build_rerank_document_text_preserves_all_hit_children_when_bundle_exceeds_budget() -> None:
+    """多個 hit child 超出 budget 時，rerank 文字仍應保留每個 child 的片段。"""
+
+    rerank_text = build_rerank_document_text(
+        heading="Large Parent",
+        content="alpha-start " + ("a" * 120) + "\n\nomega-start " + ("b" * 120),
+        matched_child_contents=[
+            "alpha-start " + ("a" * 120),
+            "omega-start " + ("b" * 120),
+        ],
+        max_chars=140,
+    )
+
+    assert len(rerank_text) <= 280
+    assert "[Hit child 1]" in rerank_text
+    assert "[Hit child 2]" in rerank_text
+    assert "alpha-start" in rerank_text
+    assert "omega-start" in rerank_text
+
+
+def test_build_rerank_document_text_expands_budget_for_multi_hit_children_with_hard_cap() -> None:
+    """多 hit child 應套用 soft budget，但仍受 hard cap 限制。"""
+
+    double_hit_text = build_rerank_document_text(
+        heading="Double Hit",
+        content="\n\n".join(["alpha " + ("a" * 300), "beta " + ("b" * 300)]),
+        matched_child_contents=[
+            "alpha " + ("a" * 300),
+            "beta " + ("b" * 300),
+        ],
+        max_chars=200,
+    )
+    triple_hit_text = build_rerank_document_text(
+        heading="Triple Hit",
+        content="\n\n".join(
+            [
+                "alpha " + ("a" * 1600),
+                "beta " + ("b" * 1600),
+                "gamma " + ("c" * 1600),
+            ]
+        ),
+        matched_child_contents=[
+            "alpha " + ("a" * 1600),
+            "beta " + ("b" * 1600),
+            "gamma " + ("c" * 1600),
+        ],
+        max_chars=2000,
+    )
+
+    assert len(double_hit_text) <= 400
+    assert len(double_hit_text) > 200
+    assert len(triple_hit_text) <= 5000
+    assert len(triple_hit_text) > 2000
+
+
 def test_build_evidence_synopsis_emits_fact_oriented_hints() -> None:
     """evidence synopsis 應能為 fact-heavy 片段產生較像答案的提示。"""
 
@@ -1157,6 +1212,119 @@ def test_retrieve_area_candidates_uses_parent_level_rerank_documents(db_session,
     assert result.candidates[1].chunk_id == child_two.id
     assert result.candidates[0].rerank_rank == 1
     assert result.candidates[1].rerank_rank == 1
+
+
+def test_retrieve_area_candidates_preserves_all_hit_children_in_rerank_documents_when_budget_is_small(
+    db_session, app_settings, monkeypatch
+) -> None:
+    """多個 hit child 落在同一 parent 且 rerank budget 很小時，仍應保留每個 hit child 的片段。"""
+
+    settings = app_settings.model_copy(update={"rerank_max_chars_per_doc": 150})
+    area = Area(id=_uuid(), name="Retrieval Hit Child Bundle")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="hit-child-bundle.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="area/document-hit-child-bundle/hit-child-bundle.md",
+        status=DocumentStatus.ready,
+    )
+    db_session.add(document)
+
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Large Parent",
+        content=("alpha-start " + ("a" * 180)) + "\n\n" + ("omega-start " + ("b" * 180)),
+        content_preview="large parent",
+        char_count=388,
+        start_offset=0,
+        end_offset=388,
+    )
+    child_one = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Large Parent",
+        content="alpha-start " + ("a" * 180),
+        content_preview="alpha-start",
+        char_count=192,
+        start_offset=0,
+        end_offset=192,
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    child_two = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=2,
+        section_index=0,
+        child_index=1,
+        heading="Large Parent",
+        content="omega-start " + ("b" * 180),
+        content_preview="omega-start",
+        char_count=192,
+        start_offset=194,
+        end_offset=386,
+        embedding=[0.1] * settings.embedding_dimensions,
+    )
+    db_session.add_all([parent, child_one, child_two])
+    db_session.commit()
+
+    captured_documents: list[RerankInputDocument] = []
+
+    class CapturingRerankProvider:
+        """記錄 rerank 輸入的測試替身。"""
+
+        def rerank(self, *, query: str, documents: list[RerankInputDocument], top_n: int) -> list:
+            """保存輸入並回傳固定分數。
+
+            參數：
+            - `query`：使用者查詢文字。
+            - `documents`：送入 rerank 的 parent-level 文件。
+            - `top_n`：最多回傳筆數。
+
+            回傳：
+            - `list[RerankScore]`：依輸入順序建立的固定分數結果。
+            """
+
+            del query, top_n
+            captured_documents.extend(documents)
+            return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
+
+    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+
+    retrieve_area_candidates(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=settings,
+        area_id=area.id,
+        query="start",
+    )
+
+    assert len(captured_documents) == 1
+    assert len(captured_documents[0].text) <= settings.rerank_max_chars_per_doc * 2
+    assert len(captured_documents[0].text) > settings.rerank_max_chars_per_doc
+    assert "[Hit child 1]" in captured_documents[0].text
+    assert "[Hit child 2]" in captured_documents[0].text
+    assert "alpha-start" in captured_documents[0].text
+    assert "omega-start" in captured_documents[0].text
 
 
 def test_retrieve_area_candidates_includes_evidence_synopsis_in_rerank_documents(
