@@ -1,0 +1,12 @@
+{
+  "benchmark_name": "summary-compare-bilingual-curated-pilot-v1",
+  "version": "1.0.0",
+  "description": "Bilingual summary/compare curated pilot suite with English and Traditional Chinese packages.",
+  "dataset_packages": [
+    "../qmsum-query-summary-curated-pilot-v1",
+    "../multinews-multi-doc-summary-curated-pilot-v1",
+    "../cocotrip-compare-curated-pilot-v1",
+    "../drcd-query-summary-curated-pilot-v1",
+    "../ttnews-multi-doc-summary-curated-pilot-v1"
+  ]
+}

@@ -2,6 +2,8 @@
 
 from uuid import uuid4
 
+import pytest
+
 from app.auth.verifier import CurrentPrincipal
 from app.chat.tools.retrieval import (
     build_agent_tool_context_payload,
@@ -231,6 +233,25 @@ def test_retrieve_area_contexts_tool_accepts_orthogonal_task_type_and_scope_hint
     assert result.trace["retrieval"]["document_scope"] == "single_document"
     assert result.trace["retrieval"]["summary_strategy"] == "document_overview"
     assert result.trace["retrieval"]["summary_strategy_source"] == "explicit"
+
+
+def test_retrieve_area_contexts_tool_rejects_raw_document_id_override(db_session, app_settings) -> None:
+    """public tool contract 不應接受原始 `document_id` override。"""
+
+    area = Area(id=_uuid(), name="No Raw Document ID")
+    db_session.add(area)
+    db_session.add(AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader))
+    db_session.commit()
+
+    with pytest.raises(TypeError):
+        retrieve_area_contexts_tool(  # type: ignore[call-arg]
+            session=db_session,
+            principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+            settings=app_settings,
+            area_id=area.id,
+            question="alpha",
+            document_ids=("some-document-id",),
+        )
 
 
 def test_retrieve_area_contexts_tool_uses_summary_profile_budget_for_assembler(db_session, app_settings) -> None:

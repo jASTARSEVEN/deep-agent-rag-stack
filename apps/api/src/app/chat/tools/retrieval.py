@@ -57,6 +57,51 @@ def retrieve_area_contexts_tool(
     - 此 tool 必須始終維持 SQL gate、same-404 與 ready-only。
     """
 
+    return _retrieve_area_contexts_internal(
+        session=session,
+        principal=principal,
+        settings=settings,
+        area_id=area_id,
+        question=question,
+        task_type=task_type,
+        document_scope=document_scope,
+        summary_strategy=summary_strategy,
+        allowed_document_ids_override=None,
+    )
+
+
+def _retrieve_area_contexts_internal(
+    *,
+    session,
+    principal: CurrentPrincipal,
+    settings: AppSettings,
+    area_id: str,
+    question: str,
+    task_type: EvaluationQueryType | str | None = None,
+    document_scope: DocumentScope | str | None = None,
+    summary_strategy: SummaryStrategy | str | None = None,
+    allowed_document_ids_override: tuple[str, ...] | None = None,
+) -> RetrievalToolResult:
+    """建立供 runtime 與 benchmark 共用的 internal retrieval helper。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `principal`：目前已驗證使用者。
+    - `settings`：API 執行期設定。
+    - `area_id`：檢索所屬 area。
+    - `question`：使用者提問。
+    - `task_type`：可選的任務類型提示。
+    - `document_scope`：可選的文件範圍提示。
+    - `summary_strategy`：可選的摘要策略提示。
+    - `allowed_document_ids_override`：benchmark/test 專用文件白名單；public tool 不應傳入。
+
+    回傳：
+    - `RetrievalToolResult`：contexts、citations 與 trace。
+
+    前置條件：
+    - benchmark/test 若傳入 `allowed_document_ids_override`，必須先完成權限與 `ready` 驗證。
+    """
+
     explicit_query_type = _coerce_optional_query_type(task_type=task_type)
     retrieval_result = retrieve_area_candidates(
         session=session,
@@ -67,6 +112,7 @@ def retrieve_area_contexts_tool(
         document_scope=document_scope,
         summary_strategy=summary_strategy,
         query_type=explicit_query_type,
+        allowed_document_ids_override=allowed_document_ids_override,
     )
     effective_settings = build_query_routing_decision(
         settings=settings,

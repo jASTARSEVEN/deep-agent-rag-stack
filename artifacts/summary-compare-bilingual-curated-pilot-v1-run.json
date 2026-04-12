@@ -1,0 +1,2854 @@
+{
+  "run_metadata": {
+    "benchmark_name": "summary-compare-bilingual-curated-pilot-v1",
+    "benchmark_version": "1.0.0",
+    "area_id": "c575a7d1-a187-454a-bb43-ced62fb0be91",
+    "actor_sub": "benchmark-suite-runner",
+    "judge_model": "gpt-5-mini",
+    "generated_at": "2026-04-12T05:34:04.500909Z",
+    "dataset_count": 6,
+    "item_count": 6
+  },
+  "execution": {
+    "parallel_workers": 6,
+    "judge_items_count": 6,
+    "judge_failed_count": 0,
+    "partial_items_count": 4
+  },
+  "metric_registry": {
+    "bert_score_f1": {
+      "metric_name": "bert_score_f1",
+      "source_method": "BERTScore (Zhang et al., 2019)",
+      "standard_level": "standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "qafacteval_score": {
+      "metric_name": "qafacteval_score",
+      "source_method": "QAFactEval (Fabbri et al., 2021)",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "pairwise_rubric_judge_win_rate": {
+      "metric_name": "pairwise_rubric_judge_win_rate",
+      "source_method": "LLM-as-a-judge rubric / pairwise evaluation",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "compare"
+      ]
+    },
+    "required_document_coverage": {
+      "metric_name": "required_document_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "citation_coverage": {
+      "metric_name": "citation_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "section_coverage": {
+      "metric_name": "section_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "required_document_not_cited_rate": {
+      "metric_name": "required_document_not_cited_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "metric_name": "insufficient_evidence_not_acknowledged_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "avg_overall_score": {
+      "metric_name": "avg_overall_score",
+      "source_method": "LLM judge rubric aggregate",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    }
+  },
+  "per_dataset_scores": [
+    {
+      "benchmark_name": "qmsum-query-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "en",
+      "task_family": "summary",
+      "item_count": 1,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "not_applicable",
+        "value": null,
+        "reason": "沒有可平均的有效 metric。"
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "multinews-multi-doc-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "en",
+      "task_family": "summary",
+      "item_count": 1,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "not_applicable",
+        "value": null,
+        "reason": "沒有可平均的有效 metric。"
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "cocotrip-compare-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "en",
+      "task_family": "compare",
+      "item_count": 1,
+      "main_score_metric": "pairwise_rubric_judge_win_rate",
+      "main_score": {
+        "status": "scored",
+        "value": 1.0,
+        "reason": null
+      },
+      "supporting_metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "drcd-query-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "zh-TW",
+      "task_family": "summary",
+      "item_count": 1,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "not_applicable",
+        "value": null,
+        "reason": "沒有可平均的有效 metric。"
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "ttnews-multi-doc-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "zh-TW",
+      "task_family": "summary",
+      "item_count": 1,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "not_applicable",
+        "value": null,
+        "reason": "沒有可平均的有效 metric。"
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "zh-compare-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "zh-TW",
+      "task_family": "compare",
+      "item_count": 1,
+      "main_score_metric": "pairwise_rubric_judge_win_rate",
+      "main_score": {
+        "status": "scored",
+        "value": 1.0,
+        "reason": null
+      },
+      "supporting_metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "task_family_scores": {
+    "summary_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "compare_benchmark_score": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    }
+  },
+  "language_rollups": {
+    "en_compare_score": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "en_summary_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "zh-TW_compare_score": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "zh-TW_summary_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    }
+  },
+  "benchmark_overview": {
+    "summary_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "compare_benchmark_score": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "dataset_count": 6,
+    "not_applicable_metrics": [
+      "qafacteval_score"
+    ]
+  },
+  "aggregate_metrics": {
+    "qafacteval_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "required_document_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "citation_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "section_coverage": {
+      "status": "scored",
+      "value": 0.666667,
+      "reason": null
+    },
+    "required_document_not_cited_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "avg_overall_score": {
+      "status": "scored",
+      "value": 4.75,
+      "reason": null
+    }
+  },
+  "per_item_results": [
+    {
+      "benchmark_name": "qmsum-query-summary-curated-pilot-v1",
+      "item_id": "qmsum-summary-1",
+      "language": "en",
+      "task_type": "document_summary",
+      "summary_strategy": "section_focused",
+      "question": "Summarize what the meeting decided about the launch date and communication plan.",
+      "answer": "決議重點如下：\n\n- 發佈（launch）日期：團隊同意將發佈日改為 4 月 18 日，以利 QA 完成回歸測試。\n- 對外溝通時程：客戶公告應在新發佈日前兩個工作天發出。\n\n若你需要我：幫你草擬客戶公告內容或排程（含發送日期與負責人），我可以繼續。",
+      "answer_blocks": [
+        {
+          "text": "決議重點如下：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 發佈（launch）日期：團隊同意將發佈日改為 4 月 18 日，以利 QA 完成回歸測試。\n- 對外溝通時程：客戶公告應在新發佈日前兩個工作天發出。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "dbae486c-9fa4-4b53-ab2c-d098131c705f",
+              "document_name": "qmsum-launch-meeting.md",
+              "heading": "Launch Date / Communication Plan",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若你需要我：幫你草擬客戶公告內容或排程（含發送日期與負責人），我可以繼續。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "dbae486c-9fa4-4b53-ab2c-d098131c705f",
+          "document_name": "qmsum-launch-meeting.md",
+          "parent_chunk_id": "d74457ed-a994-48b4-803d-372f39db1f4b",
+          "child_chunk_ids": [
+            "63a93b9d-a06a-41b4-9b8a-8bff1bb28630"
+          ],
+          "heading": "Launch Date / Communication Plan",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 209,
+          "excerpt": "The team agreed to move the launch to April 18 so QA could finish regression testing.\n\nThe customer announcement should go out two business days before the new launch date.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "Summarize what the meeting decided about the launch date and communication plan.",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "63a93b9d-a06a-41b4-9b8a-8bff1bb28630",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 14.109120550160764,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "en",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "summarize"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "summarize",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.3454
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.2974
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.2018
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.0479,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "section_focused",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.2975
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.2928
+            },
+            {
+              "label": "section_focused",
+              "score": 0.285
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "multi_document_theme",
+          "summary_strategy_embedding_margin": 0.0047,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "dbae486c-9fa4-4b53-ab2c-d098131c705f"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.78,
+          "document_mention_candidates": [
+            {
+              "document_id": "dbae486c-9fa4-4b53-ab2c-d098131c705f",
+              "file_name": "qmsum-launch-meeting.md",
+              "score": 0.78,
+              "match_signals": [
+                "token_overlap"
+              ]
+            }
+          ],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.3454
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.2974
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.2018
+              }
+            ],
+            "task_type_embedding_margin": 0.0479,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.2975
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.2928
+              },
+              {
+                "label": "section_focused",
+                "score": 0.285
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0047,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "dbae486c-9fa4-4b53-ab2c-d098131c705f"
+          ],
+          "selected_parent_ids": [
+            "d74457ed-a994-48b4-803d-372f39db1f4b"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "63a93b9d-a06a-41b4-9b8a-8bff1bb28630"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "d74457ed-a994-48b4-803d-372f39db1f4b",
+              "kept_chunk_ids": [
+                "63a93b9d-a06a-41b4-9b8a-8bff1bb28630"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 18.6734,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "qmsum-launch-meeting.md",
+          "document_id": "dbae486c-9fa4-4b53-ab2c-d098131c705f",
+          "start_offset": 37,
+          "end_offset": 122,
+          "quote": "The team agreed to move the launch to April 18 so QA could finish regression testing."
+        },
+        {
+          "file_name": "qmsum-launch-meeting.md",
+          "document_id": "dbae486c-9fa4-4b53-ab2c-d098131c705f",
+          "start_offset": 124,
+          "end_offset": 209,
+          "quote": "The customer announcement should go out two business days before the new launch date."
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "qmsum-launch-meeting.md"
+        ],
+        "resolved_document_ids": [
+          "dbae486c-9fa4-4b53-ab2c-d098131c705f"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 1.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答涵蓋了要求的兩個重點：發佈日期決議（改為 4 月 18 日）與對外溝通時程（在新發佈日前兩個工作天發出）。這兩項陳述都直接對應且忠實於提供的引用摘錄。回覆以簡潔的要點列出，聚焦在預期章節（Launch Date / Communication Plan），可讀性佳且無額外未被引用的事實陳述。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "缺少 bert-score 依賴。"
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "multinews-multi-doc-summary-curated-pilot-v1",
+      "item_id": "multinews-summary-1",
+      "language": "en",
+      "task_type": "document_summary",
+      "summary_strategy": "multi_document_theme",
+      "question": "Summarize the common theme across the two reports about transit funding and timelines.",
+      "answer": "共同主題（兩份報告的共通點）：\n\n- 兩份報告都指出資金不足的問題：一份提到現有預算只能支應第一期工程，另一份提到尚缺 1,000 萬美元資金缺口。\n- 兩份報告均暗示工程進度可能受資金與排程影響：一份提到修訂後時程可能延至 2028 年初，另一份雖仍目標 2027 年底完工，但資金缺口顯示達成時程存在風險。\n- 綜合而言，兩報告共同傳達的訊息是：若無額外資金或進度調整，專案時程與完成目標面臨不確定性（預算限制可能導致延宕）。",
+      "answer_blocks": [
+        {
+          "text": "共同主題（兩份報告的共通點）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 兩份報告都指出資金不足的問題：一份提到現有預算只能支應第一期工程，另一份提到尚缺 1,000 萬美元資金缺口。\n- 兩份報告均暗示工程進度可能受資金與排程影響：一份提到修訂後時程可能延至 2028 年初，另一份雖仍目標 2027 年底完工，但資金缺口顯示達成時程存在風險。\n- 綜合而言，兩報告共同傳達的訊息是：若無額外資金或進度調整，專案時程與完成目標面臨不確定性（預算限制可能導致延宕）。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "e4678ea1-147f-4d50-b79f-56219f71b760",
+              "document_name": "multinews-report-b.md",
+              "heading": "Funding / Timeline",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "54695718-37cf-41b1-97fc-1621aa225b70",
+              "document_name": "multinews-report-a.md",
+              "heading": "Funding / Timeline",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "e4678ea1-147f-4d50-b79f-56219f71b760",
+          "document_name": "multinews-report-b.md",
+          "parent_chunk_id": "3c3d2258-48e6-4800-b3c8-d172af4dbfa3",
+          "child_chunk_ids": [
+            "40548d5a-6c1a-4e4e-a67e-558307f25f97"
+          ],
+          "heading": "Funding / Timeline",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 204,
+          "excerpt": "The regional report warned that the current budget would only cover the project through the first construction phase.\n\nAnalysts said the revised schedule could slip into early 2028.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "54695718-37cf-41b1-97fc-1621aa225b70",
+          "document_name": "multinews-report-a.md",
+          "parent_chunk_id": "24975fff-5c02-4bbd-bdf8-2eff5c44b5df",
+          "child_chunk_ids": [
+            "416027e6-c3a8-4fec-88c3-4f49fff59487"
+          ],
+          "heading": "Funding / Timeline",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 162,
+          "excerpt": "City officials said the rail extension still faces a ten million dollar funding gap.\n\nThe local plan still targets completion in late 2027.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "Summarize the common theme across the two reports about transit funding and timelines.",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "40548d5a-6c1a-4e4e-a67e-558307f25f97",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 11.277363072918645,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "416027e6-c3a8-4fec-88c3-4f49fff59487",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 2,
+              "rerank_score": 6.328523418943132,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "en",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "summarize"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "summarize",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.3145
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.2742
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.2379
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.0402,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "multi_document_theme",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.92,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "multi_document_theme",
+              "score": 0.3939
+            },
+            {
+              "label": "document_overview",
+              "score": 0.3469
+            },
+            {
+              "label": "section_focused",
+              "score": 0.2907
+            }
+          ],
+          "summary_strategy_top_label": "multi_document_theme",
+          "summary_strategy_runner_up_label": "document_overview",
+          "summary_strategy_embedding_margin": 0.047,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "single_document_scope_conflict",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "54695718-37cf-41b1-97fc-1621aa225b70",
+            "e4678ea1-147f-4d50-b79f-56219f71b760"
+          ],
+          "document_mention_source": "query_contains_unique_suffix_phrase",
+          "document_mention_confidence": 0.94,
+          "document_mention_candidates": [
+            {
+              "document_id": "769dcce2-ccd3-46d1-aad2-307884ac8c48",
+              "file_name": "drcd-claims-timeline.md",
+              "score": 0.94,
+              "match_signals": [
+                "query_contains_unique_suffix_phrase"
+              ]
+            }
+          ],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.3145
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.2742
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.2379
+              }
+            ],
+            "task_type_embedding_margin": 0.0402,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "multi_document_theme",
+                "score": 0.3939
+              },
+              {
+                "label": "document_overview",
+                "score": 0.3469
+              },
+              {
+                "label": "section_focused",
+                "score": 0.2907
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.047,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "e4678ea1-147f-4d50-b79f-56219f71b760",
+            "54695718-37cf-41b1-97fc-1621aa225b70"
+          ],
+          "selected_parent_ids": [
+            "3c3d2258-48e6-4800-b3c8-d172af4dbfa3",
+            "24975fff-5c02-4bbd-bdf8-2eff5c44b5df"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "40548d5a-6c1a-4e4e-a67e-558307f25f97",
+            "416027e6-c3a8-4fec-88c3-4f49fff59487"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "3c3d2258-48e6-4800-b3c8-d172af4dbfa3",
+              "kept_chunk_ids": [
+                "40548d5a-6c1a-4e4e-a67e-558307f25f97"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "24975fff-5c02-4bbd-bdf8-2eff5c44b5df",
+              "kept_chunk_ids": [
+                "416027e6-c3a8-4fec-88c3-4f49fff59487"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 18.109,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "multinews-report-a.md",
+          "document_id": "54695718-37cf-41b1-97fc-1621aa225b70",
+          "start_offset": 23,
+          "end_offset": 107,
+          "quote": "City officials said the rail extension still faces a ten million dollar funding gap."
+        },
+        {
+          "file_name": "multinews-report-b.md",
+          "document_id": "e4678ea1-147f-4d50-b79f-56219f71b760",
+          "start_offset": 23,
+          "end_offset": 140,
+          "quote": "The regional report warned that the current budget would only cover the project through the first construction phase."
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "multinews-report-a.md",
+          "multinews-report-b.md"
+        ],
+        "resolved_document_ids": [
+          "54695718-37cf-41b1-97fc-1621aa225b70",
+          "e4678ea1-147f-4d50-b79f-56219f71b760"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 1.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答涵蓋了題目要求的兩個比較軸（共同的資金疑慮與不同的完成時程），並以兩份報告各自的要點回應（C1 提到預算僅支應第一期；C2 提到 1,000 萬美元缺口及 2027 年底目標）。\nFaithfulness_to_citations: 回答中的事實陳述均可直接由所提供的引文支持（C1 與 C2），未引入未被引用的新增事實；結論性的風險評估（若無額外資金或調整則時程不確定）是由兩則引文直接合理推論而來，未超出可驗證證據範圍。\nStructure_quality: 回答以清楚的標題與分點呈現，分別指出資金與時程要點，語句簡潔，易讀，符合 summary/compare 的輸出風格。\nCompare_coverage (section_focus_accuracy): 回答專注於預期章節（Funding 與 Timeline），明確指出共通點（資金不足/缺口）與差異（一份可能延至 2028 年初；另一份仍目標 2027 年底），比較面完整且有引用對應證據。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "缺少 bert-score 依賴。"
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "cocotrip-compare-curated-pilot-v1",
+      "item_id": "cocotrip-compare-1",
+      "language": "en",
+      "task_type": "cross_document_compare",
+      "summary_strategy": null,
+      "question": "Compare the two travel guides on transport convenience and food options.",
+      "answer": "下面根據可用文件整理比較（依據來源在段末以標記表示）：\n\n1) 交通便利性\n- Guide A（cocotrip-guide-a）：\n - 舊城區可步行，飯店區距離電車站約 5 分鐘，白天及晚間步行與電車轉乘較方便。\n- Guide B（cocotrip-guide-b）：\n - 有公車可到達，但晚上 10 點後通常需要搭計程車，夜間大眾運輸可用性較低。\n總結：Guide A 在步行與電車接駁上更方便；Guide B 白天仍可靠公車，但夜間交通不如 A。\n\n2) 餐飲選擇（食物）\n- Guide A：\n - 廣場附近的大多數餐廳在晚上約 9 點就關門，晚餐或宵夜選擇較有限（餐廳營業時間較早）。\n- Guide B：\n - 夜市區提供城市內最廣泛的在地街頭小吃，夜間食物選擇豐富，適合想吃當地小吃或晚間覓食的旅客。\n總結：Guide B 在夜間與街頭小吃選擇上明顯優於 Guide A；Guide A 則受限於餐廳較早打烊。\n\n3) 適合的旅客類型（綜合判斷）\n- 偏好靠步行與電車、希望交通方便、能接受餐廳較早打烊的人：傾向選 Guide A。\n- 喜歡晚間夜市、小吃文化，或不介意晚上以計程車為主交通的人：傾向選 Guide B。\n\n如需我把比較整理成一頁快捷表格、或根據你的行程時間幫你選擇更適合的地區，告訴我你的偏好與時間我來調整。",
+      "answer_blocks": [
+        {
+          "text": "下面根據可用文件整理比較（依據來源在段末以標記表示）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "1) 交通便利性\n- Guide A（cocotrip-guide-a）：\n - 舊城區可步行，飯店區距離電車站約 5 分鐘，白天及晚間步行與電車轉乘較方便。\n- Guide B（cocotrip-guide-b）：\n - 有公車可到達，但晚上 10 點後通常需要搭計程車，夜間大眾運輸可用性較低。\n總結：Guide A 在步行與電車接駁上更方便；Guide B 白天仍可靠公車，但夜間交通不如 A。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "04764a26-f10b-4497-9d66-93d9a50bff57",
+              "document_name": "cocotrip-guide-a.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "3bd06580-345f-45af-8c02-5cf18055ee2d",
+              "document_name": "cocotrip-guide-b.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "2) 餐飲選擇（食物）\n- Guide A：\n - 廣場附近的大多數餐廳在晚上約 9 點就關門，晚餐或宵夜選擇較有限（餐廳營業時間較早）。\n- Guide B：\n - 夜市區提供城市內最廣泛的在地街頭小吃，夜間食物選擇豐富，適合想吃當地小吃或晚間覓食的旅客。\n總結：Guide B 在夜間與街頭小吃選擇上明顯優於 Guide A；Guide A 則受限於餐廳較早打烊。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "04764a26-f10b-4497-9d66-93d9a50bff57",
+              "document_name": "cocotrip-guide-a.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "3bd06580-345f-45af-8c02-5cf18055ee2d",
+              "document_name": "cocotrip-guide-b.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "3) 適合的旅客類型（綜合判斷）\n- 偏好靠步行與電車、希望交通方便、能接受餐廳較早打烊的人：傾向選 Guide A。\n- 喜歡晚間夜市、小吃文化，或不介意晚上以計程車為主交通的人：傾向選 Guide B。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "04764a26-f10b-4497-9d66-93d9a50bff57",
+              "document_name": "cocotrip-guide-a.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "3bd06580-345f-45af-8c02-5cf18055ee2d",
+              "document_name": "cocotrip-guide-b.md",
+              "heading": "Transport / Food",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "如需我把比較整理成一頁快捷表格、或根據你的行程時間幫你選擇更適合的地區，告訴我你的偏好與時間我來調整。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "04764a26-f10b-4497-9d66-93d9a50bff57",
+          "document_name": "cocotrip-guide-a.md",
+          "parent_chunk_id": "f5d3e58c-9218-4df3-a312-ddd34ecdc495",
+          "child_chunk_ids": [
+            "febc97df-4f07-4967-80c9-68f6dcbd0c63"
+          ],
+          "heading": "Transport / Food",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 154,
+          "excerpt": "The old town is walkable and the tram stop is five minutes from the hotel district.\n\nMost restaurants near the square close by 9 p.m.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "3bd06580-345f-45af-8c02-5cf18055ee2d",
+          "document_name": "cocotrip-guide-b.md",
+          "parent_chunk_id": "9c69037a-cb46-4a4c-9eb3-48c2aaab2833",
+          "child_chunk_ids": [
+            "a1d72c17-7dd4-4ba7-abe1-bdaace5924ce"
+          ],
+          "heading": "Transport / Food",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 177,
+          "excerpt": "Bus access is available, but visitors usually need a taxi after 10 p.m.\n\nThe night market district offers the widest range of local street food in the city.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "Compare the two travel guides on transport convenience and food options.",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "febc97df-4f07-4967-80c9-68f6dcbd0c63",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 8.214160084454953,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "a1d72c17-7dd4-4ba7-abe1-bdaace5924ce",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 2,
+              "rerank_score": 7.915673324438543,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "cross_document_compare",
+          "query_type_language": "en",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "compare"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "cross_document_compare",
+              "reason": "compare",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "cross_document_compare",
+              "score": 0.3331
+            },
+            {
+              "label": "document_summary",
+              "score": 0.2281
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.0641
+            }
+          ],
+          "query_type_top_label": "cross_document_compare",
+          "query_type_runner_up_label": "document_summary",
+          "query_type_embedding_margin": 0.105,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": null,
+          "summary_strategy": null,
+          "summary_strategy_source": "not_applicable",
+          "summary_strategy_confidence": 0.0,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [],
+          "summary_strategy_top_label": null,
+          "summary_strategy_runner_up_label": null,
+          "summary_strategy_embedding_margin": 0.0,
+          "summary_strategy_fallback_used": false,
+          "summary_strategy_fallback_reason": null,
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "04764a26-f10b-4497-9d66-93d9a50bff57",
+            "3bd06580-345f-45af-8c02-5cf18055ee2d"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "cross_document_compare_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 8,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3200,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "cross_document_compare",
+                "score": 0.3331
+              },
+              {
+                "label": "document_summary",
+                "score": 0.2281
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.0641
+              }
+            ],
+            "task_type_embedding_margin": 0.105,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [],
+            "summary_strategy_embedding_margin": 0.0,
+            "summary_strategy_fallback_used": false
+          },
+          "selection_applied": true,
+          "selection_strategy": "compare_coverage_then_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "04764a26-f10b-4497-9d66-93d9a50bff57",
+            "3bd06580-345f-45af-8c02-5cf18055ee2d"
+          ],
+          "selected_parent_ids": [
+            "f5d3e58c-9218-4df3-a312-ddd34ecdc495",
+            "9c69037a-cb46-4a4c-9eb3-48c2aaab2833"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3200,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "febc97df-4f07-4967-80c9-68f6dcbd0c63",
+            "a1d72c17-7dd4-4ba7-abe1-bdaace5924ce"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "f5d3e58c-9218-4df3-a312-ddd34ecdc495",
+              "kept_chunk_ids": [
+                "febc97df-4f07-4967-80c9-68f6dcbd0c63"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "9c69037a-cb46-4a4c-9eb3-48c2aaab2833",
+              "kept_chunk_ids": [
+                "a1d72c17-7dd4-4ba7-abe1-bdaace5924ce"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 11.8774,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cocotrip-guide-a.md",
+          "document_id": "04764a26-f10b-4497-9d66-93d9a50bff57",
+          "start_offset": 21,
+          "end_offset": 104,
+          "quote": "The old town is walkable and the tram stop is five minutes from the hotel district."
+        },
+        {
+          "file_name": "cocotrip-guide-b.md",
+          "document_id": "3bd06580-345f-45af-8c02-5cf18055ee2d",
+          "start_offset": 94,
+          "end_offset": 177,
+          "quote": "The night market district offers the widest range of local street food in the city."
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cocotrip-guide-a.md",
+          "cocotrip-guide-b.md"
+        ],
+        "resolved_document_ids": [
+          "04764a26-f10b-4497-9d66-93d9a50bff57",
+          "3bd06580-345f-45af-8c02-5cf18055ee2d"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 3.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答涵蓋了題目要求的比較軸（Guide A 的交通優勢、Guide B 的餐飲優勢）並對交通與餐飲分別做出總結與對象建議，沒有遺漏主要要點，故給最高分。  \nFaithfulness_to_citations: 大部分陳述直接對應引用片段：C1 提到舊城可步行、電車站五分鐘；C1 也提到餐廳約 9 點關門；C2 提到白天有公車但 10 點後需計程車、夜市提供最多在地小吃。惟回答中聲稱 Guide A 在「白天及晚間」都較方便、並直接比較夜間交通「不如 A」等斷言，超出原始摘錄所明確指出的證據（摘錄未明說夜間大眾運輸在 A 的可用性），因此須降低忠實度評分。  \nStructure_quality: 回答以條列式分段（交通、餐飲、適合旅客類型）呈現，層次清楚、有總結與行動建議，易讀且符合比較題的結構要求，給最高分。  \nCompare_coverage: 比較覆蓋了共通點與差異（A 的步行/電車便利 vs B 的白天公車/夜間需計程車；A 餐廳早關 vs B 夜市小吃豐富），並提供來源對應的證據要點與旅行者建議，符合 compare 題的覆蓋要求，給最高分。",
+        "missing_points": [
+          "回答斷言 Guide A 在「夜間」也同樣或較為方便（如「白天及晚間步行與電車轉乘較方便」）— 原始引用（C1）未明示夜間大眾運輸或步行可用性，該夜間比較為超出引用的推論，缺乏直接證據。",
+          "回答說明 Guide B 的夜間交通「不如 A」— 這一直接比較在引用中沒有明確支持（C2 指出 B 夜晚需計程車，但 C1 並未說明 A 夜間仍有電車或其他大眾運輸可用）。",
+          "宣稱「依據來源在段末以標記表示」，但回答中未實際在每個陳述後標注對應的引用標籤（例如 C1/C2），使讀者難以逐句核對證據來源。"
+        ]
+      },
+      "pairwise_judge_result": {
+        "model": "gpt-5-mini",
+        "verdict": "candidate",
+        "rationale": "The candidate answer accurately and explicitly reflects the provided citations for both axes. It states Guide A's transport advantage (old town walkable; tram stop five minutes from the hotel district) and Guide B's food advantage (night market offers the widest range of local street food), and correctly notes Guide B's limited night transit (bus available but taxis needed after 10 p.m.) and Guide A's earlier restaurant closing (around 9 p.m.). These points match the excerpts and satisfy the required claims. The additional traveler-type suggestions and offer to format a table are reasonable syntheses rather than unsupported factual claims, so the candidate is more complete and better than the concise reference.",
+        "score": 1.0
+      },
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        },
+        "pairwise_rubric_judge_win_rate": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "drcd-query-summary-curated-pilot-v1",
+      "item_id": "drcd-summary-1",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "section_focused",
+      "question": "請摘要這篇說明中關於審核時程與延長條件的重點。",
+      "answer": "以下為該說明中關於「審核時程與延長條件」的重點摘要：\n\n- 標準案件：在文件齊備的情況下，於七個工作天內完成審核。\n- 延長情形：若需要進行醫療調閱，審核時程可延長至十五個工作天。",
+      "answer_blocks": [
+        {
+          "text": "以下為該說明中關於「審核時程與延長條件」的重點摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 標準案件：在文件齊備的情況下，於七個工作天內完成審核。\n- 延長情形：若需要進行醫療調閱，審核時程可延長至十五個工作天。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "769dcce2-ccd3-46d1-aad2-307884ac8c48",
+              "document_name": "drcd-claims-timeline.md",
+              "heading": "審核時程",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "769dcce2-ccd3-46d1-aad2-307884ac8c48",
+          "document_name": "drcd-claims-timeline.md",
+          "parent_chunk_id": "48deff28-1b42-406a-a1cd-4ae28e0c4991",
+          "child_chunk_ids": [
+            "a1b7dfeb-9b77-4a0d-9695-0fdadf98a447"
+          ],
+          "heading": "審核時程",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 57,
+          "excerpt": "文件齊備後，標準案件於七個工作天內完成審核。\n\n若涉及醫療調閱，審核時程可能延長至十五個工作天。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇說明中關於審核時程與延長條件的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "a1b7dfeb-9b77-4a0d-9695-0fdadf98a447",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.9800248984706469,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "fact_lookup",
+              "score": 0.5405
+            },
+            {
+              "label": "document_summary",
+              "score": 0.4942
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3794
+            }
+          ],
+          "query_type_top_label": "fact_lookup",
+          "query_type_runner_up_label": "document_summary",
+          "query_type_embedding_margin": 0.0463,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "section_focused",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.95,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "section_focused",
+              "score": 0.4896
+            },
+            {
+              "label": "document_overview",
+              "score": 0.4653
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.3737
+            }
+          ],
+          "summary_strategy_top_label": "section_focused",
+          "summary_strategy_runner_up_label": "document_overview",
+          "summary_strategy_embedding_margin": 0.0244,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "769dcce2-ccd3-46d1-aad2-307884ac8c48"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "fact_lookup",
+                "score": 0.5405
+              },
+              {
+                "label": "document_summary",
+                "score": 0.4942
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3794
+              }
+            ],
+            "task_type_embedding_margin": 0.0463,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "section_focused",
+                "score": 0.4896
+              },
+              {
+                "label": "document_overview",
+                "score": 0.4653
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.3737
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0244,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "769dcce2-ccd3-46d1-aad2-307884ac8c48"
+          ],
+          "selected_parent_ids": [
+            "48deff28-1b42-406a-a1cd-4ae28e0c4991"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "a1b7dfeb-9b77-4a0d-9695-0fdadf98a447"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "48deff28-1b42-406a-a1cd-4ae28e0c4991",
+              "kept_chunk_ids": [
+                "a1b7dfeb-9b77-4a0d-9695-0fdadf98a447"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 17.8779,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "drcd-claims-timeline.md",
+          "document_id": "769dcce2-ccd3-46d1-aad2-307884ac8c48",
+          "start_offset": 9,
+          "end_offset": 31,
+          "quote": "文件齊備後，標準案件於七個工作天內完成審核。"
+        },
+        {
+          "file_name": "drcd-claims-timeline.md",
+          "document_id": "769dcce2-ccd3-46d1-aad2-307884ac8c48",
+          "start_offset": 33,
+          "end_offset": 57,
+          "quote": "若涉及醫療調閱，審核時程可能延長至十五個工作天。"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "drcd-claims-timeline.md"
+        ],
+        "resolved_document_ids": [
+          "769dcce2-ccd3-46d1-aad2-307884ac8c48"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 1.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答涵蓋了要求的兩個要點（標準審核時程與延長情形），與 required_claims_or_compare_axes 完全對應，故得最高分。\nFaithfulness_to_citations: 回答內容與 citation 中的摘錄逐字對應（「文件齊備後，標準案件於七個工作天內完成審核」及「若涉及醫療調閱，審核時程可能延長至十五個工作天」），未加入未被引用的額外資訊或推論，故給予滿分。\nStructure_quality: 回答以簡潔的要點列表呈現重點，清晰且易讀，符合 summary 的輸出期望，故給予滿分。\nCompare_coverage (section_focus_accuracy): 題目期待聚焦於「審核時程」章節；回答直接基於該章節摘錄並聚焦於審核時程與延長條件，完全對焦，故給予滿分。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "缺少 bert-score 依賴。"
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "ttnews-multi-doc-summary-curated-pilot-v1",
+      "item_id": "ttnews-summary-1",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "multi_document_theme",
+      "question": "請整理兩篇報導對市府交通預算與工程時程的共同重點。",
+      "answer": "整理兩篇報導對市府交通預算與工程時程的共同重點如下：\n\n- 預算缺口與追加需求：市府目前仍面臨約三億元的預算缺口，且有議員指出追加預算程序尚未完成，顯示資金尚未完全落實。\n\n- 中央補助與進度關聯：報導提到若中央補助如期到位，工程可望在年底前完工，表示工程進度高度依賴中央補助的撥款。\n\n- 追加預算不到位的風險：若追加預算或必要經費未能如期到位，工程工期可能延後，第二篇報導估計最早會延到明年第二季。\n\n- 主要結論（風險與關鍵條件）：工程能否按期完工取決於兩項關鍵條件——中央補助撥款與市府追加預算程序完成；任一環節延遲皆可能導致工期延後。\n\n若需要，我可把上述重點整理成簡短報表或時間線，或追蹤目前追加預算程序的最新進度。",
+      "answer_blocks": [
+        {
+          "text": "整理兩篇報導對市府交通預算與工程時程的共同重點如下：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 預算缺口與追加需求：市府目前仍面臨約三億元的預算缺口，且有議員指出追加預算程序尚未完成，顯示資金尚未完全落實。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "7425b291-c627-490b-a2e0-432677be479a",
+              "document_name": "ttnews-budget-a.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "149b211f-7155-4bf8-8241-a533a827e33d",
+              "document_name": "ttnews-budget-b.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "- 中央補助與進度關聯：報導提到若中央補助如期到位，工程可望在年底前完工，表示工程進度高度依賴中央補助的撥款。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "7425b291-c627-490b-a2e0-432677be479a",
+              "document_name": "ttnews-budget-a.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "- 追加預算不到位的風險：若追加預算或必要經費未能如期到位，工程工期可能延後，第二篇報導估計最早會延到明年第二季。",
+          "citation_context_indices": [
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "149b211f-7155-4bf8-8241-a533a827e33d",
+              "document_name": "ttnews-budget-b.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "- 主要結論（風險與關鍵條件）：工程能否按期完工取決於兩項關鍵條件——中央補助撥款與市府追加預算程序完成；任一環節延遲皆可能導致工期延後。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "7425b291-c627-490b-a2e0-432677be479a",
+              "document_name": "ttnews-budget-a.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "149b211f-7155-4bf8-8241-a533a827e33d",
+              "document_name": "ttnews-budget-b.md",
+              "heading": "預算 / 時程",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需要，我可把上述重點整理成簡短報表或時間線，或追蹤目前追加預算程序的最新進度。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "7425b291-c627-490b-a2e0-432677be479a",
+          "document_name": "ttnews-budget-a.md",
+          "parent_chunk_id": "3fc74aa2-69ac-4780-b809-a52c6d82b930",
+          "child_chunk_ids": [
+            "7a7e0b27-6ab4-435d-9635-d59e1295b240"
+          ],
+          "heading": "預算 / 時程",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 51,
+          "excerpt": "市府坦言目前仍有三億元的預算缺口。\n\n若中央補助如期到位，工程預計年底前完工。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "149b211f-7155-4bf8-8241-a533a827e33d",
+          "document_name": "ttnews-budget-b.md",
+          "parent_chunk_id": "57638d8c-cd46-4251-8854-3e44f0cc1b71",
+          "child_chunk_ids": [
+            "a3a4aa3f-5307-488b-9f43-bad7221e2f29"
+          ],
+          "heading": "預算 / 時程",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 62,
+          "excerpt": "議員質疑目前追加預算程序仍未完成。\n\n第二篇報導則指出，若追加預算未到位，工期可能延後到明年第二季。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請整理兩篇報導對市府交通預算與工程時程的共同重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "7a7e0b27-6ab4-435d-9635-d59e1295b240",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.8647990682873152,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "a3a4aa3f-5307-488b-9f43-bad7221e2f29",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 2,
+              "rerank_score": 0.7847647233892484,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "整理",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "整理",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.4144
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3807
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.2825
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.0337,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "multi_document_theme",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.88,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.4461
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4167
+            },
+            {
+              "label": "section_focused",
+              "score": 0.37
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "multi_document_theme",
+          "summary_strategy_embedding_margin": 0.0294,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "7425b291-c627-490b-a2e0-432677be479a",
+            "149b211f-7155-4bf8-8241-a533a827e33d"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.4144
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3807
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.2825
+              }
+            ],
+            "task_type_embedding_margin": 0.0337,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.4461
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4167
+              },
+              {
+                "label": "section_focused",
+                "score": 0.37
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0294,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "7425b291-c627-490b-a2e0-432677be479a",
+            "149b211f-7155-4bf8-8241-a533a827e33d"
+          ],
+          "selected_parent_ids": [
+            "3fc74aa2-69ac-4780-b809-a52c6d82b930",
+            "57638d8c-cd46-4251-8854-3e44f0cc1b71"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "7a7e0b27-6ab4-435d-9635-d59e1295b240",
+            "a3a4aa3f-5307-488b-9f43-bad7221e2f29"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "3fc74aa2-69ac-4780-b809-a52c6d82b930",
+              "kept_chunk_ids": [
+                "7a7e0b27-6ab4-435d-9635-d59e1295b240"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "57638d8c-cd46-4251-8854-3e44f0cc1b71",
+              "kept_chunk_ids": [
+                "a3a4aa3f-5307-488b-9f43-bad7221e2f29"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 19.3211,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "ttnews-budget-a.md",
+          "document_id": "7425b291-c627-490b-a2e0-432677be479a",
+          "start_offset": 12,
+          "end_offset": 29,
+          "quote": "市府坦言目前仍有三億元的預算缺口。"
+        },
+        {
+          "file_name": "ttnews-budget-b.md",
+          "document_id": "149b211f-7155-4bf8-8241-a533a827e33d",
+          "start_offset": 31,
+          "end_offset": 62,
+          "quote": "第二篇報導則指出，若追加預算未到位，工期可能延後到明年第二季。"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "ttnews-budget-a.md",
+          "ttnews-budget-b.md"
+        ],
+        "resolved_document_ids": [
+          "7425b291-c627-490b-a2e0-432677be479a",
+          "149b211f-7155-4bf8-8241-a533a827e33d"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 1.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 4.0,
+          "structure_quality": 4.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness (5): 回答覆蓋了題目要求的兩個重點軸（預算壓力與完工時程差異）：引用C1指出三億元缺口與中央補助如期到位可望年底完工，引用C2指出追加預算程序未完成且若不到位工期可能延到明年第二季，故主要重點皆有呈現。 Faithfulness_to_citations (4): 大多數斷言可直接對應到提供的引文（C1、C2）。唯一處為總結性陳述——「工程能否按期完工取決於兩項關鍵條件——中央補助撥款與市府追加預算程序完成」——這是將兩篇報導的各自條件合併為一個共同決定因子，屬於合理推論但並非任一引文明確以共同必要條件表述，因此信實性略降。 Structure_quality (4): 回答以要點列出，語句清楚且分為預算與時程相關論點，易讀；但未使用題目期待的精確章節標題（如直接標示「預算」「時程」）且結尾的總結為綜合性陳述，故略有改進空間。 Compare_coverage / section_focus_accuracy (5): 回答聚焦在預算與時程兩節，呈現兩篇報導之共通點與時間點差異（年底完工 vs. 明年第二季延後），符合比較覆蓋要求。",
+        "missing_points": [
+          "引文中並未明確表示「中央補助與市府追加預算二者為共同且皆為必要條件」，回答將兩者合併為共同決定因子屬推論，該合併性陳述在原始引文中未被逐字支持。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "缺少 bert-score 依賴。"
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": true
+    },
+    {
+      "benchmark_name": "zh-compare-curated-pilot-v1",
+      "item_id": "zh-compare-1",
+      "language": "zh-TW",
+      "task_type": "cross_document_compare",
+      "summary_strategy": null,
+      "question": "請比較兩份政策說明在遠距天數與新進員工到班要求上的差異。",
+      "answer": "以下為兩份政策在「遠距天數」與「新進員工到班要求」上的差異比較：\n\n- 遠距天數\n - 政策 A：一般員工每週最多可遠距 3 天。\n - 政策 B：未提供固定遠距天數承諾（沒有明確遠距天數上限或標準）。\n\n- 新進員工到班要求\n - 政策 A：新進同仁前一個月需接受導師協作（未明文要求到辦公室天數，但強調導師協作期為一個月）。\n - 政策 B：新進同仁在前三個月每週至少 4 天需進辦公室（明確的到班天數要求）。\n\n若要我把比較整理成表格或加入建議（例如如何在兩者間擬定混合作法），我可以再補上。",
+      "answer_blocks": [
+        {
+          "text": "以下為兩份政策在「遠距天數」與「新進員工到班要求」上的差異比較：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 遠距天數\n - 政策 A：一般員工每週最多可遠距 3 天。\n - 政策 B：未提供固定遠距天數承諾（沒有明確遠距天數上限或標準）。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+              "document_name": "zh-policy-a.md",
+              "heading": "遠距安排 / 新進員工",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "4f5d487e-6676-4b72-b3b1-d8fa8a50901e",
+              "document_name": "zh-policy-b.md",
+              "heading": "遠距安排 / 新進員工",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "- 新進員工到班要求\n - 政策 A：新進同仁前一個月需接受導師協作（未明文要求到辦公室天數，但強調導師協作期為一個月）。\n - 政策 B：新進同仁在前三個月每週至少 4 天需進辦公室（明確的到班天數要求）。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+              "document_name": "zh-policy-a.md",
+              "heading": "遠距安排 / 新進員工",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "4f5d487e-6676-4b72-b3b1-d8fa8a50901e",
+              "document_name": "zh-policy-b.md",
+              "heading": "遠距安排 / 新進員工",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若要我把比較整理成表格或加入建議（例如如何在兩者間擬定混合作法），我可以再補上。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+          "document_name": "zh-policy-a.md",
+          "parent_chunk_id": "bdd74285-d46d-47d7-a84c-7f77e5b6ac9f",
+          "child_chunk_ids": [
+            "9fc530b9-fa82-4151-b565-228162f8d5f8"
+          ],
+          "heading": "遠距安排 / 新進員工",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 48,
+          "excerpt": "一般員工每週最多可遠距三天。\n\n新進同仁前一個月需接受導師協作。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "4f5d487e-6676-4b72-b3b1-d8fa8a50901e",
+          "document_name": "zh-policy-b.md",
+          "parent_chunk_id": "51ad5ca2-31ad-4bc7-b849-634fb8e46183",
+          "child_chunk_ids": [
+            "cbf091b0-2ecf-4ede-9ec0-7072c15a9b71"
+          ],
+          "heading": "遠距安排 / 新進員工",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 54,
+          "excerpt": "本政策未提供固定遠距天數承諾。\n\n新進同仁在前三個月每週至少四天需進辦公室。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請比較兩份政策說明在遠距天數與新進員工到班要求上的差異。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "9fc530b9-fa82-4151-b565-228162f8d5f8",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.15096163106493107,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "cbf091b0-2ecf-4ede-9ec0-7072c15a9b71",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 2,
+              "rerank_score": 0.10963399320853373,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "cross_document_compare",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "比較",
+            "差異"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "cross_document_compare",
+              "reason": "比較",
+              "confidence": 0.92
+            },
+            {
+              "label": "cross_document_compare",
+              "reason": "差異",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "cross_document_compare",
+              "score": 0.4433
+            },
+            {
+              "label": "document_summary",
+              "score": 0.4275
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.3342
+            }
+          ],
+          "query_type_top_label": "cross_document_compare",
+          "query_type_runner_up_label": "document_summary",
+          "query_type_embedding_margin": 0.0158,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": null,
+          "summary_strategy": null,
+          "summary_strategy_source": "not_applicable",
+          "summary_strategy_confidence": 0.0,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [],
+          "summary_strategy_top_label": null,
+          "summary_strategy_runner_up_label": null,
+          "summary_strategy_embedding_margin": 0.0,
+          "summary_strategy_fallback_used": false,
+          "summary_strategy_fallback_reason": null,
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+            "4f5d487e-6676-4b72-b3b1-d8fa8a50901e"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "cross_document_compare_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 8,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3200,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "cross_document_compare",
+                "score": 0.4433
+              },
+              {
+                "label": "document_summary",
+                "score": 0.4275
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.3342
+              }
+            ],
+            "task_type_embedding_margin": 0.0158,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [],
+            "summary_strategy_embedding_margin": 0.0,
+            "summary_strategy_fallback_used": false
+          },
+          "selection_applied": true,
+          "selection_strategy": "compare_coverage_then_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+            "4f5d487e-6676-4b72-b3b1-d8fa8a50901e"
+          ],
+          "selected_parent_ids": [
+            "bdd74285-d46d-47d7-a84c-7f77e5b6ac9f",
+            "51ad5ca2-31ad-4bc7-b849-634fb8e46183"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3200,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "9fc530b9-fa82-4151-b565-228162f8d5f8",
+            "cbf091b0-2ecf-4ede-9ec0-7072c15a9b71"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "bdd74285-d46d-47d7-a84c-7f77e5b6ac9f",
+              "kept_chunk_ids": [
+                "9fc530b9-fa82-4151-b565-228162f8d5f8"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "51ad5ca2-31ad-4bc7-b849-634fb8e46183",
+              "kept_chunk_ids": [
+                "cbf091b0-2ecf-4ede-9ec0-7072c15a9b71"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 7.6965,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "zh-policy-a.md",
+          "document_id": "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+          "start_offset": 16,
+          "end_offset": 30,
+          "quote": "一般員工每週最多可遠距三天。"
+        },
+        {
+          "file_name": "zh-policy-b.md",
+          "document_id": "4f5d487e-6676-4b72-b3b1-d8fa8a50901e",
+          "start_offset": 33,
+          "end_offset": 54,
+          "quote": "新進同仁在前三個月每週至少四天需進辦公室。"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "zh-policy-a.md",
+          "zh-policy-b.md"
+        ],
+        "resolved_document_ids": [
+          "4792d1e4-25ff-4dec-9414-65aab1d3134e",
+          "4f5d487e-6676-4b72-b3b1-d8fa8a50901e"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 4.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "Completeness: 回答直接覆蓋了題目要求的兩個比較軸（遠距天數與新進員工到班要求），引用的片段 C1/C2 所示內容皆被呈現，故給最高分。Faithfulness_to_citations: 大部分陳述忠於引用片段（A 每週最多遠距三天；B 未提供固定遠距天數承諾；B 新進前三個月每週至少四天到辦公室；A 新進前一個月需導師協作）。但回答中補述「（未明文要求到辦公室天數）」屬於對 C1 引文的推斷（absence inference），該細節未在引用文字明確出現，依照要求不得腦補，因此稍微扣分。Structure_quality: 回答以清晰的分項比較呈現，易讀且符合比較題的輸出格式，給予高分。Compare_coverage: 回答列出差異（遠距與新進員工要求），但未明確用一句總結指出「哪份文件遠距較寬鬆／哪份對新進員工較嚴」，而是以條列呈現細節並留給讀者推論，且未討論共通點或證據限制，故給中上分。",
+        "missing_points": [
+          "未以一兩句明確標示結論（例如：「政策 A 較寬鬆；政策 B 對新進員工限制較嚴」）。",
+          "對「政策 A 未明文要求到辦公室天數」為推論，該推論未直接出現在引用片段，屬於超出引用的補腦，應標註為推論或移除。",
+          "未說明兩份文件在此主題上的任何共通點（若有）或明確指出證據的任何限制／範圍（例如引用是否完整）。",
+          "未使用預期的 section heading（例如 'compare'）作為標題。"
+        ]
+      },
+      "pairwise_judge_result": {
+        "model": "gpt-5-mini",
+        "verdict": "candidate",
+        "rationale": "候選答案完全根據所提供引文陳述要點：在「遠距天數」上明確指出政策 A 為每週最多 3 天、政策 B 未提供固定遠距天數（與 zh-policy-a.md 與 zh-policy-b.md 的摘錄相符）；在「新進員工到班要求」上指出政策 A 只有「前一個月需接受導師協作」而未明文要求到辦公室天數，政策 B 則明確規定前三個月每週至少 4 天需進辦公室（亦與摘錄一致）。候選答案沒有超出引文範圍，並直接回應了要求的比較面向與必要判斷（哪份文件遠距較寬鬆、哪份對新進員工限制較嚴），因此優於較為簡短的參考答案。",
+        "score": 1.0
+      },
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.5,
+          "reason": null
+        },
+        "pairwise_rubric_judge_win_rate": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "baseline_compare": {
+    "per_dataset": {
+      "qmsum-query-summary-curated-pilot-v1": {
+        "current": null,
+        "reference": 0.0,
+        "delta": null
+      },
+      "multinews-multi-doc-summary-curated-pilot-v1": {
+        "current": null,
+        "reference": 0.0,
+        "delta": null
+      },
+      "cocotrip-compare-curated-pilot-v1": {
+        "current": 1.0,
+        "reference": 0.0,
+        "delta": 1.0
+      },
+      "drcd-query-summary-curated-pilot-v1": {
+        "current": null,
+        "reference": 0.0,
+        "delta": null
+      },
+      "ttnews-multi-doc-summary-curated-pilot-v1": {
+        "current": null,
+        "reference": 0.0,
+        "delta": null
+      },
+      "zh-compare-curated-pilot-v1": {
+        "current": 1.0,
+        "reference": 0.0,
+        "delta": 1.0
+      }
+    },
+    "task_family": {
+      "summary": {
+        "current": null,
+        "reference": null,
+        "delta": null
+      },
+      "compare": {
+        "current": 1.0,
+        "reference": 0.0,
+        "delta": 1.0
+      }
+    }
+  }
+}

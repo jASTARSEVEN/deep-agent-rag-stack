@@ -616,6 +616,7 @@ def execute_summary_compare_item(
     area_id: str,
     item: SummaryCompareCheckpointItem,
     thinking_mode: bool = True,
+    benchmark_document_ids: tuple[str, ...] | None = None,
 ) -> SummaryCompareExecution:
     """執行單題 summary/compare chat runtime。
 
@@ -626,6 +627,7 @@ def execute_summary_compare_item(
     - `area_id`：目標 area。
     - `item`：checkpoint fixture 題目。
     - `thinking_mode`：是否保留 thinking mode metadata。
+    - `benchmark_document_ids`：benchmark/test 專用文件白名單；checkpoint 正式路徑通常不提供。
 
     回傳：
     - `SummaryCompareExecution`：單題執行結果。
@@ -643,6 +645,7 @@ def execute_summary_compare_item(
         question=item.question,
         thinking_mode=thinking_mode,
         conversation_messages=None,
+        benchmark_document_ids=benchmark_document_ids,
     )
     latency_seconds = round(time.perf_counter() - started_at, 4)
     return SummaryCompareExecution(

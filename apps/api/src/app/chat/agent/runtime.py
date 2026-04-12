@@ -16,6 +16,7 @@ from app.chat.agent.deep_agents import build_main_agent
 from app.chat.contracts.types import ChatAnswerBlock, ChatMessageArtifact
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
+    _retrieve_area_contexts_internal,
     build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,
@@ -231,6 +232,7 @@ class DeepAgentsChatRuntime:
         thinking_mode: bool = False,
         conversation_messages: list[object] | None = None,
         writer: Callable[[dict[str, object]], None] | None = None,
+        benchmark_document_ids: tuple[str, ...] | None = None,
     ) -> dict[str, object]:
         """執行 Deep Agents 回答，並回傳最終 graph state payload。
 
@@ -243,6 +245,7 @@ class DeepAgentsChatRuntime:
         - `thinking_mode`：是否啟用 thinking mode；目前僅保留為相容 metadata。
         - `conversation_messages`：目前 thread 已累積的對話訊息；若無則回退為單輪輸入。
         - `writer`：LangGraph custom event writer。
+        - `benchmark_document_ids`：benchmark/test 專用文件白名單；public chat 不應傳入。
 
         回傳：
         - `dict[str, object]`：最終回答、references 與 trace。
@@ -367,12 +370,13 @@ class DeepAgentsChatRuntime:
             emit_phase(phase="tool_calling", status="started", message="正在呼叫知識庫工具")
             emit_phase(phase="searching", status="started", message="正在搜尋知識庫內容")
             emit_tool_call(name="retrieve_area_contexts", status="started", input_payload=tool_input)
-            retrieval_result = retrieve_area_contexts_tool(
+            retrieval_result = _retrieve_area_contexts_internal(
                 session=session,
                 principal=principal,
                 settings=settings,
                 area_id=area_id,
                 question=str(tool_input["question"]),
+                allowed_document_ids_override=benchmark_document_ids,
             )
             citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
             assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)

@@ -432,6 +432,7 @@ def retrieve_area_candidates(
     document_scope: DocumentScope | str | None = None,
     summary_strategy: SummaryStrategy | str | None = None,
     query_type: EvaluationQueryType | None = None,
+    allowed_document_ids_override: tuple[str, ...] | None = None,
 ) -> RetrievalResult:
     """在指定 area 內取得 hybrid recall、Python RRF 與 rerank candidates。
 
@@ -444,6 +445,7 @@ def retrieve_area_candidates(
     - `document_scope`：若由外部提供文件範圍提示，只影響 scope 判斷，不允許直接指定 document ids。
     - `summary_strategy`：若由外部提供摘要策略提示，只在 `document_summary` 下使用。
     - `query_type`：若已由上層明確指定的 query type；否則由 classifier 自動判定。
+    - `allowed_document_ids_override`：benchmark/test 專用文件白名單；正式 public chat 不應使用。
 
     回傳：
     - `RetrievalResult`：已完成 recall、RRF、ranking hook 與 rerank 的候選集合。
@@ -461,13 +463,14 @@ def retrieve_area_candidates(
         principal=principal,
         area_id=area_id,
     )
+    resolved_document_ids = allowed_document_ids_override or routing_decision.resolved_document_ids or None
     effective_settings = routing_decision.effective_settings
     recalled_matches = _recall_ranked_candidates(
         session=session,
         settings=effective_settings,
         area_id=area_id,
         query=query,
-        allowed_document_ids=routing_decision.resolved_document_ids or None,
+        allowed_document_ids=resolved_document_ids,
         allowed_parent_ids=None,
     )
     rrf_matches = _apply_python_rrf(matches=recalled_matches, settings=effective_settings)
@@ -485,7 +488,7 @@ def retrieve_area_candidates(
     selection_result = apply_scope_aware_selection(
         candidates=reranked_candidates,
         selected_profile=routing_decision.selected_profile,
-        resolved_document_ids=routing_decision.resolved_document_ids,
+        resolved_document_ids=resolved_document_ids or (),
         max_contexts=effective_settings.assembler_max_contexts,
     )
     candidates = selection_result.candidates
@@ -547,8 +550,8 @@ def retrieve_area_candidates(
             summary_strategy_embedding_margin=routing_decision.summary_strategy_embedding_margin,
             summary_strategy_fallback_used=routing_decision.summary_strategy_fallback_used,
             summary_strategy_fallback_reason=routing_decision.summary_strategy_fallback_reason,
-            document_scope=routing_decision.document_scope,
-            resolved_document_ids=list(routing_decision.resolved_document_ids),
+            document_scope="explicit_document_ids" if allowed_document_ids_override else routing_decision.document_scope,
+            resolved_document_ids=list(resolved_document_ids or ()),
             document_mention_source=routing_decision.document_mention_source,
             document_mention_confidence=routing_decision.document_mention_confidence,
             document_mention_candidates=[dict(candidate) for candidate in routing_decision.document_mention_candidates],

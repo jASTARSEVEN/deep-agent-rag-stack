@@ -107,6 +107,13 @@
 - checkpoint 會以固定 dataset 直接跑真實 chat runtime，再用 `LLM-as-judge` 評 `completeness / faithfulness / structure / compare_coverage`，並以 deterministic hard blockers 擋 `task_type`、`summary_strategy`、`ready-only citations`、必需文件覆蓋、timeout 與 token budget
 - checkpoint run metadata 已新增固定 `answer_path="deepagents_unified"`，用來明確標示目前正式驗證的是主 Deep Agents answer path
 - `Phase 8A` 目前的正式驗收定義已不再要求 query-time synopsis recall 或 summary/compare 專用 synthesis lane；驗收核心改為 unified Deep Agents path 是否能在固定 checkpoint 上穩定過線
+- 已新增雙語 summary/compare benchmark scoring lane：`python -m app.scripts.run_summary_compare_benchmark`
+- 新 lane 目前以 `benchmarks/summary-compare-bilingual-curated-pilot-v1` 作為 suite root，現行保留五個 curated pilot packages：`QMSum`、`Multi-News`、`CoCoTrip`、`DRCD query summary` 與 `TTNews multi-doc summary`
+- 新 benchmark report 固定產出 `summary_benchmark_score`、`compare_benchmark_score`、`per_dataset_scores`、`task_family_scores`、`language_rollups`、`benchmark_overview` 與 `baseline_compare`
+- 新 lane 已落地 metric registry，對每個 summary/compare 指標標示 `source_method` 與 `standard_level`；目前主分數為 `bert_score_f1` 與 `pairwise_rubric_judge_win_rate`
+- 新 lane 已支援 benchmark/test retrieval 的 `explicit_document_ids` scope contract；runner 會先重新驗證 area、權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`
+- public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override；`document_id` 直指定能力只屬於 benchmark/test contract
+- summary/compare benchmark runner 已固定 bounded parallel execution，上限 `6` 條 item lanes；若中途需要 `LLM judge`，judge 也在同一條 lane 內執行，不做二次無上限 fan-out
 - synopsis 的再利用目前不屬於 `Phase 8A` 或 `Phase 8B` 正式交付；`Phase 8C` 已改為 agentic evidence-seeking loop，synopsis 僅能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
 - repo 已新增固定 benchmark package `benchmarks/phase8a-summary-compare-v1`，包含 `16` 題 summary/compare checkpoint fixtures 與對應 source documents
 - `Phase 8A` 已完成最新一輪正式驗收 checkpoint；最新 accepted artifact 為 `parallel-6` runner 輸出，雖未通過原先 `passed=true` gate，但專案已判定目前優化接近現階段上限，因此接受當前 ceiling 並以現況結案

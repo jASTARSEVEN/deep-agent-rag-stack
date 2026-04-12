@@ -206,6 +206,8 @@ flowchart TD
 11. `avg_overall_score` 僅可作為彙總觀測值，不得單獨作為 release gate，也不得取代分面的代表主指標與 groundedness guardrails。
 12. 未來正式調教的 summary / compare 外部資料集最小可行組合固定為：`QMSum`（query-conditioned summary）、`Multi-News`（multi-document summary）與 `CoCoTrip`（cross-document compare）；`phase8a-summary-compare-v1` 持續作為唯一產品 release gate。
 13. `Multi-XScience`、`MS²` 與 `ORCHID` 等資料集在第一輪只屬於第二梯隊擴充候選，不得在 MVP 正式調教 lane 與主 gate 中搶先取代上述最小組合。
+14. repo 目前已另外落地一條雙語 curated pilot suite：英文 `QMSum + Multi-News + CoCoTrip`，中文目前保留 `DRCD query summary + TTNews multi-doc summary`；這條 suite 只用於 tuning / observability，不取代 `phase8a-summary-compare-v1` 的 release-gate 地位。
+15. 雙語 summary/compare benchmark suite 的正式主輸出只有 `summary_benchmark_score` 與 `compare_benchmark_score`；不額外定義跨任務單一總分。
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` / `MS MARCO` / `Natural Questions` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式；其中 `MS MARCO` 與 `NQ` 可直接使用 `hf://...` dataset-server 參照。
@@ -333,6 +335,7 @@ flowchart TD
 19.12.9. 送進 LLM 的主體必須是 assembled `parent/child` evidence contexts；`document synopsis` 與 `section synopsis` 若要送入，只能以 selected / compressed hints 形式作為 orientation / planning hints，不得與 citation-ready contexts 混成同權重主體。
 19.12.10. `Phase 8C` 的 agentic evidence-seeking loop 可新增 agent 可見工具，但每個工具都必須保留 SQL gate、deny-by-default、same-404 與 ready-only 語意。文件清單工具只能回傳已授權 `ready` 文件名稱與短期 handle；synopsis inspection / ranking 工具只能查詢已授權 `ready` 文件且輸出長度受控；scoped retrieval 工具必須在後端重新驗證 handle 對應的 area、使用者權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`。agent 不得直接提供原始 `document_id` 繞過後端解析，也不得用 synopsis hints 補成沒有 citation-ready evidence 的結論。
 19.12.11. `Phase 8C` 的每回合 loop 必須具備明確上限：最大 retrieval 呼叫次數、最大 synopsis inspection 次數、每次 scoped retrieval 最大文件數、全回合 token budget、context budget 與 latency budget。若補查沒有新增文件 / section / citation coverage，agent 必須停止補查並在回答中標示證據不足。
+19.12.12. summary/compare benchmark/test runner 目前允許依資料集特性直接指定 `explicit_document_ids`；但這只屬於 benchmark contract，public chat、`retrieve_area_contexts` tool 與 Deep Agents 主線都不得接受原始 `document_id` override。runner 必須先驗證 area、權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`。
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
 21. 多輪對話記憶必須以 LangGraph built-in thread state 為主，不能只在前端記住訊息列表卻不回寫 server-side state

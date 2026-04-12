@@ -106,6 +106,22 @@ For `qasper-*`, `uda-*`, and `drcd-*` evaluation datasets, benchmark runs now us
 | `uda-curated-v1-100` | `en` | `Specified-doc` | `0.7900` | `0.6492` | `0.6044` | Specified-document same-document localization lane |
 | `qasper-curated-v1-100` | `en` | `Specified-doc` | `0.9200` | `0.6105` | `0.5127` | Specified-document scientific-paper hard lane |
 
+Current bilingual summary/compare pilot benchmark snapshot:
+
+| Suite | Summary Benchmark Score | Compare Benchmark Score | Notes |
+| --- | ---: | ---: | --- |
+| `summary-compare-bilingual-curated-pilot-v1` | `0.764864` | `1.000000` | Bilingual curated pilot suite, `6` parallel lanes, no judge failures |
+
+Current summary/compare pilot package scores:
+
+| Package | Family | Lang | Main Metric | Score |
+| --- | --- | --- | --- | ---: |
+| `qmsum-query-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.753233` |
+| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.727891` |
+| `drcd-query-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.846113` |
+| `ttnews-multi-doc-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.732217` |
+| `cocotrip-compare-curated-pilot-v1` | `compare` | `en` | `pairwise_rubric_judge_win_rate` | `1.000000` |
+
 Current benchmark interpretation at the README level:
 
 - rerank is already a real optimization layer in the current stack, not just a planned box in the pipeline; the system uses parent-level rerank with cost guardrails and traceable fallback behavior

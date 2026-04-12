@@ -574,11 +574,16 @@ MVP 組合：
   - 角色：`compare_primary`
   - 題型：`cross_document_compare`
   - 用途：作為 compare 任務的外部主資料集；優先校準 common points / differences / contrastive coverage 的能力
+- `summary-compare-bilingual-curated-pilot-v1`
+  - 角色：`tuning_suite`
+  - 題型：`document_summary` + `cross_document_compare`
+  - 用途：repo 內實際落地的雙語 curated pilot suite；英文沿用 `QMSum + Multi-News + CoCoTrip`，中文目前保留 `DRCD query summary + TTNews multi-doc summary`，主輸出固定為 `summary_benchmark_score` 與 `compare_benchmark_score`
 
 選用原則：
 - `summary` 的正式外部 MVP 不同時引入 `QMSum`、`Multi-News` 之外的第三套主資料集；`Multi-XScience` 與 `MS²` 保留為第二階段擴充，不納入第一輪正式調教集合
 - `compare` 的正式外部 MVP 先只採 `CoCoTrip`；`ORCHID` 保留為中文 compare 第二階段擴充，不納入第一輪正式調教集合
 - `phase8a-summary-compare-v1` 不得被外部資料集取代；外部資料集用於校準通用能力，內部資料集用於驗證產品契約
+- `summary-compare-bilingual-curated-pilot-v1` 的 benchmark/test retrieval 可依資料集特性使用 `explicit_document_ids`，但此能力只屬於 benchmark contract，不進 public chat runtime
 - 若某外部資料集不具 reference summary 或無法穩定套用既定 metric registry，必須先標記 `not_applicable` 或降級為觀測用途，不得直接升為正式 gate
 
 建議 rollout 順序：

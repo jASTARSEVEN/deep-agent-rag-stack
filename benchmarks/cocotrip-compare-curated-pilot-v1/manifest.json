@@ -1,0 +1,8 @@
+{
+  "benchmark_name": "cocotrip-compare-curated-pilot-v1",
+  "version": "1.0.0",
+  "description": "English cross-document compare pilot package inspired by CoCoTrip-style comparisons.",
+  "language": "en",
+  "task_family": "compare",
+  "item_count": 1
+}
