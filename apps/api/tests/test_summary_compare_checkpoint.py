@@ -10,13 +10,16 @@ import pytest
 
 from app.db.models import Area, Document, DocumentStatus
 from app.schemas.summary_compare_checkpoint import SummaryCompareCheckpointItem, SummaryCompareJudgeResult, SummaryCompareJudgeScores
+from app.services.summary_compare_offline_judge import write_offline_judge_packets
 from app.services.summary_compare_checkpoint import (
     SummaryCompareExecution,
     build_summary_compare_checkpoint_markdown,
     build_summary_compare_judge_prompt,
+    export_summary_compare_checkpoint_offline_packets,
     execute_summary_compare_item,
     load_summary_compare_checkpoint_dataset,
     run_summary_compare_checkpoint,
+    run_summary_compare_checkpoint_from_offline_packets,
     write_summary_compare_checkpoint_artifacts,
 )
 
@@ -458,6 +461,7 @@ def test_run_summary_compare_checkpoint_reports_hard_and_soft_failures(db_sessio
     assert "task_type_mismatch" in report.hard_blocker_failures[0]["reasons"]
     assert "required_document_not_cited" in report.hard_blocker_failures[0]["reasons"]
     assert "insufficient_evidence_not_acknowledged" in report.hard_blocker_failures[0]["reasons"]
+    assert report.per_item_results[0].missing_required_document_names == ["benefits-overview.mixed.md"]
     assert any(metric.name == "hard_blocker_failures" and metric.passed is False for metric in report.gate_results)
     assert report.failure_category_counts["judge_low_completeness"] == 1
     assert report.failure_category_counts["timeout"] == 1
@@ -489,3 +493,132 @@ def test_execute_summary_compare_item_requires_deepagents(app_settings, db_sessi
             area_id="area-1",
             item=item,
         )
+
+
+def test_summary_compare_checkpoint_supports_offline_judge_packets(
+    db_session,
+    app_settings,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """checkpoint 應支援離線 judge packet 匯出與回填。"""
+
+    area = Area(id=_uuid(), name="Checkpoint Offline Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="employee-handbook.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="checkpoint/employee-handbook.md",
+        display_text="Overview\nEmployees receive 15 days of annual leave after probation.",
+        normalized_text="placeholder",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, document])
+    db_session.commit()
+
+    dataset_dir = tmp_path / "checkpoint-offline-dataset"
+    _write_checkpoint_dataset(
+        dataset_dir=dataset_dir,
+        item_payloads=[
+            {
+                "id": "summary-1",
+                "language": "en",
+                "question": "Summarize the employee handbook.",
+                "expected_query_type": "document_summary",
+                "expected_summary_strategy": "document_overview",
+                "expected_document_names": ["employee-handbook.md"],
+                "expected_section_headings": ["Overview"],
+                "required_claims_or_compare_axes": ["annual leave"],
+                "gold_span_refs": [{"file_name": "employee-handbook.md", "quote": "Employees receive 15 days of annual leave after probation."}],
+                "allows_insufficient_evidence": False,
+            }
+        ],
+    )
+
+    def fake_execute_summary_compare_item(*, item, **kwargs) -> SummaryCompareExecution:
+        """回傳固定 runtime 執行結果。"""
+
+        del kwargs
+        assert item.id == "summary-1"
+        return SummaryCompareExecution(
+            answer="The handbook grants 15 days of annual leave after probation.",
+            answer_blocks=[],
+            citations=[
+                {
+                    "context_label": "C1",
+                    "document_id": document.id,
+                    "document_name": document.file_name,
+                    "heading": "Overview",
+                    "start_offset": document.display_text.find("Employees receive"),
+                    "end_offset": document.display_text.find("Employees receive") + len("Employees receive 15 days of annual leave after probation."),
+                    "excerpt": "Employees receive 15 days of annual leave after probation.",
+                }
+            ],
+            trace={
+                "retrieval": {"query_type": "document_summary", "summary_strategy": "document_overview"},
+                "agent": {"map_reduce_trace": {"total_tokens": 120}},
+            },
+            latency_seconds=0.8,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr("app.services.summary_compare_checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
+
+    manifest, packets = export_summary_compare_checkpoint_offline_packets(
+        session=db_session,
+        settings=app_settings,
+        area_id=area.id,
+        actor_sub="checkpoint-user",
+        dataset_dir=dataset_dir,
+        judge_label="offline-codex",
+    )
+
+    assert manifest.item_count == 1
+    assert len(packets) == 1
+    assert packets[0].judge_kind == "checkpoint_rubric"
+    assert "不可腦補未被引用的內容" in packets[0].system_prompt
+
+    packet_path = write_offline_judge_packets(
+        packets=packets,
+        output_path=tmp_path / "checkpoint-offline-packets.jsonl",
+    )
+    decision_path = tmp_path / "checkpoint-offline-decisions.jsonl"
+    decision_path.write_text(
+        json.dumps(
+            {
+                "packet_id": packets[0].packet_id,
+                "model": "codex-pro",
+                "result": {
+                    "scores": {
+                        "completeness": 4.8,
+                        "faithfulness_to_citations": 4.9,
+                        "structure_quality": 4.6,
+                        "compare_coverage": 4.5,
+                    },
+                    "coverage_dimension_name": "section_focus_accuracy",
+                    "rationale": "Looks grounded.",
+                    "missing_points": [],
+                },
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_summary_compare_checkpoint_from_offline_packets(
+        settings=app_settings,
+        area_id=area.id,
+        actor_sub="checkpoint-user",
+        dataset_dir=dataset_dir,
+        thinking_mode=True,
+        judge_packets_path=packet_path,
+        judge_results_path=decision_path,
+        judge_label="offline-codex",
+    )
+
+    assert report.run_metadata.judge_model == "offline-codex"
+    assert report.per_item_results[0].judge_result.model == "codex-pro"
+    assert report.aggregate_metrics.avg_overall_score > 4.0

@@ -22,6 +22,14 @@
 - 主輸出只有 `summary_benchmark_score` 與 `compare_benchmark_score`
 - benchmark/test retrieval 允許 `explicit_document_ids`，但此能力只屬於 benchmark contract，不進 public chat runtime
 
+### 基線引用規則
+
+為避免後續 before / after 比較混用不同 artifact，本 lane 的引用規則固定如下：
+
+1. `summary-compare-real-curated-v1` 的 current baseline 一律指 package-level consolidated baseline，不指涉單一 aggregate suite artifact。
+2. `phase8a-summary-compare-v1` 仍是唯一 product gate；在未補跑前，不宣稱 repo 已固定一份可追溯的 numeric checkpoint baseline。
+3. 後續若產生新的 suite aggregate artifact，除非文件明確升格為 canonical baseline，否則只視為觀測輸出，不得直接覆蓋本文件所列 current baseline。
+
 ### 目前資料集組成
 
 目前 summary/compare 真資料 suite 的 package 組成為：
@@ -67,6 +75,8 @@
 其中 `summary_benchmark_score` 為四個 summary package 的等權平均：
 
 - `(0.730954 + 0.709126 + 0.624256 + 0.621386) / 4 = 0.671431`
+
+這組 consolidated baseline 是後續 summary/compare prompt 或 runtime 調整的唯一 before / after 比較基準；`phase8a-summary-compare-v1` 則維持 release gate 身分，不直接拿來取代這組 suite baseline。
 
 ### 這輪分數代表什麼
 

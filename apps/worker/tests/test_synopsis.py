@@ -121,7 +121,7 @@ def test_openai_document_synopsis_provider_omits_temperature_for_gpt5_models(mon
     monkeypatch.setitem(__import__("sys").modules, "openai", SimpleNamespace(OpenAI=FakeOpenAI))
     provider = OpenAIDocumentSynopsisProvider(
         api_key="test-key",
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         max_output_tokens=2000,
         reasoning_effort="minimal",
         text_verbosity="low",
@@ -135,7 +135,7 @@ def test_openai_document_synopsis_provider_omits_temperature_for_gpt5_models(mon
     )
 
     assert "temperature" not in captured_kwargs
-    assert captured_kwargs["model"] == "gpt-5-mini"
+    assert captured_kwargs["model"] == "gpt-5.4-mini"
     assert captured_kwargs["max_output_tokens"] == 2000
     assert captured_kwargs["reasoning"] == {"effort": "minimal"}
     assert captured_kwargs["text"] == {"verbosity": "low"}
@@ -168,7 +168,7 @@ def test_openai_document_synopsis_provider_surfaces_incomplete_reason_for_gpt5(m
     monkeypatch.setitem(__import__("sys").modules, "openai", SimpleNamespace(OpenAI=FakeOpenAI))
     provider = OpenAIDocumentSynopsisProvider(
         api_key="test-key",
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         max_output_tokens=2000,
         reasoning_effort="minimal",
         text_verbosity="low",

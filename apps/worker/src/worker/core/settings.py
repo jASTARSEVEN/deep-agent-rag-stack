@@ -134,7 +134,7 @@ class WorkerSettings(BaseSettings):
     document_synopsis_enabled: Annotated[bool, Field(alias="DOCUMENT_SYNOPSIS_ENABLED")] = True
     document_synopsis_provider: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_PROVIDER")] = "openai"
     document_section_synopsis_enabled: Annotated[bool, Field(alias="DOCUMENT_SECTION_SYNOPSIS_ENABLED")] = False
-    document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-5-mini"
+    document_synopsis_model: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_MODEL")] = "gpt-5.4-mini"
     document_synopsis_max_input_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS")] = 6000
     document_synopsis_max_output_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS")] = 1600
     document_synopsis_max_output_tokens: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_TOKENS")] = 2000

@@ -70,7 +70,7 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.self_hosted_embedding_api_key is None
     assert settings.self_hosted_embedding_timeout_seconds == 60.0
     assert settings.document_synopsis_provider == "openai"
-    assert settings.document_synopsis_model == "gpt-5-mini"
+    assert settings.document_synopsis_model == "gpt-5.4-mini"
     assert settings.document_synopsis_max_input_chars == 6000
     assert settings.document_synopsis_max_output_chars == 1600
     assert settings.document_synopsis_max_output_tokens == 2000

@@ -169,7 +169,7 @@ OPENAI_API_KEY="$OPENAI_API_KEY" \
 PYTHONPATH=apps/api/src .venv/bin/python -m app.scripts.review_external_benchmark_with_openai \
   --workspace-dir /tmp/nq-100-workspace \
   --area-id "$AREA_ID" \
-  --model gpt-5-mini \
+  --model gpt-5.4-mini \
   --replace \
   --review-source alignment_review_queue
 ```

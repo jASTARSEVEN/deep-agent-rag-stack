@@ -241,11 +241,13 @@
 3. `Phase 8A` 已完成，固定目前的 unified `Deep Agents` answer path、checkpoint contract 與 benchmark 治理邊界
 4. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
 5. 未實現的 `Phase 8` 現在先聚焦 `summary/compare benchmark baseline consolidation`：先整併既有 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` package 分數，固定 `summary-compare-real-curated-v1` 的 canonical suite baseline，再決定何時補跑
-6. 只有在下一輪真的要做 prompt / runtime 調整前先補跑 checkpoint / suite，且 rerun 後仍清楚顯示 coverage / faithfulness / compare quality / latency 問題適合用 agentic loop 解決時，才正式啟動 `Phase 8C`
-7. `Phase 8C` 若啟動，synopsis 仍只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
-8. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
-9. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
-10. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+6. baseline consolidation 完成前，所有文件都必須明確區分 `summary-compare-real-curated-v1` 是 tuning / observability suite、`phase8a-summary-compare-v1` 是唯一 product gate；後者在未補跑前不得宣稱已固定 numeric baseline
+7. 若後續新增新的 suite aggregate artifact，預設只視為觀測輸出；只有文件明確升格後，才可覆蓋 canonical suite baseline
+8. 只有在下一輪真的要做 prompt / runtime 調整前先補跑 checkpoint / suite，且 rerun 後仍清楚顯示 coverage / faithfulness / compare quality / latency 問題適合用 agentic loop 解決時，才正式啟動 `Phase 8C`
+9. `Phase 8C` 若啟動，synopsis 仍只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
+10. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
+11. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
+12. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## Phase 7 — Retrieval Correctness Evaluation
 
@@ -619,6 +621,7 @@ MVP 組合：
 
 啟動前提：
 - 先完成 `summary-compare-real-curated-v1` 的 canonical baseline consolidation；目前正式採信的是 package-level consolidated baseline，而不是單一 aggregate suite artifact。
+- 啟動前的文件必須已明確區分 canonical suite baseline、觀測用 aggregate artifact 與 `phase8a-summary-compare-v1` product gate，避免 before / after 比較基準漂移。
 - 若要正式啟動 `Phase 8C`，再先補跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，以 consolidated baseline 作為 before / after 比較基準。
 - rerun 報告必須先回答三件事：目前主要缺口是否真的集中在 agentic evidence-seeking 可解的 coverage / faithfulness 問題、是否其實是 compare answer quality 本身不足、以及 latency ceiling 是否已經讓多一步 loop 不划算。
 - 若 rerun 顯示 gap 主要來自 judge / dataset contract、compare answer formulation 或非 loop 類問題，則優先調整 benchmark 治理或 prompt / answer contract，不直接進入 8C runtime 實作。

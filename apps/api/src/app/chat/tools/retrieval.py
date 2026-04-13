@@ -260,6 +260,51 @@ def build_agent_tool_context_payload(
     ]
 
 
+def build_agent_response_contract_payload(
+    session,
+    retrieval_result: RetrievalToolResult | None,
+) -> dict[str, object] | None:
+    """建立給 LLM 的回答契約提示。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `dict[str, object] | None`：僅在需要額外回答 guardrail 時回傳契約 payload。
+    """
+
+    if retrieval_result is None:
+        return None
+
+    retrieval_trace = retrieval_result.trace["retrieval"] if retrieval_result is not None else {}
+    if retrieval_trace.get("query_type") != EvaluationQueryType.cross_document_compare.value:
+        return None
+
+    fallback_document_names = _collect_document_names_from_citations(retrieval_result.citations)
+    document_name_by_id = _load_document_names(
+        session=session,
+        document_ids=[str(context.document_id) for context in retrieval_result.assembled_contexts],
+        fallback_names=fallback_document_names,
+    )
+    required_document_names = list(
+        dict.fromkeys(
+            document_name_by_id.get(str(context.document_id), "")
+            for context in retrieval_result.assembled_contexts
+            if document_name_by_id.get(str(context.document_id), "")
+        )
+    )
+    return {
+        "task_type": EvaluationQueryType.cross_document_compare.value,
+        "required_document_names": required_document_names,
+        "compare_answer_template": [
+            "先逐一說明每份文件的直接證據與立場。",
+            "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
+            "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
+        ],
+    }
+
+
 def build_tool_call_output_summary(
     session,
     retrieval_result: RetrievalToolResult | None,
@@ -276,7 +321,8 @@ def build_tool_call_output_summary(
 
     assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
     retrieval_trace = retrieval_result.trace["retrieval"] if retrieval_result is not None else {}
-    return {
+    response_contract = build_agent_response_contract_payload(session, retrieval_result)
+    payload = {
         "contexts_count": len(assembled_contexts_payload),
         "citations_count": len(retrieval_result.citations) if retrieval_result is not None else 0,
         "query_type": retrieval_trace.get("query_type"),
@@ -334,6 +380,9 @@ def build_tool_call_output_summary(
             for item in assembled_contexts_payload
         ],
     }
+    if response_contract is not None:
+        payload["response_contract"] = response_contract
+    return payload
 
 
 def build_chat_citations(

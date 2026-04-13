@@ -24,7 +24,7 @@ python -m app.scripts.run_summary_compare_checkpoint \
   --area-id <AREA_ID> \
   --dataset-dir benchmarks/phase8a-summary-compare-v1 \
   --actor-sub <USER_SUB> \
-  --judge-model gpt-5-mini \
+  --judge-model gpt-5.4-mini \
   --output-path artifacts/phase8a-summary-compare-report.json
 ```
 

@@ -18,6 +18,7 @@ from app.core.settings import AppSettings
 from app.db.models import EvaluationQueryType
 from app.services.document_mentions import (
     DOCUMENT_MENTION_SOURCE_NONE,
+    DocumentMentionCandidate,
     DocumentMentionResolution,
     resolve_document_mentions,
 )
@@ -197,6 +198,13 @@ OPENAI_REASONING_EFFORT_TASK_TYPE = "minimal"
 OPENAI_REASONING_EFFORT_SUMMARY_STRATEGY = "low"
 # agent 明示 multi-document scope 時，候選文件可用較低門檻補入，但仍只限 SQL-gated ready 文件。
 MULTI_DOCUMENT_SCOPE_HINT_CANDIDATE_THRESHOLD = 0.55
+# compare / multi-doc summary 題保留第二候選所需的最低分數。
+MULTI_DOCUMENT_QUERY_CANDIDATE_THRESHOLD = 0.55
+# compare / multi-doc summary 常見 query cue。
+MULTI_DOCUMENT_QUERY_PATTERN = re.compile(
+    r"(?:\bbetween\b|\bacross\b|\bcompare\b|\bversus\b|\bvs\.?\b|\band\b|與|和|及|跟)",
+    re.IGNORECASE,
+)
 
 # prototype embedding cache，避免每次 routing 都重算固定語義模板。
 _ROUTING_PROTOTYPE_EMBEDDING_CACHE: dict[tuple[object, ...], tuple[tuple[str, tuple[float, ...]], ...]] = {}
@@ -378,6 +386,7 @@ def build_query_routing_decision(
     )
     mention_resolution = _resolve_document_mentions_for_query_type(
         raw_mention_resolution=raw_mention_resolution,
+        query=normalized_query,
         query_type=EvaluationQueryType(task_type_decision.label),
         explicit_scope=explicit_scope,
     )
@@ -1553,6 +1562,7 @@ def build_resolved_settings_trace(
 def _resolve_document_mentions_for_query_type(
     *,
     raw_mention_resolution: DocumentMentionResolution,
+    query: str,
     query_type: EvaluationQueryType,
     explicit_scope: DocumentScope | None,
 ) -> DocumentMentionResolution:
@@ -1567,12 +1577,10 @@ def _resolve_document_mentions_for_query_type(
     - `DocumentMentionResolution`：可作為檢索 scope 的 mention 結果。
     """
 
-    del query_type
     if explicit_scope == DocumentScope.MULTI_DOCUMENT and len(raw_mention_resolution.resolved_document_ids) < 2:
-        promoted_candidates = tuple(
-            candidate
-            for candidate in raw_mention_resolution.candidates
-            if candidate.score >= MULTI_DOCUMENT_SCOPE_HINT_CANDIDATE_THRESHOLD
+        promoted_candidates = _select_multi_document_candidates(
+            candidates=raw_mention_resolution.candidates,
+            threshold=MULTI_DOCUMENT_SCOPE_HINT_CANDIDATE_THRESHOLD,
         )
         if len(promoted_candidates) >= 2:
             return DocumentMentionResolution(
@@ -1581,7 +1589,71 @@ def _resolve_document_mentions_for_query_type(
                 confidence=promoted_candidates[0].score,
                 candidates=raw_mention_resolution.candidates,
             )
+
+    if (
+        len(raw_mention_resolution.resolved_document_ids) == 1
+        and _should_promote_to_multi_document_scope(
+            query=query,
+            query_type=query_type,
+            mention_resolution=raw_mention_resolution,
+        )
+    ):
+        promoted_candidates = _select_multi_document_candidates(
+            candidates=raw_mention_resolution.candidates,
+            threshold=MULTI_DOCUMENT_QUERY_CANDIDATE_THRESHOLD,
+        )
+        if len(promoted_candidates) >= 2:
+            return DocumentMentionResolution(
+                resolved_document_ids=tuple(candidate.document_id for candidate in promoted_candidates),
+                source="multi_document_query_override",
+                confidence=promoted_candidates[0].score,
+                candidates=raw_mention_resolution.candidates,
+            )
     return raw_mention_resolution
+
+
+def _select_multi_document_candidates(
+    *,
+    candidates: tuple[DocumentMentionCandidate, ...],
+    threshold: float,
+) -> tuple[DocumentMentionCandidate, ...]:
+    """挑出可保留為 multi-document scope 的候選文件。
+
+    參數：
+    - `candidates`：依分數排序後的 mention 候選。
+    - `threshold`：最低保留分數。
+
+    回傳：
+    - `tuple[DocumentMentionCandidate, ...]`：符合門檻的候選集合。
+    """
+
+    return tuple(candidate for candidate in candidates if candidate.score >= threshold)
+
+
+def _should_promote_to_multi_document_scope(
+    *,
+    query: str,
+    query_type: EvaluationQueryType,
+    mention_resolution: DocumentMentionResolution,
+) -> bool:
+    """判斷是否應覆寫單文件 mention，保留 multi-document scope。
+
+    參數：
+    - `query`：正規化後的原始 query。
+    - `query_type`：目前第一層 task type。
+    - `mention_resolution`：目前 mention 解析結果。
+
+    回傳：
+    - `bool`：若應優先保留 multi-document scope 則回傳真值。
+    """
+
+    if len(mention_resolution.candidates) < 2:
+        return False
+    if query_type == EvaluationQueryType.cross_document_compare:
+        return True
+    if query_type != EvaluationQueryType.document_summary:
+        return False
+    return bool(MULTI_DOCUMENT_QUERY_PATTERN.search(query))
 
 
 def _resolve_document_scope(

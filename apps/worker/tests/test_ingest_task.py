@@ -101,7 +101,7 @@ def build_settings(tmp_path: Path) -> WorkerSettings:
         OPENDATALOADER_USE_STRUCT_TREE=True,
         OPENDATALOADER_QUIET=True,
         DOCUMENT_SYNOPSIS_PROVIDER="deterministic",
-        DOCUMENT_SYNOPSIS_MODEL="gpt-5-mini",
+        DOCUMENT_SYNOPSIS_MODEL="gpt-5.4-mini",
         DOCUMENT_SYNOPSIS_MAX_INPUT_CHARS=6000,
         DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS=1600,
         LLAMAPARSE_API_KEY="",

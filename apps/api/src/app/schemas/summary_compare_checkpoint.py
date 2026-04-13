@@ -253,6 +253,8 @@ class SummaryComparePerItemResult(BaseModel):
     summary_strategy_matched: bool
     # 必需文件是否都有被引用。
     required_document_coverage: float = Field(ge=0.0, le=1.0)
+    # 尚未被引用到的必需文件名稱。
+    missing_required_document_names: list[str] = Field(default_factory=list)
     # section heading 是否都有被命中。
     section_coverage: float = Field(ge=0.0, le=1.0)
     # citation 與 gold spans 的覆蓋率。

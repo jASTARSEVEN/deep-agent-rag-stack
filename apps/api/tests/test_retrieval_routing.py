@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
 from app.db.models import Area, AreaUserRole, Document, DocumentStatus, EvaluationQueryType, Role
-from app.services.document_mentions import DocumentMentionResolution
+from app.services.document_mentions import DocumentMentionCandidate, DocumentMentionResolution
 from app.services.retrieval_routing import (
     QUERY_ROUTING_SOURCE_EMBEDDING,
     QUERY_ROUTING_SOURCE_EXPLICIT,
@@ -294,6 +294,123 @@ def test_build_query_routing_decision_keeps_document_scope_for_fact_lookup(db_se
     assert decision.selected_profile == "fact_lookup_precision_v1"
 
 
+def test_build_query_routing_decision_promotes_compare_query_to_multi_document_scope(monkeypatch) -> None:
+    """compare 題若第二候選達中等信心，不應被單文件 mention 壓成 single-document。"""
+
+    first_document_id = _uuid()
+    second_document_id = _uuid()
+
+    monkeypatch.setattr(
+        "app.services.retrieval_routing.resolve_document_mentions",
+        lambda **kwargs: DocumentMentionResolution(
+            resolved_document_ids=(first_document_id,),
+            source="query_contains_unique_suffix_phrase",
+            confidence=0.94,
+            candidates=(
+                DocumentMentionCandidate(
+                    document_id=first_document_id,
+                    file_name="benefits-overview.mixed.md",
+                    score=0.94,
+                    match_signals=("query_contains_unique_suffix_phrase",),
+                ),
+                DocumentMentionCandidate(
+                    document_id=second_document_id,
+                    file_name="claims-guide.zh-TW.md",
+                    score=0.60,
+                    match_signals=("token_overlap", "ordered_token_coverage"),
+                ),
+            ),
+        ),
+    )
+
+    decision = build_query_routing_decision(
+        settings=_routing_settings(),
+        query="請比較 claims guide 與 Benefits Overview 對理賠時程的說明",
+        explicit_query_type=EvaluationQueryType.cross_document_compare,
+    )
+
+    assert decision.document_scope == "multi_document"
+    assert decision.resolved_document_ids == (first_document_id, second_document_id)
+
+
+def test_build_query_routing_decision_promotes_multi_document_summary_query_from_candidates(monkeypatch) -> None:
+    """明顯 multi-doc summary 語句不應被高分單文件 mention 蓋掉第二候選。"""
+
+    first_document_id = _uuid()
+    second_document_id = _uuid()
+
+    monkeypatch.setattr(
+        "app.services.retrieval_routing.resolve_document_mentions",
+        lambda **kwargs: DocumentMentionResolution(
+            resolved_document_ids=(first_document_id,),
+            source="query_contains_canonical_title",
+            confidence=0.96,
+            candidates=(
+                DocumentMentionCandidate(
+                    document_id=first_document_id,
+                    file_name="travel-policy.md",
+                    score=0.96,
+                    match_signals=("query_contains_canonical_title",),
+                ),
+                DocumentMentionCandidate(
+                    document_id=second_document_id,
+                    file_name="claims-guide.zh-TW.md",
+                    score=0.60,
+                    match_signals=("token_overlap", "ordered_token_coverage"),
+                ),
+            ),
+        ),
+    )
+
+    decision = build_query_routing_decision(
+        settings=_routing_settings(),
+        query="Summarize approval and deadline rules across the travel policy and the claims guide.",
+        explicit_query_type=EvaluationQueryType.document_summary,
+    )
+
+    assert decision.document_scope == "multi_document"
+    assert decision.resolved_document_ids == (first_document_id, second_document_id)
+
+
+def test_build_query_routing_decision_keeps_single_document_scope_without_multi_document_cue(monkeypatch) -> None:
+    """一般單文件摘要題不應因第二候選中等分數而自動升成 multi-document。"""
+
+    first_document_id = _uuid()
+    second_document_id = _uuid()
+
+    monkeypatch.setattr(
+        "app.services.retrieval_routing.resolve_document_mentions",
+        lambda **kwargs: DocumentMentionResolution(
+            resolved_document_ids=(first_document_id,),
+            source="query_contains_canonical_title",
+            confidence=0.96,
+            candidates=(
+                DocumentMentionCandidate(
+                    document_id=first_document_id,
+                    file_name="travel-policy.md",
+                    score=0.96,
+                    match_signals=("query_contains_canonical_title",),
+                ),
+                DocumentMentionCandidate(
+                    document_id=second_document_id,
+                    file_name="claims-guide.zh-TW.md",
+                    score=0.60,
+                    match_signals=("token_overlap", "ordered_token_coverage"),
+                ),
+            ),
+        ),
+    )
+
+    decision = build_query_routing_decision(
+        settings=_routing_settings(),
+        query="Summarize the travel policy.",
+        explicit_query_type=EvaluationQueryType.document_summary,
+    )
+
+    assert decision.document_scope == "single_document"
+    assert decision.resolved_document_ids == (first_document_id,)
+
+
 def test_build_query_routing_decision_accepts_orthogonal_task_type_and_scope_hints(db_session) -> None:
     """task type 與 document scope hint 應可正交提供，且不直接指定 document ids。"""
 
@@ -490,7 +607,7 @@ def test_build_query_routing_decision_llm_fallback_can_override_single_document_
     )
 
     assert decision.summary_strategy == "multi_document_theme"
-    assert decision.summary_strategy_source == QUERY_ROUTING_SOURCE_LLM_FALLBACK
+    assert decision.summary_strategy_source == QUERY_ROUTING_SOURCE_RULE
     assert decision.summary_scope == "multi_document"
     assert decision.selected_profile == "document_summary_multi_document_diversified_v1"
 

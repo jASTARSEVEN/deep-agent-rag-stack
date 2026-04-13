@@ -14,10 +14,13 @@ from app.schemas.summary_compare_benchmark import (
     SummaryComparePairwiseJudgeResult,
 )
 from app.schemas.summary_compare_checkpoint import SummaryCompareJudgeResult, SummaryCompareJudgeScores
+from app.services.summary_compare_offline_judge import write_offline_judge_packets
 from app.services.summary_compare_benchmark import (
     build_summary_compare_benchmark_markdown,
+    export_summary_compare_benchmark_offline_packets,
     load_summary_compare_benchmark_suite,
     run_summary_compare_benchmark,
+    run_summary_compare_benchmark_from_offline_packets,
     write_summary_compare_benchmark_artifacts,
 )
 
@@ -431,6 +434,7 @@ def test_run_summary_compare_benchmark_aggregates_summary_and_compare_scores(
     assert report.per_dataset_scores[0].benchmark_name == "summary-pkg"
     assert report.per_dataset_scores[0].main_score.value == 0.8
     assert report.per_dataset_scores[1].main_score.value == 1.0
+    assert report.per_item_results[0].missing_required_document_names == []
     assert report.baseline_compare["per_dataset"]["summary-pkg"]["delta"] == 0.4
     assert report.baseline_compare["per_dataset"]["compare-pkg"]["delta"] == 0.3
 
@@ -588,3 +592,248 @@ def test_run_summary_compare_benchmark_rejects_parallel_workers_above_six(db_ses
             rubric_judge=FakeRubricJudge(),
             pairwise_judge=FakePairwiseJudge(),
         )
+
+
+def test_summary_compare_benchmark_supports_offline_judge_packets(
+    db_session,
+    app_settings,
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """benchmark suite 應支援離線 judge packet 匯出與回填。"""
+
+    area = Area(id=_uuid(), name="Summary Compare Offline")
+    summary_document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="summary-doc.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="benchmark/summary-doc.md",
+        display_text="Overview\nSummary evidence.",
+        normalized_text="placeholder",
+        status=DocumentStatus.ready,
+    )
+    compare_document_a = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="compare-doc-a.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="benchmark/compare-doc-a.md",
+        display_text="Diff\nCompare evidence A.",
+        normalized_text="placeholder",
+        status=DocumentStatus.ready,
+    )
+    compare_document_b = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="compare-doc-b.md",
+        content_type="text/markdown",
+        file_size=100,
+        storage_key="benchmark/compare-doc-b.md",
+        display_text="Diff\nCompare evidence B.",
+        normalized_text="placeholder",
+        status=DocumentStatus.ready,
+    )
+    db_session.add_all([area, summary_document, compare_document_a, compare_document_b])
+    db_session.commit()
+
+    suite_dir = tmp_path / "offline-suite"
+    suite_dir.mkdir(parents=True, exist_ok=True)
+    (suite_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "benchmark_name": "bilingual-offline",
+                "version": "v1",
+                "description": "Synthetic bilingual offline suite.",
+                "dataset_packages": ["summary-pkg", "compare-pkg"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    _write_package(
+        package_dir=suite_dir / "summary-pkg",
+        manifest_payload={
+            "benchmark_name": "summary-pkg",
+            "version": "v1",
+            "description": "summary test package",
+            "language": "en",
+            "task_family": "summary",
+            "item_count": 1,
+        },
+        question_payloads=[
+            {
+                "id": "summary-1",
+                "language": "en",
+                "task_type": "document_summary",
+                "question": "Summarize the document.",
+                "summary_strategy": "document_overview",
+                "expected_document_names": ["summary-doc.md"],
+                "expected_section_headings": ["Overview"],
+                "required_claims_or_axes": ["overview"],
+                "gold_span_refs": [{"file_name": "summary-doc.md", "quote": "Summary evidence."}],
+                "reference_answer": "Reference answer.",
+                "retrieval_scope": {"mode": "explicit_document_ids", "document_file_names": ["summary-doc.md"]},
+                "allows_insufficient_evidence": False,
+            }
+        ],
+        reference_main_score=0.4,
+    )
+    _write_package(
+        package_dir=suite_dir / "compare-pkg",
+        manifest_payload={
+            "benchmark_name": "compare-pkg",
+            "version": "v1",
+            "description": "compare test package",
+            "language": "zh-TW",
+            "task_family": "compare",
+            "item_count": 1,
+        },
+        question_payloads=[
+            {
+                "id": "compare-1",
+                "language": "zh-TW",
+                "task_type": "cross_document_compare",
+                "question": "請比較兩份文件。",
+                "comparison_axes": ["差異"],
+                "expected_document_names": ["compare-doc-a.md", "compare-doc-b.md"],
+                "required_claims_or_axes": ["差異"],
+                "gold_span_refs": [{"file_name": "compare-doc-a.md", "quote": "Compare evidence A."}],
+                "reference_answer": "參考答案。",
+                "retrieval_scope": {"mode": "explicit_document_ids", "document_file_names": ["compare-doc-a.md", "compare-doc-b.md"]},
+                "allows_insufficient_evidence": False,
+            }
+        ],
+        reference_main_score=0.7,
+    )
+
+    from app.services import summary_compare_benchmark as benchmark_module
+
+    def fake_execute_summary_compare_item(*, item, benchmark_document_ids=None, **kwargs):
+        """回傳固定 runtime 執行結果。"""
+
+        del kwargs
+        if item.id == "summary-1":
+            assert benchmark_document_ids == (summary_document.id,)
+            citations = [
+                {
+                    "context_label": "C1",
+                    "document_id": summary_document.id,
+                    "document_name": summary_document.file_name,
+                    "heading": "Overview",
+                    "start_offset": summary_document.display_text.find("Summary evidence."),
+                    "end_offset": summary_document.display_text.find("Summary evidence.") + len("Summary evidence."),
+                    "excerpt": "Summary evidence.",
+                }
+            ]
+        else:
+            assert benchmark_document_ids == (compare_document_a.id, compare_document_b.id)
+            citations = [
+                {
+                    "context_label": "C1",
+                    "document_id": compare_document_a.id,
+                    "document_name": compare_document_a.file_name,
+                    "heading": "Diff",
+                    "start_offset": compare_document_a.display_text.find("Compare evidence A."),
+                    "end_offset": compare_document_a.display_text.find("Compare evidence A.") + len("Compare evidence A."),
+                    "excerpt": "Compare evidence A.",
+                },
+                {
+                    "context_label": "C2",
+                    "document_id": compare_document_b.id,
+                    "document_name": compare_document_b.file_name,
+                    "heading": "Diff",
+                    "start_offset": compare_document_b.display_text.find("Compare evidence B."),
+                    "end_offset": compare_document_b.display_text.find("Compare evidence B.") + len("Compare evidence B."),
+                    "excerpt": "Compare evidence B.",
+                },
+            ]
+        return benchmark_module.SummaryCompareExecution(
+            answer="synthetic answer",
+            answer_blocks=[],
+            citations=citations,
+            trace={"agent": {"map_reduce_trace": {"total_tokens": 120}}, "retrieval": {"query_type": item.expected_query_type.value}},
+            latency_seconds=1.2,
+            timed_out=False,
+        )
+
+    monkeypatch.setattr(benchmark_module, "execute_summary_compare_item", fake_execute_summary_compare_item)
+
+    suite_manifest, _, packets = export_summary_compare_benchmark_offline_packets(
+        session=db_session,
+        settings=app_settings,
+        area_id=area.id,
+        actor_sub="benchmark-user",
+        dataset_dir=suite_dir,
+        judge_label="offline-codex",
+        summary_scorer=FakeSummaryScorer(),
+        qafacteval_scorer=FakeQAFactEvalScorer(),
+    )
+
+    assert suite_manifest.benchmark_name == "bilingual-offline"
+    assert len(packets) == 3
+
+    packet_path = write_offline_judge_packets(
+        packets=packets,
+        output_path=tmp_path / "benchmark-offline-packets.jsonl",
+    )
+    decision_path = tmp_path / "benchmark-offline-decisions.jsonl"
+    decision_rows = [
+        {
+            "packet_id": "summary-pkg:summary-1:rubric",
+            "model": "codex-pro",
+            "result": {
+                "scores": {
+                    "completeness": 4.5,
+                    "faithfulness_to_citations": 4.6,
+                    "structure_quality": 4.4,
+                    "compare_coverage": 4.3,
+                },
+                "rationale": "Summary looks grounded.",
+                "missing_points": [],
+            },
+        },
+        {
+            "packet_id": "compare-pkg:compare-1:rubric",
+            "model": "codex-pro",
+            "result": {
+                "scores": {
+                    "completeness": 4.2,
+                    "faithfulness_to_citations": 4.3,
+                    "structure_quality": 4.1,
+                    "compare_coverage": 4.0,
+                },
+                "rationale": "Compare answer is acceptable.",
+                "missing_points": [],
+            },
+        },
+        {
+            "packet_id": "compare-pkg:compare-1:pairwise",
+            "model": "codex-pro",
+            "result": {
+                "verdict": "candidate",
+                "rationale": "Candidate is stronger.",
+            },
+        },
+    ]
+    decision_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False) for row in decision_rows) + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_summary_compare_benchmark_from_offline_packets(
+        settings=app_settings,
+        area_id=area.id,
+        actor_sub="benchmark-user",
+        dataset_dir=suite_dir,
+        judge_packets_path=packet_path,
+        judge_results_path=decision_path,
+        judge_label="offline-codex",
+    )
+
+    assert report.run_metadata.judge_model == "offline-codex"
+    assert report.execution.judge_items_count == 2
+    assert report.task_family_scores["compare_benchmark_score"].value == 1.0

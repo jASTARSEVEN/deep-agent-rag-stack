@@ -17,6 +17,7 @@ from app.chat.contracts.types import ChatAnswerBlock, ChatMessageArtifact
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
     _retrieve_area_contexts_internal,
+    build_agent_response_contract_payload,
     build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,
@@ -358,7 +359,7 @@ class DeepAgentsChatRuntime:
         def ensure_retrieval_result() -> RetrievalToolResult:
             """確保本輪 retrieval 已執行並回傳快取結果。"""
 
-            nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload
+            nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload, llm_response_contract_payload
 
             if retrieval_result is not None:
                 return retrieval_result
@@ -381,6 +382,7 @@ class DeepAgentsChatRuntime:
             citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
             assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
             llm_tool_contexts_payload = build_agent_tool_context_payload(session, retrieval_result)
+            llm_response_contract_payload = build_agent_response_contract_payload(session, retrieval_result)
             retrieval_invoked = True
             emit_references(assembled_contexts_payload)
             log_stream_debug(
@@ -420,20 +422,30 @@ class DeepAgentsChatRuntime:
             emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
 
             return json.dumps(
-                {
-                    "assembled_contexts": llm_tool_contexts_payload,
-                },
+                (
+                    {
+                        "assembled_contexts": llm_tool_contexts_payload,
+                        "response_contract": llm_response_contract_payload,
+                    }
+                    if llm_response_contract_payload is not None
+                    else {
+                        "assembled_contexts": llm_tool_contexts_payload,
+                    }
+                ),
                 ensure_ascii=False,
             )
 
-        llm = ChatOpenAI(
-            model=self.model,
-            api_key=self._api_key,
-            timeout=self._timeout_seconds,
-            max_tokens=self._max_output_tokens,
-            reasoning_effort=OPENAI_REASONING_EFFORT_MINIMAL,
-            streaming=True,
-        )
+        llm_kwargs: dict[str, object] = {
+            "model": self.model,
+            "api_key": self._api_key,
+            "timeout": self._timeout_seconds,
+            "max_tokens": self._max_output_tokens,
+            "streaming": True,
+        }
+        reasoning_effort = _resolve_openai_reasoning_effort(model_name=self.model)
+        if reasoning_effort is not None:
+            llm_kwargs["reasoning_effort"] = reasoning_effort
+        llm = ChatOpenAI(**llm_kwargs)
         tracing_manager = nullcontext()
         emit_phase(phase="preparing", status="started", message="正在建立回答流程")
         if settings.langsmith_tracing:
@@ -460,6 +472,7 @@ class DeepAgentsChatRuntime:
 
         result: object | None = None
         streamed_answer_parts: list[str] = []
+        llm_response_contract_payload: dict[str, object] | None = None
         with tracing_manager:
             for stream_item in main_agent.stream(
                 {
@@ -615,6 +628,22 @@ def _build_answer_blocks_from_markers(
     fallback_answer = CITATION_MARKER_PATTERN.sub("", answer).strip()
     fallback_text = fallback_answer or answer.strip()
     return fallback_text, [ChatAnswerBlock(text=fallback_text, citation_context_indices=[], display_citations=[])]
+
+
+def _resolve_openai_reasoning_effort(*, model_name: str) -> str | None:
+    """依模型名稱選擇可接受的 reasoning effort。
+
+    參數：
+    - `model_name`：目前使用的 OpenAI chat model 名稱。
+
+    回傳：
+    - `str | None`：對應模型可接受的 reasoning effort；若應省略則回傳空值。
+    """
+
+    normalized = model_name.strip().lower()
+    if normalized.startswith("gpt-5.4-mini"):
+        return None
+    return OPENAI_REASONING_EFFORT_MINIMAL
 
 
 def _count_assistant_turns(conversation_messages: list[object] | None) -> int:

@@ -160,13 +160,13 @@ class AppSettings(BaseSettings):
     assembler_max_chars_per_context: Annotated[int, Field(alias="ASSEMBLER_MAX_CHARS_PER_CONTEXT")] = 3000
     assembler_max_children_per_parent: Annotated[int, Field(alias="ASSEMBLER_MAX_CHILDREN_PER_PARENT")] = 7
     chat_provider: Annotated[str, Field(alias="CHAT_PROVIDER")] = "deterministic"
-    chat_model: Annotated[str, Field(alias="CHAT_MODEL")] = "gpt-5-mini"
+    chat_model: Annotated[str, Field(alias="CHAT_MODEL")] = "gpt-5.4-mini"
     chat_max_output_tokens: Annotated[int, Field(alias="CHAT_MAX_OUTPUT_TOKENS")] = 700
     chat_timeout_seconds: Annotated[int, Field(alias="CHAT_TIMEOUT_SECONDS")] = 30
     chat_include_trace: Annotated[bool, Field(alias="CHAT_INCLUDE_TRACE")] = False
     chat_stream_chunk_size: Annotated[int, Field(alias="CHAT_STREAM_CHUNK_SIZE")] = 64
     chat_stream_debug: Annotated[bool, Field(alias="CHAT_STREAM_DEBUG")] = False
-    summary_compare_eval_judge_model: Annotated[str, Field(alias="SUMMARY_COMPARE_EVAL_JUDGE_MODEL")] = "gpt-5-mini"
+    summary_compare_eval_judge_model: Annotated[str, Field(alias="SUMMARY_COMPARE_EVAL_JUDGE_MODEL")] = "gpt-5.4-mini"
     summary_compare_eval_max_p95_latency_seconds: Annotated[
         float, Field(alias="SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS")
     ] = 30.0

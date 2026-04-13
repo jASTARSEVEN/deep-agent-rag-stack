@@ -10,9 +10,12 @@ import sys
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
 from app.services.summary_compare_benchmark import (
+    export_summary_compare_benchmark_offline_packets,
     run_summary_compare_benchmark,
+    run_summary_compare_benchmark_from_offline_packets,
     write_summary_compare_benchmark_artifacts,
 )
+from app.services.summary_compare_offline_judge import write_offline_judge_packets
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -30,6 +33,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dataset-dir", required=True, help="benchmark suite 或 package 目錄。")
     parser.add_argument("--actor-sub", required=True, help="以哪個使用者身分執行 benchmark。")
     parser.add_argument("--judge-model", default=None, help="覆寫預設 judge model。")
+    parser.add_argument(
+        "--judge-mode",
+        choices=("openai", "offline-export", "offline-import"),
+        default="openai",
+        help="judge 模式：openai、離線匯出 packet、或從離線結果匯入。",
+    )
+    parser.add_argument(
+        "--judge-packets-path",
+        default=None,
+        help="離線 judge packet JSONL 路徑；offline-export 會寫出，offline-import 會讀取。",
+    )
+    parser.add_argument(
+        "--judge-results-path",
+        default=None,
+        help="離線 judge 回填結果 JSONL 路徑；僅 offline-import 需要。",
+    )
     parser.add_argument(
         "--max-parallel-workers",
         type=int,
@@ -69,16 +88,58 @@ def main() -> None:
         print(json.dumps(event, ensure_ascii=False), file=sys.stderr, flush=True)
 
     with session_factory() as session:
-        report = run_summary_compare_benchmark(
-            session=session,
-            settings=settings,
-            area_id=args.area_id,
-            actor_sub=args.actor_sub,
-            dataset_dir=Path(args.dataset_dir).resolve(),
-            judge_model=args.judge_model,
-            max_parallel_workers=args.max_parallel_workers,
-            progress_reporter=report_progress,
-        )
+        if args.judge_mode == "offline-export":
+            if not args.judge_packets_path:
+                raise ValueError("offline-export 需要提供 --judge-packets-path。")
+            suite_manifest, _, packets = export_summary_compare_benchmark_offline_packets(
+                session=session,
+                settings=settings,
+                area_id=args.area_id,
+                actor_sub=args.actor_sub,
+                dataset_dir=Path(args.dataset_dir).resolve(),
+                judge_label=args.judge_model or "offline-codex",
+                max_parallel_workers=args.max_parallel_workers,
+            )
+            packet_path = write_offline_judge_packets(
+                packets=packets,
+                output_path=Path(args.judge_packets_path).resolve(),
+            )
+            print(
+                json.dumps(
+                    {
+                        "mode": args.judge_mode,
+                        "benchmark_name": suite_manifest.benchmark_name,
+                        "judge_packets_path": str(packet_path),
+                        "packet_count": len(packets),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        if args.judge_mode == "offline-import":
+            if not args.judge_packets_path or not args.judge_results_path:
+                raise ValueError("offline-import 需要同時提供 --judge-packets-path 與 --judge-results-path。")
+            report = run_summary_compare_benchmark_from_offline_packets(
+                settings=settings,
+                area_id=args.area_id,
+                actor_sub=args.actor_sub,
+                dataset_dir=Path(args.dataset_dir).resolve(),
+                judge_packets_path=Path(args.judge_packets_path).resolve(),
+                judge_results_path=Path(args.judge_results_path).resolve(),
+                judge_label=args.judge_model or "offline-codex",
+            )
+        else:
+            report = run_summary_compare_benchmark(
+                session=session,
+                settings=settings,
+                area_id=args.area_id,
+                actor_sub=args.actor_sub,
+                dataset_dir=Path(args.dataset_dir).resolve(),
+                judge_model=args.judge_model,
+                max_parallel_workers=args.max_parallel_workers,
+                progress_reporter=report_progress,
+            )
         json_path, markdown_path = write_summary_compare_benchmark_artifacts(
             report=report,
             output_path=Path(args.output_path).resolve(),
@@ -86,6 +147,7 @@ def main() -> None:
         print(
             json.dumps(
                 {
+                    "mode": args.judge_mode,
                     "json_report_path": str(json_path),
                     "markdown_summary_path": str(markdown_path),
                     "summary_benchmark_score": report.task_family_scores["summary_benchmark_score"].model_dump(mode="json"),

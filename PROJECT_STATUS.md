@@ -96,6 +96,9 @@
 - 目前正式 suite baseline 固定為 `summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
 - summary/compare benchmark report 已固定輸出 `summary_benchmark_score`、`compare_benchmark_score`、`per_dataset_scores`、`task_family_scores`、`language_rollups`、`benchmark_overview` 與 `baseline_compare`
 - summary/compare metric registry 已落地；主分數目前為 `bert_score_f1` 與 `pairwise_rubric_judge_win_rate`
+- 已新增 `docs/summary-compare-benchmark-rerun-guide.md`，固定 suite / checkpoint 的 rerun CLI、artifact 角色與 baseline 引用規則
+- 已新增 `summary/compare` 離線 judge packet workflow：`run_summary_compare_checkpoint` 與 `run_summary_compare_benchmark` CLI 現支援 `offline-export` / `offline-import`，可先匯出 judge packets，交由 `Codex / ChatGPT Pro` 人工回填，再匯入產生正式 report
+- `Phase 8A` checkpoint 與 `summary-compare-real-curated-v1` compare/rubric judge 現在不再被 `OPENAI_API_KEY` 綁死；若不想用 API key，可改走離線 packet + decision JSONL 流程，但仍維持同一套 report schema 與 gate / baseline compare 契約
 - benchmark/test runner 允許 `explicit_document_ids`，但 public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override
 - `Phase 8B` enrichment lane 已取消並移除；後續不得重新引入已刪除的 enrichment schema、query-time merge lane 或查詢改寫 lane
 - `Phase 8C` 尚未開始；本輪只固定 canonical baseline，不做 go/no-go 判斷，且 synopsis 若未來接回，也只能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
@@ -307,12 +310,14 @@
 ### Current Focus
 - `Phase 8B` enrichment lane 已取消；目前 focus 先改為整併既有 summary/compare baseline artifact，暫不重跑 benchmark，也不直接開始新的 query-time runtime lane
 - summary/compare current baseline 已先收斂為 package-level consolidated baseline：`summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
+- 目前正式採信的 canonical baseline 來源固定為 `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`、`artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`、`artifacts/lcsts-news-summary-curated-pilot-v1-run.json`、`artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`、`artifacts/cocotrip-compare-curated-pilot-v1-run.json` 與 `artifacts/cocotrip-rerun-subset.json`
 - 先把 canonical baseline 文件定稿，避免後續 before / after 比較基準漂移
 - `Phase 8C` 路線仍保留為 agentic evidence-seeking loop 候選，但只有在下一輪真的要做 prompt/runtime 調整前補跑 checkpoint / suite 後，才重新判斷是否啟動
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
 - `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準，不再承載額外的舊決策敘事；在未補跑前不宣稱已固定 numeric baseline
+- 若後續產生新的 suite aggregate artifact，除非文件明確升格為 canonical baseline，否則一律只視為觀測輸出，不得直接覆蓋 current baseline
 
 ## 下一步
 

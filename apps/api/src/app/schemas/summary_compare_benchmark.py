@@ -371,6 +371,8 @@ class SummaryCompareBenchmarkPerItemResult(BaseModel):
     benchmark_document_scope: SummaryCompareScopeValidationResult
     # 必需文件覆蓋率。
     required_document_coverage: float = Field(ge=0.0, le=1.0)
+    # 尚未被引用到的必需文件名稱。
+    missing_required_document_names: list[str] = Field(default_factory=list)
     # section 覆蓋率。
     section_coverage: float = Field(ge=0.0, le=1.0)
     # citation 覆蓋率。

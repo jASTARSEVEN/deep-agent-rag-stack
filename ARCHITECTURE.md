@@ -196,6 +196,7 @@ flowchart TD
 1. `summary/compare` 的正式 checkpoint 不沿用 Phase 7 retrieval-only runner，而是透過 `python -m app.scripts.run_summary_compare_checkpoint` 執行固定 dataset。
 2. checkpoint runner 直接呼叫真實 chat runtime，逐題保存 `answer`、`answer_blocks`、`citations`、routing / selection trace、fallback reason 與 latency。
 3. 判定流程採兩層：先做 deterministic hard blockers，再做 `LLM-as-judge` 的 `completeness / faithfulness_to_citations / structure_quality / compare_coverage` 評分。
+3.5. judge 執行模式正式支援兩條路徑：`OpenAI API key` 直跑，以及 `offline packet` 路徑。後者會先匯出 `system_prompt + user_prompt + item context` JSONL，再由 `Codex / ChatGPT Pro` 或人工回填結果 JSONL，最後匯入產生相同 schema 的正式 report。
 4. hard blockers 至少包含：`task_type` 命中、`summary_strategy` 命中、citations 只來自 `ready` 文件、必需文件被引用、允許證據不足的題目不得硬編結論、不得 timeout、不得超過 token budget。
 5. checkpoint report 固定輸出 `run_metadata`、`aggregate_metrics`、`gate_results`、`per_item_results`、`judge_scores`、`hard_blocker_failures` 與 `recommendations`；`run_metadata.answer_path` 固定標示 `deepagents_unified`。
 6. summary / compare 的正式 metric registry 必須對每個指標標示 `source_method` 與 `standard_level`，其中 `standard_level` 固定只允許 `standard | semi_standard | project_contract`。
@@ -205,6 +206,7 @@ flowchart TD
 10. `required_document_coverage`、`citation_coverage`、`section_coverage`、`required_document_not_cited` 與 `insufficient_evidence_not_acknowledged` 屬於產品 evidence contract，正式標示為 `project_contract`。
 11. `phase8a-summary-compare-v1` 持續作為唯一產品 gate；`summary-compare-real-curated-v1` 則作為 tuning / observability suite，不取代產品 gate。
 12. 雙語 summary/compare benchmark suite 的正式主輸出只有 `summary_benchmark_score` 與 `compare_benchmark_score`；不額外定義跨任務單一總分。
+13. 離線 judge workflow 只替換 judge 執行方式，不得改動題目、runtime answer、citations、SQL gate、ready-only 邊界或 baseline compare 規則；packet 只是 judge 輸入輸出的搬運層，不是第二條產品 answer path。
 
 ### 外部 benchmark curation 流程
 1. `python -m app.scripts.prepare_external_benchmark prepare-source` 會將 `QASPER` / `UDA` / `MS MARCO` / `Natural Questions` 類原始資料轉成 repo-local 的 `source_documents/` 與統一 `prepared_items` 中間格式；其中 `MS MARCO` 與 `NQ` 可直接使用 `hf://...` dataset-server 參照。

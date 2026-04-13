@@ -36,20 +36,27 @@ from app.schemas.summary_compare_benchmark import (
     SummaryCompareRubricJudgeResult,
     SummaryCompareScopeValidationResult,
 )
-from app.schemas.summary_compare_checkpoint import SummaryCompareCheckpointItem
+from app.schemas.summary_compare_checkpoint import SummaryCompareCheckpointItem, SummaryCompareJudgeScores
+from app.schemas.summary_compare_offline_judge import (
+    SummaryCompareOfflineJudgeDecision,
+    SummaryCompareOfflineJudgePacket,
+)
 from app.services.summary_compare_checkpoint import (
     OpenAISummaryCompareJudge,
     SummaryCompareExecution,
     _answer_mentions_insufficient_evidence,
     _coerce_optional_str,
     _compute_citation_coverage,
+    _collect_missing_required_document_names,
     _compute_required_document_coverage,
     _compute_section_coverage,
     _load_ready_documents_by_name,
     _resolve_gold_spans,
     _validate_citation_ready_documents,
+    build_summary_compare_judge_prompt,
     execute_summary_compare_item,
 )
+from app.services.summary_compare_offline_judge import load_offline_judge_decisions, load_offline_judge_packets
 
 
 # suite manifest 檔名。
@@ -387,6 +394,22 @@ class _SingleItemExecutionResult:
     judge_failed: bool
 
 
+@dataclass(slots=True)
+class _BenchmarkEvaluationContext:
+    """單題 benchmark 在 judge 前的上下文。"""
+
+    # 不含 judge 結果的單題 payload。
+    item_payload: dict[str, object]
+    # checkpoint 相容題目，供 rubric judge 使用。
+    checkpoint_item: SummaryCompareCheckpointItem
+    # compare 題原始資料；summary 題為空值。
+    compare_item: CompareBenchmarkItem | None
+    # 本題 runtime 執行結果。
+    execution: SummaryCompareExecution
+    # 需要輸出的離線 judge packets。
+    judge_packets: list[SummaryCompareOfflineJudgePacket]
+
+
 def build_pairwise_compare_judge_prompt(
     *,
     item: CompareBenchmarkItem,
@@ -677,42 +700,161 @@ def run_summary_compare_benchmark(
     language_rollups = _build_language_rollups(per_dataset_scores=per_dataset_scores)
     aggregate_metrics = _build_aggregate_metrics(per_item_results=per_item_results)
     baseline_compare = _build_baseline_compare(packages=packages, per_dataset_scores=per_dataset_scores)
-    report = SummaryCompareBenchmarkReport(
-        run_metadata=SummaryCompareBenchmarkRunMetadata(
-            benchmark_name=suite_manifest.benchmark_name,
-            benchmark_version=suite_manifest.version,
-            area_id=area_id,
-            actor_sub=actor_sub,
-            judge_model=judge_model or settings.summary_compare_eval_judge_model if settings.openai_api_key else None,
-            generated_at=datetime.now(UTC),
-            dataset_count=len(packages),
-            item_count=len(per_item_results),
-        ),
-        execution=SummaryCompareExecutionSummary(
-            parallel_workers=max_parallel_workers,
-            judge_items_count=judge_items_count,
-            judge_failed_count=judge_failed_count,
-            partial_items_count=partial_items_count,
-        ),
-        metric_registry=SUMMARY_COMPARE_METRIC_REGISTRY,
-        per_dataset_scores=per_dataset_scores,
-        task_family_scores=task_family_scores,
-        language_rollups=language_rollups,
-        benchmark_overview=SummaryCompareBenchmarkOverview(
-            summary_benchmark_score=task_family_scores.get("summary_benchmark_score", SummaryCompareMetricResult(status="not_applicable")),
-            compare_benchmark_score=task_family_scores.get("compare_benchmark_score", SummaryCompareMetricResult(status="not_applicable")),
-            dataset_count=len(packages),
-            not_applicable_metrics=sorted(
-                metric_name
-                for metric_name, result in aggregate_metrics.items()
-                if result.status != "scored"
-            ),
-        ),
-        aggregate_metrics=aggregate_metrics,
+    return _build_benchmark_report(
+        suite_manifest=suite_manifest,
+        packages=packages,
+        settings=settings,
+        area_id=area_id,
+        actor_sub=actor_sub,
+        judge_model=judge_model or settings.summary_compare_eval_judge_model if settings.openai_api_key else None,
         per_item_results=per_item_results,
-        baseline_compare=baseline_compare,
+        judge_items_count=judge_items_count,
+        judge_failed_count=judge_failed_count,
+        partial_items_count=partial_items_count,
+        parallel_workers=max_parallel_workers,
     )
-    return report
+
+
+def export_summary_compare_benchmark_offline_packets(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    dataset_dir: Path,
+    judge_label: str = "offline-codex",
+    max_parallel_workers: int = SUMMARY_COMPARE_MAX_PARALLEL_WORKERS,
+    summary_scorer: SummaryReferenceScorer | None = None,
+    qafacteval_scorer: SupportingMetricScorer | None = None,
+) -> tuple[SummaryCompareBenchmarkSuiteManifest, list[_BenchmarkPackage], list[SummaryCompareOfflineJudgePacket]]:
+    """執行 benchmark runtime 並匯出離線 judge packets。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area。
+    - `actor_sub`：執行者 sub。
+    - `dataset_dir`：suite 或 package 目錄。
+    - `judge_label`：離線 judge 顯示標籤。
+    - `max_parallel_workers`：保留與正式 runner 一致的並行上限驗證。
+    - `summary_scorer`：可注入的 summary 主分數 scorer。
+    - `qafacteval_scorer`：可注入的 supporting scorer。
+
+    回傳：
+    - `tuple[SummaryCompareBenchmarkSuiteManifest, list[_BenchmarkPackage], list[SummaryCompareOfflineJudgePacket]]`：suite manifest、package 清單與 packet 清單。
+    """
+
+    if max_parallel_workers < 1 or max_parallel_workers > SUMMARY_COMPARE_MAX_PARALLEL_WORKERS:
+        raise ValueError(f"--max-parallel-workers 只支援 1 到 {SUMMARY_COMPARE_MAX_PARALLEL_WORKERS}。")
+    suite_manifest, packages = load_summary_compare_benchmark_suite(dataset_dir=dataset_dir)
+    ready_documents_by_name = _load_ready_documents_by_name(session=session, area_id=area_id)
+    ready_documents_by_id = _load_ready_documents_by_id(session=session, area_id=area_id)
+    principal = CurrentPrincipal(sub=actor_sub, groups=())
+    session_factory = sessionmaker(
+        bind=session.get_bind(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        class_=Session,
+    )
+    resolved_summary_scorer = summary_scorer or BertScoreSummaryScorer()
+    resolved_qafacteval_scorer = qafacteval_scorer or UnsupportedQAFactEvalScorer()
+    packets: list[SummaryCompareOfflineJudgePacket] = []
+    for package in packages:
+        for item in package.items:
+            context = _evaluate_benchmark_item_context(
+                session_factory=session_factory,
+                settings=settings,
+                principal=principal,
+                area_id=area_id,
+                package=package,
+                item=item,
+                ready_documents_by_name=ready_documents_by_name,
+                ready_documents_by_id=ready_documents_by_id,
+                summary_scorer=resolved_summary_scorer,
+                qafacteval_scorer=resolved_qafacteval_scorer,
+                judge_label=judge_label,
+            )
+            packets.extend(context.judge_packets)
+    return suite_manifest, packages, packets
+
+
+def run_summary_compare_benchmark_from_offline_packets(
+    *,
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    dataset_dir: Path,
+    judge_packets_path: Path,
+    judge_results_path: Path,
+    judge_label: str = "offline-codex",
+) -> SummaryCompareBenchmarkReport:
+    """從離線 judge packet 與回填結果產生正式 benchmark report。
+
+    參數：
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area。
+    - `actor_sub`：執行者 sub。
+    - `dataset_dir`：suite 或 package 目錄。
+    - `judge_packets_path`：離線 judge packet JSONL。
+    - `judge_results_path`：人工 / Codex 回填結果 JSONL。
+    - `judge_label`：預設離線 judge 標籤。
+
+    回傳：
+    - `SummaryCompareBenchmarkReport`：完整 benchmark report。
+    """
+
+    suite_manifest, packages = load_summary_compare_benchmark_suite(dataset_dir=dataset_dir)
+    packets = load_offline_judge_packets(packet_path=judge_packets_path)
+    decisions = load_offline_judge_decisions(decision_path=judge_results_path)
+    package_names = {package.manifest.benchmark_name for package in packages}
+    per_item_payloads: dict[tuple[str, str], dict[str, object]] = {}
+    judge_packets_by_item: dict[tuple[str, str], list[SummaryCompareOfflineJudgePacket]] = defaultdict(list)
+    for packet in packets:
+        if packet.benchmark_name not in package_names:
+            raise ValueError(f"離線 judge packet 含未知 benchmark_name：{packet.benchmark_name}")
+        item_key = (packet.benchmark_name, packet.item_id)
+        if item_key not in per_item_payloads:
+            per_item_payloads[item_key] = dict(packet.context_payload)
+        judge_packets_by_item[item_key].append(packet)
+
+    ordered_item_results: list[SummaryCompareBenchmarkPerItemResult] = []
+    judge_items_count = 0
+    judge_failed_count = 0
+    partial_items_count = 0
+    for package in packages:
+        for item in package.items:
+            item_key = (package.manifest.benchmark_name, item.id)
+            item_payload = per_item_payloads.get(item_key)
+            if item_payload is None:
+                raise ValueError(f"離線 judge packet 缺少題目：{package.manifest.benchmark_name}/{item.id}")
+            final_item_result, judge_attempted, judge_failed = _finalize_benchmark_item_from_offline_packets(
+                item_payload=item_payload,
+                judge_packets=judge_packets_by_item.get(item_key, []),
+                decisions=decisions,
+                judge_label=judge_label,
+            )
+            ordered_item_results.append(final_item_result)
+            if judge_attempted:
+                judge_items_count += 1
+            if judge_failed:
+                judge_failed_count += 1
+            if final_item_result.partial:
+                partial_items_count += 1
+
+    return _build_benchmark_report(
+        suite_manifest=suite_manifest,
+        packages=packages,
+        settings=settings,
+        area_id=area_id,
+        actor_sub=actor_sub,
+        judge_model=judge_label,
+        per_item_results=ordered_item_results,
+        judge_items_count=judge_items_count,
+        judge_failed_count=judge_failed_count,
+        partial_items_count=partial_items_count,
+        parallel_workers=1,
+    )
 
 
 def _run_single_benchmark_item(
@@ -748,6 +890,117 @@ def _run_single_benchmark_item(
 
     回傳：
     - `_SingleItemExecutionResult`：單題結果與 judge 統計。
+    """
+
+    context = _evaluate_benchmark_item_context(
+        session_factory=session_factory,
+        settings=settings,
+        principal=principal,
+        area_id=area_id,
+        package=package,
+        item=item,
+        ready_documents_by_name=ready_documents_by_name,
+        ready_documents_by_id=ready_documents_by_id,
+        summary_scorer=summary_scorer,
+        qafacteval_scorer=qafacteval_scorer,
+        judge_label=(
+            getattr(rubric_judge, "_model", None)
+            or getattr(pairwise_judge, "_model", None)
+            or settings.summary_compare_eval_judge_model
+        ),
+    )
+    item_payload = dict(context.item_payload)
+    rubric_result = None
+    rubric_judge_failed = False
+    pairwise_result = None
+    pairwise_judge_failed = False
+    for packet in context.judge_packets:
+        if packet.judge_kind == "benchmark_rubric":
+            rubric_result, rubric_judge_failed = _run_rubric_judge(
+                rubric_judge=rubric_judge,
+                checkpoint_item=context.checkpoint_item,
+                execution=context.execution,
+            )
+            item_payload["rubric_judge_result"] = rubric_result.model_dump(mode="json") if rubric_result is not None else None
+            item_metrics = dict(item_payload["metrics"])
+            item_metrics["avg_overall_score"] = (
+                SummaryCompareMetricResult(value=rubric_result.scores.overall).model_dump(mode="json")
+                if rubric_result is not None
+                else SummaryCompareMetricResult(
+                    status="judge_failed" if rubric_judge_failed else "not_applicable",
+                    reason="supporting rubric judge unavailable。",
+                ).model_dump(mode="json")
+            )
+            item_payload["metrics"] = item_metrics
+        elif packet.judge_kind == "benchmark_pairwise":
+            if pairwise_judge is None:
+                pairwise_result = None
+                pairwise_judge_failed = True
+            else:
+                try:
+                    pairwise_result = pairwise_judge.judge(
+                        item=context.compare_item,
+                        answer=context.execution.answer,
+                        citations=context.execution.citations,
+                    )
+                except Exception:  # pragma: no cover - 依賴細節由整合環境決定。
+                    pairwise_result = None
+                    pairwise_judge_failed = True
+            item_payload["pairwise_judge_result"] = (
+                pairwise_result.model_dump(mode="json") if pairwise_result is not None else None
+            )
+            item_metrics = dict(item_payload["metrics"])
+            item_metrics[COMPARE_MAIN_SCORE_METRIC] = (
+                SummaryCompareMetricResult(value=pairwise_result.score).model_dump(mode="json")
+                if pairwise_result is not None
+                else SummaryCompareMetricResult(
+                    status="judge_failed",
+                    reason="缺少 compare pairwise judge。" if pairwise_judge is None else "pairwise judge 失敗。",
+                ).model_dump(mode="json")
+            )
+            item_payload["metrics"] = item_metrics
+    finalized_item_result = SummaryCompareBenchmarkPerItemResult.model_validate(
+        _finalize_benchmark_item_payload(item_payload=item_payload)
+    )
+    judge_attempted = bool(context.judge_packets)
+    return _SingleItemExecutionResult(
+        item_result=finalized_item_result,
+        judge_attempted=judge_attempted,
+        judge_failed=finalized_item_result.partial,
+    )
+
+
+def _evaluate_benchmark_item_context(
+    *,
+    session_factory: sessionmaker[Session],
+    settings: AppSettings,
+    principal: CurrentPrincipal,
+    area_id: str,
+    package: _BenchmarkPackage,
+    item: SummaryCompareBenchmarkItem,
+    ready_documents_by_name: dict[str, Document],
+    ready_documents_by_id: dict[str, Document],
+    summary_scorer: SummaryReferenceScorer,
+    qafacteval_scorer: SupportingMetricScorer,
+    judge_label: str,
+) -> _BenchmarkEvaluationContext:
+    """建立單題 benchmark 在 judge 前的上下文。
+
+    參數：
+    - `session_factory`：thread-local session factory。
+    - `settings`：應用程式設定。
+    - `principal`：執行者 principal。
+    - `area_id`：目標 area。
+    - `package`：所屬 benchmark package。
+    - `item`：benchmark 題目。
+    - `ready_documents_by_name`：以檔名索引的 ready 文件。
+    - `ready_documents_by_id`：以 id 索引的 ready 文件。
+    - `summary_scorer`：summary 主分數 scorer。
+    - `qafacteval_scorer`：summary supporting scorer。
+    - `judge_label`：離線或線上 judge 顯示標籤。
+
+    回傳：
+    - `_BenchmarkEvaluationContext`：單題 payload 與 judge packets。
     """
 
     scope_validation = _validate_item_retrieval_scope(
@@ -794,6 +1047,10 @@ def _run_single_benchmark_item(
         expected_document_names=item.expected_document_names,
         citations=execution.citations,
     )
+    missing_required_document_names = _collect_missing_required_document_names(
+        expected_document_names=item.expected_document_names,
+        citations=execution.citations,
+    )
     if required_document_coverage < 1.0:
         hard_blocker_failures.append("required_document_not_cited")
 
@@ -821,93 +1078,318 @@ def _run_single_benchmark_item(
     if item.allows_insufficient_evidence and not _answer_mentions_insufficient_evidence(execution.answer):
         hard_blocker_failures.append("insufficient_evidence_not_acknowledged")
 
-    metrics: dict[str, SummaryCompareMetricResult] = {
-        "required_document_coverage": SummaryCompareMetricResult(value=round(required_document_coverage, 6)),
-        "citation_coverage": SummaryCompareMetricResult(value=round(citation_coverage, 6)),
-        "section_coverage": SummaryCompareMetricResult(value=round(section_coverage, 6)),
-        "required_document_not_cited_rate": SummaryCompareMetricResult(value=1.0 if required_document_coverage < 1.0 else 0.0),
+    metrics: dict[str, object] = {
+        "required_document_coverage": SummaryCompareMetricResult(value=round(required_document_coverage, 6)).model_dump(mode="json"),
+        "citation_coverage": SummaryCompareMetricResult(value=round(citation_coverage, 6)).model_dump(mode="json"),
+        "section_coverage": SummaryCompareMetricResult(value=round(section_coverage, 6)).model_dump(mode="json"),
+        "required_document_not_cited_rate": SummaryCompareMetricResult(
+            value=1.0 if required_document_coverage < 1.0 else 0.0
+        ).model_dump(mode="json"),
         "insufficient_evidence_not_acknowledged_rate": SummaryCompareMetricResult(
             value=1.0 if "insufficient_evidence_not_acknowledged" in hard_blocker_failures else 0.0
-        ),
+        ).model_dump(mode="json"),
     }
-    rubric_result, rubric_judge_failed = _run_rubric_judge(
-        rubric_judge=rubric_judge,
-        checkpoint_item=checkpoint_item,
-        execution=execution,
-    )
-    if rubric_result is not None:
-        metrics["avg_overall_score"] = SummaryCompareMetricResult(value=rubric_result.scores.overall)
-    else:
-        metrics["avg_overall_score"] = SummaryCompareMetricResult(
-            status="judge_failed" if rubric_judge_failed else "not_applicable",
-            reason="supporting rubric judge unavailable。",
-        )
-
-    pairwise_result: SummaryComparePairwiseJudgeResult | None = None
-    pairwise_judge_failed = False
     if isinstance(item, SummaryBenchmarkItem):
-        metrics[SUMMARY_MAIN_SCORE_METRIC] = summary_scorer.score(item=item, answer=execution.answer)
+        metrics[SUMMARY_MAIN_SCORE_METRIC] = summary_scorer.score(item=item, answer=execution.answer).model_dump(mode="json")
         metrics["qafacteval_score"] = qafacteval_scorer.score(
             item=item,
             answer=execution.answer,
             citations=execution.citations,
-        )
-    else:
-        if pairwise_judge is None:
-            metrics[COMPARE_MAIN_SCORE_METRIC] = SummaryCompareMetricResult(
-                status="judge_failed",
-                reason="缺少 compare pairwise judge。",
-            )
-            pairwise_judge_failed = True
-        else:
-            try:
-                pairwise_result = pairwise_judge.judge(
-                    item=item,
-                    answer=execution.answer,
-                    citations=execution.citations,
-                )
-                metrics[COMPARE_MAIN_SCORE_METRIC] = SummaryCompareMetricResult(value=pairwise_result.score)
-            except Exception as exc:  # pragma: no cover - 依賴細節由整合環境決定。
-                metrics[COMPARE_MAIN_SCORE_METRIC] = SummaryCompareMetricResult(
-                    status="judge_failed",
-                    reason=f"pairwise judge 失敗：{type(exc).__name__}",
-                )
-                pairwise_judge_failed = True
+        ).model_dump(mode="json")
 
-    partial = any(
-        metrics[metric_name].status != "scored"
-        for metric_name in [SUMMARY_MAIN_SCORE_METRIC if isinstance(item, SummaryBenchmarkItem) else COMPARE_MAIN_SCORE_METRIC, "avg_overall_score"]
-    )
-    item_result = SummaryCompareBenchmarkPerItemResult(
-        benchmark_name=package.manifest.benchmark_name,
-        item_id=item.id,
-        language=item.language,
-        task_type=EvaluationQueryType(item.task_type),
-        summary_strategy=item.summary_strategy if isinstance(item, SummaryBenchmarkItem) else None,
-        question=item.question,
+    rubric_system_prompt, rubric_user_prompt = build_summary_compare_judge_prompt(
+        item=checkpoint_item,
         answer=execution.answer,
-        answer_blocks=execution.answer_blocks,
         citations=execution.citations,
         trace=execution.trace,
-        latency_seconds=execution.latency_seconds,
-        total_tokens=total_tokens,
-        resolved_gold_spans=resolved_gold_spans,
-        benchmark_document_scope=scope_validation,
-        required_document_coverage=required_document_coverage,
-        section_coverage=section_coverage,
-        citation_coverage=citation_coverage,
-        fallback_triggered=fallback_triggered,
-        hard_blocker_failures=sorted(set(hard_blocker_failures)),
-        rubric_judge_result=rubric_result,
-        pairwise_judge_result=pairwise_result,
-        metrics=metrics,
-        partial=partial,
     )
-    judge_attempted = rubric_result is not None or rubric_judge_failed or pairwise_result is not None or pairwise_judge_failed
-    return _SingleItemExecutionResult(
-        item_result=item_result,
-        judge_attempted=judge_attempted,
-        judge_failed=rubric_judge_failed or pairwise_judge_failed,
+    judge_packets = [
+        SummaryCompareOfflineJudgePacket(
+            packet_id=f"{package.manifest.benchmark_name}:{item.id}:rubric",
+            judge_kind="benchmark_rubric",
+            benchmark_name=package.manifest.benchmark_name,
+            item_id=item.id,
+            model_label=judge_label,
+            system_prompt=rubric_system_prompt,
+            user_prompt=rubric_user_prompt,
+            context_payload={},
+        )
+    ]
+    if isinstance(item, CompareBenchmarkItem):
+        pairwise_system_prompt, pairwise_user_prompt = build_pairwise_compare_judge_prompt(
+            item=item,
+            answer=execution.answer,
+            citations=execution.citations,
+        )
+        judge_packets.append(
+            SummaryCompareOfflineJudgePacket(
+                packet_id=f"{package.manifest.benchmark_name}:{item.id}:pairwise",
+                judge_kind="benchmark_pairwise",
+                benchmark_name=package.manifest.benchmark_name,
+                item_id=item.id,
+                model_label=judge_label,
+                system_prompt=pairwise_system_prompt,
+                user_prompt=pairwise_user_prompt,
+                context_payload={},
+            )
+        )
+
+    item_payload = {
+        "benchmark_name": package.manifest.benchmark_name,
+        "item_id": item.id,
+        "language": item.language.value,
+        "task_type": item.task_type,
+        "summary_strategy": item.summary_strategy if isinstance(item, SummaryBenchmarkItem) else None,
+        "question": item.question,
+        "answer": execution.answer,
+        "answer_blocks": execution.answer_blocks,
+        "citations": execution.citations,
+        "trace": execution.trace,
+        "latency_seconds": execution.latency_seconds,
+        "total_tokens": total_tokens,
+        "resolved_gold_spans": [span.model_dump(mode="json") for span in resolved_gold_spans],
+        "benchmark_document_scope": scope_validation.model_dump(mode="json"),
+        "required_document_coverage": required_document_coverage,
+        "missing_required_document_names": missing_required_document_names,
+        "section_coverage": section_coverage,
+        "citation_coverage": citation_coverage,
+        "fallback_triggered": fallback_triggered,
+        "hard_blocker_failures": sorted(set(hard_blocker_failures)),
+        "rubric_judge_result": None,
+        "pairwise_judge_result": None,
+        "metrics": metrics,
+        "partial": True,
+    }
+    for packet in judge_packets:
+        packet.context_payload = item_payload
+    return _BenchmarkEvaluationContext(
+        item_payload=item_payload,
+        checkpoint_item=checkpoint_item,
+        compare_item=item if isinstance(item, CompareBenchmarkItem) else None,
+        execution=execution,
+        judge_packets=judge_packets,
+    )
+
+
+def _finalize_benchmark_item_from_offline_packets(
+    *,
+    item_payload: dict[str, object],
+    judge_packets: list[SummaryCompareOfflineJudgePacket],
+    decisions: dict[str, SummaryCompareOfflineJudgeDecision],
+    judge_label: str,
+) -> tuple[SummaryCompareBenchmarkPerItemResult, bool, bool]:
+    """將離線 decisions 套回單題 benchmark payload。
+
+    參數：
+    - `item_payload`：匯出時保存的單題 payload。
+    - `judge_packets`：該題對應的 judge packets。
+    - `decisions`：`packet_id -> decision` 對照表。
+    - `judge_label`：預設離線 judge 標籤。
+
+    回傳：
+    - `tuple[SummaryCompareBenchmarkPerItemResult, bool, bool]`：正式單題結果、是否需要 judge、是否 judge 失敗。
+    """
+
+    patched_payload = dict(item_payload)
+    metrics = dict(patched_payload["metrics"])
+    judge_failed = False
+    for packet in judge_packets:
+        decision = decisions.get(packet.packet_id)
+        if decision is None:
+            raise ValueError(f"缺少離線 judge decision：{packet.packet_id}")
+        if packet.judge_kind == "benchmark_rubric":
+            rubric_result = _build_offline_rubric_result(
+                decision_payload=decision.result,
+                model=decision.model or judge_label,
+            )
+            patched_payload["rubric_judge_result"] = rubric_result.model_dump(mode="json")
+            metrics["avg_overall_score"] = SummaryCompareMetricResult(value=rubric_result.scores.overall).model_dump(mode="json")
+        elif packet.judge_kind == "benchmark_pairwise":
+            pairwise_result = _build_offline_pairwise_result(
+                decision_payload=decision.result,
+                model=decision.model or judge_label,
+            )
+            patched_payload["pairwise_judge_result"] = pairwise_result.model_dump(mode="json")
+            metrics[COMPARE_MAIN_SCORE_METRIC] = SummaryCompareMetricResult(value=pairwise_result.score).model_dump(mode="json")
+    patched_payload["metrics"] = metrics
+    finalized_payload = _finalize_benchmark_item_payload(item_payload=patched_payload)
+    finalized_item_result = SummaryCompareBenchmarkPerItemResult.model_validate(finalized_payload)
+    if finalized_item_result.partial:
+        judge_failed = True
+    return finalized_item_result, bool(judge_packets), judge_failed
+
+
+def _finalize_benchmark_item_payload(*, item_payload: dict[str, object]) -> dict[str, object]:
+    """依 metric 狀態回填 benchmark item 的 partial 欄位。
+
+    參數：
+    - `item_payload`：尚未定稿的單題 payload。
+
+    回傳：
+    - `dict[str, object]`：可直接做 model_validate 的最終 payload。
+    """
+
+    payload = dict(item_payload)
+    metrics = {
+        metric_name: (
+            metric_value
+            if isinstance(metric_value, SummaryCompareMetricResult)
+            else SummaryCompareMetricResult.model_validate(metric_value)
+        )
+        for metric_name, metric_value in dict(payload["metrics"]).items()
+    }
+    main_metric_name = (
+        SUMMARY_MAIN_SCORE_METRIC
+        if payload.get("task_type") == EvaluationQueryType.document_summary.value
+        else COMPARE_MAIN_SCORE_METRIC
+    )
+    payload["partial"] = any(
+        metrics[metric_name].status != "scored"
+        for metric_name in [main_metric_name, "avg_overall_score"]
+    )
+    payload["metrics"] = {name: metric.model_dump(mode="json") for name, metric in metrics.items()}
+    return payload
+
+
+def _build_benchmark_report(
+    *,
+    suite_manifest: SummaryCompareBenchmarkSuiteManifest,
+    packages: list[_BenchmarkPackage],
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    judge_model: str | None,
+    per_item_results: list[SummaryCompareBenchmarkPerItemResult],
+    judge_items_count: int,
+    judge_failed_count: int,
+    partial_items_count: int,
+    parallel_workers: int,
+) -> SummaryCompareBenchmarkReport:
+    """依單題結果建立正式 benchmark report。
+
+    參數：
+    - `suite_manifest`：suite manifest。
+    - `packages`：benchmark packages。
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area。
+    - `actor_sub`：執行者 sub。
+    - `judge_model`：judge 模型或標籤。
+    - `per_item_results`：所有單題結果。
+    - `judge_items_count`：需要 judge 的題數。
+    - `judge_failed_count`：judge 失敗題數。
+    - `partial_items_count`：partial 題數。
+    - `parallel_workers`：本輪並行 worker 數。
+
+    回傳：
+    - `SummaryCompareBenchmarkReport`：完整 benchmark report。
+    """
+
+    del settings
+    per_dataset_scores = _build_per_dataset_scores(packages=packages, per_item_results=per_item_results)
+    task_family_scores = _build_task_family_scores(per_dataset_scores=per_dataset_scores)
+    language_rollups = _build_language_rollups(per_dataset_scores=per_dataset_scores)
+    aggregate_metrics = _build_aggregate_metrics(per_item_results=per_item_results)
+    baseline_compare = _build_baseline_compare(packages=packages, per_dataset_scores=per_dataset_scores)
+    return SummaryCompareBenchmarkReport(
+        run_metadata=SummaryCompareBenchmarkRunMetadata(
+            benchmark_name=suite_manifest.benchmark_name,
+            benchmark_version=suite_manifest.version,
+            area_id=area_id,
+            actor_sub=actor_sub,
+            judge_model=judge_model,
+            generated_at=datetime.now(UTC),
+            dataset_count=len(packages),
+            item_count=len(per_item_results),
+        ),
+        execution=SummaryCompareExecutionSummary(
+            parallel_workers=parallel_workers,
+            judge_items_count=judge_items_count,
+            judge_failed_count=judge_failed_count,
+            partial_items_count=partial_items_count,
+        ),
+        metric_registry=SUMMARY_COMPARE_METRIC_REGISTRY,
+        per_dataset_scores=per_dataset_scores,
+        task_family_scores=task_family_scores,
+        language_rollups=language_rollups,
+        benchmark_overview=SummaryCompareBenchmarkOverview(
+            summary_benchmark_score=task_family_scores.get(
+                "summary_benchmark_score",
+                SummaryCompareMetricResult(status="not_applicable"),
+            ),
+            compare_benchmark_score=task_family_scores.get(
+                "compare_benchmark_score",
+                SummaryCompareMetricResult(status="not_applicable"),
+            ),
+            dataset_count=len(packages),
+            not_applicable_metrics=sorted(
+                metric_name
+                for metric_name, result in aggregate_metrics.items()
+                if result.status != "scored"
+            ),
+        ),
+        aggregate_metrics=aggregate_metrics,
+        per_item_results=per_item_results,
+        baseline_compare=baseline_compare,
+    )
+
+
+def _build_offline_rubric_result(
+    *,
+    decision_payload: dict[str, object],
+    model: str,
+) -> SummaryCompareRubricJudgeResult:
+    """將離線 decision 轉成 benchmark rubric judge 結果。
+
+    參數：
+    - `decision_payload`：離線回填結果。
+    - `model`：judge 標籤。
+
+    回傳：
+    - `SummaryCompareRubricJudgeResult`：rubric judge 結果。
+    """
+
+    scores = SummaryCompareJudgeScores.model_validate(decision_payload.get("scores", {}))
+    return SummaryCompareRubricJudgeResult(
+        model=model,
+        scores=SummaryCompareJudgeRubricScores(
+            completeness=scores.completeness,
+            faithfulness_to_citations=scores.faithfulness_to_citations,
+            structure_quality=scores.structure_quality,
+            compare_coverage=scores.compare_coverage,
+        ),
+        rationale=str(decision_payload.get("rationale", "")).strip(),
+        missing_points=[
+            str(point).strip()
+            for point in decision_payload.get("missing_points", [])
+            if isinstance(point, str) and str(point).strip()
+        ],
+    )
+
+
+def _build_offline_pairwise_result(
+    *,
+    decision_payload: dict[str, object],
+    model: str,
+) -> SummaryComparePairwiseJudgeResult:
+    """將離線 decision 轉成 benchmark pairwise judge 結果。
+
+    參數：
+    - `decision_payload`：離線回填結果。
+    - `model`：judge 標籤。
+
+    回傳：
+    - `SummaryComparePairwiseJudgeResult`：pairwise judge 結果。
+    """
+
+    verdict = str(decision_payload.get("verdict", "reference")).strip()
+    if verdict not in {"candidate", "reference", "tie"}:
+        verdict = "reference"
+    score = 1.0 if verdict == "candidate" else 0.5 if verdict == "tie" else 0.0
+    return SummaryComparePairwiseJudgeResult(
+        model=model,
+        verdict=verdict,  # type: ignore[arg-type]
+        rationale=str(decision_payload.get("rationale", "")).strip(),
+        score=score,
     )
 
 

@@ -110,7 +110,7 @@ Current real summary/compare suite:
 
 | Suite | Packages | Notes |
 | --- | --- | --- |
-| `summary-compare-real-curated-v1` | `QMSum`, `Multi-News`, `CoCoTrip`, `LCSTS`, `CNewSum` | Only real-dataset extracted packages are kept. The previous handcrafted pilot scores are retired and should not be compared against this suite. |
+| `summary-compare-real-curated-v1` | `QMSum`, `Multi-News`, `CoCoTrip`, `LCSTS`, `CNewSum` | Only real-dataset extracted packages are kept. The previous handcrafted pilot scores are retired and should not be compared against this suite. This suite is the current tuning/observability baseline, not the product gate. |
 
 Current real summary/compare package scores:
 
@@ -129,6 +129,14 @@ Canonical current suite baseline:
 | `summary_benchmark_score` | `0.671431` |
 | `compare_benchmark_score` | `0.000000` |
 
+Interpretation boundary for these numbers:
+
+- canonical suite artifacts: `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`, `artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`, `artifacts/lcsts-news-summary-curated-pilot-v1-run.json`, `artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`, `artifacts/cocotrip-compare-curated-pilot-v1-run.json`, and `artifacts/cocotrip-rerun-subset.json`
+- use this package-level consolidated suite baseline for future summary/compare before/after comparisons
+- keep `phase8a-summary-compare-v1` as the only product gate
+- do not claim that the repo already has a frozen numeric checkpoint baseline for `phase8a-summary-compare-v1` before an explicit rerun fixes one
+- do not treat a newly generated aggregate suite artifact as the new baseline unless the docs explicitly promote it
+
 Current benchmark interpretation at the README level:
 
 - rerank is already a real optimization layer in the current stack, not just a planned box in the pipeline; the system uses parent-level rerank with cost guardrails and traceable fallback behavior
@@ -137,7 +145,7 @@ Current benchmark interpretation at the README level:
 - `DRCD 100` is the Traditional Chinese rerank sentinel
 - `DuReader-robust 100` and `MS MARCO 100` are near-ceiling sanity checks
 
-For the full benchmark analysis, see [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md).
+For the full benchmark analysis, see [`docs/retrieval-benchmark-strategy-analysis.md`](docs/retrieval-benchmark-strategy-analysis.md). For rerun procedure and artifact interpretation, see [`docs/summary-compare-benchmark-rerun-guide.md`](docs/summary-compare-benchmark-rerun-guide.md).
 
 ## How To Start
 

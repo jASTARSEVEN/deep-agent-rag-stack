@@ -75,7 +75,7 @@ def test_deepagents_runtime_factory_returns_real_deepagents_runtime() -> None:
 
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=1024,
         CHAT_TIMEOUT_SECONDS=60,
         OPENAI_API_KEY="test-key",
@@ -153,14 +153,14 @@ def test_deepagents_runtime_exposes_single_retrieval_tool_without_keyword_gate(m
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", fake_create_deep_agent)
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -256,6 +256,7 @@ def test_build_answer_blocks_from_markers_parses_context_labels() -> None:
     assert [item.context_label for item in answer_blocks[1].display_citations] == ["C1", "C2"]
 
 
+
 def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch) -> None:
     """Deep Agents runtime 應把 LangGraph thread 累積的 messages 傳給主 agent。
 
@@ -310,14 +311,14 @@ def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent())
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -387,7 +388,7 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
             trace={"retrieval": {"query": kwargs["question"]}, "assembler": {"contexts": []}},
         )
 
-    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_tool)
 
     class FakeAgent:
         """模擬主 agent，並主動呼叫 retrieval tool。"""
@@ -439,14 +440,14 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", fake_create_deep_agent)
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -581,18 +582,18 @@ def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch)
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
     monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
-    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_tool)
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", fake_create_deep_agent)
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -623,7 +624,7 @@ def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch)
     assert result_true["trace"]["agent"]["thinking_mode"] is True
     assert result_false["trace"]["agent"]["thinking_mode_ignored"] is False
     assert result_true["trace"]["agent"]["thinking_mode_ignored"] is True
-    assert captured_llm_kwargs[0]["reasoning_effort"] == "minimal"
+    assert "reasoning_effort" not in captured_llm_kwargs[0]
     assert all(item == {"messages": [{"role": "user", "content": "Summarize the document"}]} or item == {"messages": [{"role": "user", "content": "Summarize the section"}]} for item in captured_inputs)
 
 
@@ -748,7 +749,7 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
             },
         )
 
-    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_tool)
 
     class FakeAgent:
         """模擬主 agent，並主動呼叫 retrieval tool。"""
@@ -773,14 +774,14 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -925,7 +926,7 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             },
         )
 
-    monkeypatch.setattr("app.chat.agent.runtime.retrieve_area_contexts_tool", fake_retrieve_area_contexts_tool)
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_tool)
 
     class FakeAgent:
         """模擬主 agent，並擷取 tool 回傳字串。"""
@@ -950,14 +951,14 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -981,6 +982,203 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             "assembled_text": "這是一段組裝後的內容。",
         }
     ]
+
+
+def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatch) -> None:
+    """compare query 餵給 LLM 的 tool payload 應包含逐文件比較契約。"""
+
+    captured_tool_result: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    @dataclass
+    class FakeCitation:
+        """模擬 citation 的最小 `model_dump` 介面。"""
+
+        context_index: int
+        context_label: str
+        document_id: str
+        document_name: str
+        parent_chunk_id: str | None
+        child_chunk_ids: list[str]
+        heading: str | None
+        structure_kind: str
+        start_offset: int
+        end_offset: int
+        excerpt: str
+        source: str
+        truncated: bool
+        page_start: int | None = None
+        page_end: int | None = None
+        regions: list[dict[str, object]] | None = None
+
+        def model_dump(self, *, mode: str = "json") -> dict[str, object]:
+            """回傳與 Pydantic model 類似的 dump 結果。
+
+            參數：
+            - `mode`：序列化模式。
+
+            回傳：
+            - `dict[str, object]`：序列化後字典。
+            """
+
+            assert mode == "json"
+            return {
+                "context_index": self.context_index,
+                "context_label": self.context_label,
+                "document_id": self.document_id,
+                "document_name": self.document_name,
+                "parent_chunk_id": self.parent_chunk_id,
+                "child_chunk_ids": self.child_chunk_ids,
+                "heading": self.heading,
+                "structure_kind": self.structure_kind,
+                "start_offset": self.start_offset,
+                "end_offset": self.end_offset,
+                "excerpt": self.excerpt,
+                "source": self.source,
+                "truncated": self.truncated,
+                "page_start": self.page_start,
+                "page_end": self.page_end,
+                "regions": self.regions or [],
+            }
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+
+    def fake_retrieve_area_contexts_internal(**kwargs):
+        """回傳 compare query 的最小 retrieval 結果。"""
+
+        return SimpleNamespace(
+            assembled_contexts=[
+                AssembledContext(
+                    document_id="doc-1",
+                    parent_chunk_id="parent-1",
+                    chunk_ids=["child-1"],
+                    structure_kind=ChunkStructureKind.text,
+                    heading="Approval Flow",
+                    assembled_text="Domestic travel needs manager approval.",
+                    source="travel-policy.md",
+                    start_offset=0,
+                    end_offset=40,
+                ),
+                AssembledContext(
+                    document_id="doc-2",
+                    parent_chunk_id="parent-2",
+                    chunk_ids=["child-2"],
+                    structure_kind=ChunkStructureKind.text,
+                    heading="Remote Work",
+                    assembled_text="Employees may work remotely up to three days per week.",
+                    source="employee-handbook.md",
+                    start_offset=0,
+                    end_offset=56,
+                ),
+            ],
+            citations=[
+                FakeCitation(
+                    context_index=0,
+                    context_label="C1",
+                    document_id="doc-1",
+                    document_name="travel-policy.md",
+                    parent_chunk_id="parent-1",
+                    child_chunk_ids=["child-1"],
+                    heading="Approval Flow",
+                    structure_kind="text",
+                    start_offset=0,
+                    end_offset=40,
+                    excerpt="Domestic travel needs manager approval.",
+                    source="hybrid",
+                    truncated=False,
+                ),
+                FakeCitation(
+                    context_index=1,
+                    context_label="C2",
+                    document_id="doc-2",
+                    document_name="employee-handbook.md",
+                    parent_chunk_id="parent-2",
+                    child_chunk_ids=["child-2"],
+                    heading="Remote Work",
+                    structure_kind="text",
+                    start_offset=0,
+                    end_offset=56,
+                    excerpt="Employees may work remotely up to three days per week.",
+                    source="hybrid",
+                    truncated=False,
+                ),
+            ],
+            trace={
+                "retrieval": {"query": kwargs["question"], "query_type": "cross_document_compare"},
+                "assembler": {"contexts": [{"context_index": 0, "truncated": False}, {"context_index": 1, "truncated": False}]},
+            },
+        )
+
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
+
+    class FakeAgent:
+        """模擬主 agent，並擷取 tool 回傳字串。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。"""
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先執行 retrieval，再回傳固定回答。"""
+
+            assert stream_mode == ["messages", "values"]
+            captured_tool_result.update(json.loads(self.tools[0]()))
+            return iter(
+                [
+                    ("messages", ({"content": "這是比較回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是比較回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5.4-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5.4-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+
+    provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="Compare the travel policy and employee handbook.",
+    )
+
+    assert captured_tool_result["response_contract"] == {
+        "task_type": "cross_document_compare",
+        "required_document_names": ["travel-policy.md", "employee-handbook.md"],
+        "compare_answer_template": [
+            "先逐一說明每份文件的直接證據與立場。",
+            "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
+            "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
+        ],
+    }
 
 
 def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contract(
@@ -1129,7 +1327,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
@@ -1137,7 +1335,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     settings = app_settings.model_copy(
         update={
             "chat_provider": "deepagents",
-            "chat_model": "gpt-5-mini",
+            "chat_model": "gpt-5.4-mini",
             "chat_max_output_tokens": 512,
             "chat_timeout_seconds": 30,
             "openai_api_key": "test-key",
@@ -1374,14 +1572,14 @@ def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkey
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent())
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",
@@ -1406,14 +1604,14 @@ def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkey
             "deepagents",
             "langgraph",
             "chat_provider:deepagents",
-            "chat_model:gpt-5-mini",
+            "chat_model:gpt-5.4-mini",
         ],
         "metadata": {
             "area_id": "area-1",
             "principal_sub": "user-1",
             "principal_groups_count": 1,
             "chat_provider": "deepagents",
-            "chat_model": "gpt-5-mini",
+            "chat_model": "gpt-5.4-mini",
             "question_length": len("請根據文件回答 reader policy"),
         },
     }
@@ -1448,14 +1646,14 @@ def test_deepagents_runtime_rejects_langsmith_tracing_without_api_key(monkeypatc
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
 
     provider = DeepAgentsChatRuntime(
-        model="gpt-5-mini",
+        model="gpt-5.4-mini",
         api_key="test-key",
         max_output_tokens=512,
         timeout_seconds=30,
     )
     settings = AppSettings(
         CHAT_PROVIDER="deepagents",
-        CHAT_MODEL="gpt-5-mini",
+        CHAT_MODEL="gpt-5.4-mini",
         CHAT_MAX_OUTPUT_TOKENS=512,
         CHAT_TIMEOUT_SECONDS=30,
         OPENAI_API_KEY="test-key",

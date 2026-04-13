@@ -32,6 +32,11 @@ from app.schemas.summary_compare_checkpoint import (
     SummaryCompareResolvedGoldSpan,
     SummaryCompareRunMetadata,
 )
+from app.schemas.summary_compare_offline_judge import (
+    SummaryCompareOfflineJudgeDecision,
+    SummaryCompareOfflineJudgePacket,
+)
+from app.services.summary_compare_offline_judge import load_offline_judge_decisions, load_offline_judge_packets
 
 
 # checkpoint dataset manifest 檔名。
@@ -108,6 +113,20 @@ class SummaryCompareExecution:
     latency_seconds: float
     # 是否觸發 timeout。
     timed_out: bool
+
+
+@dataclass(slots=True)
+class _CheckpointEvaluationContext:
+    """單題 checkpoint 在 judge 前的上下文。"""
+
+    # 單題結果 payload，尚未包含 judge_result。
+    base_payload: dict[str, object]
+    # 若已有可直接使用的 judge 結果，則不需外部 judge。
+    seeded_judge_result: SummaryCompareJudgeResult | None
+    # 若需外部 judge，保存 system prompt。
+    system_prompt: str | None
+    # 若需外部 judge，保存 user prompt。
+    user_prompt: str | None
 
 
 class OpenAISummaryCompareJudge:
@@ -406,42 +425,148 @@ def run_summary_compare_checkpoint(
 
     per_item_results.sort(key=lambda result: item_index_by_id[result.item_id])
 
-    aggregate_metrics = _build_aggregate_metrics(per_item_results=per_item_results)
-    gate_results = _build_gate_results(settings=settings, aggregate_metrics=aggregate_metrics, per_item_results=per_item_results)
-    hard_blocker_failures = [
-        {"item_id": item.item_id, "reasons": item.hard_blocker_failures}
-        for item in per_item_results
-        if item.hard_blocker_failures
-    ]
-    failure_category_counts = _build_failure_category_counts(per_item_results=per_item_results)
-    report = SummaryCompareCheckpointReport(
-        passed=all(metric.passed for metric in gate_results),
-        run_metadata=SummaryCompareRunMetadata(
-            benchmark_name=manifest.benchmark_name,
-            benchmark_version=manifest.version,
-            area_id=area_id,
-            actor_sub=actor_sub,
-            judge_model=resolved_judge_model,
-            thinking_mode=thinking_mode,
-            answer_path="deepagents_unified",
-            generated_at=datetime.now(UTC),
-            item_count=len(per_item_results),
-        ),
-        aggregate_metrics=aggregate_metrics,
-        judge_scores={
-            "completeness": aggregate_metrics.avg_completeness,
-            "faithfulness_to_citations": aggregate_metrics.avg_faithfulness_to_citations,
-            "structure_quality": aggregate_metrics.avg_structure_quality,
-            "compare_coverage": aggregate_metrics.avg_compare_coverage,
-            "overall": aggregate_metrics.avg_overall_score,
-        },
-        gate_results=gate_results,
+    return _build_checkpoint_report(
+        manifest=manifest,
+        settings=settings,
+        area_id=area_id,
+        actor_sub=actor_sub,
+        thinking_mode=thinking_mode,
+        judge_model=resolved_judge_model,
         per_item_results=per_item_results,
-        hard_blocker_failures=hard_blocker_failures,
-        failure_category_counts=failure_category_counts,
-        recommendations=_build_recommendations(failure_category_counts=failure_category_counts),
     )
-    return report
+
+
+def export_summary_compare_checkpoint_offline_packets(
+    *,
+    session: Session,
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    dataset_dir: Path,
+    thinking_mode: bool = True,
+    judge_label: str = "offline-codex",
+) -> tuple[SummaryCompareCheckpointManifest, list[SummaryCompareOfflineJudgePacket]]:
+    """執行 checkpoint runtime 並匯出離線 judge packets。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area 識別碼。
+    - `actor_sub`：以哪個使用者身分執行。
+    - `dataset_dir`：checkpoint dataset 目錄。
+    - `thinking_mode`：是否保留 thinking mode metadata。
+    - `judge_label`：離線 judge 顯示標籤。
+
+    回傳：
+    - `tuple[SummaryCompareCheckpointManifest, list[SummaryCompareOfflineJudgePacket]]`：manifest 與 packet 清單。
+    """
+
+    manifest, items = load_summary_compare_checkpoint_dataset(dataset_dir=dataset_dir)
+    principal = CurrentPrincipal(sub=actor_sub, groups=())
+    ready_documents = _load_ready_documents_by_name(session=session, area_id=area_id)
+    session_factory = sessionmaker(
+        bind=session.get_bind(),
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        class_=Session,
+    )
+    packets: list[SummaryCompareOfflineJudgePacket] = []
+    for item in items:
+        context = _evaluate_checkpoint_item_context(
+            session_factory=session_factory,
+            settings=settings,
+            principal=principal,
+            area_id=area_id,
+            item=item,
+            thinking_mode=thinking_mode,
+            ready_documents=ready_documents,
+            judge_model=judge_label,
+        )
+        packets.append(
+            SummaryCompareOfflineJudgePacket(
+                packet_id=item.id,
+                judge_kind="checkpoint_rubric",
+                benchmark_name=manifest.benchmark_name,
+                item_id=item.id,
+                model_label=judge_label,
+                system_prompt=context.system_prompt or "seeded-result",
+                user_prompt=context.user_prompt or "seeded-result",
+                context_payload=context.base_payload,
+                decision_required=context.seeded_judge_result is None,
+                seeded_result=(
+                    context.seeded_judge_result.model_dump(mode="json")
+                    if context.seeded_judge_result is not None
+                    else None
+                ),
+            )
+        )
+    return manifest, packets
+
+
+def run_summary_compare_checkpoint_from_offline_packets(
+    *,
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    dataset_dir: Path,
+    thinking_mode: bool,
+    judge_packets_path: Path,
+    judge_results_path: Path,
+    judge_label: str = "offline-codex",
+) -> SummaryCompareCheckpointReport:
+    """從離線 judge packet 與回填結果產生正式 checkpoint report。
+
+    參數：
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area 識別碼。
+    - `actor_sub`：執行者 sub。
+    - `dataset_dir`：checkpoint dataset 目錄。
+    - `thinking_mode`：本輪是否保留 thinking mode metadata。
+    - `judge_packets_path`：先前匯出的 packet JSONL。
+    - `judge_results_path`：人工 / Codex 回填結果 JSONL。
+    - `judge_label`：預設離線 judge 標籤。
+
+    回傳：
+    - `SummaryCompareCheckpointReport`：完整 checkpoint report。
+    """
+
+    manifest, items = load_summary_compare_checkpoint_dataset(dataset_dir=dataset_dir)
+    packets = load_offline_judge_packets(packet_path=judge_packets_path)
+    decisions = load_offline_judge_decisions(decision_path=judge_results_path)
+    expected_item_ids = {item.id for item in items}
+    per_item_results: list[SummaryComparePerItemResult] = []
+    seen_item_ids: set[str] = set()
+    for packet in packets:
+        if packet.item_id not in expected_item_ids:
+            raise ValueError(f"離線 judge packet 含未知 item_id：{packet.item_id}")
+        seen_item_ids.add(packet.item_id)
+        if packet.seeded_result is not None:
+            judge_result = SummaryCompareJudgeResult.model_validate(packet.seeded_result)
+        else:
+            decision = decisions.get(packet.packet_id)
+            if decision is None:
+                raise ValueError(f"缺少離線 judge decision：{packet.packet_id}")
+            judge_result = _build_offline_checkpoint_judge_result(
+                packet=packet,
+                decision_payload=decision.result,
+                model=decision.model or judge_label,
+            )
+        item_payload = dict(packet.context_payload)
+        item_payload["judge_result"] = judge_result.model_dump(mode="json")
+        per_item_results.append(SummaryComparePerItemResult.model_validate(item_payload))
+    if seen_item_ids != expected_item_ids:
+        missing_item_ids = sorted(expected_item_ids - seen_item_ids)
+        raise ValueError(f"離線 judge packet 缺少題目：{', '.join(missing_item_ids)}")
+    return _build_checkpoint_report(
+        manifest=manifest,
+        settings=settings,
+        area_id=area_id,
+        actor_sub=actor_sub,
+        thinking_mode=thinking_mode,
+        judge_model=judge_label,
+        per_item_results=per_item_results,
+    )
 
 
 def _run_single_checkpoint_item(
@@ -473,6 +598,56 @@ def _run_single_checkpoint_item(
     - `SummaryComparePerItemResult`：單題完整結果。
     """
 
+    context = _evaluate_checkpoint_item_context(
+        session_factory=session_factory,
+        settings=settings,
+        principal=principal,
+        area_id=area_id,
+        item=item,
+        thinking_mode=thinking_mode,
+        ready_documents=ready_documents,
+        judge_model=judge_model,
+    )
+    judge_result = context.seeded_judge_result
+    if judge_result is None:
+        judge_result = judge.judge(
+            item=item,
+            answer=str(context.base_payload["answer"]),
+            citations=list(context.base_payload["citations"]),
+            trace=dict(context.base_payload["trace"]),
+        )
+    item_payload = dict(context.base_payload)
+    item_payload["judge_result"] = judge_result.model_dump(mode="json")
+    return SummaryComparePerItemResult.model_validate(item_payload)
+
+
+def _evaluate_checkpoint_item_context(
+    *,
+    session_factory: sessionmaker[Session],
+    settings: AppSettings,
+    principal: CurrentPrincipal,
+    area_id: str,
+    item: SummaryCompareCheckpointItem,
+    thinking_mode: bool,
+    ready_documents: dict[str, Document],
+    judge_model: str,
+) -> _CheckpointEvaluationContext:
+    """建立單題 checkpoint 在 judge 前的上下文。
+
+    參數：
+    - `session_factory`：thread-local session factory。
+    - `settings`：應用程式設定。
+    - `principal`：執行者 principal。
+    - `area_id`：目標 area。
+    - `item`：checkpoint 題目。
+    - `thinking_mode`：是否保留 thinking mode metadata。
+    - `ready_documents`：ready 文件映射。
+    - `judge_model`：judge 標籤或模型名稱。
+
+    回傳：
+    - `_CheckpointEvaluationContext`：judge 前上下文與可選 seeded result。
+    """
+
     with session_factory() as item_session:
         execution_started_at = time.perf_counter()
         hard_blocker_failures: list[str] = []
@@ -495,28 +670,36 @@ def _run_single_checkpoint_item(
                 timed_out=False,
             )
             hard_blocker_failures.append(f"runtime_error:{type(exc).__name__}")
-            judge_result = _build_runtime_error_judge_result(model=judge_model, error_message=str(exc), item=item)
-            return SummaryComparePerItemResult(
-                item_id=item.id,
-                language=item.language,
-                question=item.question,
-                answer="",
-                answer_blocks=[],
-                citations=[],
-                trace={},
-                actual_query_type=None,
-                actual_summary_strategy=None,
-                task_type_matched=False,
-                summary_strategy_matched=False,
-                required_document_coverage=0.0,
-                section_coverage=0.0,
-                citation_coverage=0.0,
-                fallback_triggered=False,
-                latency_seconds=execution.latency_seconds,
-                total_tokens=0,
-                resolved_gold_spans=[],
-                hard_blocker_failures=hard_blocker_failures,
-                judge_result=judge_result,
+            base_payload = {
+                "item_id": item.id,
+                "language": item.language.value,
+                "question": item.question,
+                "answer": "",
+                "answer_blocks": [],
+                "citations": [],
+                "trace": {},
+                "actual_query_type": None,
+                "actual_summary_strategy": None,
+                "task_type_matched": False,
+                "summary_strategy_matched": False,
+                "required_document_coverage": 0.0,
+                "section_coverage": 0.0,
+                "citation_coverage": 0.0,
+                "fallback_triggered": False,
+                "latency_seconds": execution.latency_seconds,
+                "total_tokens": 0,
+                "resolved_gold_spans": [],
+                "hard_blocker_failures": hard_blocker_failures,
+            }
+            return _CheckpointEvaluationContext(
+                base_payload=base_payload,
+                seeded_judge_result=_build_runtime_error_judge_result(
+                    model=judge_model,
+                    error_message=str(exc),
+                    item=item,
+                ),
+                system_prompt=None,
+                user_prompt=None,
             )
 
         trace = execution.trace
@@ -552,6 +735,10 @@ def _run_single_checkpoint_item(
             expected_document_names=item.expected_document_names,
             citations=execution.citations,
         )
+        missing_required_document_names = _collect_missing_required_document_names(
+            expected_document_names=item.expected_document_names,
+            citations=execution.citations,
+        )
         if required_document_coverage < 1.0:
             hard_blocker_failures.append("required_document_not_cited")
 
@@ -577,35 +764,140 @@ def _run_single_checkpoint_item(
         if item.allows_insufficient_evidence and not _answer_mentions_insufficient_evidence(execution.answer):
             hard_blocker_failures.append("insufficient_evidence_not_acknowledged")
 
-        judge_result = judge.judge(
+        system_prompt, user_prompt = build_summary_compare_judge_prompt(
             item=item,
             answer=execution.answer,
             citations=execution.citations,
             trace=trace,
         )
-
-        return SummaryComparePerItemResult(
-            item_id=item.id,
-            language=item.language,
-            question=item.question,
-            answer=execution.answer,
-            answer_blocks=execution.answer_blocks,
-            citations=execution.citations,
-            trace=trace,
-            actual_query_type=actual_query_type,
-            actual_summary_strategy=actual_summary_strategy,
-            task_type_matched=task_type_matched,
-            summary_strategy_matched=summary_strategy_matched,
-            required_document_coverage=required_document_coverage,
-            section_coverage=section_coverage,
-            citation_coverage=citation_coverage,
-            fallback_triggered=fallback_triggered,
-            latency_seconds=execution.latency_seconds,
-            total_tokens=total_tokens,
-            resolved_gold_spans=resolved_gold_spans,
-            hard_blocker_failures=sorted(set(hard_blocker_failures)),
-            judge_result=judge_result,
+        return _CheckpointEvaluationContext(
+            base_payload={
+                "item_id": item.id,
+                "language": item.language.value,
+                "question": item.question,
+                "answer": execution.answer,
+                "answer_blocks": execution.answer_blocks,
+                "citations": execution.citations,
+                "trace": trace,
+                "actual_query_type": actual_query_type,
+                "actual_summary_strategy": actual_summary_strategy,
+                "task_type_matched": task_type_matched,
+                "summary_strategy_matched": summary_strategy_matched,
+                "required_document_coverage": required_document_coverage,
+                "missing_required_document_names": missing_required_document_names,
+                "section_coverage": section_coverage,
+                "citation_coverage": citation_coverage,
+                "fallback_triggered": fallback_triggered,
+                "latency_seconds": execution.latency_seconds,
+                "total_tokens": total_tokens,
+                "resolved_gold_spans": [span.model_dump(mode="json") for span in resolved_gold_spans],
+                "hard_blocker_failures": sorted(set(hard_blocker_failures)),
+            },
+            seeded_judge_result=None,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
         )
+
+
+def _build_checkpoint_report(
+    *,
+    manifest: SummaryCompareCheckpointManifest,
+    settings: AppSettings,
+    area_id: str,
+    actor_sub: str,
+    thinking_mode: bool,
+    judge_model: str,
+    per_item_results: list[SummaryComparePerItemResult],
+) -> SummaryCompareCheckpointReport:
+    """依單題結果建立正式 checkpoint report。
+
+    參數：
+    - `manifest`：checkpoint manifest。
+    - `settings`：應用程式設定。
+    - `area_id`：目標 area。
+    - `actor_sub`：執行者 sub。
+    - `thinking_mode`：是否保留 thinking mode metadata。
+    - `judge_model`：本輪 judge 標籤。
+    - `per_item_results`：所有單題結果。
+
+    回傳：
+    - `SummaryCompareCheckpointReport`：完整 checkpoint report。
+    """
+
+    aggregate_metrics = _build_aggregate_metrics(per_item_results=per_item_results)
+    gate_results = _build_gate_results(settings=settings, aggregate_metrics=aggregate_metrics, per_item_results=per_item_results)
+    hard_blocker_failures = [
+        {"item_id": item.item_id, "reasons": item.hard_blocker_failures}
+        for item in per_item_results
+        if item.hard_blocker_failures
+    ]
+    failure_category_counts = _build_failure_category_counts(per_item_results=per_item_results)
+    return SummaryCompareCheckpointReport(
+        passed=all(metric.passed for metric in gate_results),
+        run_metadata=SummaryCompareRunMetadata(
+            benchmark_name=manifest.benchmark_name,
+            benchmark_version=manifest.version,
+            area_id=area_id,
+            actor_sub=actor_sub,
+            judge_model=judge_model,
+            thinking_mode=thinking_mode,
+            answer_path="deepagents_unified",
+            generated_at=datetime.now(UTC),
+            item_count=len(per_item_results),
+        ),
+        aggregate_metrics=aggregate_metrics,
+        judge_scores={
+            "completeness": aggregate_metrics.avg_completeness,
+            "faithfulness_to_citations": aggregate_metrics.avg_faithfulness_to_citations,
+            "structure_quality": aggregate_metrics.avg_structure_quality,
+            "compare_coverage": aggregate_metrics.avg_compare_coverage,
+            "overall": aggregate_metrics.avg_overall_score,
+        },
+        gate_results=gate_results,
+        per_item_results=per_item_results,
+        hard_blocker_failures=hard_blocker_failures,
+        failure_category_counts=failure_category_counts,
+        recommendations=_build_recommendations(failure_category_counts=failure_category_counts),
+    )
+
+
+def _build_offline_checkpoint_judge_result(
+    *,
+    packet: SummaryCompareOfflineJudgePacket,
+    decision_payload: dict[str, object],
+    model: str,
+) -> SummaryCompareJudgeResult:
+    """將離線 decision payload 轉成 checkpoint judge 結果。
+
+    參數：
+    - `packet`：對應的離線 judge packet。
+    - `decision_payload`：人工 / Codex 回填結果。
+    - `model`：要寫入 report 的 judge 標籤。
+
+    回傳：
+    - `SummaryCompareJudgeResult`：可直接放進 report 的 judge 結果。
+    """
+
+    default_coverage_dimension = (
+        "compare_coverage"
+        if packet.context_payload.get("actual_query_type") == "cross_document_compare"
+        else "section_focus_accuracy"
+    )
+    scores = SummaryCompareJudgeScores.model_validate(decision_payload.get("scores", {}))
+    return SummaryCompareJudgeResult(
+        model=model,
+        scores=scores,
+        coverage_dimension_name=str(
+            decision_payload.get("coverage_dimension_name", default_coverage_dimension)
+        ).strip()
+        or default_coverage_dimension,
+        rationale=str(decision_payload.get("rationale", "")).strip(),
+        missing_points=[
+            str(point).strip()
+            for point in decision_payload.get("missing_points", [])
+            if isinstance(point, str) and str(point).strip()
+        ],
+    )
 
 
 def execute_summary_compare_item(
@@ -897,6 +1189,29 @@ def _compute_required_document_coverage(
     }
     matched = sum(1 for file_name in expected_document_names if file_name in cited_document_names)
     return round(matched / max(1, len(expected_document_names)), 4)
+
+
+def _collect_missing_required_document_names(
+    *,
+    expected_document_names: list[str],
+    citations: list[dict[str, object]],
+) -> list[str]:
+    """列出尚未出現在 citations 中的必需文件名稱。
+
+    參數：
+    - `expected_document_names`：題目要求至少應引用到的文件名稱。
+    - `citations`：runtime citations。
+
+    回傳：
+    - `list[str]`：依 fixture 原順序保留的缺失文件名稱清單。
+    """
+
+    cited_document_names = {
+        str(citation.get("document_name", "")).strip()
+        for citation in citations
+        if str(citation.get("document_name", "")).strip()
+    }
+    return [document_name for document_name in expected_document_names if document_name not in cited_document_names]
 
 
 def _compute_section_coverage(
