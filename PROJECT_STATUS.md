@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Post-Phase 8A — Summary/Compare Benchmark Re-Baselining (In Progress)`
+當前主階段：`Post-Phase 8A — Summary/Compare Benchmark Baseline Consolidation (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -92,11 +92,14 @@
 - `Phase 8A` 已固定 CLI-first checkpoint：`python -m app.scripts.run_summary_compare_checkpoint`；其職責是以固定 dataset 驗證 unified answer path，而不是延續 retrieval-only benchmark
 - 已新增雙語 summary/compare benchmark scoring lane：`python -m app.scripts.run_summary_compare_benchmark`
 - 目前正式 tuning / observability suite 為 `benchmarks/summary-compare-real-curated-v1`，只保留真實資料集提取版 packages：`QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum`
+- `summary-compare-real-curated-v1` 的 current canonical baseline 已固定為 package-level consolidated baseline，而不是單一 aggregate suite artifact；正式採信來源為 `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`、`artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`、`artifacts/lcsts-news-summary-curated-pilot-v1-run.json`、`artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`、`artifacts/cocotrip-compare-curated-pilot-v1-run.json` 與 `artifacts/cocotrip-rerun-subset.json`
+- 目前正式 suite baseline 固定為 `summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
 - summary/compare benchmark report 已固定輸出 `summary_benchmark_score`、`compare_benchmark_score`、`per_dataset_scores`、`task_family_scores`、`language_rollups`、`benchmark_overview` 與 `baseline_compare`
 - summary/compare metric registry 已落地；主分數目前為 `bert_score_f1` 與 `pairwise_rubric_judge_win_rate`
 - benchmark/test runner 允許 `explicit_document_ids`，但 public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override
 - `Phase 8B` enrichment lane 已取消並移除；後續不得重新引入已刪除的 enrichment schema、query-time merge lane 或查詢改寫 lane
-- `Phase 8C` 尚未開始；目前只保留為候選路線，且 synopsis 若未來接回，也只能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
+- `Phase 8C` 尚未開始；本輪只固定 canonical baseline，不做 go/no-go 判斷，且 synopsis 若未來接回，也只能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
+- `phase8a-summary-compare-v1` 仍保留唯一 product gate 身分，但本輪不虛構 checkpoint numeric baseline；repo 目前只固定 gate dataset 與 runner contract，尚未在這次 consolidation pass 內凍結單一可追溯的 checkpoint artifact 分數
 - 已於 `2026-04-05` 將長期 benchmark 文件收斂為七個正式 dataset：六個 external `100Q` package 加上自家 `tw-insurance-rag-benchmark-v1`；舊的 `UDA` / `QASPER` 小樣本 package 已移出 current benchmark 集合。目前 `QASPER 100`、`UDA 100` 與 `DRCD 100` 的 benchmark contract 已改為使用 gold span `document_id` 作為指定文件 scope，避免把原始資料集的文件上下文誤當成 area-wide ambiguous query。
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為七資料集 current 基線，並把 `External 100Q` 壓力測試集合維持為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：指定文件後 `QASPER 100` 最新 mainline assembled `Recall@10=0.9200`、`nDCG@10=0.6105`、`MRR@10=0.5127`；`DRCD 100` 指定文件後 assembled `Recall@10=1.0000`、`nDCG@10=0.8894`、`MRR@10=0.8517`；`UDA 100` 指定文件後 latest mainline assembled `Recall@10=0.7900`、`nDCG@10=0.6492`、`MRR@10=0.6044`。`NQ` 仍是 assembler 壓力測試 lane，`DuReader-robust` 與 `MS MARCO` 維持 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留舊版 `QASPER + UDA` 詳細 miss 清單
@@ -302,22 +305,23 @@
 ## 目前階段重點
 
 ### Current Focus
-- `Phase 8B` enrichment lane 已取消；目前 focus 先改為 summary/compare benchmark re-baseline，而不是直接開始新的 query-time runtime lane
-- 新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後，需先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，重新確認目前 unified Deep Agents 主線的 ceiling、退化點與 latency 成本
-- `Phase 8C` 路線仍保留為 agentic evidence-seeking loop 候選，但只有在 rerun 後仍清楚顯示 coverage / faithfulness 問題適合用 loop 解決時才啟動
+- `Phase 8B` enrichment lane 已取消；目前 focus 先改為整併既有 summary/compare baseline artifact，暫不重跑 benchmark，也不直接開始新的 query-time runtime lane
+- summary/compare current baseline 已先收斂為 package-level consolidated baseline：`summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
+- 先把 canonical baseline 文件定稿，避免後續 before / after 比較基準漂移
+- `Phase 8C` 路線仍保留為 agentic evidence-seeking loop 候選，但只有在下一輪真的要做 prompt/runtime 調整前補跑 checkpoint / suite 後，才重新判斷是否啟動
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
-- `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準，不再承載額外的舊決策敘事
+- `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準，不再承載額外的舊決策敘事；在未補跑前不宣稱已固定 numeric baseline
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，把新增 `QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum` 後的最新 summary/compare baseline 固定下來
-2. 先分析 rerun 結果，判斷主要缺口究竟是 compare answer quality、中文 summary 壓縮率、evidence contract，還是 agentic evidence-seeking 真能改善的 coverage 問題
-3. 只有在 rerun 仍顯示 loop 具明確 ROI 時，才設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
-4. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
-5. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+1. 先完成 summary/compare baseline 文件定稿，讓 `PROJECT_STATUS.md`、`ROADMAP.md`、README 與 benchmark 分析文件都只採信同一套 canonical baseline
+2. 若後續新增新的 suite aggregate artifact，必須先明確標示其是否 canonical；未被明確升格前，不得直接作 current baseline
+3. 若要開始下一輪 prompt / runtime 調整，先補跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，再用本輪已整併的 canonical suite baseline 做 before / after 比較
+4. 補跑後再判斷主要缺口究竟是 compare answer quality、中文 summary 壓縮率、evidence contract，還是 agentic evidence-seeking 真能改善的 coverage 問題
+5. 只有在新的 rerun 仍顯示 loop 具明確 ROI 時，才設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
 6. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
 
 ## 尚未開始的功能

@@ -122,6 +122,13 @@ Current real summary/compare package scores:
 | `cnewsum-news-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.621386` | `10` items, clean run |
 | `cocotrip-compare-curated-pilot-v1` | `compare` | `pairwise_rubric_judge_win_rate` | `0.000000` | package run had `2` judge failures, but rerunning the affected subset still kept the score at `0.0` |
 
+Canonical current suite baseline:
+
+| Score | Value |
+| --- | ---: |
+| `summary_benchmark_score` | `0.671431` |
+| `compare_benchmark_score` | `0.000000` |
+
 Current benchmark interpretation at the README level:
 
 - rerank is already a real optimization layer in the current stack, not just a planned box in the pipeline; the system uses parent-level rerank with cost guardrails and traceable fallback behavior

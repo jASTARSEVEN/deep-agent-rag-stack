@@ -1,4 +1,4 @@
-# Retrieval Benchmark Strategy Analysis（截至 2026-04-11）
+# Retrieval Benchmark Strategy Analysis（截至 2026-04-13）
 
 ## 文件目的
 
@@ -36,7 +36,9 @@
 
 ### 2026-04-13 真資料 suite 最新實跑分數
 
-本輪正式分數對應的 artifact 如下：
+本輪 current canonical baseline 採 package-level consolidated baseline，而不是單一 aggregate suite artifact。
+
+正式採信的 artifact 如下：
 
 - `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`
 - `artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`
@@ -91,8 +93,6 @@
 | `avg_overall_score` | supporting metric | `LLM judge rubric aggregate` | `project_contract` | 來自 supporting rubric judge 的四維平均值，不可取代主分數 |
 
 ### 舊分數狀態
-
-先前 `summary-compare-bilingual-curated-pilot-v1` 的分數，是在手工 curated package 上跑出的歷史結果。由於目前 suite 已切換成只保留真資料集提取版 package，舊分數不得再與新 suite 混讀，也不應再作為 release / tuning 依據。
 
 ## 2026-04-11 目前基線範圍
 

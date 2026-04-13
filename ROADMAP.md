@@ -240,8 +240,8 @@
 2. `Phase 8.1 ~ 8.3` 已完成，作為目前 `summary/compare` 與 `fact_lookup` 共用檢索骨架的基礎
 3. `Phase 8A` 已完成，固定目前的 unified `Deep Agents` answer path、checkpoint contract 與 benchmark 治理邊界
 4. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
-5. 未實現的 `Phase 8` 現在先聚焦 `summary/compare benchmark re-baseline`：新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後，先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`
-6. 只有在 rerun 後仍清楚顯示 coverage / faithfulness / compare quality / latency 問題適合用 agentic loop 解決時，才正式啟動 `Phase 8C`
+5. 未實現的 `Phase 8` 現在先聚焦 `summary/compare benchmark baseline consolidation`：先整併既有 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` package 分數，固定 `summary-compare-real-curated-v1` 的 canonical suite baseline，再決定何時補跑
+6. 只有在下一輪真的要做 prompt / runtime 調整前先補跑 checkpoint / suite，且 rerun 後仍清楚顯示 coverage / faithfulness / compare quality / latency 問題適合用 agentic loop 解決時，才正式啟動 `Phase 8C`
 7. `Phase 8C` 若啟動，synopsis 仍只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
 8. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
 9. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
@@ -586,8 +586,8 @@ MVP 組合：
 
 建議 rollout 順序：
 1. `phase8a-summary-compare-v1` 維持唯一正式 gate，不變
-2. 先固定 `summary-compare-real-curated-v1` 的五 package re-baseline，將 `QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum` 視為同一條 tuning / observability suite
-3. 再依 rerun 結果判斷下一輪最值得優先處理的是 `compare` 品質、中文 summary 壓縮率，或 latency / evidence contract 問題
+2. 先以 package-level consolidated baseline 定稿 `summary-compare-real-curated-v1`，將 `QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum` 視為同一條 tuning / observability suite
+3. 若要開始下一輪 prompt / runtime 調整，先補跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，再用已定稿的 canonical baseline 做 before / after 比較
 4. 只有在 suite rerun 仍指向同一類 summary/compare 缺口時，才進入 `Phase 8C` 的 agentic loop 實作
 
 補充：
@@ -618,7 +618,8 @@ MVP 組合：
 - 改善 `phase8a-summary-compare-v1` 中仍存在的 required document coverage、insufficient evidence acknowledgement 與 faithfulness 問題，盡量避免 p95 latency 與 token budget 繼續惡化 (latency僅提醒)。
 
 啟動前提：
-- 先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，把新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後的主線 benchmark baseline 固定下來。
+- 先完成 `summary-compare-real-curated-v1` 的 canonical baseline consolidation；目前正式採信的是 package-level consolidated baseline，而不是單一 aggregate suite artifact。
+- 若要正式啟動 `Phase 8C`，再先補跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，以 consolidated baseline 作為 before / after 比較基準。
 - rerun 報告必須先回答三件事：目前主要缺口是否真的集中在 agentic evidence-seeking 可解的 coverage / faithfulness 問題、是否其實是 compare answer quality 本身不足、以及 latency ceiling 是否已經讓多一步 loop 不划算。
 - 若 rerun 顯示 gap 主要來自 judge / dataset contract、compare answer formulation 或非 loop 類問題，則優先調整 benchmark 治理或 prompt / answer contract，不直接進入 8C runtime 實作。
 
@@ -660,4 +661,4 @@ MVP 組合：
 
 狀態：
 - `未開始`
-- `是否啟動以 rerun 後的 benchmark 證據為準`
+- `是否啟動以前置 baseline consolidation 完成後的 rerun 證據為準`
