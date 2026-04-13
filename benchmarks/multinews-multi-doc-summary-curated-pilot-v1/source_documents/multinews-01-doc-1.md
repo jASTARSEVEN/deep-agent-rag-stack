@@ -1,0 +1,47 @@
+GOP Eyes Gains As Voters In 11 States Pick Governors 
+ 
+ Enlarge this image toggle caption Jim Cole/AP Jim Cole/AP 
+ 
+ Voters in 11 states will pick their governors tonight, and Republicans appear on track to increase their numbers by at least one, with the potential to extend their hold to more than two-thirds of the nation's top state offices. 
+ 
+ Eight of the gubernatorial seats up for grabs are now held by Democrats; three are in Republican hands. Republicans currently hold 29 governorships, Democrats have 20, and Rhode Island's Gov. Lincoln Chafee is an Independent. 
+ 
+ Polls and race analysts suggest that only three of tonight's contests are considered competitive, all in states where incumbent Democratic governors aren't running again: Montana, New Hampshire and Washington. 
+ 
+ While those state races remain too close to call, Republicans are expected to wrest the North Carolina governorship from Democratic control, and to easily win GOP-held seats in Utah, North Dakota and Indiana. 
+ 
+ Democrats are likely to hold on to their seats in West Virginia and Missouri, and are expected to notch safe wins in races for seats they hold in Vermont and Delaware. 
+ 
+ Holding Sway On Health Care 
+ 
+ While the occupant of the governor's office is historically far less important than the party that controls the state legislature, top state officials in coming years are expected to wield significant influence in at least one major area. 
+ 
+ And that's health care, says political scientist Thad Kousser, co-author of The Power of American Governors. 
+ 
+ "No matter who wins the presidency, national politics is going to be stalemated on the Affordable Care Act," says Kousser, of the University of California, San Diego. 
+ 
+ A recent U.S. Supreme Court decision giving states the ability to opt out of the law's expansion of Medicaid, the federal insurance program for poor, disabled and elderly Americans, confers "incredible power" on the states and their governors, Kousser says. 
+ 
+ Just look at what happened when the Obama administration in 2010 offered federal stimulus money to states to begin building a high-speed rail network. Three Republican governors, including Rick Scott of Florida and Scott Walker of Wisconsin, rejected a share of the money citing debt and deficit concerns. 
+ 
+ "A [Mitt] Romney victory would dramatically empower Republican governors," Kousser says. 
+ 
+ State-By-State View 
+ 
+ North Carolina: One-term incumbent Democratic Gov. Beverly Perdue, the first woman to hold the state's top office, announced in January that she would not seek re-election after polls showed her with high disapproval ratings and trailing Republican candidate Pat McCrory. 
+ 
+ The seat is expected to be won by McCrory, a former Charlotte mayor, who is facing Perdue's lieutenant governor, Walter Dalton. McCrory lost a close race to Perdue in 2008, when then-presidential candidate Barack Obama became the first Democrat to win North Carolina in more than three decades. The Real Clear Politics average for the race has McCrory maintaining a 14.3 percentage point lead. 
+ 
+ Montana: Popular Democratic Gov. Brian Schweitzer — he won his last election with 65 percent of the vote — has reached his two-term limit. The state's Democratic Attorney General Steve Bullock is trying to keep the seat in his party's column by associating himself with Schweitzer's legacy. He's in a tough race with former two-term GOP Rep. Rick Hill. 
+ 
+ New Hampshire: Former Democratic state Sen. Maggie Hassan has also promised a continuation of the policies of her predecessor, retiring Democratic Gov. John Lynch. Her opponent is lawyer Ovide Lamontagne, a Tea Party conservative who ran unsuccessfully for governor in 1996 and for the U.S. Senate in 2010. The national parties have invested in the campaigns, which have focused on fiscal and women's health care issues. 
+ 
+ Washington: The state's governorship has been in Democratic hands for 32 years, and former U.S. Rep. Jay Inslee is in a dead-heat battle to keep it that way. His opponent is the state's Republican Attorney General Rob McKenna. McKenna has a proven ability to win statewide, but working in Inslee's favor are Obama's poll numbers. The Real Clear Politics average shows Obama with an average 13.6 percentage point lead over Romney; Inslee is leading McKenna by an average of 1 percentage point. 
+ 
+ Pretty Much Sure Things 
+ 
+ Republican Govs. Jack Dalrymple in North Dakota and Gary Herbert in Utah, and GOP Rep. Mike Pence in Indiana are expected to win. So are Democratic Govs. Peter Shumlin in Vermont and Jack Markell in Delaware. 
+ 
+ Democrats are also hoping to hold on to the governorship in Missouri, where Jay Nixon is running for a second term against Republican Dave Spence; and in West Virginia, where Gov. Earl Ray Tomblin, former state senate president, is running for his first full term after winning a special election in 2011. GOP businessman Bill Maloney is his opponent, as he was last year. 
+ 
+ Nixon has been consistently outpolling Spence by an average of about 7 points in Missouri. Tomblin is seen as likely to retain his seat, even in a state where Romney is leading Obama by double digits.

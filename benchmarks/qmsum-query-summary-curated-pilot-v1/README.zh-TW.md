@@ -2,15 +2,11 @@
 
 ## 用途
 
-此 package 提供英文 query-conditioned summary 的小型 curated pilot，供雙語 summary/compare benchmark lane 使用。
+從 QMSum 官方 test split 提取的 `10` 題 query-conditioned summary 真實資料 package。
 
-## 內容
+## 資料來源與還原依據
 
-- `manifest.json`
-- `questions.jsonl`
-- `source_documents/`
-- `reference_run_summary.json`
-
-## 備註
-
-- retrieval scope 採 `explicit_document_ids`，但 repo 內先以 `document_file_names` 表示，執行 benchmark 時再解析成實際 area `document_id`。
+- 上游資料集：QMSum 官方 test split。
+- 上游檔案：Yale-LILY 官方 repo 的 `data/ALL/jsonl/test.jsonl`。
+- 抽取規則：依原始會議順序，從 `specific_query_list` 取前 `10` 題。
+- 每題都保存 `source_record_index`、`source_example_id` 與 `source_mapping.query_index`，可直接回對原始 row。

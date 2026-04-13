@@ -1,0 +1,17 @@
+Microsoft is buying Nokia's cell phone business and licensing its patent portfolio, according to both companies. 
+ 
+ In 2003, Nokia's cell phone market share exceeded 35%. That same year, its phone business alone posted an operating profit of 5.48 billion euros. Today's sale price, which includes 1.65 billion euros in patents, is just 5.44 billion euros. It's been a rough decade. 
+ 
+ Nokia's cell phone collapse has been a spectacular one. The Finnish giant dominated the dumbphone era after Motorola, another faded star that recently fell into the hands of a comparative upstart. But it was blindsided by Apple, then deprived of a chance to regain its footing by an even more aggressive Google, which followed close behind. 
+ 
+ The story, in hindsight, is simple: Nokia did not have a truly compelling smartphone ready when a large segment of the developed world was first compelled by smartphones. Whether this was the result of complacency — Nokia was, in the mid-2000s, the leader of the niche smartphone category — doesn't matter now. 
+ 
+ Nokia's miscalculations became impossible to ignore in 2008, the same year Microsoft decided, internally at least, to scrap its ancient and inadequate Windows Mobile platform in favor of something entirely new. Under these circumstances, it's easy to imagine how a sort of camaraderie might have emerged at the time, or at least a mutual sympathy. Certainly a shared interest: to break back into the market from which they had been unceremoniously expelled. 
+ 
+ During the next two years, while Microsoft readied Windows Phone 7 and Nokia floundered on, the seeds of Sunday's deal were sewn. A chastened Nokia was a natural partner for the tardy but determined Microsoft; it needed a software solution and Microsoft needed help with hardware. The 2009 vision of 2013 renders clearly: Two giants, united after some missteps, regain their rightful place. By 2010, when the head of Microsoft's Business division left to take the helm at Nokia, the gears were moving. Many at the time wondered if Stephen Elop's time at Nokia would be spent grooming the company for purchase — a foreigner in all possible ways, he began his time at the company with a memo rightly but offensively declaring Nokia's proud platform a failure, and quickly pledged the company's commitment to the still-tiny Windows Phone. It felt like a radical about-face, but no matter: Nokia and Microsoft were going to save each other. 
+ 
+ Now, with Elop returning to Microsoft after a job well done — well, a job, done —that plan has come to fruition. The only problem is that there's little left to save. Windows Phone has barely dented the now much larger smartphone market. Nokia hasn't had a Windows Phone hit. This incongruity — between a successfully executed, slyly strategic long-term merger plan and a much grander, more general sense of failure — might explain Microsoft's deeply strange and somewhat sad stated goals for its Nokia acquisition. 
+ 
+ Microsoft' s "Strategic Rationale," titled "Accelerating Growth," is a disjointed and bizarre document. It manages to sound both insane and uninspiring, outlining modest goals that still sound unrealistic. 
+ 
+ For example, it lays out a plan to pull in over $45 billion dollars in smartphone revenue by 2018. But it plans on doing this by securing just 15% of the projected global smartphone market — not exactly a world-beating plan, keeping in mind the time frame. Consider: 2018 is five years away. Five years ago was the year the App Store first opened.

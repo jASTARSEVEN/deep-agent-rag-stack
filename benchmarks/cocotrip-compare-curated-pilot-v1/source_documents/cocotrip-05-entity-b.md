@@ -1,0 +1,7 @@
+# Entity B
+
+This hotel was not worth the price paid for it. The hotel is situated in an excellent location on the river. The rooms were very large with a great view of the Chicago River although at times smelt unsavoury and had a dirty bathroom. The hotel did not have a drinks vending machine or fridge and the toilet paper was of a poor quality.
+
+Considering what you pay for this hotel your expectations might be a little too high because it only provides typical accommodations. The hotel provides a great view of the city. Additionally there is a lovely river nearby as well, which gives the best view of the river. Also included is a huge bathroom with separate sinks as well as separate bathtub and shower. The deluxe room itself was particularly big. Sadly there was no mini fridge available to eat and drink anything in the room and there also wasn't any vending machines for snacks or drink. The toilet paper at this hotel seems quite cheap.
+
+Considerably expensive for what was provided, however overall it is a beautiful place to visit. The location is being near the river and it offers great views of the city. Large, spacious rooms with excellent views of the Chicago River in some. However, the cleanliness isn't a high quality and could be improved. There were no vending machines with soda and no mini-fridge. 

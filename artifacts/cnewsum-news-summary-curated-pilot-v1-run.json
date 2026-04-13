@@ -1,0 +1,3845 @@
+{
+  "run_metadata": {
+    "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+    "benchmark_version": "1.0.0",
+    "area_id": "340d4857-044c-4092-ae43-c90211aa1f16",
+    "actor_sub": "benchmark-suite-runner",
+    "judge_model": "gpt-5-mini",
+    "generated_at": "2026-04-12T12:01:31.805216Z",
+    "dataset_count": 1,
+    "item_count": 10
+  },
+  "execution": {
+    "parallel_workers": 1,
+    "judge_items_count": 10,
+    "judge_failed_count": 0,
+    "partial_items_count": 0
+  },
+  "metric_registry": {
+    "bert_score_f1": {
+      "metric_name": "bert_score_f1",
+      "source_method": "BERTScore (Zhang et al., 2019)",
+      "standard_level": "standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "qafacteval_score": {
+      "metric_name": "qafacteval_score",
+      "source_method": "QAFactEval (Fabbri et al., 2021)",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "pairwise_rubric_judge_win_rate": {
+      "metric_name": "pairwise_rubric_judge_win_rate",
+      "source_method": "LLM-as-a-judge rubric / pairwise evaluation",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "compare"
+      ]
+    },
+    "required_document_coverage": {
+      "metric_name": "required_document_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "citation_coverage": {
+      "metric_name": "citation_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "section_coverage": {
+      "metric_name": "section_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "required_document_not_cited_rate": {
+      "metric_name": "required_document_not_cited_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "metric_name": "insufficient_evidence_not_acknowledged_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "avg_overall_score": {
+      "metric_name": "avg_overall_score",
+      "source_method": "LLM judge rubric aggregate",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    }
+  },
+  "per_dataset_scores": [
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "zh-TW",
+      "task_family": "summary",
+      "item_count": 10,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "scored",
+        "value": 0.621386,
+        "reason": null
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.525,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "task_family_scores": {
+    "summary_benchmark_score": {
+      "status": "scored",
+      "value": 0.621386,
+      "reason": null
+    },
+    "compare_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    }
+  },
+  "language_rollups": {
+    "zh-TW_summary_score": {
+      "status": "scored",
+      "value": 0.621386,
+      "reason": null
+    }
+  },
+  "benchmark_overview": {
+    "summary_benchmark_score": {
+      "status": "scored",
+      "value": 0.621386,
+      "reason": null
+    },
+    "compare_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "dataset_count": 1,
+    "not_applicable_metrics": [
+      "qafacteval_score"
+    ]
+  },
+  "aggregate_metrics": {
+    "qafacteval_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "required_document_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "citation_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "section_coverage": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "required_document_not_cited_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "avg_overall_score": {
+      "status": "scored",
+      "value": 4.525,
+      "reason": null
+    }
+  },
+  "per_item_results": [
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-1",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "以下為新聞的核心事件與主要結論摘要：\n\n核心事件\n- 2014年9月26日，美國愛荷華州在一輛轎車後備箱發現一名20歲中國女留學生邵某屍體，死因為暴力窒息。\n- 被害人之男友李向南（1991年生，溫州樂清人、赴美留學）被認定具有重大作案嫌疑；案發後他搭機返回中國。\n- 美國方面將案件線索通報中國，並移交物證、書證、影音等資料；溫州市檢察院和公安人員依中美司法協作機制赴美調查取證。\n- 2015年5月，李向南在中國投案並被刑拘；2015年6月經檢方批准被依法逮捕；同年12月檢方以涉嫌故意殺人罪提起公訴。\n- 檢方調查與被告供述顯示：雙方為男女朋友，因感情糾紛在旅館發生爭執，李向南在旅館內扼頸致死並將屍體裝入行李箱藏於車後備箱，隨後回國。\n- 溫州市中級人民法院排定開庭審理此案，美方代表亦將旁聽庭審，這為溫州首例與美方合作偵辦的跨國刑事案件之一。\n\n主要結論\n- 檢察機關認為李向南因感情糾葛故意剝奪他人生命，其行為構成故意殺人罪，犯罪事實清楚、證據充分，應依法追究刑事責任。\n- 依據我國法律，中國公民在境外犯罪由中國行使管轄，不需引渡，因此在中國審理此案合規；同時該案展示了中美司法協作在跨國刑事案件調查與取證上的運作。\n\n如需我把新聞整理成更精短的一段式摘要或製作時間軸，請告訴我。",
+      "answer_blocks": [
+        {
+          "text": "以下為新聞的核心事件與主要結論摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件\n- 2014年9月26日，美國愛荷華州在一輛轎車後備箱發現一名20歲中國女留學生邵某屍體，死因為暴力窒息。\n- 被害人之男友李向南（1991年生，溫州樂清人、赴美留學）被認定具有重大作案嫌疑；案發後他搭機返回中國。\n- 美國方面將案件線索通報中國，並移交物證、書證、影音等資料；溫州市檢察院和公安人員依中美司法協作機制赴美調查取證。\n- 2015年5月，李向南在中國投案並被刑拘；2015年6月經檢方批准被依法逮捕；同年12月檢方以涉嫌故意殺人罪提起公訴。\n- 檢方調查與被告供述顯示：雙方為男女朋友，因感情糾紛在旅館發生爭執，李向南在旅館內扼頸致死並將屍體裝入行李箱藏於車後備箱，隨後回國。\n- 溫州市中級人民法院排定開庭審理此案，美方代表亦將旁聽庭審，這為溫州首例與美方合作偵辦的跨國刑事案件之一。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "feab4417-96dd-4c98-ae2a-54d451ba0857",
+              "document_name": "cnewsum-article-01.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論\n- 檢察機關認為李向南因感情糾葛故意剝奪他人生命，其行為構成故意殺人罪，犯罪事實清楚、證據充分，應依法追究刑事責任。\n- 依據我國法律，中國公民在境外犯罪由中國行使管轄，不需引渡，因此在中國審理此案合規；同時該案展示了中美司法協作在跨國刑事案件調查與取證上的運作。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "feab4417-96dd-4c98-ae2a-54d451ba0857",
+              "document_name": "cnewsum-article-01.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "如需我把新聞整理成更精短的一段式摘要或製作時間軸，請告訴我。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "feab4417-96dd-4c98-ae2a-54d451ba0857",
+          "document_name": "cnewsum-article-01.md",
+          "parent_chunk_id": "dea88633-aa88-493c-a310-57caa99eacfc",
+          "child_chunk_ids": [
+            "8fd8a8a6-b823-40ee-a30d-ff57bf9b5ea6",
+            "9983892b-d0dd-4bf9-8b36-970e1f3c921d"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 1270,
+          "excerpt": "澎湃新闻记者。\n张刘涛2016-03-2218:20。\n来自。\n长三角政商字号。\n李向南。\n澎湃新闻3月22日从温州市中级人民法院获悉,该院将于23日9点30分开庭审理中国留学生李向南在美国故意杀人一案。\n2014年9月26日,美国爱荷华州警方在1辆轿车后备箱中发现1具年轻女性遗体,经查验,死者系1名20岁的中国辽宁籍留美女大学生邵某,遭受暴力窒息死亡。\n邵某男友李向南具有重大作案嫌疑,案发后李向南已搭乘航班返回中国。\n去年5月,李向南向中国警方投案自首。\n根据我国法律规定,中国公民在境外犯罪,中国拥有管辖权,不必引渡。\n去年6月20日,李向南经温州市检察院批准被依法逮捕。\n同年12月23日,温州市检察院以涉嫌故意杀人罪对李向南提起公诉。\n据悉,该案为温州首例中美合作侦破的跨国刑事案件。\n根据中美司法协作机制,为调查相关案情,去年温州市检察院专门派出检察官与公安部门组成工作组赴美国调查取证。\n同时,美方向中方工作组移交了案件物证、书证、视频资料等一系列证据材料。\n明天的庭审,还将有美方代表参与旁听。\n李向南,男,1991年9月16日出生,温州乐清市人,留美大学生。\n据此前温州检方公布的消息,被告人李向南与被害人邵某案发前均在美国留学,双方系男女朋友关系。\n早在2011年,两人出国前在北京上托福英语培训班时便已相识。\n2014年9月5日下午,被告人与被害人邵某入住美国爱荷华州内华达市“BudgetInn”旅馆,当晚两人因感情问题发生争执,后被告人李向南通过其学长预定回中国的单程机票。\n次日17时许,李向南趁被害人邵某回学校做小组作业之际,到麦克斯折扣店及沃尔玛超市分别购买了一只行李箱与两只哑铃,放置于其驾驶的丰田凯美瑞轿车后备箱内。\n去年9月7日凌晨1时许,李向南在旅馆房间内再次与邵某发生争执,并对其扼颈致死,将尸体装入行李箱内,并塞进一只哑铃,后将行李箱藏于其驾驶的轿车后备箱内,再驾驶该车回到爱荷华州爱荷华城海豚湖小区,将车停放在其租住处附近的停车场。\n同年9月8日,李向南乘坐事先订好的航班回到中国。\n发现李向南返回中国后,美方立即通过中国驻美大使馆和驻芝加哥总领事馆及时将案件情况通报中国警方。\n公安部刑侦局立即部署浙江省公安机关立案侦查。\n2015年5月11日,温州警方接李某报警称,其于2014年9月初在美国爱荷华州读书时将其女友邵某杀害,现人在成都,准备回温州投案。\n同年5月13日,李某在父母陪同下向温州警方投案,同日被刑事拘留。\n据李向南向警方供述,其行凶后逃回中国是想见父母最后一面。\n案发后,因害怕被发现,李向南还用自己的手机以邵某的名义发短信给邵某的室友,称邵某去明尼苏达州玩一个星期左右。\n而回国之后,由于害怕被警方发现,李某一度藏匿于青海的1户牧民家中。\n检察机关认为,被告人李向南因感情纠葛而故意非法剥夺他人生命,致人死亡,其行为已触犯《中华人民共和国刑法》第232条,犯罪事实清楚,证据充分,应当以故意杀人罪追究其刑事责任。\n关键词。\n>>。\n留学生,美国,掐死女友,温州开庭继续阅读",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "8fd8a8a6-b823-40ee-a30d-ff57bf9b5ea6",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.014392336369436931,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "9983892b-d0dd-4bf9-8b36-970e1f3c921d",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.014392336369436931,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3386
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1569,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "feab4417-96dd-4c98-ae2a-54d451ba0857"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3386
+              }
+            ],
+            "task_type_embedding_margin": 0.1569,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "feab4417-96dd-4c98-ae2a-54d451ba0857"
+          ],
+          "selected_parent_ids": [
+            "dea88633-aa88-493c-a310-57caa99eacfc"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "8fd8a8a6-b823-40ee-a30d-ff57bf9b5ea6",
+            "9983892b-d0dd-4bf9-8b36-970e1f3c921d"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "dea88633-aa88-493c-a310-57caa99eacfc",
+              "kept_chunk_ids": [
+                "8fd8a8a6-b823-40ee-a30d-ff57bf9b5ea6",
+                "9983892b-d0dd-4bf9-8b36-970e1f3c921d"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 23.309,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-01.md",
+          "document_id": "feab4417-96dd-4c98-ae2a-54d451ba0857",
+          "start_offset": 0,
+          "end_offset": 6,
+          "quote": "澎湃新闻记者"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-01.md"
+        ],
+        "resolved_document_ids": [
+          "feab4417-96dd-4c98-ae2a-54d451ba0857"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 3.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 3.0
+        },
+        "rationale": "Completeness (3): 回答覆蓋了多數要求的要點——在美發現屍體、被告身分與返國、移交證據與中方赴美取證、2015年投案與逮捕、檢方起訴、以及溫州市中院開庭且美方代表將旁聽等，這些均可在引用片段 C1 中找到。但有一項明確要求的主張未被覆蓋（見下）。\nFaithfulness_to_citations (5): 回答中的事實陳述均可在提供的引用片段（C1）中找到支持（案發日期、死者與被告身分、取證與移交、投案/逮捕/起訴時間、法院開庭及美方旁聽等）。回答未引入未被引用證據，忠實於所給引文。\nStructure_quality (5): 回答以「核心事件」與「主要結論」分段並以條列呈現，層次清晰、易讀，符合 document_overview 的摘要結構要求。\nCompare_coverage / section_focus_accuracy (3): 作為單一文件摘要，回答大致聚焦於該文件所述內容（引用片段 C1 的主體），但未涵蓋要求中的一個關鍵子點，導致在完整覆蓋預期章節要點上評分下降。",
+        "missing_points": [
+          "未提及「嫌犯曾藏匿于青海牧民家中」——此項為 required_claims_or_compare_axes 中明確列出的內容，但在給定引用片段 C1 中並未見出現，且回答亦未包含該資訊。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.583255,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-2",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "以下為新聞核心事件與主要結論摘要（依據授權文件）：\n\n核心事件：\n- 3月21日21:45左右，浙江宁波鄞州区东裕路与四明路交叉口北侧發生一起車輛撞擊自行車事故，一名中年女性騎自行車被撞倒，頭部流血、昏迷，送醫搶救後無生命危險。\n- 肇事車輛逃離現場；警方調取監控鎖定一輛銀灰色明銳轎車（浙B532EL），車主為30歲苑某某。\n- 肇事者苑某某於事發後4小時多才到交警中隊配合調查；呼氣酒測顯示血液酒精含量102mg/100ml，構成醉酒駕駛。苑某某承認當晚在火鍋店與友人飲酒（喝了6瓶啤酒），事發後因害怕受罰逃離現場並將車停放後打車回家，後在證據面前坦承撞人並逃逸。\n\n主要結論：\n- 事故由醉酒駕駛造成，且肇事者在撞傷騎車人後逃逸，已被警方確認並對其採取調查措施，案件進一步偵辦中。\n\n註：以上內容完全依據授權新聞文件彙整。若需更詳細时间线、醫療狀況或後續法律處理進展，可再告知我擴充查詢或追蹤更新。",
+      "answer_blocks": [
+        {
+          "text": "以下為新聞核心事件與主要結論摘要（依據授權文件）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件：\n- 3月21日21:45左右，浙江宁波鄞州区东裕路与四明路交叉口北侧發生一起車輛撞擊自行車事故，一名中年女性騎自行車被撞倒，頭部流血、昏迷，送醫搶救後無生命危險。\n- 肇事車輛逃離現場；警方調取監控鎖定一輛銀灰色明銳轎車（浙B532EL），車主為30歲苑某某。\n- 肇事者苑某某於事發後4小時多才到交警中隊配合調查；呼氣酒測顯示血液酒精含量102mg/100ml，構成醉酒駕駛。苑某某承認當晚在火鍋店與友人飲酒（喝了6瓶啤酒），事發後因害怕受罰逃離現場並將車停放後打車回家，後在證據面前坦承撞人並逃逸。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "b15cc73b-bbb9-45bf-812b-ad544b86d8db",
+              "document_name": "cnewsum-article-02.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論：\n- 事故由醉酒駕駛造成，且肇事者在撞傷騎車人後逃逸，已被警方確認並對其採取調查措施，案件進一步偵辦中。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "b15cc73b-bbb9-45bf-812b-ad544b86d8db",
+              "document_name": "cnewsum-article-02.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "註：以上內容完全依據授權新聞文件彙整。若需更詳細时间线、醫療狀況或後續法律處理進展，可再告知我擴充查詢或追蹤更新。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "b15cc73b-bbb9-45bf-812b-ad544b86d8db",
+          "document_name": "cnewsum-article-02.md",
+          "parent_chunk_id": "570d183e-2059-4717-b160-7dc4f5dbc5b3",
+          "child_chunk_ids": [
+            "95ba6ebc-7a56-4fc9-825a-0dab7e4e3812"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 681,
+          "excerpt": "中国宁波网讯昨天晚上,在鄞州区东裕路发生一起轿车撞自行车的交通事故,一名醉酒司机将横过马路的一名骑自行车妇女撞成重伤,司机逃逸4个多小时后被警方抓获。\n事故发生在3月21日晚上21时45分许。\n鄞州区下应交警中队民警接到市民报警后赶到现场时发现,在东裕路与四明路交叉路口北侧,一名中年女子倒在血泊中,头部流了不少血,不省人事,一辆自行车横躺在旁边,车轮已被撞得扭曲。\n肇事车辆已经逃离现场。\n伤者第一时间被送至医院进行抢救,没有生命危险。\n下应交警中队迅速展开侦查,通过调取附近几个路口监控,很快锁定一辆银灰色的明锐轿车,车牌为浙B532EL,车主苑某某,30岁,河南人,现暂住鄞州区紫郡小区。\n于是警方拔打手机通知苑某某速来交警队接受调查。\n凌晨2时许,苑某某才来到下应交警中队配合调查。\n这个时候已离肇事时间有4个多小时。\n在交警队里,民警对苑某某进行了呼气式酒精检测,结果显示酒精含量为102MG/100ML,属于醉酒驾驶范畴。\n据苑某某交代,当天晚上19时许,他和两个朋友一起在鄞州区贸城东路一火锅店喝酒吃饭。\n期间,苑某某喝了6瓶啤酒。\n21时吃完饭后,苑某某就驾驶浙B532EL轿车沿东裕路由南往北行驶,送朋友回家,途经事发路段时,与一辆前方正在横过马路的自行车相撞。\n事故发生后,苑某某因害怕处罚而直接驾车逃离了现场。\n最后,苑某某将车停在高教园区的学府苑之后,打出租车回到诚信路的紫郡小区。\n在家里,苑某某一直惶恐不安,直到接到交警电话,才来到交警队。\n在证据面前,苑某某对醉酒驾车将骑车人撞伤后逃逸的行为供认不讳。\n目前,案件正在进一步调查中。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "95ba6ebc-7a56-4fc9-825a-0dab7e4e3812",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.00564190850002335,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.95,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "b15cc73b-bbb9-45bf-812b-ad544b86d8db"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "b15cc73b-bbb9-45bf-812b-ad544b86d8db"
+          ],
+          "selected_parent_ids": [
+            "570d183e-2059-4717-b160-7dc4f5dbc5b3"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "95ba6ebc-7a56-4fc9-825a-0dab7e4e3812"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "570d183e-2059-4717-b160-7dc4f5dbc5b3",
+              "kept_chunk_ids": [
+                "95ba6ebc-7a56-4fc9-825a-0dab7e4e3812"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 17.5452,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-02.md",
+          "document_id": "b15cc73b-bbb9-45bf-812b-ad544b86d8db",
+          "start_offset": 0,
+          "end_offset": 74,
+          "quote": "中国宁波网讯昨天晚上,在鄞州区东裕路发生一起轿车撞自行车的交通事故,一名醉酒司机将横过马路的一名骑自行车妇女撞成重伤,司机逃逸4个多小时后被警方抓获"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-02.md"
+        ],
+        "resolved_document_ids": [
+          "b15cc73b-bbb9-45bf-812b-ad544b86d8db"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答涵蓋了引用片段（C1）中提出的所有主要事實：發生時間與地點、傷者狀況（頭部流血、昏迷、送醫且無生命危險）、肇事車輛逃離現場、透過監控鎖定銀灰色明銳（浙B532EL）及車主苑某某（30歲）、肇事者4小時多後到交警中隊配合調查、呼氣酒測102mg/100ml屬醉酒駕駛、其飲酒情況（6瓶啤酒）、逃逸經過與最終在證據面前供認，以及案件正在進一步偵辦。回答結構清晰（「核心事件」與「主要結論」），且作者明確標示依據授權文件，沒有引入陳述外的未引用事實，因此在完整性、對引文忠實度、結構與章節聚焦上均給予最高分。",
+        "missing_points": [
+          "引用片段中還提到肇事者為河南人且現暫住鄞州区紫郡小区，以及將車停放在高教园区的学府苑後打出租回到诚信路的紫郡小区；回答未具體提及肇事者的籍貫/暫住地與停車與回家的具體地點（屬次要細節，且不影響核心主張）。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.573208,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-3",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "以下為該新聞的核心事件與主要結論摘要：\n\n核心事件\n- 2016年1月4日中國A股在實施新引入的「指數熔斷機制」首日即觸發，滬深300指數先後觸及5%（觸發15分鐘暫停）與7%（觸發全天或尾盤停市）兩級熔斷，導致當日13:33起全市場停牌至收市。\n\n主要結論與論點\n- 中國股市已有個股10%漲跌停板制度，當在指數層面再設熔斷時，因整體波動性高，5%與7%兩檔閾值太低且間隔僅2%，導致並非「罕見極端情況」，而是常見波動會頻繁觸發，從而失效或適得其反。\n- 熔斷原意是給市場冷靜期，但過低的閾值與過小的間隔會產生「磁吸效應」，使價格在接近閾值時反而被加速拉向熔斷點，暫停反而加劇恐慌與波動——首日事件即證明在恢復交易後短短數分鐘內從5%下探至7%。\n- 因為個股已有10%漲跌限制，指數熔斷的最大閾值也不可能超過10%，在10%範圍內只能設定較低且間隔小的閾值，這使得指數熔斷在中國條件下弊大於利；作者認為最佳選擇是取消指數熔斷機制。\n\n若要我再進一步整理「國際熔斷機制比較」或提出「替代穩定市場的機制建議」，我可以基於該文章內容繼續擴展或比較其他市場做法。",
+      "answer_blocks": [
+        {
+          "text": "以下為該新聞的核心事件與主要結論摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件\n- 2016年1月4日中國A股在實施新引入的「指數熔斷機制」首日即觸發，滬深300指數先後觸及5%（觸發15分鐘暫停）與7%（觸發全天或尾盤停市）兩級熔斷，導致當日13:33起全市場停牌至收市。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "98427955-2ca1-4e70-9490-ad6edd4cadee",
+              "document_name": "cnewsum-article-03.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論與論點\n- 中國股市已有個股10%漲跌停板制度，當在指數層面再設熔斷時，因整體波動性高，5%與7%兩檔閾值太低且間隔僅2%，導致並非「罕見極端情況」，而是常見波動會頻繁觸發，從而失效或適得其反。\n- 熔斷原意是給市場冷靜期，但過低的閾值與過小的間隔會產生「磁吸效應」，使價格在接近閾值時反而被加速拉向熔斷點，暫停反而加劇恐慌與波動——首日事件即證明在恢復交易後短短數分鐘內從5%下探至7%。\n- 因為個股已有10%漲跌限制，指數熔斷的最大閾值也不可能超過10%，在10%範圍內只能設定較低且間隔小的閾值，這使得指數熔斷在中國條件下弊大於利；作者認為最佳選擇是取消指數熔斷機制。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "98427955-2ca1-4e70-9490-ad6edd4cadee",
+              "document_name": "cnewsum-article-03.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若要我再進一步整理「國際熔斷機制比較」或提出「替代穩定市場的機制建議」，我可以基於該文章內容繼續擴展或比較其他市場做法。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "98427955-2ca1-4e70-9490-ad6edd4cadee",
+          "document_name": "cnewsum-article-03.md",
+          "parent_chunk_id": "db6b2331-0849-4b7d-9e1e-03ab497d7dd3",
+          "child_chunk_ids": [
+            "2bebdb0e-1694-4170-a8eb-cbedde8859c1",
+            "58bbc623-3e43-477b-8fb2-abc81d780399",
+            "6f94d89c-4b14-4103-a8af-6678acd4c44a"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2114,
+          "excerpt": "2016年01月06日14:31。\n南方都市报黄嵩中国股票市场已经有了10%的涨跌停板,设置指数熔断机制的阈值最大不能超过10%,否则就永远不会触发。\n在10%的范围内设置熔断阈值,只能是既低又间隔小的阈值。\n从这个角度看,10%的涨跌停板制已是目前比较理想的熔断机制,在此基础上再加设指数熔断机制,弊大于利。\n2015年1月4日,A股新年首个交易日,也是实施指数熔断机制的首个交易日,市场低开低走,连续触及5%和7%两级熔断阈值,最终于13点33分全市场暂停交易至收市。\n中国的指数熔断机制在实施的首个交易日即触发,创造了历史,真可谓啼声初试,就一鸣惊人。\n所谓熔断机制,是指金融市场价格涨跌超过一定幅度后,对交易进行限制的制度。\n交易限制包括交易暂停一段时间,或者交易可以继续进行,但报价限制在一定幅度之内。\n熔断机制有三种形式。\n第一种是涨跌停板制。\n例如我国股票市场的涨跌停板制度规定,当个股价格涨跌幅度触及10%时,交易继续进行,但报价限制在10%之内。\n事实上也可以看出,涨跌停板的叫法不是很科学,因为交易并未“停”,更正确的叫法是“价格限制。\n第二种是个股交易暂停制。\n例如美国股票市场的暂停交易制度规定,当个股价格偏离前五分钟交易平均价格的幅度大于区间限制,且没有在15秒内回到区间限制内,将被暂停交易5分钟。\n根据股票的不同类型,设立了5%、10%和20%三个价格区间限制。\n第三种是市场交易暂停制。\n当有代表性的市场指数涨跌超过预先设定的幅度后,市场暂停交易一段时间。\n此次触发的指数熔断机制,即属第三种熔断机制,于2015年12月4日由上证所、深交所、中金所发布相关规定,并于2016年1月1日起正式实施。\n根据规定,指数熔断机制以沪深300指数为基准指数,设置5%、7%两档熔断阈值,进行双向熔断。\n当沪深300指数涨跌达到5%时,暂停交易15分钟,尾盘阶段达到5%或全天任何时候达到7%时,暂停交易至收市。\n暂停交易的产品包括沪深两市交易的A股、B股、基金、可转换公司债券和可交换公司债券,以及中金所交易的股指期货。\n熔断机制的主要目的,是给市场一个冷静期,让投资者充分消化市场信息,避免市场价格出现极端变化情况。\n指数熔断机制起源于美国,1987年10月19日股市暴跌后,美国在1988年10月引入熔断机制,此后几次修订规则。\n美国现行的指数熔断机制以标普500指数为基准指数,设置7%、13%、20%三级熔断阈值,当标普500指数跌幅触发各级阈值时,股市分别暂停15分钟、暂停15分钟和暂停直至收市。\n中国推出指数熔断机制的一个背景是,2015年6月中下旬开始,A股市场出现急速下跌,其间屡次出现千股跌停的奇观。\n熔断机制是防止市场价格的极端变化情况,因此触发情况很少见。\n如美国在引入熔断机制后,只触发过1次熔断机制,韩国也仅为3次。\n而据统计,2011年以来,沪深300指数波动超过5%有105次,超过7%有33次。\n也就是说,5%和7%的熔断阈值设置太低,很难算是极端情况,由此,实施的首个交易日即触发熔断机制也就不足为奇了。\n如果考虑到中国股市的波动性远高于美国股市这一事实,中国的相对熔断阈值更低。\n由此可见,中国的指数熔断机制防止市场价格出现极端变化情况的说法,值得商榷。\n如果熔断机制不是防止市场价格出现极端情况,则是破坏市场价格发现功能的坏机制。\n而破坏市场价格发现功能正是批评熔断机制的主要理由之一。\n反对熔断机制的另一主要理由是,可能引发“磁吸效应。\n磁吸效应描述的是当价格接近熔断阈值时,熔断阈值会像一块磁铁将价格加速吸向熔断阈值的现象,其原因是投资者惧怕暂停交易导致的流动性缺失而改变交易行为。\n中国熔断机制的两级阈值间隔仅为2%,远小于美国的6%和7%。\n过小的阈值间隔,加上磁吸效应,使得原本是冷静期的15分钟暂停交易,反而成为恐慌期。\n也就是说,5%的一级熔断阈值极大可能会加速二级阈值7%的到来,而不是相反。\n此次触发熔断机制事件,即证明了这一点。\n在沪深300指数下跌5%触发一级熔断阈值后,暂停15分钟交易。\n在恢复交易后,短短6分钟,沪深300指数就下跌到了7%触发二级熔断阈值。\n由此可见,熔断机制非但没有让市场冷静,稳定市场,反而是加剧了市场价格波动。\n1月5日,证监会发言人评论熔断机制说道:“引入指数熔断机制是一项全新的制度,在我国还没有经验,市场对新的规则有一个逐步调整适应的过程。\n从境外经验看,熔断机制的完善不是一步到位的,也没有统一的做法,需要在实践中逐步探索、积累经验、动态调整。\n我们将根据熔断机制实际运行情况,不断完善相关机制。\n”但事实则是,基本没有调整和完善指数熔断机制的空间。\n中国股票市场已经有了10%的涨跌停板,指数的涨跌幅度不可能超过10%,设置指数熔断机制的阈值最大不能超过10%,否则就永远不会触发。\n在10%的范围内设置熔断阈值,只能是既低又间隔小的阈值。\n从这个角度看,10%的涨跌停板制倒是目前比较理想的熔断机制,在此基础上再加设指数熔断机制,弊大于利。\n可见,调整和完善指数熔断机制的最佳选择,是取消指数熔断机制。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 3,
+          "candidates": [
+            {
+              "chunk_id": "2bebdb0e-1694-4170-a8eb-cbedde8859c1",
+              "source": "vector",
+              "vector_rank": 3,
+              "fts_rank": null,
+              "rrf_rank": 3,
+              "rrf_score": 0.015873015873015872,
+              "rerank_rank": 1,
+              "rerank_score": 0.009522485670336662,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "58bbc623-3e43-477b-8fb2-abc81d780399",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.009522485670336662,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "6f94d89c-4b14-4103-a8af-6678acd4c44a",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.009522485670336662,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3386
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1569,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.96,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "98427955-2ca1-4e70-9490-ad6edd4cadee"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3386
+              }
+            ],
+            "task_type_embedding_margin": 0.1569,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "98427955-2ca1-4e70-9490-ad6edd4cadee"
+          ],
+          "selected_parent_ids": [
+            "db6b2331-0849-4b7d-9e1e-03ab497d7dd3"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "2bebdb0e-1694-4170-a8eb-cbedde8859c1",
+            "58bbc623-3e43-477b-8fb2-abc81d780399",
+            "6f94d89c-4b14-4103-a8af-6678acd4c44a"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "db6b2331-0849-4b7d-9e1e-03ab497d7dd3",
+              "kept_chunk_ids": [
+                "2bebdb0e-1694-4170-a8eb-cbedde8859c1",
+                "58bbc623-3e43-477b-8fb2-abc81d780399",
+                "6f94d89c-4b14-4103-a8af-6678acd4c44a"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 23.0388,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-03.md",
+          "document_id": "98427955-2ca1-4e70-9490-ad6edd4cadee",
+          "start_offset": 0,
+          "end_offset": 16,
+          "quote": "2016年01月06日14:31"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-03.md"
+        ],
+        "resolved_document_ids": [
+          "98427955-2ca1-4e70-9490-ad6edd4cadee"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 2.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "completeness: 回答覆蓋了引文中的主要事件（指數熔斷於首日觸發、觸及5%與7%、13:33全市場停牌）與文章主要結論（中國有10%漲跌停板、在10%範圍內設熔斷閾值只能很低且間隔小、在此基礎上再加設指數熔斷弊大於利），因此在完備性上符合要求。 faithfulness_to_citations: 回答引入了未在提供引文中明確出現的細節或術語（例如明確使用「磁吸效應」一詞來解釋機制，以及聲稱“恢復交易後短短數分鐘內從5%下探至7%”的時間線證明），這些具體論述或細節並未由所提供的摘錄直接支持，故忠實度需大幅扣分。 structure_quality: 回答以「核心事件」與「主要結論與論點」分節，條列清晰、易讀，結構良好。 compare_coverage (section_focus_accuracy): 不是多文件比較題，回答聚焦於預期章節（document）與核心論點，對指定重點有聚焦且覆蓋，故評為最高分。",
+        "missing_points": [
+          "摘錄中並未使用或明確提出“磁吸效應”這一術語或以此作為主要機制解釋，回答中將此作為因果機制屬於超出引文證據的推論。",
+          "摘錄未明確說明“在恢復交易後短短數分鐘內從5%下探至7%”的具體時間動態；引文只記載首日連續觸及5%與7%並最終13:33停市，未提供恢復後幾分鐘內的價格移動細節。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.25,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.618514,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-4",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "以下為該新聞的核心事件與主要結論摘要：\n\n核心事件\n- 萊蕪市氣象台於2016年1月6日15:45發布道路結冰黃色預警信號，因降雪與冷空氣影響，預計當晚到隔天大部分地區將出現可能影響交通的道路結冰情形。\n\n主要結論與建議\n- 道路結冰可能在12小時內對交通造成影響，相關單位（交通、公安等）應依職責做好應對準備。\n- 駕駛人應注意路況並安全行駛；行人外出應減少騎自行車並注意防滑。\n\n備註：以上內容均根據授權文件摘錄整理。",
+      "answer_blocks": [
+        {
+          "text": "以下為該新聞的核心事件與主要結論摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件\n- 萊蕪市氣象台於2016年1月6日15:45發布道路結冰黃色預警信號，因降雪與冷空氣影響，預計當晚到隔天大部分地區將出現可能影響交通的道路結冰情形。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "765a5abd-e26b-4d80-8f1e-7a5ea15de397",
+              "document_name": "cnewsum-article-04.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論與建議\n- 道路結冰可能在12小時內對交通造成影響，相關單位（交通、公安等）應依職責做好應對準備。\n- 駕駛人應注意路況並安全行駛；行人外出應減少騎自行車並注意防滑。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "765a5abd-e26b-4d80-8f1e-7a5ea15de397",
+              "document_name": "cnewsum-article-04.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "備註：以上內容均根據授權文件摘錄整理。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "765a5abd-e26b-4d80-8f1e-7a5ea15de397",
+          "document_name": "cnewsum-article-04.md",
+          "parent_chunk_id": "6eb6f3cd-963a-43cc-9523-df18f84a8f29",
+          "child_chunk_ids": [
+            "61e974fb-36b1-442d-ada0-6fa68e559a26"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 215,
+          "excerpt": "发布日期:2016-01-0615:45:00莱芜市气象台2016年1月6日15时45分发布道路结冰黄色预警信号。\n受降雪和冷空气影响,预计今天夜间到明天我市大部分地区将出现对交通有影响的道路结冰,注意防范。\n图例标准防御指南当路表温度低于0℃,出现降水,12小时内可能出现对交通有影响的道路结冰。\n1.交通、公安等部门要按照职责做好道路结冰应对准备工作;2.驾驶人员应当注意路况,安全行驶;3.行人外出尽量少骑自行车,注意防滑。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "61e974fb-36b1-442d-ada0-6fa68e559a26",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.014447852533602465,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3386
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1569,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "765a5abd-e26b-4d80-8f1e-7a5ea15de397"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3386
+              }
+            ],
+            "task_type_embedding_margin": 0.1569,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "765a5abd-e26b-4d80-8f1e-7a5ea15de397"
+          ],
+          "selected_parent_ids": [
+            "6eb6f3cd-963a-43cc-9523-df18f84a8f29"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "61e974fb-36b1-442d-ada0-6fa68e559a26"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "6eb6f3cd-963a-43cc-9523-df18f84a8f29",
+              "kept_chunk_ids": [
+                "61e974fb-36b1-442d-ada0-6fa68e559a26"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 14.9988,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-04.md",
+          "document_id": "765a5abd-e26b-4d80-8f1e-7a5ea15de397",
+          "start_offset": 0,
+          "end_offset": 56,
+          "quote": "发布日期:2016-01-0615:45:00莱芜市气象台2016年1月6日15时45分发布道路结冰黄色预警信号"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-04.md"
+        ],
+        "resolved_document_ids": [
+          "765a5abd-e26b-4d80-8f1e-7a5ea15de397"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 4.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness 5: 回答覆蓋了引用片段中的核心事件（莱芜市气象台于2016-01-06 15:45发布道路结冰黄色预警）及主要结论和三项建议（交通/公安准备、驾驶人注意行驶、行人注意防滑），符合 required_claims_or_compare_axes。 Faithfulness_to_citations 4: 回答大部分陳述直接對應引用內容（发布时间、预警类型、受降雪和冷空气影响、预期时段、对交通的影响及三项建议），但在表述“道路结冰可能在12小时内对交通造成影响”时省略了原文中将“12小时内”作为在“路表温度低于0℃且出现降水”这一条件下的说明，因而存在輕微的去條件化，故信頼度略降。 Structure_quality 5: 摘要條理清晰，分「核心事件」與「主要結論與建議」，易讀且符合 document_overview 的格式。 Compare_coverage 5: 該題非比較題，回答聚焦於預期的文件章節內容（document），涵蓋了該章節的主要要點，故得高分。",
+        "missing_points": [
+          "原文將“12小时内可能出现对交通有影响的道路结冰”置于条件句中（当路表温度低于0℃且出现降水时），摘要未明確保留該條件，導致表述看似絕對化。",
+          "未引用或說明原文中提及的“图例标准防御指南”表述（為技術背景說明），雖非必要但屬原文細節之一。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.75,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.683939,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-5",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "核心事件摘要：\n- 事件：順德大良一名11歲小學女生蘇某在上學途中失蹤，經警方搜查後於出租屋內被發現已死亡；警方已抓獲犯罪嫌疑人張某，案件正進一步偵查中。\n\n主要事實與時間線（依據文件）：\n- 1月4日早上，蘇某從家附近步行前往學校途中失聯，最後一次被見到在龍的酒樓附近過橋後前往學校方向。學校發現其未到校並報警。\n- 警方成立專案組展開全市搜尋，調查中發現一名特徵為短髮、戴黑色眼鏡、白T恤、牛仔褲的可疑男子，呼籲目擊者提供線索。\n- 經兩日兩夜調查，警方於1月6日6時許在大良廣源路附近抓獲嫌疑人張某；張某初步供述以讓受害人替其女兒帶作業為由，騙蘇某回出租屋並將其殺害。\n- 現場有目擊者見警方拉起警戒線並從出租屋清理出多個紙箱；網路上關於女孩跟網友外出等說法尚未獲警方證實。\n\n主要結論（依據文件可確定的）：\n- 事件已確認為他殺，嫌疑人被捕並有初步供述，案件進入偵辦階段，警方仍在進一步調查以釐清完整動機與案情細節。\n\n缺乏或未經證實的資訊：\n- 網路流傳的女孩與網友外出的說法，文件中指出未獲警方證實，因此目前無足夠授權資料支持該說法。\n\n若需我可以：\n- 幫你整理警方公開通報全文重點或製作簡短時間軸圖表。",
+      "answer_blocks": [
+        {
+          "text": "核心事件摘要：\n- 事件：順德大良一名11歲小學女生蘇某在上學途中失蹤，經警方搜查後於出租屋內被發現已死亡；警方已抓獲犯罪嫌疑人張某，案件正進一步偵查中。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+              "document_name": "cnewsum-article-05.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要事實與時間線（依據文件）：\n- 1月4日早上，蘇某從家附近步行前往學校途中失聯，最後一次被見到在龍的酒樓附近過橋後前往學校方向。學校發現其未到校並報警。\n- 警方成立專案組展開全市搜尋，調查中發現一名特徵為短髮、戴黑色眼鏡、白T恤、牛仔褲的可疑男子，呼籲目擊者提供線索。\n- 經兩日兩夜調查，警方於1月6日6時許在大良廣源路附近抓獲嫌疑人張某；張某初步供述以讓受害人替其女兒帶作業為由，騙蘇某回出租屋並將其殺害。\n- 現場有目擊者見警方拉起警戒線並從出租屋清理出多個紙箱；網路上關於女孩跟網友外出等說法尚未獲警方證實。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+              "document_name": "cnewsum-article-05.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論（依據文件可確定的）：\n- 事件已確認為他殺，嫌疑人被捕並有初步供述，案件進入偵辦階段，警方仍在進一步調查以釐清完整動機與案情細節。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+              "document_name": "cnewsum-article-05.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "缺乏或未經證實的資訊：\n- 網路流傳的女孩與網友外出的說法，文件中指出未獲警方證實，因此目前無足夠授權資料支持該說法。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+              "document_name": "cnewsum-article-05.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需我可以：\n- 幫你整理警方公開通報全文重點或製作簡短時間軸圖表。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+          "document_name": "cnewsum-article-05.md",
+          "parent_chunk_id": "477dc57d-d8cd-46bc-bd4f-1e7f51aeeb51",
+          "child_chunk_ids": [
+            "011b3d8a-29d1-45e8-b48d-5f0a4e89a05d",
+            "59d079ce-861f-4d0e-822c-2134e69b6f94"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 1256,
+          "excerpt": "这两天,佛山全城都在寻找顺德一名失踪的11岁女孩苏某。\n今天,传来了噩耗!顺德警方证实,女孩今天在一出租屋内被发现,证实已死亡。\n犯罪嫌疑人已被抓,案件正在进一步侦查中。\n今天下午2:00,顺德警方发布消息,顺德大良失踪的11岁女孩今天在顺德大良近良市场后一出租屋内被发现,被警方证实已死亡。\n其被一男子以帮其女儿带作业为名骗回出租屋杀害,现场目击者说,当天10时前后,警方在该出租屋附近拉起警戒线,并从出租屋清理出数个纸箱。\n通报全文如下1月4日9时许,顺德区公安局大良派出所接到报警称,大良某小学六年级学生苏某在上学途中失踪。\n接报后,市区两级公安机关高度重视,立即成立专案组全面开展一系列侦查工作,全力开展全市大寻查。\n经过两日两夜的连续深入调查,警方于1月6日6时许在大良广源路附近将嫌疑男子张某抓获。\n经审查,张某初步交代,当日以要求受害人苏某帮其女儿带作业给老师为借口,将苏某骗回出租屋并将其杀害的犯罪事实。\n目前,案件正在进一步侦查中。\n有目击者称,今天上午看到警方在该出租屋附近拉起警戒线,并从出租屋清理出数个纸箱。\n网传女孩是跟网友外出等说法,未获警方证实警方昨日通报发现一名男子可能知情顺德警察昨日通报称,2016年1月4日早上,大良公安局接到报警:大良世纪小学六年级学生苏某从大良美食城途经龙的酒楼到世纪小学上学途中走失。\n经走访调查,警方发现一名男子可能知情,其特征如下:短发,戴黑色眼镜,身穿白色T恤,牛仔裤,手持一件深色外套。\n警方已组织警力全力搜寻,现呼吁该男子、认识该男子的市民、当天的目击者,或有行车记录仪记录到上述两人的车主,联系李警官、欧警官或致电110。\n据悉,疑犯正是警方昨天通报寻找的那位短发,戴黑色眼镜的男子。\n11岁女孩上学途中失联1月4日,元旦假后的第一天,一大早顺德人的朋友圈就被小女孩苏某走丢的消息刷屏了。\n当天是周一,早上,世纪小学学生苏某和往常一样由大良美食城途径龙的到世纪小学,但从龙的酒楼过了桥后就失踪了,据了解,苏某今年11岁,读六年级。\n以往一到五年级的时候都是由家里人接送,从六年级开始自己走路上学。\n“家里离学校很近,一般走路十几分钟就到了。\n苏某的妈妈回忆,早上最后一次见到女儿是在龙旳附近,随后女儿就过了桥朝学校的方向走了。\n这段路没有监控,老师和同学们也都没有见到小丽。\n学校老师说“苏某品学兼优,和同学相处也很好”,世纪小学教导处主任何小姐向南都记者表示,她是专门管理6年级学生的工作的,学校要求学生每天8点开始上早读课,而当天早上班主任莫老师却一直没发现苏某,于是第一时间就打电话询问家长情况,但她的父亲并没有接电话,于是校方就把苏某没来上学的消息发到了家长微信群。\n“之后就报警了”,何小姐说,后来家长也说苏某不在家,她们就报警了,然后在学校门口的保安室反复看监控视频,看了不下30次,但没有看到苏某的影子,接着又去警察那边看监控,但是也没有找到。\n来源|南都佛山原创采写|南都记者。\n何奎山。\n陈飞龙编辑|新媒体工作室。\n关婉灵",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "011b3d8a-29d1-45e8-b48d-5f0a4e89a05d",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.011201213376078314,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "59d079ce-861f-4d0e-822c-2134e69b6f94",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.011201213376078314,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "80ad59ae-331b-445c-80af-cf1d3a287510"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "80ad59ae-331b-445c-80af-cf1d3a287510"
+          ],
+          "selected_parent_ids": [
+            "477dc57d-d8cd-46bc-bd4f-1e7f51aeeb51"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "011b3d8a-29d1-45e8-b48d-5f0a4e89a05d",
+            "59d079ce-861f-4d0e-822c-2134e69b6f94"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "477dc57d-d8cd-46bc-bd4f-1e7f51aeeb51",
+              "kept_chunk_ids": [
+                "011b3d8a-29d1-45e8-b48d-5f0a4e89a05d",
+                "59d079ce-861f-4d0e-822c-2134e69b6f94"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 19.6794,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-05.md",
+          "document_id": "80ad59ae-331b-445c-80af-cf1d3a287510",
+          "start_offset": 0,
+          "end_offset": 26,
+          "quote": "这两天,佛山全城都在寻找顺德一名失踪的11岁女孩苏某"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-05.md"
+        ],
+        "resolved_document_ids": [
+          "80ad59ae-331b-445c-80af-cf1d3a287510"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 3.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "Completeness (3): 回答覆蓋了大多數文件中可驗證的主要事實：11歲女孩失聯、在出租屋被發現已死亡、警方成立專案組搜尋、於1月6日抓獲嫌疑人張某並有其初步供述（以讓女孩替其女兒帶作業為由騙回出租屋並殺害）、現場有目擊者見警方拉警戒線並清理紙箱、網傳說法未獲證實等。惟題目要求的必要聲明包含「28歲男子」此一細節，回答未提及該年齡，故未完全覆蓋 required_claims_or_compare_axes，降低分數。\\nFaithfulness_to_citations (5): 回答中的事實陳述均可在所給引用（C1）中找到對應證據，未加入未被引用支援的額外細節或推測，故忠實於引文。\\nStructure_quality (5): 回答結構清晰（核心摘要、時間線、主要結論、未證實資訊、後續可協助事項），易讀且符合摘要所需的固定輸出格式。\\nCompare_coverage / section_focus_accuracy (4): 回答聚焦於預期的文件章節內容（document），涵蓋主要事實與時間軸，但因未包含要求中的「28歲」這一明確要點，故在聚焦且完整覆蓋預期章節方面略有不足。",
+        "missing_points": [
+          "未表明行凶男子年齡（題目要求之「28歲男子」），此為 required_claims_or_compare_axes 中明確要求的資訊。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.25,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.588098,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-6",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "核心事件摘要：\n- 元旦三天假期期間，洛陽接待遊客約53萬人次；有網友曝光在洛陽古墓博物館的墓道壁畫上有人刻字、刻心形並寫下情侶姓名的照片，引發公眾譴責與對文明旅遊的討論。\n\n主要結論：\n- 曝光照片顯示精美壁畫被利器刮傷，包含心形圖案與多人留下的「到此一遊／姓名」等刻畫或書寫痕跡，損害嚴重；博物館記者實地確認存在多處刻字現象。\n- 博物館表示被刻的壁畫為複製品，但強調無論是否原作，隨意刻畫屬不文明行為，走廊與大廳有監控但墓室內未全面覆蓋，若發現會立即制止，呼籲遊客文明參觀、杜絕此類行為。\n\n若需我把新聞整理成一句話稿、媒體稿或提案給博物館的文明參觀宣導文案，我可以接續幫您撰寫。",
+      "answer_blocks": [
+        {
+          "text": "核心事件摘要：\n- 元旦三天假期期間，洛陽接待遊客約53萬人次；有網友曝光在洛陽古墓博物館的墓道壁畫上有人刻字、刻心形並寫下情侶姓名的照片，引發公眾譴責與對文明旅遊的討論。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "e0635ead-cbbf-4328-ba40-569eb6c4ed4a",
+              "document_name": "cnewsum-article-06.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論：\n- 曝光照片顯示精美壁畫被利器刮傷，包含心形圖案與多人留下的「到此一遊／姓名」等刻畫或書寫痕跡，損害嚴重；博物館記者實地確認存在多處刻字現象。\n- 博物館表示被刻的壁畫為複製品，但強調無論是否原作，隨意刻畫屬不文明行為，走廊與大廳有監控但墓室內未全面覆蓋，若發現會立即制止，呼籲遊客文明參觀、杜絕此類行為。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "e0635ead-cbbf-4328-ba40-569eb6c4ed4a",
+              "document_name": "cnewsum-article-06.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需我把新聞整理成一句話稿、媒體稿或提案給博物館的文明參觀宣導文案，我可以接續幫您撰寫。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "e0635ead-cbbf-4328-ba40-569eb6c4ed4a",
+          "document_name": "cnewsum-article-06.md",
+          "parent_chunk_id": "96764f0a-081c-4252-8d1d-1e7b98f4c94b",
+          "child_chunk_ids": [
+            "0fece619-9689-4335-881f-b0dc73cbfcae"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 673,
+          "excerpt": "记者李晓波实习生乔欢欢文记者吴国强摄影本报讯。\n元旦3天假期,洛阳接待游客53万人次,在获得收益同时,也有网友曝出一些不文明的行为。\n有游客在洛阳古墓博物馆狭窄低矮的墓道里,看到有情侣刻的文字,并配发了图片。\n对于该种行为,网友们纷纷谴责,呼吁大家文明参观。\n在古墓的墓道壁画上刻名字留念,该事情被网友曝光后,人们纷纷谴责这种不文明的行为。\n被曝光的照片显示,一幅精美的壁画上,有人用利器刻了一个心形图案,里边写着张某某和张某某的名字,旁边的壁画上隐约也能看到被划的痕迹。\n“精美的壁画遭到利器划伤,真不知道刻字的人是怎么想的?”“古墓里刻名字留念,也太奇葩了。\n”“文明出游,做中国好游客。\n”昨日,大河报记者来到洛阳古墓博物馆探访,在该馆的地下壁画展区,找到了被刻字的墓道壁画。\n据介绍,该古墓为“新莽天象神话壁画墓。\n墓葬结构是砖室墓,关注重点是壁画、祭台。\n记者看到,被刻字的壁画十分精美,但“受伤”严重,网友曝光的游客名字已经被抹掉,但心形图案仍在,应是用利器刻上的,在这个壁画周边,还能隐约看到“到此一游”、“某某某”名字等字样,有的是刻上的,也有用笔写上的。\n此外,记者走访其他墓室,看到一些砖室墓上也有游客的刻字。\n据馆内工作人员介绍,这些刻字都是游客的个人行为,走廊和大厅都有摄像头,但墓室内并没有安装摄像头,不能完全监控到每个角落,如果发现游客刻字,肯定会立即制止。\n随后,洛阳古墓博物馆一徐姓负责人告诉记者,遭刻字的壁画都是复制品,但随意在壁画或其他地方刻字是种不文明行为,希望游客能够文明参观、游览,杜绝不文明现象的发生。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "0fece619-9689-4335-881f-b0dc73cbfcae",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.006930671656746301,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "e0635ead-cbbf-4328-ba40-569eb6c4ed4a"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "e0635ead-cbbf-4328-ba40-569eb6c4ed4a"
+          ],
+          "selected_parent_ids": [
+            "96764f0a-081c-4252-8d1d-1e7b98f4c94b"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "0fece619-9689-4335-881f-b0dc73cbfcae"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "96764f0a-081c-4252-8d1d-1e7b98f4c94b",
+              "kept_chunk_ids": [
+                "0fece619-9689-4335-881f-b0dc73cbfcae"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 17.0502,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-06.md",
+          "document_id": "e0635ead-cbbf-4328-ba40-569eb6c4ed4a",
+          "start_offset": 0,
+          "end_offset": 22,
+          "quote": "记者李晓波实习生乔欢欢文记者吴国强摄影本报讯"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-06.md"
+        ],
+        "resolved_document_ids": [
+          "e0635ead-cbbf-4328-ba40-569eb6c4ed4a"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答涵蓋了引用片段中的關鍵事實：元旦假期遊客量、網友曝光洛陽古墓博物館墓道壁畫被刻字（包括用利器刻出的心形並有姓名/‘到此一遊’等字樣）、記者實地在地下壁畫展區發現刻字現象、部分墓室亦有刻字、館方說明被刻壁畫為複製品，以及走廊/大廳有監控但墓室未全面覆蓋並會制止不當行為。回答的敘述與 citations 中的文字一一對應，未加入未被引文支持的歷史、動機或法律判定等新資訊，結構清晰（事件摘要 + 主要結論），且聚焦於預期的文件內容章節。基於此，各項評分給予最高分。",
+        "missing_points": [
+          "未明確提及該墓葬的正式名稱“新莽天象神话壁画墓”。",
+          "引文中提到“网友曝光的游客名字已经被抹掉,但心形图案仍在”，回答未明確指出公開照片中部分名字已被抹掉的細節（僅概述有姓名/痕跡）。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.650242,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-7",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "摘要 — 核心事件與主要結論\n\n核心事件：\n- 1月6日小牛與國王的比賽延長至雙加時，小牛以117-116取勝。比賽中德克·諾維茨基在首節嘗試無人防守扣籃但未能命中，賽後他在推特上轉發該段影片並自嘲籃框「好像有12英尺高」。\n\n主要結論：\n- 事實上在德克扣籃前，帕森斯的一次上籃被吹犯規（干擾球）但判定進球有效，與德克扣籃失誤無直接關聯。\n- NBA 標準籃框高度為10英尺，德克的玩笑與實際高度不符。\n- 德克本場表現穩定：出場43分鐘，19投8中得到23分、5籃板、3助攻、1次失誤，並在第四節與加時關鍵時刻有重要投籃幫助球隊勝利。",
+      "answer_blocks": [
+        {
+          "text": "摘要 — 核心事件與主要結論",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件：\n- 1月6日小牛與國王的比賽延長至雙加時，小牛以117-116取勝。比賽中德克·諾維茨基在首節嘗試無人防守扣籃但未能命中，賽後他在推特上轉發該段影片並自嘲籃框「好像有12英尺高」。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "734a0d53-3e5d-4a68-97b3-b240f756823f",
+              "document_name": "cnewsum-article-07.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論：\n- 事實上在德克扣籃前，帕森斯的一次上籃被吹犯規（干擾球）但判定進球有效，與德克扣籃失誤無直接關聯。\n- NBA 標準籃框高度為10英尺，德克的玩笑與實際高度不符。\n- 德克本場表現穩定：出場43分鐘，19投8中得到23分、5籃板、3助攻、1次失誤，並在第四節與加時關鍵時刻有重要投籃幫助球隊勝利。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "734a0d53-3e5d-4a68-97b3-b240f756823f",
+              "document_name": "cnewsum-article-07.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "734a0d53-3e5d-4a68-97b3-b240f756823f",
+          "document_name": "cnewsum-article-07.md",
+          "parent_chunk_id": "5d11647a-1bf5-4962-b77b-55adc6b4b7b8",
+          "child_chunk_ids": [
+            "0bb3fa13-39ed-4cd0-80bd-6061cce6d908"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 226,
+          "excerpt": "北京时间1月6日,在小牛双加时117-116战胜国王的比赛中,德克-诺维茨基首节在无人防守的情况下扣篮不中,赛后,德克在推特上笑称篮筐有点高。\n德克转发了自己扣篮不中的视频,并写道:“Yooo。\n那个篮筐好像有12英尺高......”实际上,在德克扣篮之前,帕森斯的上篮已经被吹罚干扰球,进球有效。\n至于NBA标准篮筐的高度则是10英尺。\n本场比赛,德克上场43分钟,19投8中得到23分5篮板3助攻,出现1次失误,并在第四节和加时赛多次命中关键投篮。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "0bb3fa13-39ed-4cd0-80bd-6061cce6d908",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.02006180244042778,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.92,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "734a0d53-3e5d-4a68-97b3-b240f756823f"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "734a0d53-3e5d-4a68-97b3-b240f756823f"
+          ],
+          "selected_parent_ids": [
+            "5d11647a-1bf5-4962-b77b-55adc6b4b7b8"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "0bb3fa13-39ed-4cd0-80bd-6061cce6d908"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "5d11647a-1bf5-4962-b77b-55adc6b4b7b8",
+              "kept_chunk_ids": [
+                "0bb3fa13-39ed-4cd0-80bd-6061cce6d908"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 15.5787,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-07.md",
+          "document_id": "734a0d53-3e5d-4a68-97b3-b240f756823f",
+          "start_offset": 0,
+          "end_offset": 70,
+          "quote": "北京时间1月6日,在小牛双加时117-116战胜国王的比赛中,德克-诺维茨基首节在无人防守的情况下扣篮不中,赛后,德克在推特上笑称篮筐有点高"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-07.md"
+        ],
+        "resolved_document_ids": [
+          "734a0d53-3e5d-4a68-97b3-b240f756823f"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答涵蓋引文 C1 中的所有主要要點——比賽為小牛雙加時117-116勝國王、諾維茨基首節無人防守扣籃未中並於推特自嘲籃筐“好像有12英尺高”、在其扣籃前帕森斯的上籃被判干擾但進球有效、NBA 籃筐高度為10英尺、以及諾維茨基本場數據（43分鐘、19投8中、23分、5籃板、3助攻、1失誤）與在關鍵時刻有得分表現。Faithfulness_to_citations: 回答的所有陳述均可直接在提供的引文 C1 找到或為其合理重述，未加入未被引文支持的新事實或推測。Structure_quality: 以「核心事件」與「主要結論」分段列出要點，條列清晰，符合 summary/overview 的格式與可讀性要求。Compare_coverage (section_focus_accuracy): 題目期望聚焦的章節為 document，回答完全聚焦並忠實反映該章節內容，未偏題或遺漏預期重點。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.580252,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-8",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "以下為該篇新聞的核心事件與主要結論摘要：\n\n核心事件\n- A股市場出現全面上漲，滬指收報3361.84點，漲2.25%，超過150只個股漲停，鋼鐵、採掘（煤炭）、有色金屬領漲，次新股與多個題材板塊也全面走強，盤面全線飄紅。\n\n主要結論\n- 供給側改革與存貨下降的預期是本輪周期性板塊（鋼鐵、煤炭、有色等）反彈的內在邏輯；機構觀察到鋼廠和相關庫存顯著下降，這有利於板塊盈利改善與估值修復，短期內帶動上述板塊獲超額收益。\n- 市場止跌反彈的背景還包括監管層喊話、上市公司增持維穩、央行大規模逆回購以及對減持憂慮的緩和，這些因素共同促成了情緒回暖與技術性反彈。\n- 專家指出，開年暴跌主要與基本面走弱、行業業績下行及供求關係變化有關；熔斷機制並非主要下跌原因，其衝擊相對有限。\n- 個別事件：萬科港股復牌後大跌並放量，市場對其股權爭議及槓桿使用有所擔憂，投機資金可能撤出。\n\n若需我把新聞內容整理成簡短新聞稿、投資觀察要點或製成一頁簡報（含圖表建議），我可以接續處理。",
+      "answer_blocks": [
+        {
+          "text": "以下為該篇新聞的核心事件與主要結論摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "核心事件\n- A股市場出現全面上漲，滬指收報3361.84點，漲2.25%，超過150只個股漲停，鋼鐵、採掘（煤炭）、有色金屬領漲，次新股與多個題材板塊也全面走強，盤面全線飄紅。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "9ad4827b-b651-4e02-a955-a58dc0bf10a5",
+              "document_name": "cnewsum-article-08.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論\n- 供給側改革與存貨下降的預期是本輪周期性板塊（鋼鐵、煤炭、有色等）反彈的內在邏輯；機構觀察到鋼廠和相關庫存顯著下降，這有利於板塊盈利改善與估值修復，短期內帶動上述板塊獲超額收益。\n- 市場止跌反彈的背景還包括監管層喊話、上市公司增持維穩、央行大規模逆回購以及對減持憂慮的緩和，這些因素共同促成了情緒回暖與技術性反彈。\n- 專家指出，開年暴跌主要與基本面走弱、行業業績下行及供求關係變化有關；熔斷機制並非主要下跌原因，其衝擊相對有限。\n- 個別事件：萬科港股復牌後大跌並放量，市場對其股權爭議及槓桿使用有所擔憂，投機資金可能撤出。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "9ad4827b-b651-4e02-a955-a58dc0bf10a5",
+              "document_name": "cnewsum-article-08.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需我把新聞內容整理成簡短新聞稿、投資觀察要點或製成一頁簡報（含圖表建議），我可以接續處理。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "9ad4827b-b651-4e02-a955-a58dc0bf10a5",
+          "document_name": "cnewsum-article-08.md",
+          "parent_chunk_id": "d617e228-1aab-4cf2-9abe-660c0baa525b",
+          "child_chunk_ids": [
+            "2118df89-8150-445e-9740-1e8119aeb5a3",
+            "437c613a-7aba-4146-a883-032aa6a9f79e"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 1417,
+          "excerpt": "财新网1月6日电:全线飘红,钢铁采掘领涨,150余只股涨停,沪指缩量收报3361.84点涨2.25%。\n开年暴跌以来,钢铁、煤炭、有色金属表现抢眼,率先收复失地,周三更是积极领涨。\n在证监会喊话、上市公司增持维稳的背景下,周三沪深两市止跌企稳,午后在上述周期性板块的积极拉升下,沪指涨幅超过2%。\n市场情绪恢复,全线飘红,题材概念方面,次新股涌现涨停。\n盘面上,全线飘红。\n钢铁领涨逾7%,其中十余只个股涨停;采掘、有色金属、建筑材料涨幅居前。\n题材上,亦是全线飘红;次新股领涨涨幅超过6%,其中个股近30只涨停;冷链物流、黄金珠宝、新疆区域振兴、北部湾自贸区等指数涨幅居前。\n爱建证券一位不愿具名的策略分析师指出,现在市场的情况和股灾时有天壤之别,很难出现连续大幅下跌。\n再加上昨日央行大规模逆回购和市场对股东和高管减持忧虑的下降,大盘也出现了企稳和技术性反弹。\n东北证券分析师沈正阳表示,开年首日大跌跟基本面不佳、大部分行业业绩趋势性下降有关。\n在供求关系预期发生变化之际,上攻乏力,市场以退为进往往是大概率选择。\n暴跌是风险快速释放的过程,是对供求关系趋弱的反应、也是对元旦前最后一周反历史经验的防御之策。\n熔断机制的表现、某种意义上加速了市场的波动。\n“客观而言,熔断机制并非市场下跌的主因、熔断机制对市场的影响力要远小于限售股解禁、远小于新股发行制度的改革等,熔断机制带来的市场冲击、持续性不会太强。\n”沈正阳称。\n周三钢铁、采掘、有色金属大幅领涨,上述爱建证券分析师对财新记者表示,采掘钢铁有色等上游行业一直属于产能过剩行业,而政府进行的供给侧改革决心淘汰落后产能,会增加产业集中度,从供给端改善上述行业的盈利状况。\n在经济增速不断下滑的情况下,为了保证就业,市场对政府出台稳增长政策有一定预期;再加上近期动力煤、螺纹钢、沪铜等出现一定反弹,从需求端改善了盈利状况。\n近期各大机构纷纷上调煤炭、钢铁行业投资评级,认为库存下降带动需求恢复。\n海通证券研报表示,2015年12月以来钢厂和钢材库存同比下降9%和4%,钢厂和焦化厂库存同比下降33%,钢铁社会库存水平达到2009年以来最低水平;电厂近期虽然在补库,但煤炭库存同比仍下降20%,秦皇岛库存更是同比下降了43%。\n“供给侧改革预期加速是本轮周期行情发动的内在逻辑。\n”长江证券行业研究员王鹤涛等人在最新发布的研报中指出,虽然现阶段钢铁行业基本面有所改善,但并非根本原因,钢价上涨12月初便已发生,不止是钢铁,煤炭、有色等在内的整个周期性板块同步走强。\n王鹤涛认为,目前的需求好转更多源于短期季节性因素,但在近期各种有关此类改革消息不断释放并且未来仍或层出不穷,同时眼前处于检验政策落实真空期的情况下,供给侧改革预期将有助于板块估值提升并使得板块阶段性获得超额收益。\n类似这种借改革等预期之名提升估值的行情在钢铁板块2014年中期以来频繁出现。\n万科港股今日复牌,大跌且成交放量。\n爱建证券一位不愿具名的分析师认为,在万科停牌期间,公开信息揭露宝能在购买万科股份时采用了大量杠杆,这引起了监管层的高度重视,保监会也出台了相应政策规范险资举牌行为。\n加上王石、宝能、安邦三方似有和解迹象,所以投机资金争相退出也就在情理之中了。\n采编:财新记者。\n曹文姣。\n康淑。\n实习记者。\n张莉掌握经济脉搏,淘金股市起落,更多优质内容请见财新网旗下微信公众号:金融混业观察金融混业观察",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 2,
+          "candidates": [
+            {
+              "chunk_id": "2118df89-8150-445e-9740-1e8119aeb5a3",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.008156248626973424,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "437c613a-7aba-4146-a883-032aa6a9f79e",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.008156248626973424,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3386
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1569,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.92,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "9ad4827b-b651-4e02-a955-a58dc0bf10a5"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3386
+              }
+            ],
+            "task_type_embedding_margin": 0.1569,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "9ad4827b-b651-4e02-a955-a58dc0bf10a5"
+          ],
+          "selected_parent_ids": [
+            "d617e228-1aab-4cf2-9abe-660c0baa525b"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "2118df89-8150-445e-9740-1e8119aeb5a3",
+            "437c613a-7aba-4146-a883-032aa6a9f79e"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "d617e228-1aab-4cf2-9abe-660c0baa525b",
+              "kept_chunk_ids": [
+                "2118df89-8150-445e-9740-1e8119aeb5a3",
+                "437c613a-7aba-4146-a883-032aa6a9f79e"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 20.8243,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-08.md",
+          "document_id": "9ad4827b-b651-4e02-a955-a58dc0bf10a5",
+          "start_offset": 0,
+          "end_offset": 50,
+          "quote": "财新网1月6日电:全线飘红,钢铁采掘领涨,150余只股涨停,沪指缩量收报3361.84点涨2.25%"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-08.md"
+        ],
+        "resolved_document_ids": [
+          "9ad4827b-b651-4e02-a955-a58dc0bf10a5"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 3.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "completeness: 回答包含了要求的核心陳述（沪指收报3361.84点涨2.25%、板块全线飘红、钢铁/采掘/有色领涨、150余只股涨停），並覆蓋文章中多個主要觀點（监管喊话、上市公司增持、央行逆回购、周期性板块反弹的供给端逻辑、熔断机制影响等），因此為完整。faithfulness_to_citations: 回答大部分陳述可在引用片段中找到對應支持（市场涨幅、板块领涨、监管与逆回购背景、分析师關點、熔断非主因等），但包含若干超出引用證據的內容（如“库存显著下降”、具體稱“钢厂和相关库存显著下降”、提及“万科港股复牌后大跌并放量”、以及明確說短期內帶來“超額收益”），這些細節在提供的摘錄中未見，因此忠實度需下調。structure_quality: 回答有清晰分段（核心事件、主要结论）與條列，易讀且符合摘要格式。compare_coverage (section_focus_accuracy): 文章不是比對題，評估是否聚焦於預期章節（document）：大體聚焦且覆蓋該章節主要論點，但包含少數與該章節證據不符的額外事件/細節，故稍有扣分。",
+        "missing_points": [
+          "回答中提及“钢厂和相关库存显著下降/存货下降的预期”——引用片段未包含“库存显著下降”或類似具體表述，原文僅談供给侧改革及供求关系预期變化與近期商品反弹。",
+          "回答提到“短期内带动上述板块获超额收益”——引用片段支持板块盈利改善/估值修复的論點，但未直接提供“短期内获超额收益”的具體表述或數據，屬推論性擴展。",
+          "回答包含“個別事件：万科港股复牌后大跌并放量”等敘述——此事件在所給引用片段中未出現，屬未被引用證據支持的新增內容。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.25,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.639005,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-9",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "核心事件摘要：\n- 觀致汽車現任 CEO 墨斐於 1 月 5 日突然請辭，董事長陳安寧將兼任 CEO，親自督戰觀致；市場與銷售執行副總裁孫曉東職位維持不變。\n\n主要背景與可能原因：\n- 墨斐自 2015 年 2 月加盟觀致，與孫曉東組成「墨+孫」組合，推動內部改革並帶動銷量回升。觀致去年 12 月單月銷量突破 2,000 輛，全年約 14,000 餘台，年增約 170%，反映改革初見成效，但仍未達成立時對 2015 年 3–5 萬台的目標。\n- 內部消息指墨斐以「個人原因」離職，但也有跡象顯示可能與股東（奇瑞與以色列量子集團）之間日益增加的壓力與干涉有關。觀致過去一年虧損擴大至約 22 億元，股東已表示會追加約 10 億元投資以支持公司。\n\n主要結論與影響：\n- 墨斐離任發生在公司轉機之際，外界對觀致未來發展與管理層穩定性產生質疑；若管理層變動頻繁，可能影響公司持續改善與市場信心。\n- 陳安寧兼任 CEO、孫曉東獨挑行銷重任，短期內為接續運作，但是否能延續「墨+孫」改革效果、或找到新的長期領導人選，仍未可知，後續發展與股東策略干預是關鍵觀察點。\n\n若需要，我可以再把文章中時間線、銷量與財務數據、以及主要當事人背景各自整理成簡表。",
+      "answer_blocks": [
+        {
+          "text": "核心事件摘要：\n- 觀致汽車現任 CEO 墨斐於 1 月 5 日突然請辭，董事長陳安寧將兼任 CEO，親自督戰觀致；市場與銷售執行副總裁孫曉東職位維持不變。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "c11f603a-4ad1-42fc-84b6-25260e9ef5c1",
+              "document_name": "cnewsum-article-09.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要背景與可能原因：\n- 墨斐自 2015 年 2 月加盟觀致，與孫曉東組成「墨+孫」組合，推動內部改革並帶動銷量回升。觀致去年 12 月單月銷量突破 2,000 輛，全年約 14,000 餘台，年增約 170%，反映改革初見成效，但仍未達成立時對 2015 年 3–5 萬台的目標。\n- 內部消息指墨斐以「個人原因」離職，但也有跡象顯示可能與股東（奇瑞與以色列量子集團）之間日益增加的壓力與干涉有關。觀致過去一年虧損擴大至約 22 億元，股東已表示會追加約 10 億元投資以支持公司。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "c11f603a-4ad1-42fc-84b6-25260e9ef5c1",
+              "document_name": "cnewsum-article-09.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論與影響：\n- 墨斐離任發生在公司轉機之際，外界對觀致未來發展與管理層穩定性產生質疑；若管理層變動頻繁，可能影響公司持續改善與市場信心。\n- 陳安寧兼任 CEO、孫曉東獨挑行銷重任，短期內為接續運作，但是否能延續「墨+孫」改革效果、或找到新的長期領導人選，仍未可知，後續發展與股東策略干預是關鍵觀察點。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "c11f603a-4ad1-42fc-84b6-25260e9ef5c1",
+              "document_name": "cnewsum-article-09.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需要，我可以再把文章中時間線、銷量與財務數據、以及主要當事人背景各自整理成簡表。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "c11f603a-4ad1-42fc-84b6-25260e9ef5c1",
+          "document_name": "cnewsum-article-09.md",
+          "parent_chunk_id": "8de45478-4a4e-4072-a1ab-8ea50b0c6d77",
+          "child_chunk_ids": [
+            "db373710-6d38-40d1-9c03-d73a36702dcf",
+            "5586a28d-035a-41c3-9551-b9c1638117de",
+            "1ec77ffe-6ed5-47e2-9db0-df69da3503e2"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2015,
+          "excerpt": "经济观察网。\n记者。\n王国信。\n在观致汽车发展刚有起色之际,却突然发生巨变!1月5日,经济观察网记者独家获悉,观致汽车现任CEO墨斐先生已经于1月5日突然请辞。\n观致董事长陈安宁将兼任CEO,亲自督战观致,而墨斐的搭档——观致汽车市场与销售执行副总裁孙晓东职位未有变化。\n墨斐突然请辞墨斐于2015年2月2日加盟观致。\n曾在通用中国担任“一把手”的墨斐被媒体誉为“中国通”汽车市场传奇人物。\n1996年至2000年,墨斐一直担任上海通用汽车公司执行副总裁。\n从2000年到2005年,他任职通用汽车中国公司董事长兼首席执行官。\n离开通用汽车后,墨斐在上海汽车集团担任执行副总裁,负责公司国际运营。\n随后,他在克莱斯勒担任亚洲业务首席执行官。\n挽救了日益下滑的克莱斯勒发展的墨斐,在业内被视为知名“残局收拾者。\n墨斐与上汽通用创始人之一,曾担任上汽通用副总经理的孙晓东组成的“墨+孙”组合,也被视作观致命运扭转的关键。\n从1996年开始,墨斐就与孙晓东在事业上存在紧密的“交集”:在墨斐任职上海通用执行副总裁五年期间,孙晓东同样在上海通用担任高管并且将别克品牌营销做得风生水起。\n观致汽车内部人士向记者透露,墨斐离开为“个人原因。\n不过,即便是观致内部,大部分人是也对此感到摸不着头脑。\n“观致正处于好转的前夕,此时墨斐的突然请辞着实令人意外。\n”有内部人士向记者表示。\n经济观察网记者在2015年12月曾独家专访墨斐,其仍向记者表达了对观致汽车前景看好的预判。\n而在1月4日墨斐辞职前一天,这个2016年第一天上班之际,墨斐还带领观致员工敲响开市之锣,对前景充满希望。\n压力导致离开?墨+孙的改革是否能成功,在外界看来是有争议的。\n不过,在过去一年时间内,观致以“墨+孙”为核心,迅速组建起了一支通用系队伍,并在公司管理和营销等多个方面进行了全方面的调整,开源节流的方式也使得观致逐步走上正轨。\n公司的日益成熟化,使得观致在市场上也初步打开局面。\n1月5日,经济观察网记者也独家获悉,去年12月观致的销量已经突破2000辆,全年销量14000余台,同比增长170%。\n这反映了观致团队由内而外的改革已经逐步见效。\n按照此前预测,观致如果年销量突破5万辆,则可能摆脱亏损,实现盈亏平衡——这个目标被认为在接下来两年内可能实现。\n“这一年,‘墨+孙’的组合使得观致刚有起色,此时高层的变动无疑给外界带来强烈质疑。\n但墨斐的离开可能不是对观致发展不看好。\n分析人士指出。\n但究竟墨斐为何会选择在此时离开已经成为谜团。\n而经济观察网记者从观致汽车和奇瑞汽车内部了解到,墨斐的离开或许有股东双方对观致日益增加的压力以及过多的干涉有关。\n“实际上今年下半年开始,这种苗头已经逐渐显现。\n”知情人士向记者表示。\n观致作为奇瑞汽车和以色列量子集团股比对半的合资公司,至今成立不过9年时间,距离第一款产品上市不过2年时间。\n但其发展压力也在与日俱增——尽管增幅巨大,但观致销量并未达到预期,这使得这个公司管理团队承受了巨大的压力。\n从数据上来看,在观致成立之初的计划中,观致在2015年的年销量目标为3-5万台,目前销量据此还有很大一段距离。\n而与此同时,去年观致亏损扩大了37%至22亿元左右。\n为了支持观致发展,观致股东双方也不得不继续砸入重金。\n“我们正在对观致追加投资,这笔资金大概有10亿元。\n”在去年12月,奇瑞汽车董事长尹同跃曾对记者表示。\n观致未来怎么走?不管如何,墨斐的离开引起业界质疑观致的未来发展。\n“对观致这样正处于起步的公司,保持管理层的稳定是企业发展的关键点之一。\n”接近观致和奇瑞高层的分析人士指出。\n此前,“墨+孙”组合也在2015年8月,刚刚发布了观致未来5年的计划,墨斐还信誓旦旦的表示,希望在五年之后能给观致一个美好的未来。\n此举被视为观致新管理团队建立长久发展,塑造市场信心的信号。\n然而,墨斐此时的突然请辞,使得一切都打上了一个大大的问号。\n那么,奇瑞和量子集团究竟要干什么?观致未来要走向何处?作为开创了中国自主品牌汽车发展第三条发展道路,在产品上率先达到欧洲标准,同时在素以严苛著称的欧洲碰撞试验中刷新历史得分记录——可以说,观致创造了中国汽车的奇迹。\n尽管观致目前的市场份额很小,但却牵动了整个行业,其未来命运如何,值得关注。\n墨斐离开是否会带来后续效应,尚难以预料。\n1月5日晚,经济观察网记者向孙晓东询问墨斐请辞的消息以及公司未来的安排,但未获得回应。\n在墨斐离开后,作为观致最重要的营销干将,孙晓东在未来将独立挑起观致发展的大梁。\n而对于陈安宁而言,其兼任观致CEO无疑也将给自己增加巨大的工作量。\n陈安宁现为奇瑞汽车常务执行副总经理,同时其还兼任奇瑞捷豹路虎董事长、观致汽车董事长、奇瑞汽车工程研究总院院长。\n至于后续观致是否已经寻觅到比墨斐更为合适的人选,截止记者发稿时,双方依然没有回应。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 3,
+          "candidates": [
+            {
+              "chunk_id": "db373710-6d38-40d1-9c03-d73a36702dcf",
+              "source": "vector",
+              "vector_rank": 3,
+              "fts_rank": null,
+              "rrf_rank": 3,
+              "rrf_score": 0.015873015873015872,
+              "rerank_rank": 1,
+              "rerank_score": 0.0027791905585136147,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "5586a28d-035a-41c3-9551-b9c1638117de",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.0027791905585136147,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "1ec77ffe-6ed5-47e2-9db0-df69da3503e2",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.0027791905585136147,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "c11f603a-4ad1-42fc-84b6-25260e9ef5c1"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "c11f603a-4ad1-42fc-84b6-25260e9ef5c1"
+          ],
+          "selected_parent_ids": [
+            "8de45478-4a4e-4072-a1ab-8ea50b0c6d77"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "db373710-6d38-40d1-9c03-d73a36702dcf",
+            "5586a28d-035a-41c3-9551-b9c1638117de",
+            "1ec77ffe-6ed5-47e2-9db0-df69da3503e2"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "8de45478-4a4e-4072-a1ab-8ea50b0c6d77",
+              "kept_chunk_ids": [
+                "db373710-6d38-40d1-9c03-d73a36702dcf",
+                "5586a28d-035a-41c3-9551-b9c1638117de",
+                "1ec77ffe-6ed5-47e2-9db0-df69da3503e2"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 22.9701,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-09.md",
+          "document_id": "c11f603a-4ad1-42fc-84b6-25260e9ef5c1",
+          "start_offset": 0,
+          "end_offset": 5,
+          "quote": "经济观察网"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-09.md"
+        ],
+        "resolved_document_ids": [
+          "c11f603a-4ad1-42fc-84b6-25260e9ef5c1"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 4.0,
+          "faithfulness_to_citations": 2.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "回答覆盖了引用片段中明确记载的核心事件：墨斐于1月5日突然请辞、董事长陈安宁兼任CEO、孙晓东职位未变、墨斐2015年加盟、“墨+孙”组合被视为扭转观致的关键、公司内部对离职理由感到意外，以及墨斐在1月4日带员工敲响开市之锣等要点，且条理清晰（因此 structure_quality 给高分）。\n\n但回答包含多项具体财务与销量数据（如12月单月破2000辆、全年约1.4万台、年增约170%）、亏损约22亿元、股东将追加约10亿元投资、并点名股东（奇瑞与以色列量子集团）等细节，引用片段并未提供这些具体数字或股东名称／投资金额的证据。因此存在超出引用证据的补脑，导致 faithfulness_to_citations 评分较低。compare_coverage（section_focus_accuracy）评分为较高但非满分，因回答总体聚焦在期望章節（document）且触及要求主张，但对“或与股东压力及过多干涉有关”这一暗示只做了推测性的陈述，引用片段仅有“压力导致离开?”的提示性小标题/片段，并未提供明确证据支持具体股东干预或其细节，故未完全覆盖证据层面的论据。",
+        "missing_points": [
+          "文中未提供支持的销量數據：『去年12月單月銷量突破2000輛、全年約14,000台、年增約170%』——引用片段未包含這些數字。",
+          "文中未提供支持的財務數據：『過去一年虧損擴大至約22億元』——引用片段未包含此虧損金額。",
+          "文中未提供支持的股東名稱與投資金額：『股東（奇瑞與以色列量子集團）已表示會追加約10億元投資』——引用片段未提及股東名稱或10億元投資的具體數字。",
+          "將離職直接歸因於股東壓力或過多干涉的陳述，超出引用片段可驗證的內容：引用只有一處提示性標題/句子（如“压力导致离开?”），但沒有具體證據或來源來證實股東干涉為主要原因。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 3.75,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.600763,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+      "item_id": "cnewsum-summary-10",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的核心事件與主要結論。",
+      "answer": "核心事件：\n- 潍坊市火车站公告：2016年春运期间，基於客流需求，有45趟经由潍坊的高铁动车将临时停运（停运时段主要集中在2月7日至2月9日），并另有三趟（G223、G228、G247）自1月24日至3月3日期間全部春运期间停运，提醒旅客注意车次信息以免影响行程。\n\n主要結論：\n- 旅客在2016年春节前后出行时需提前核实列车时刻与停运信息，尤其留意2月7–9日的多个停运车次以及G223、G228、G247在整個春运期的停运安排，以规避行程不便或改签改乘。",
+      "answer_blocks": [
+        {
+          "text": "核心事件：\n- 潍坊市火车站公告：2016年春运期间，基於客流需求，有45趟经由潍坊的高铁动车将临时停运（停运时段主要集中在2月7日至2月9日），并另有三趟（G223、G228、G247）自1月24日至3月3日期間全部春运期间停运，提醒旅客注意车次信息以免影响行程。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "fa01bee7-f88b-4085-959b-8612d00f377e",
+              "document_name": "cnewsum-article-10.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要結論：\n- 旅客在2016年春节前后出行时需提前核实列车时刻与停运信息，尤其留意2月7–9日的多个停运车次以及G223、G228、G247在整個春运期的停运安排，以规避行程不便或改签改乘。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "fa01bee7-f88b-4085-959b-8612d00f377e",
+              "document_name": "cnewsum-article-10.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "fa01bee7-f88b-4085-959b-8612d00f377e",
+          "document_name": "cnewsum-article-10.md",
+          "parent_chunk_id": "7180e467-e7d8-4ccb-8f33-e930fdde582e",
+          "child_chunk_ids": [
+            "fc71ced4-0db5-4707-a5fa-b006fba89f0d"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 549,
+          "excerpt": "中国山东网潍坊频道1月5日讯记者从潍坊市火车站获悉,根据客流实际需求,2016年春节期间,将有45趟经潍高铁动车临时停运,提醒广大旅客注意掌握车次信息,避免行程不便。\n据介绍,临时停运的高铁动车临时停运时间主要集中在2月7日至2月9日之间,其中G223、G228、G247三趟列车是从1月24日至3月3日的整个春运期间停运。\n2月7日停运的高铁动车车次为:G1207、G209、G224、G227、G182、G189、G192、G180。\nG199、G185、G172、G173、D6016、D6002、D6073、D6006、D6077、D6082。\nD6052、D6056、D6053、D6004、D6012、D6005、D60792月8日停运的高铁动车车次:G1208、G177、G194、G289、G224、G227、G182、G189、G190、G197、G192、G180、G199、G185、G172、G173、D6016、D6001、D6002、D6073、D6078。\nD6017、D6051、D6013、D6054、D6075、D6076、D6015、D6074、D60092月9日停运的高铁动车车次:G190、G197、G177、G194、D6001、D6078、D6017。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的核心事件與主要結論。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "fc71ced4-0db5-4707-a5fa-b006fba89f0d",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.005220125693558397,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "摘要"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5148
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.358
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3385
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "fact_lookup",
+          "query_type_embedding_margin": 0.1568,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.93,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5094
+            },
+            {
+              "label": "section_focused",
+              "score": 0.4552
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4106
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0542,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "fa01bee7-f88b-4085-959b-8612d00f377e"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5148
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.358
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3385
+              }
+            ],
+            "task_type_embedding_margin": 0.1568,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5094
+              },
+              {
+                "label": "section_focused",
+                "score": 0.4552
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4106
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0542,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "fa01bee7-f88b-4085-959b-8612d00f377e"
+          ],
+          "selected_parent_ids": [
+            "7180e467-e7d8-4ccb-8f33-e930fdde582e"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "fc71ced4-0db5-4707-a5fa-b006fba89f0d"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "7180e467-e7d8-4ccb-8f33-e930fdde582e",
+              "kept_chunk_ids": [
+                "fc71ced4-0db5-4707-a5fa-b006fba89f0d"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 14.9774,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cnewsum-article-10.md",
+          "document_id": "fa01bee7-f88b-4085-959b-8612d00f377e",
+          "start_offset": 0,
+          "end_offset": 82,
+          "quote": "中国山东网潍坊频道1月5日讯记者从潍坊市火车站获悉,根据客流实际需求,2016年春节期间,将有45趟经潍高铁动车临时停运,提醒广大旅客注意掌握车次信息,避免行程不便"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cnewsum-article-10.md"
+        ],
+        "resolved_document_ids": [
+          "fa01bee7-f88b-4085-959b-8612d00f377e"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答直接反映了引文 C1 的要點：指出潍坊市火车站通告提到2016年春节期間共有45趟经潍高铁动车临时停运，停运时段主要集中在2月7日至2月9日，並明确列出G223、G228、G247三趟自1月24日至3月3日整个春运期间停运；且包含原文的提醒旅客注意车次信息以免行程受影响。未引入引文之外的資訊，語句清晰、分項呈現，符合摘要結構與預期章節焦點。",
+        "missing_points": [
+          "無",
+          "重",
+          "大",
+          "遺",
+          "漏",
+          "。",
+          "若",
+          "需",
+          "更",
+          "完",
+          "整",
+          "的",
+          "技",
+          "術",
+          "性",
+          "摘",
+          "要",
+          "，",
+          "可",
+          "將",
+          "引",
+          "文",
+          "中",
+          "列",
+          "出",
+          "的",
+          "2",
+          "月",
+          "7",
+          "日",
+          "、",
+          "2",
+          "月",
+          "8",
+          "日",
+          "、",
+          "2",
+          "月",
+          "9",
+          "日",
+          "具",
+          "體",
+          "停",
+          "運",
+          "車",
+          "次",
+          "逐",
+          "一",
+          "列",
+          "出",
+          "，",
+          "但",
+          "這",
+          "屬",
+          "細",
+          "節",
+          "擴",
+          "展",
+          "，",
+          "非",
+          "必",
+          "需",
+          "之",
+          "核",
+          "心",
+          "要",
+          "點",
+          "。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.696582,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    }
+  ],
+  "baseline_compare": {
+    "per_dataset": {
+      "cnewsum-news-summary-curated-pilot-v1": {
+        "current": 0.621386,
+        "reference": 0.0,
+        "delta": 0.621386
+      }
+    },
+    "task_family": {
+      "summary": {
+        "current": 0.621386,
+        "reference": 0.0,
+        "delta": 0.621386
+      },
+      "compare": {
+        "current": null,
+        "reference": null,
+        "delta": null
+      }
+    }
+  }
+}

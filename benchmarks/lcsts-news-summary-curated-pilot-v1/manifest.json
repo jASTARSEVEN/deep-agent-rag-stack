@@ -1,0 +1,15 @@
+{
+  "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+  "version": "1.0.0",
+  "description": "Officially extracted LCSTS Chinese news summary package.",
+  "language": "zh-TW",
+  "task_family": "summary",
+  "item_count": 10,
+  "dataset_provenance": {
+    "source_name": "LCSTS",
+    "upstream_url": "https://huggingface.co/datasets/suolyer/lcsts",
+    "source_split": "test",
+    "extraction_rule": "Take the first 10 rows from the official test split after removing the instruction prefix from `input`.",
+    "note": "Each item stores the zero-based row index as the stable key, and keeps the raw LCSTS `id` in `source_mapping.original_id`."
+  }
+}

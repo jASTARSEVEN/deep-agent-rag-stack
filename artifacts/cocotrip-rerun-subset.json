@@ -1,0 +1,1356 @@
+{
+  "run_metadata": {
+    "benchmark_name": "cocotrip-compare-curated-rerun-subset",
+    "benchmark_version": "2.0.0",
+    "area_id": "340d4857-044c-4092-ae43-c90211aa1f16",
+    "actor_sub": "benchmark-suite-runner",
+    "judge_model": "gpt-5-mini",
+    "generated_at": "2026-04-12T12:44:13.890650Z",
+    "dataset_count": 1,
+    "item_count": 2
+  },
+  "execution": {
+    "parallel_workers": 1,
+    "judge_items_count": 2,
+    "judge_failed_count": 0,
+    "partial_items_count": 0
+  },
+  "metric_registry": {
+    "bert_score_f1": {
+      "metric_name": "bert_score_f1",
+      "source_method": "BERTScore (Zhang et al., 2019)",
+      "standard_level": "standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "qafacteval_score": {
+      "metric_name": "qafacteval_score",
+      "source_method": "QAFactEval (Fabbri et al., 2021)",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "pairwise_rubric_judge_win_rate": {
+      "metric_name": "pairwise_rubric_judge_win_rate",
+      "source_method": "LLM-as-a-judge rubric / pairwise evaluation",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "compare"
+      ]
+    },
+    "required_document_coverage": {
+      "metric_name": "required_document_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "citation_coverage": {
+      "metric_name": "citation_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "section_coverage": {
+      "metric_name": "section_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "required_document_not_cited_rate": {
+      "metric_name": "required_document_not_cited_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "metric_name": "insufficient_evidence_not_acknowledged_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "avg_overall_score": {
+      "metric_name": "avg_overall_score",
+      "source_method": "LLM judge rubric aggregate",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    }
+  },
+  "per_dataset_scores": [
+    {
+      "benchmark_name": "cocotrip-compare-curated-rerun-subset",
+      "benchmark_version": "2.0.0",
+      "language": "en",
+      "task_family": "compare",
+      "item_count": 2,
+      "main_score_metric": "pairwise_rubric_judge_win_rate",
+      "main_score": {
+        "status": "scored",
+        "value": 0.0,
+        "reason": null
+      },
+      "supporting_metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 3.375,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "task_family_scores": {
+    "summary_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "compare_benchmark_score": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    }
+  },
+  "language_rollups": {
+    "en_compare_score": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    }
+  },
+  "benchmark_overview": {
+    "summary_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "compare_benchmark_score": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "dataset_count": 1,
+    "not_applicable_metrics": []
+  },
+  "aggregate_metrics": {
+    "required_document_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "citation_coverage": {
+      "status": "scored",
+      "value": 1.0,
+      "reason": null
+    },
+    "section_coverage": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "required_document_not_cited_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "avg_overall_score": {
+      "status": "scored",
+      "value": 3.375,
+      "reason": null
+    }
+  },
+  "per_item_results": [
+    {
+      "benchmark_name": "cocotrip-compare-curated-rerun-subset",
+      "item_id": "cocotrip-compare-3",
+      "language": "en",
+      "task_type": "cross_document_compare",
+      "summary_strategy": null,
+      "question": "Compare the two travel entities based on the provided review summaries. Include the main strengths of each entity and any shared points.",
+      "answer": "以下為根據已授權文件整理的比較（依據來源標記於段落末）：\n\n總覽\n- 兩家皆為位於波士頓、位置便利且受旅客推薦的飯店，且都強調餐飲與員工服務品質。\n\n主要優勢 — Entity A（C2）\n- 優越地理位置，靠近市中心與會展中心，交通便利。\n- 出眾且一致的客服表現：前台、禮賓與門僮（文中點名人員）都被多次稱讚為禮貌、周到且專業。\n- 附設餐廳 Brasserie Jo 評價極佳：食物、美感與服務皆被強調。\n- 房間舒適、床寢品質佳（羽絨枕被等）且整體氛圍獨特令人印象深刻。\n- 有健身房且設備可用，適合需要運動的旅客。\n\n主要優勢 — Entity B（C1）\n- 價格具吸引力（包含促銷/Deal），性價比高；適合各類旅遊型態（商務/休閒混合）。\n- 位置接近 Boston Public Garden 與地鐵 Arlington 站，方便觀光與移動。\n- 房間雖小但有家的裝飾風格；升級房型空間良好並提供免費早餐與點心、WiFi。\n- 餐飲（含海鮮、Whiskey Bar）與特別活動（如聖誕茶會）被旅客喜愛。\n- 員工普遍專業且樂於協助，能處理遇到的問題。\n\n共同點（兩者皆具備）\n- 位置優越、交通與觀光便利（都接近主要活動地點或地鐵站）。\n- 餐飲為強項：兩家飯店的餐廳皆獲好評，對餐食與服務的評價正面。\n- 員工服務整體為亮點：多位評論指向員工的專業與友善（雖 Entity B 提及個別安全人員較不幫忙）。\n\n需注意/弱點\n- Entity A：房內電視尺寸被數次提及偏小（可能影響影音需求旅客）。\n- Entity B：有較多維護/設備問題被提及，尤其電梯常故障（甚至曾在停電後停在樓層間），以及部分維修問題影響入住體驗；另安全隊伍服務有負面紀錄。\n\n總結建議（依旅客需求）\n- 若重視一貫優質服務、餐廳體驗與",
+      "answer_blocks": [
+        {
+          "text": "以下為根據已授權文件整理的比較（依據來源標記於段落末）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "總覽\n- 兩家皆為位於波士頓、位置便利且受旅客推薦的飯店，且都強調餐飲與員工服務品質。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+              "document_name": "cocotrip-03-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "document_name": "cocotrip-03-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要優勢 — Entity A（C2）\n- 優越地理位置，靠近市中心與會展中心，交通便利。\n- 出眾且一致的客服表現：前台、禮賓與門僮（文中點名人員）都被多次稱讚為禮貌、周到且專業。\n- 附設餐廳 Brasserie Jo 評價極佳：食物、美感與服務皆被強調。\n- 房間舒適、床寢品質佳（羽絨枕被等）且整體氛圍獨特令人印象深刻。\n- 有健身房且設備可用，適合需要運動的旅客。",
+          "citation_context_indices": [
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "document_name": "cocotrip-03-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "主要優勢 — Entity B（C1）\n- 價格具吸引力（包含促銷/Deal），性價比高；適合各類旅遊型態（商務/休閒混合）。\n- 位置接近 Boston Public Garden 與地鐵 Arlington 站，方便觀光與移動。\n- 房間雖小但有家的裝飾風格；升級房型空間良好並提供免費早餐與點心、WiFi。\n- 餐飲（含海鮮、Whiskey Bar）與特別活動（如聖誕茶會）被旅客喜愛。\n- 員工普遍專業且樂於協助，能處理遇到的問題。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+              "document_name": "cocotrip-03-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "共同點（兩者皆具備）\n- 位置優越、交通與觀光便利（都接近主要活動地點或地鐵站）。\n- 餐飲為強項：兩家飯店的餐廳皆獲好評，對餐食與服務的評價正面。\n- 員工服務整體為亮點：多位評論指向員工的專業與友善（雖 Entity B 提及個別安全人員較不幫忙）。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+              "document_name": "cocotrip-03-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "document_name": "cocotrip-03-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "需注意/弱點\n- Entity A：房內電視尺寸被數次提及偏小（可能影響影音需求旅客）。\n- Entity B：有較多維護/設備問題被提及，尤其電梯常故障（甚至曾在停電後停在樓層間），以及部分維修問題影響入住體驗；另安全隊伍服務有負面紀錄。",
+          "citation_context_indices": [
+            1,
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "document_name": "cocotrip-03-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+              "document_name": "cocotrip-03-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "總結建議（依旅客需求）\n- 若重視一貫優質服務、餐廳體驗與",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+          "document_name": "cocotrip-03-entity-b.md",
+          "parent_chunk_id": "9bbc6d7b-2d3b-4154-bf6e-031596779597",
+          "child_chunk_ids": [
+            "0cc29a36-2e63-4a5d-bef7-810f1c013dbf",
+            "0908c29d-20ea-455f-bd13-1605a0d58dea",
+            "e0dc1086-3137-407e-922a-212914251624",
+            "6fe089a2-e97f-4ca7-a9a6-76c9293d3860"
+          ],
+          "heading": "Entity B",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2350,
+          "excerpt": "This is a perfect hotel for any type of stay and you will want to keep coming back for the tranquillity, unbeatable price and the quality. The hotel is very close to the Boston public gardens and the Arlington stop of the T line. The rooms are smaller in size but are decorated with a homely charm. The staff at the hotel were professional and also rectified any problems that occurred. The hotel 's Christmas Tea was particularly enjoyable, as well as the famous seafood available in the restaurant. The hotel itself has elevators that malfunctioned repeatedly while staying here, including stopping between floors after electricity completely cut out.\n\nThe hotel was available with a deal through Priceline, but there were some maintenance issues that tarnished the stay a little. In general, a great place to stay for a trip to Boston. The location of the hotel is great for accessing nearby attractions and places to eat. Newly updated rooms, with upgrades on offer for guests to choose if they want to. The upgraded rooms in particular are an excellent size and there is wireless internet for guests to enjoy. Staff at the hotel is very helpful and always available to answer questions. They are very professional and make you feel comfortable. There are plenty of food choices here including seafood. There is lunch provided in the hotel's restaurant too. The hotel's elevators seemed to be malfunctioning a lot.\n\nThis hotel is perfect for a mixed business/pleasure stay in Boston at any time of the year or season. It is reminiscent of vintage class when quality was key and mattered most. Travel the world and come back, this may be the favorite place. With a central location, the hotel is really convenient for the Arlington subway stop, and the Boston Common. If you politely request you can get a really great room on the eighth floor which is a King room. It's really big and has free breakfasts and appetisers as well as WiFi internet. Reasonable service at this hotel, with many members of staff very attentive to their guests. The security team were not so helpful but overall the staff seemed quite professional. Food-wise, the hotel does have, The Whiskey Bar, a hotel restaurant and seafood. They also had a special treat of Christmas Tea. The elevators were not working properly and kept getting stuck between floors.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+          "document_name": "cocotrip-03-entity-a.md",
+          "parent_chunk_id": "c3060e37-99b1-4fb9-9e64-827d3613cfea",
+          "child_chunk_ids": [
+            "f67c2ffd-b0ea-410f-9b8a-39d319875b73",
+            "16470024-6351-4c2e-96f3-4ac19a5d9740",
+            "eb673f53-cfd2-4038-90a4-8c0193759e44",
+            "6489d2d9-3239-494a-a50e-eb717e8c7514"
+          ],
+          "heading": "Entity A",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2295,
+          "excerpt": "A unique hotel that provides a similarly unique and unforgettable experience. It can't be recommended highly enough for the convenience and friendliness here. The location is superb. It had absolutely in the center of everything you could need. The hotel rooms are decorated sophistically, although the TV was very small. Exceptional service; every member of staff on front of house were super polite, courteous and so thoughtful. Brasserie Jo, the restaurant attached to the hotel, is excellent with delicious food, charming atmosphere , and the best service. There's a good gym in this hotel. It is on the fifth floor and features some cardio machines.\n\nThe Colonnade Hotel is a great place to stay and highly recommended. A comfortable and unique atmosphere. The hotel is situated centrally in Boston for activities. It is in close proximity to a number of locales, such as a T connection and the Hynes Convention Centre. The rooms in this hotel are really comfortable with nice features such as feather pillows and comforter. The television was however on the small side. The hotel's staff are fantastic, from arrival to departure. They are helpful and a good face for the hotel. The front desk staff, the concierge Jerry Good and the doorman Norman Maines are of particular note. The restaurant, Brasserie Jo is excellent with delicious food. The hotel has a gym that is usable for guests.\n\nThis hotel comes highly recommended, leaving visitors wanting to come and stay again. From the beginning to the end of a visit, this hotel provides an exceptional experience in every aspect. The hotel is close to the central activities of the city with the Convention Center nearby. The decor of the rooms are to a good standard, with very comfortable bedding. However, the size of the TV is quite small in comparison to other hotels. From check-in to check out the staff was fantastic. They were thoughtful, and polite and always courteous. Norman, the doorman, Jerry, the concierge right through to the front desk staff were all particularly outstanding. The hotel's restaurant, Brasserie Jo, is very good . It has a great atmosphere and food is provided with great service. This hotel provides a decent sized gym which has a variety of cardio machines on offer for a varied work out.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "Compare the two travel entities based on the provided review summaries. Include the main strengths of each entity and any shared points.",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 8,
+          "candidates": [
+            {
+              "chunk_id": "0cc29a36-2e63-4a5d-bef7-810f1c013dbf",
+              "source": "vector",
+              "vector_rank": 6,
+              "fts_rank": null,
+              "rrf_rank": 6,
+              "rrf_score": 0.015151515151515152,
+              "rerank_rank": 1,
+              "rerank_score": 0.003469890732315233,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "0908c29d-20ea-455f-bd13-1605a0d58dea",
+              "source": "vector",
+              "vector_rank": 4,
+              "fts_rank": null,
+              "rrf_rank": 4,
+              "rrf_score": 0.015625,
+              "rerank_rank": 1,
+              "rerank_score": 0.003469890732315233,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "e0dc1086-3137-407e-922a-212914251624",
+              "source": "vector",
+              "vector_rank": 3,
+              "fts_rank": null,
+              "rrf_rank": 3,
+              "rrf_score": 0.015873015873015872,
+              "rerank_rank": 1,
+              "rerank_score": 0.003469890732315233,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "6fe089a2-e97f-4ca7-a9a6-76c9293d3860",
+              "source": "vector",
+              "vector_rank": 5,
+              "fts_rank": null,
+              "rrf_rank": 5,
+              "rrf_score": 0.015384615384615385,
+              "rerank_rank": 1,
+              "rerank_score": 0.003469890732315233,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "f67c2ffd-b0ea-410f-9b8a-39d319875b73",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 2,
+              "rerank_score": 0.0019117693602301456,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "16470024-6351-4c2e-96f3-4ac19a5d9740",
+              "source": "vector",
+              "vector_rank": 7,
+              "fts_rank": null,
+              "rrf_rank": 7,
+              "rrf_score": 0.014925373134328358,
+              "rerank_rank": 2,
+              "rerank_score": 0.0019117693602301456,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "eb673f53-cfd2-4038-90a4-8c0193759e44",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 2,
+              "rerank_score": 0.0019117693602301456,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "6489d2d9-3239-494a-a50e-eb717e8c7514",
+              "source": "vector",
+              "vector_rank": 8,
+              "fts_rank": null,
+              "rrf_rank": 8,
+              "rrf_score": 0.014705882352941176,
+              "rerank_rank": 2,
+              "rerank_score": 0.0019117693602301456,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "cross_document_compare",
+          "query_type_language": "en",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "compare"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "cross_document_compare",
+              "reason": "compare",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "cross_document_compare",
+              "score": 0.4075
+            },
+            {
+              "label": "document_summary",
+              "score": 0.3134
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.1715
+            }
+          ],
+          "query_type_top_label": "cross_document_compare",
+          "query_type_runner_up_label": "document_summary",
+          "query_type_embedding_margin": 0.0941,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": null,
+          "summary_strategy": null,
+          "summary_strategy_source": "not_applicable",
+          "summary_strategy_confidence": 0.0,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [],
+          "summary_strategy_top_label": null,
+          "summary_strategy_runner_up_label": null,
+          "summary_strategy_embedding_margin": 0.0,
+          "summary_strategy_fallback_used": false,
+          "summary_strategy_fallback_reason": null,
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "a3046565-439e-4f10-9154-b139a486445b",
+            "162d117a-4eea-4bae-bfc8-b7203fcd5a87"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.475,
+          "document_mention_candidates": [
+            {
+              "document_id": "10098d6f-d19f-4e0d-aad2-20060033bf1c",
+              "file_name": "cocotrip-01-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "61f20e76-fbd7-4cc3-b576-f4248ba0455e",
+              "file_name": "cocotrip-01-entity-b.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "434602ca-7733-4329-91d4-6cb615e66783",
+              "file_name": "cocotrip-02-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "1d30f800-1546-4ce6-afbf-c5f66853d151",
+              "file_name": "cocotrip-02-entity-b.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "file_name": "cocotrip-03-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            }
+          ],
+          "selected_profile": "cross_document_compare_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 8,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3200,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "cross_document_compare",
+                "score": 0.4075
+              },
+              {
+                "label": "document_summary",
+                "score": 0.3134
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.1715
+              }
+            ],
+            "task_type_embedding_margin": 0.0941,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [],
+            "summary_strategy_embedding_margin": 0.0,
+            "summary_strategy_fallback_used": false
+          },
+          "selection_applied": true,
+          "selection_strategy": "compare_coverage_then_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+            "a3046565-439e-4f10-9154-b139a486445b"
+          ],
+          "selected_parent_ids": [
+            "9bbc6d7b-2d3b-4154-bf6e-031596779597",
+            "c3060e37-99b1-4fb9-9e64-827d3613cfea"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3200,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "0cc29a36-2e63-4a5d-bef7-810f1c013dbf",
+            "0908c29d-20ea-455f-bd13-1605a0d58dea",
+            "e0dc1086-3137-407e-922a-212914251624",
+            "6fe089a2-e97f-4ca7-a9a6-76c9293d3860",
+            "f67c2ffd-b0ea-410f-9b8a-39d319875b73",
+            "16470024-6351-4c2e-96f3-4ac19a5d9740",
+            "eb673f53-cfd2-4038-90a4-8c0193759e44",
+            "6489d2d9-3239-494a-a50e-eb717e8c7514"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "9bbc6d7b-2d3b-4154-bf6e-031596779597",
+              "kept_chunk_ids": [
+                "0cc29a36-2e63-4a5d-bef7-810f1c013dbf",
+                "0908c29d-20ea-455f-bd13-1605a0d58dea",
+                "e0dc1086-3137-407e-922a-212914251624",
+                "6fe089a2-e97f-4ca7-a9a6-76c9293d3860"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "c3060e37-99b1-4fb9-9e64-827d3613cfea",
+              "kept_chunk_ids": [
+                "f67c2ffd-b0ea-410f-9b8a-39d319875b73",
+                "16470024-6351-4c2e-96f3-4ac19a5d9740",
+                "eb673f53-cfd2-4038-90a4-8c0193759e44",
+                "6489d2d9-3239-494a-a50e-eb717e8c7514"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 16.4109,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cocotrip-03-entity-a.md",
+          "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+          "start_offset": 13,
+          "end_offset": 253,
+          "quote": "A unique hotel that provides a similarly unique and unforgettable experience. It can't be recommended highly enough for the convenience and friendliness here. The location is superb. It had absolutely in the center of everything you could n"
+        },
+        {
+          "file_name": "cocotrip-03-entity-b.md",
+          "document_id": "162d117a-4eea-4bae-bfc8-b7203fcd5a87",
+          "start_offset": 13,
+          "end_offset": 252,
+          "quote": "This is a perfect hotel for any type of stay and you will want to keep coming back for the tranquillity, unbeatable price and the quality. The hotel is very close to the Boston public gardens and the Arlington stop of the T line. The rooms"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cocotrip-03-entity-a.md",
+          "cocotrip-03-entity-b.md"
+        ],
+        "resolved_document_ids": [
+          "a3046565-439e-4f10-9154-b139a486445b",
+          "162d117a-4eea-4bae-bfc8-b7203fcd5a87"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 4.0,
+          "faithfulness_to_citations": 2.0,
+          "structure_quality": 4.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "Completeness (4): 回答涵蓋了題目要求的主要對比點，包含兩家飯店的主要優勢、共同點與弱點，且包含了兩項 required_claims_or_compare_axes（Entity A 為 \"unique...unforgettable\" 及 \"can't be recommended highly enough...convenience and friendliness\"），這些皆可在 C2 引文中找到。\n\nFaithfulness_to_citations (2): 回答包含多項與提供之引文不符或未在引文中出現的陳述，須降低可信度。支持的內容示例：Entity A 的「位置優越、客服出眾、Brasserie Jo 優秀、房內電視小、健身房在五樓有心率訓練設備」均可在 C2 中找到；Entity B 的「靠近 Boston Public Garden 與 Arlington 站、房間小但有家的裝飾、員工專業并可處理問題、有透過 Priceline 的折扣、電梯故障與維護問題」可在 C1 中找到。非引文支持的陳述（導致分數下降）包括但不限於：提及羽絨枕被/床寢品質佳、免費早餐與點心／WiFi、升級房型之敘述、Whiskey Bar、以及對安全人員服務有負面記述（C1 未提供該細節）。回答亦在結尾處截斷，顯示未完整呈現結論。\n\nStructure_quality (4): 結構清晰（總覽、主要優勢、共同點、需注意/弱點、總結建議），可讀性良好。但最後段落被截斷，略微影響結構完整性。\n\nCompare_coverage (4): 回答有系統地呈現共通點與差異，並指出各文件的立場（正面推薦 vs 維護問題）。大多數比較點可在引文找到。但因包含未被引用支持的細節，且少數負面點（如安全人員不幫忙）並無對應 citation，故未能獲得最高分。",
+        "missing_points": [
+          "回答內提及但未見於引文的細節：床寢品質佳（如羽絨枕被）——C2 未提及此細節。",
+          "回答內提及但未見於引文的服務/設施項目：免費早餐、點心與 WiFi，以及升級房型帶來的空間改善——C1 引文未提及這些福利。",
+          "回答內提及的 Whiskey Bar（或其他特定酒吧）——C1 引文只提到餐廳與海鮮、聖誕茶會，未提 Whiskey Bar。",
+          "關於安全人員服務有負面紀錄的說法在回答中出現，但對應的 C1/C2 引文未包含此資訊。",
+          "回答結尾的『總結建議』段落被截斷，未完整呈現結論與建議，屬內容遺失/不完整。"
+        ]
+      },
+      "pairwise_judge_result": {
+        "model": "gpt-5-mini",
+        "verdict": "reference",
+        "rationale": "參考答案直接且忠實地反映了所給 citation 的要點，並完整包含題目要求的聲明（Entity A 為獨特、令人難忘且強烈推薦的飯店；強調便利性與友善）。候選答案雖然組織良好、覆蓋多項優勢，但包含多處超出 citations 的資訊（例如：宣稱靠近會展中心、具體床寢為羽絨枕被、提到促銷/升等、免費早餐/點心/WiFi、Whiskey Bar 及對安全人員的負面細節等）— 這些細節並未在提供的摘錄中出現。依據「若 candidate 過度超出 citations，應判 reference 或 tie」的準則，應判參考答案較佳。",
+        "score": 0.0
+      },
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 3.5,
+          "reason": null
+        },
+        "pairwise_rubric_judge_win_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "cocotrip-compare-curated-rerun-subset",
+      "item_id": "cocotrip-compare-9",
+      "language": "en",
+      "task_type": "cross_document_compare",
+      "summary_strategy": null,
+      "question": "Compare the two travel entities based on the provided review summaries. Include the main strengths of each entity and any shared points.",
+      "answer": "以下比較根據授權文件摘要整理完成。\n\n主要共同點\n- 兩家旅館都位於靠近主要水上交通或大運河的地區，步行或搭船可到達主要觀光景點與船路。\n- 兩者房間整潔、景觀/位置為重要優勢（Entity B 強調運河景觀；Entity A 則強調靠近大運河且遠離觀光人潮）。\n- 早餐皆被描述為「基本/尚可/足夠」，非主要亮點。\n- 兩家員工/業主被評為友善且提供當地建議或協助訂位。\n\nEntity A — 主要優勢（根據文件）\n- 位在安靜社區、離熱門人潮較遠、能享受較寧靜的住宿環境，且仍接近主要水路與景點。\n- 價格合理、房間乾淨；對預算導向旅客有吸引力（部分房型像宿舍式，亦可付費升級）。\n- 業主（小型旅館經營者）非常友善，會協助預訂餐廳並提供實用建議（例如前往穆拉諾島應搭一般船）。\n\nEntity B — 主要優勢（根據文件）\n- 直接位於大運河、面對 Santa Lucia 車站，房間可看運河景色（視角與裝潢被多次讚賞）。\n- 房間採光良好、維護良好；浴室有雙洗手台（對雙人旅客為便利設計）。\n- 服務人員專業且知識豐富，能提供詳盡景點與餐廳建議、並提供路線地圖，讓整體住宿體驗更難忘。\n- 電梯雖小但維護良好（若有行李或行動不便者仍可使用）。\n\n限制或差異（供參考）\n- 位置感受：Entity A 被描述為「隱於小巷、離觀光人潮較遠且偶爾較難找」，適合想避開人群者；Entity B 則更靠近交通節點（火車站、主要船路），但部分評論覺得離聖馬可廣場稍遠。\n- 房型差異：Entity A 有較多經濟/類宿舍房型、需額外付費升級至較好房型；Entity B 強調房間寬敞、裝潢（吊燈等）與運河景觀。\n- 早餐與電梯：兩者早餐皆非強項（基本或尚可）；Entity B 明確提到電梯小但良好；Entity A",
+      "answer_blocks": [
+        {
+          "text": "以下比較根據授權文件摘要整理完成。",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "主要共同點\n- 兩家旅館都位於靠近主要水上交通或大運河的地區，步行或搭船可到達主要觀光景點與船路。\n- 兩者房間整潔、景觀/位置為重要優勢（Entity B 強調運河景觀；Entity A 則強調靠近大運河且遠離觀光人潮）。\n- 早餐皆被描述為「基本/尚可/足夠」，非主要亮點。\n- 兩家員工/業主被評為友善且提供當地建議或協助訂位。",
+          "citation_context_indices": [
+            0,
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+              "document_name": "cocotrip-09-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "190b31c9-fec3-464f-b42b-44e0b63328c7",
+              "document_name": "cocotrip-09-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "Entity A — 主要優勢（根據文件）\n- 位在安靜社區、離熱門人潮較遠、能享受較寧靜的住宿環境，且仍接近主要水路與景點。\n- 價格合理、房間乾淨；對預算導向旅客有吸引力（部分房型像宿舍式，亦可付費升級）。\n- 業主（小型旅館經營者）非常友善，會協助預訂餐廳並提供實用建議（例如前往穆拉諾島應搭一般船）。",
+          "citation_context_indices": [
+            1
+          ],
+          "display_citations": [
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "190b31c9-fec3-464f-b42b-44e0b63328c7",
+              "document_name": "cocotrip-09-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "Entity B — 主要優勢（根據文件）\n- 直接位於大運河、面對 Santa Lucia 車站，房間可看運河景色（視角與裝潢被多次讚賞）。\n- 房間採光良好、維護良好；浴室有雙洗手台（對雙人旅客為便利設計）。\n- 服務人員專業且知識豐富，能提供詳盡景點與餐廳建議、並提供路線地圖，讓整體住宿體驗更難忘。\n- 電梯雖小但維護良好（若有行李或行動不便者仍可使用）。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+              "document_name": "cocotrip-09-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "限制或差異（供參考）\n- 位置感受：Entity A 被描述為「隱於小巷、離觀光人潮較遠且偶爾較難找」，適合想避開人群者；Entity B 則更靠近交通節點（火車站、主要船路），但部分評論覺得離聖馬可廣場稍遠。\n- 房型差異：Entity A 有較多經濟/類宿舍房型、需額外付費升級至較好房型；Entity B 強調房間寬敞、裝潢（吊燈等）與運河景觀。\n- 早餐與電梯：兩者早餐皆非強項（基本或尚可）；Entity B 明確提到電梯小但良好；Entity A",
+          "citation_context_indices": [
+            1,
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 1,
+              "context_label": "C2",
+              "document_id": "190b31c9-fec3-464f-b42b-44e0b63328c7",
+              "document_name": "cocotrip-09-entity-a.md",
+              "heading": "Entity A",
+              "page_start": null,
+              "page_end": null
+            },
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+              "document_name": "cocotrip-09-entity-b.md",
+              "heading": "Entity B",
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+          "document_name": "cocotrip-09-entity-b.md",
+          "parent_chunk_id": "45809918-f992-4dc7-8153-45199aff3b0c",
+          "child_chunk_ids": [
+            "59a7a7c3-40a9-43c7-b4d4-33761ccd29f2",
+            "4b7587e8-4cbb-4420-9737-54fc8a9afa70",
+            "139b8f9d-2399-41a2-8f98-d64e2a39c81d"
+          ],
+          "heading": "Entity B",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2138,
+          "excerpt": "The hotel is definitely recommended for others, but it is a little remote for some. The hotel is located on the Grand Canal and opposite the Santa Lucia train station. It is in a less buys part of the city but a gentle walk to all of the tourist sights and boat routes. The rooms in the hotel have a view of the canal. The rooms are light and well maintained. The bathrooms have twin basins which is ideal for a couple. The staff at the hotel were helpful and knowledgeable. The breakfast provided by the hotel was adequate. The elevator in this hotel was small but it was really well-maintained.\n\nThe hotel is great and very recommendable. It is a little bit of a distance from St Mark's but otherwise very good. The location of this hotel is great. It's within walking distance of most tourist attractions but isn't far from the railway station if it's needed. It is close to the main boat routes as well. Views of the canal from the rooms are amazing. The rooms are gorgeous and the room also had a twin basin bathroom which was a great bonus. The staff will make any visit to this hotel really memorable. Every member of staff have loads of great advice and recommendations for the local area from sight-seeing to restaurants, and even provided a map with best routes, Here at the hotel the breakfast food that's served is okay. The hotel had a small elevator but it was in good condition.\n\nThis is a gem of a hotel that is highly recommended if you want a memorable stay. It is easy enough to walk to main tourist attractions from this hotel but there are transport links that are close to the hotel should your feet get tired. Overall this is a great and lovable location. There were great views from the blue room in this hotel and it had plenty of room inside. There are gorgeous chandeliers provide a luxurious touch. The staff are very welcoming here, and are well equipped to provide guests with directions and recommendations. Very helpful at all times, and do everything they can to make each guests's stay memorable. The breakfast food at the hotel was okay. A small, yet well maintained elevator in this hotel.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        },
+        {
+          "context_index": 1,
+          "context_label": "C2",
+          "document_id": "190b31c9-fec3-464f-b42b-44e0b63328c7",
+          "document_name": "cocotrip-09-entity-a.md",
+          "parent_chunk_id": "1d8a527f-9a8f-4773-b582-c2b0e7817829",
+          "child_chunk_ids": [
+            "a734b481-7a21-4c2f-9a1b-c6b185b58551",
+            "5bd050ca-1be1-4496-bef9-bc45dbbde056",
+            "11382d08-b7c7-4eac-978b-078a0d6e4508",
+            "67ee35e9-006a-4cbc-8b92-d3638bbe44be"
+          ],
+          "heading": "Entity A",
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 2241,
+          "excerpt": "This lovely and charming hotel can be busy during September time. This hotel is nicely located in quiet neighborhood and also close to the best things to do in Venice. The room were clean but it seems more like a dorm than a hotel room. You need to spend extra 20 euro for an upgrade. Very friendly owners. While the breakfast is basic here the breakfast area is quite small and it gets filled up fast, there are lots of places near by; the staff will even make a reservation for you. The local boat trip to Murano is worth it but the advice would be to go on the normal boat.\n\nThe hotel is generally good but may be a little difficult to find. The hotel really nicely located off the beaten path, hidden away in a quiet neighborhood. It is great once you get your bearings in Venice and is close to everything but the trip to Murano, though free, is not good. The room was clean with a good price for Venice. It was more of a dorm room than a hotel room away from the main hotel but we were eventually able to get a lovely room for an additional cost. The owners of this hotel were very friendly. The hotel offers a basic breakfast but the room is too small and fills quickly. There are places to eat nearby but you can also book a place in the restaurant. One boat tried was the size of a box so if going to Murano, go on the normal boat.\n\nThis is a charming hotel with several factories and shops nearby to give you choices in your shopping experience. Even during the busy September season, it is a enjoyable experience. And don't worry about being able to find it. It's no drama to locate and everyone will enjoy their stay. The hotel was well located and right on the Grand Canal. The hotel was located off of the beaten path so you can avoid a lot of tourists. The location was central for the main water boat routes too. The room was lovely, although across from the main hotel. It was a second floor corner room that was a bit smaller than anticipated, but at a good price and very clean. The owners of the hotel were welcoming. The hotel's breakfast was adequate although a little basic. The hotel can book the restaurant for you at your preferred time. The best way for hotel guests to go to Murano is by normal boat.",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "Compare the two travel entities based on the provided review summaries. Include the main strengths of each entity and any shared points.",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 7,
+          "candidates": [
+            {
+              "chunk_id": "59a7a7c3-40a9-43c7-b4d4-33761ccd29f2",
+              "source": "vector",
+              "vector_rank": 4,
+              "fts_rank": null,
+              "rrf_rank": 4,
+              "rrf_score": 0.015625,
+              "rerank_rank": 1,
+              "rerank_score": 0.003222484324002434,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "4b7587e8-4cbb-4420-9737-54fc8a9afa70",
+              "source": "vector",
+              "vector_rank": 2,
+              "fts_rank": null,
+              "rrf_rank": 2,
+              "rrf_score": 0.016129032258064516,
+              "rerank_rank": 1,
+              "rerank_score": 0.003222484324002434,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "139b8f9d-2399-41a2-8f98-d64e2a39c81d",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.003222484324002434,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "a734b481-7a21-4c2f-9a1b-c6b185b58551",
+              "source": "vector",
+              "vector_rank": 5,
+              "fts_rank": null,
+              "rrf_rank": 5,
+              "rrf_score": 0.015384615384615385,
+              "rerank_rank": 2,
+              "rerank_score": 0.0010322310367548194,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "5bd050ca-1be1-4496-bef9-bc45dbbde056",
+              "source": "vector",
+              "vector_rank": 6,
+              "fts_rank": null,
+              "rrf_rank": 6,
+              "rrf_score": 0.015151515151515152,
+              "rerank_rank": 2,
+              "rerank_score": 0.0010322310367548194,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "11382d08-b7c7-4eac-978b-078a0d6e4508",
+              "source": "vector",
+              "vector_rank": 3,
+              "fts_rank": null,
+              "rrf_rank": 3,
+              "rrf_score": 0.015873015873015872,
+              "rerank_rank": 2,
+              "rerank_score": 0.0010322310367548194,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            },
+            {
+              "chunk_id": "67ee35e9-006a-4cbc-8b92-d3638bbe44be",
+              "source": "vector",
+              "vector_rank": 7,
+              "fts_rank": null,
+              "rrf_rank": 7,
+              "rrf_score": 0.014925373134328358,
+              "rerank_rank": 2,
+              "rerank_score": 0.0010322310367548194,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "cross_document_compare",
+          "query_type_language": "en",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.84,
+          "query_type_matched_rules": [
+            "compare"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "cross_document_compare",
+              "reason": "compare",
+              "confidence": 0.84
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "cross_document_compare",
+              "score": 0.4075
+            },
+            {
+              "label": "document_summary",
+              "score": 0.3134
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.1715
+            }
+          ],
+          "query_type_top_label": "cross_document_compare",
+          "query_type_runner_up_label": "document_summary",
+          "query_type_embedding_margin": 0.094,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": null,
+          "summary_strategy": null,
+          "summary_strategy_source": "not_applicable",
+          "summary_strategy_confidence": 0.0,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [],
+          "summary_strategy_top_label": null,
+          "summary_strategy_runner_up_label": null,
+          "summary_strategy_embedding_margin": 0.0,
+          "summary_strategy_fallback_used": false,
+          "summary_strategy_fallback_reason": null,
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "190b31c9-fec3-464f-b42b-44e0b63328c7",
+            "a95ddb37-9072-4dfb-b086-cab6c32a815d"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.475,
+          "document_mention_candidates": [
+            {
+              "document_id": "10098d6f-d19f-4e0d-aad2-20060033bf1c",
+              "file_name": "cocotrip-01-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "61f20e76-fbd7-4cc3-b576-f4248ba0455e",
+              "file_name": "cocotrip-01-entity-b.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "434602ca-7733-4329-91d4-6cb615e66783",
+              "file_name": "cocotrip-02-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "1d30f800-1546-4ce6-afbf-c5f66853d151",
+              "file_name": "cocotrip-02-entity-b.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            },
+            {
+              "document_id": "a3046565-439e-4f10-9154-b139a486445b",
+              "file_name": "cocotrip-03-entity-a.md",
+              "score": 0.475,
+              "match_signals": [
+                "token_overlap"
+              ]
+            }
+          ],
+          "selected_profile": "cross_document_compare_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 8,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3200,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "cross_document_compare",
+                "score": 0.4075
+              },
+              {
+                "label": "document_summary",
+                "score": 0.3134
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.1715
+              }
+            ],
+            "task_type_embedding_margin": 0.094,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [],
+            "summary_strategy_embedding_margin": 0.0,
+            "summary_strategy_fallback_used": false
+          },
+          "selection_applied": true,
+          "selection_strategy": "compare_coverage_then_fill_v1",
+          "selected_document_count": 2,
+          "selected_parent_count": 2,
+          "selected_document_ids": [
+            "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+            "190b31c9-fec3-464f-b42b-44e0b63328c7"
+          ],
+          "selected_parent_ids": [
+            "45809918-f992-4dc7-8153-45199aff3b0c",
+            "1d8a527f-9a8f-4773-b582-c2b0e7817829"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3200,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "59a7a7c3-40a9-43c7-b4d4-33761ccd29f2",
+            "4b7587e8-4cbb-4420-9737-54fc8a9afa70",
+            "139b8f9d-2399-41a2-8f98-d64e2a39c81d",
+            "a734b481-7a21-4c2f-9a1b-c6b185b58551",
+            "5bd050ca-1be1-4496-bef9-bc45dbbde056",
+            "11382d08-b7c7-4eac-978b-078a0d6e4508",
+            "67ee35e9-006a-4cbc-8b92-d3638bbe44be"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "45809918-f992-4dc7-8153-45199aff3b0c",
+              "kept_chunk_ids": [
+                "59a7a7c3-40a9-43c7-b4d4-33761ccd29f2",
+                "4b7587e8-4cbb-4420-9737-54fc8a9afa70",
+                "139b8f9d-2399-41a2-8f98-d64e2a39c81d"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            },
+            {
+              "context_index": 1,
+              "parent_chunk_id": "1d8a527f-9a8f-4773-b582-c2b0e7817829",
+              "kept_chunk_ids": [
+                "a734b481-7a21-4c2f-9a1b-c6b185b58551",
+                "5bd050ca-1be1-4496-bef9-bc45dbbde056",
+                "11382d08-b7c7-4eac-978b-078a0d6e4508",
+                "67ee35e9-006a-4cbc-8b92-d3638bbe44be"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 2,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 10.8413,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "cocotrip-09-entity-a.md",
+          "document_id": "190b31c9-fec3-464f-b42b-44e0b63328c7",
+          "start_offset": 13,
+          "end_offset": 253,
+          "quote": "This lovely and charming hotel can be busy during September time. This hotel is nicely located in quiet neighborhood and also close to the best things to do in Venice. The room were clean but it seems more like a dorm than a hotel room. You"
+        },
+        {
+          "file_name": "cocotrip-09-entity-b.md",
+          "document_id": "a95ddb37-9072-4dfb-b086-cab6c32a815d",
+          "start_offset": 13,
+          "end_offset": 253,
+          "quote": "The hotel is definitely recommended for others, but it is a little remote for some. The hotel is located on the Grand Canal and opposite the Santa Lucia train station. It is in a less buys part of the city but a gentle walk to all of the to"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "cocotrip-09-entity-a.md",
+          "cocotrip-09-entity-b.md"
+        ],
+        "resolved_document_ids": [
+          "190b31c9-fec3-464f-b42b-44e0b63328c7",
+          "a95ddb37-9072-4dfb-b086-cab6c32a815d"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 4.0,
+          "faithfulness_to_citations": 2.0,
+          "structure_quality": 3.0,
+          "compare_coverage": 4.0
+        },
+        "rationale": "Completeness (4): 答案涵蓋了題目要求的比較內容與兩個強項，且包含了 required_claims_or_compare_axes 中針對 Entity A 的兩項陳述（\"This lovely and charming hotel can be busy during September time.\" 與 \"nicely located in quiet neighborhood and also close to the best things to do in Venice.\"）和 Entity B 的位置、房間、員工、早餐與電梯等要點，整體沒有遺漏主要重點。  \n\nFaithfulness_to_citations (2): 答案包含若干與引用片段不符或未由引用支持的陳述，因而大幅降低忠實度。例如答案聲稱「兩家旅館都位於靠近主要水上交通或大運河的地區」，但引用中只有 Entity B 明確提到位於大運河並靠近 Santa Lucia 車站；Entity A 的摘錄並未提到靠近大運河或水上交通（僅提到靠近景點與隱於安靜社區）。其他未被引用支持的陳述還包括：稱 Entity A \"價格合理\"、稱 Entity B 提供路線地圖或強調裝潢（如吊燈）等，這些細節不在 C1/C2 中出現，因此降低了忠實度。  \n\nStructure_quality (3): 回答整體有清晰段落（共同點、各方優勢、差異），易讀，但結尾處有未完成的句子（最後以 \"Entity A\" 未完結），並且沒有嚴格使用題目預期的單一章節標題（預期為 \"compare\"），故結構尚可但非完美。  \n\nCompare_coverage (4): 答案呈現了共通點與差異（位置感受、房型差異、早餐/電梯情形、員工服務等），也指出各自優勢，符合比較題的核心要求。但由於包含了未由引用支持的部分陳述（見上），使得比較的證據鏈不全然一致，因此未能給予最高分。",
+        "missing_points": [
+          "答案宣稱「兩家旅館都位於靠近主要水上交通或大運河」，但引用僅顯示 Entity B 位於大運河；C2（Entity A）並未提到靠近大運河或水上交通，僅提到靠近景點與安靜社區。",
+          "答案提到 Entity A 為「價格合理」並吸引預算旅客，C2 摘錄未包含明確「價格合理」或吸引預算旅客的陳述（僅提到房間像宿舍並可付費升級）。",
+          "答案聲稱 Entity B 提供「路線地圖」與較詳盡的地圖導引，C1 摘錄僅說 staff were helpful and knowledgeable，並未具體提到提供路線地圖。",
+          "答案提及 Entity B 的「裝潢（吊燈等）」等細節，C1 並未包含裝潢或吊燈的描述。",
+          "答案結尾出現未完成句（以 \"Entity A\" 結束），造成資訊不完整。",
+          "若將答案視為需要嚴格引用支撐，以上未被引用支持的陳述應移除或改為標示為不確定／無足夠證據。"
+        ]
+      },
+      "pairwise_judge_result": {
+        "model": "gpt-5-mini",
+        "verdict": "reference",
+        "rationale": "The reference answer stays closely aligned to the provided citations and explicitly includes the required claims (e.g., “This lovely and charming hotel can be busy during September time” and that Entity A is “nicely located in quiet neighborhood and also close to the best things to do in Venice”). The candidate answer contains several assertions that go beyond the excerpts: it claims both properties are near major water transport/Grand Canal for Entity A (the citation only states Entity B is on the Grand Canal; Entity A is described as in a quiet neighborhood close to sights, but not explicitly near the Grand Canal or main water transport), it asserts pricing is “reasonable,” mentions maps/decoration details and that Entity A can be hard to find—none of which are supported by the provided excerpts. The candidate also omits the explicit September-busy claim. Because the candidate overreaches beyond the citations and fails to include a required claim, the reference answer is the better match to the source material.",
+        "score": 0.0
+      },
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 3.25,
+          "reason": null
+        },
+        "pairwise_rubric_judge_win_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "baseline_compare": {
+    "per_dataset": {
+      "cocotrip-compare-curated-rerun-subset": {
+        "current": 0.0,
+        "reference": 0.0,
+        "delta": 0.0
+      }
+    },
+    "task_family": {
+      "summary": {
+        "current": null,
+        "reference": null,
+        "delta": null
+      },
+      "compare": {
+        "current": 0.0,
+        "reference": 0.0,
+        "delta": 0.0
+      }
+    }
+  }
+}

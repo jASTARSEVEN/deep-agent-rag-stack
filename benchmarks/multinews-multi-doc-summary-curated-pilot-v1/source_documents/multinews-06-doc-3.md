@@ -1,0 +1,7 @@
+Elected officials and the Landmarks Preservation Commission are both doing their best to launch a thorough investigation of what may very well be the famed 18th century saloon the Bull's Head Tavern, but their options are limited. Photographer Adam Woodward first documented the ancient, hand-planed wood joists and stone foundation in the basement of 50 Bowery last week, and both he and historian David Freeland are convinced that these are the remnants of Bull's Head. If so, this would be the oldest surviving structure in Manhattan by far, and as Woodward puts it, an "incredible opportunity to get on archaeological record." But the fate of the site depends on the current owner, Alex Chu, who is demolishing the site to make way for a new hotel. 
+ 
+ The Landmarks Commission tells The Lo-Down that they're "aware of the situation," but "cannot require the owner to conduct archaeology." The best they can do is give the owner a list of good archaeologists. Some elected officials are also getting involved, but again they've got to take it up with Chu first. 
+ 
+ · Landmarks Commission: No Jurisdiction to Mandate Historic Site Survey at 50 Bowery [TLD] 
+ 
+ · All Coverage of Bull's Head Tavern [~ENY~]

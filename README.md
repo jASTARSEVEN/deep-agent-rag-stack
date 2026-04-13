@@ -106,21 +106,21 @@ For `qasper-*`, `uda-*`, and `drcd-*` evaluation datasets, benchmark runs now us
 | `uda-curated-v1-100` | `en` | `Specified-doc` | `0.7900` | `0.6492` | `0.6044` | Specified-document same-document localization lane |
 | `qasper-curated-v1-100` | `en` | `Specified-doc` | `0.9200` | `0.6105` | `0.5127` | Specified-document scientific-paper hard lane |
 
-Current bilingual summary/compare pilot benchmark snapshot:
+Current real summary/compare suite:
 
-| Suite | Summary Benchmark Score | Compare Benchmark Score | Notes |
-| --- | ---: | ---: | --- |
-| `summary-compare-bilingual-curated-pilot-v1` | `0.764864` | `1.000000` | Bilingual curated pilot suite, `6` parallel lanes, no judge failures |
+| Suite | Packages | Notes |
+| --- | --- | --- |
+| `summary-compare-real-curated-v1` | `QMSum`, `Multi-News`, `CoCoTrip`, `LCSTS`, `CNewSum` | Only real-dataset extracted packages are kept. The previous handcrafted pilot scores are retired and should not be compared against this suite. |
 
-Current summary/compare pilot package scores:
+Current real summary/compare package scores:
 
-| Package | Family | Lang | Main Metric | Score |
-| --- | --- | --- | --- | ---: |
-| `qmsum-query-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.753233` |
-| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.727891` |
-| `drcd-query-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.846113` |
-| `ttnews-multi-doc-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.732217` |
-| `cocotrip-compare-curated-pilot-v1` | `compare` | `en` | `pairwise_rubric_judge_win_rate` | `1.000000` |
+| Package | Family | Main Metric | Score | Notes |
+| --- | --- | --- | ---: | --- |
+| `qmsum-query-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.730954` | `10` items, clean run |
+| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.709126` | `10` items, clean run |
+| `lcsts-news-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.624256` | `10` items, clean run |
+| `cnewsum-news-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.621386` | `10` items, clean run |
+| `cocotrip-compare-curated-pilot-v1` | `compare` | `pairwise_rubric_judge_win_rate` | `0.000000` | package run had `2` judge failures, but rerunning the affected subset still kept the score at `0.0` |
 
 Current benchmark interpretation at the README level:
 

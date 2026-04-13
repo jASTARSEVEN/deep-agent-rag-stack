@@ -1,0 +1,7 @@
+# Entity B
+
+The hotel is simplistic and clean and a quaint family run establishment in Istanbul. The rooms were a good size with comfortable beds that were not cheap. The staff spoke excellent English. The hotel provided a varied selection at breakfast amidst a lovely atmosphere. Once the roof terrace work is finished on the hotel it will be even better.
+
+This hotel presented itself as brand new, excellently clean and is a lovely family-run affair. It is definitely recommended on any visit here. There are a selection of restaurants within walking distance and a short taxi ride away from the Chora church, Spice Bazaar etc. The rooms at this hotel are well-sized and always clean. The beds are expensive and really comfortable. Despite not having an actual restaurant the hotel provides a breakfast that's really diverse and full. There will be a roof terrace to this hotel that will make the hotel itself even better than it already is.
+
+A simple, family run hotel that offers brand new facilities and is well maintained to a very high standard. There are many restaurants to choose from as well. Rooms were particularly spacious and you can tell they are well maintained and cleaned regularly. All staff speak excellent English and are always there for a conversation. The hotel does not have a restaurant but does have a cozy breakfast room with plenty of good food. A new roof terrace is soon to be available at this hotel, providing guests with a beautiful area to rest during their stay.

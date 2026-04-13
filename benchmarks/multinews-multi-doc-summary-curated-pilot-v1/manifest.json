@@ -1,8 +1,15 @@
 {
   "benchmark_name": "multinews-multi-doc-summary-curated-pilot-v1",
-  "version": "1.0.0",
-  "description": "English multi-document summary pilot package inspired by Multi-News style prompts.",
+  "version": "2.0.0",
+  "description": "Officially extracted Multi-News multi-document summary package.",
   "language": "en",
   "task_family": "summary",
-  "item_count": 1
+  "item_count": 10,
+  "dataset_provenance": {
+    "source_name": "Multi-News",
+    "upstream_url": "https://huggingface.co/datasets/alexfabbri/multi_news",
+    "source_split": "test",
+    "extraction_rule": "Take the first 10 rows from the official test set, preserving article order and splitting documents by the `|||||` separator.",
+    "note": "Each row stores the original line index from `test.src.cleaned` / `test.tgt`."
+  }
 }

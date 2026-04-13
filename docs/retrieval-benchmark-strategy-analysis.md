@@ -13,63 +13,76 @@
 
 ## Summary/Compare Pilot Lane
 
-除了現有 retrieval benchmark 主線之外，repo 目前也已新增一條雙語 summary/compare curated pilot suite：`benchmarks/summary-compare-bilingual-curated-pilot-v1`。
+除了現有 retrieval benchmark 主線之外，repo 目前也已新增一條真資料 summary/compare suite：`benchmarks/summary-compare-real-curated-v1`。
 
 此 lane 的定位固定為：
 
 - `phase8a-summary-compare-v1` 仍是唯一 release gate
-- pilot suite 只用於 tuning、橫向比較與長期觀測
+- 這條 suite 只用於 tuning、橫向比較與長期觀測
 - 主輸出只有 `summary_benchmark_score` 與 `compare_benchmark_score`
 - benchmark/test retrieval 允許 `explicit_document_ids`，但此能力只屬於 benchmark contract，不進 public chat runtime
 
-### 2026-04-12 最新實跑結果
+### 目前資料集組成
 
-最新一次完整實跑使用新建 benchmark area `c575a7d1-a187-454a-bb43-ced62fb0be91`，輸出 artifact 為：
+目前 summary/compare 真資料 suite 的 package 組成為：
 
-- `artifacts/summary-compare-bilingual-curated-pilot-v1-run-with-bertscore.json`
-- `artifacts/summary-compare-bilingual-curated-pilot-v1-run-with-bertscore.md`
+| Package | 類型 | 來源 |
+| --- | --- | --- |
+| `qmsum-query-summary-curated-pilot-v1` | `summary` | `QMSum` 官方 test split |
+| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `Multi-News` 官方 test split |
+| `cocotrip-compare-curated-pilot-v1` | `compare` | `CoCoTrip / cocosum` 官方 `anno.json` |
+| `lcsts-news-summary-curated-pilot-v1` | `summary` | `LCSTS` 官方 test split |
+| `cnewsum-news-summary-curated-pilot-v1` | `summary` | `CNewSum processed` test split |
 
-整體 execution metadata：
+### 2026-04-13 真資料 suite 最新實跑分數
 
-- `parallel_workers=6`
-- `judge_items_count=6`
-- `judge_failed_count=0`
-- `partial_items_count=0`
+本輪正式分數對應的 artifact 如下：
 
-正式主分數：
-
-| Score | Value |
-| --- | ---: |
-| `summary_benchmark_score` | `0.764864` |
-| `compare_benchmark_score` | `1.000000` |
-
-語言 rollup：
-
-| Rollup | Value |
-| --- | ---: |
-| `en_summary_score` | `0.740562` |
-| `zh-TW_summary_score` | `0.789165` |
-| `en_compare_score` | `1.000000` |
+- `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`
+- `artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`
+- `artifacts/lcsts-news-summary-curated-pilot-v1-run.json`
+- `artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`
+- `artifacts/cocotrip-compare-curated-pilot-v1-run.json`
+- `artifacts/cocotrip-rerun-subset.json`
 
 各 package 主分數：
 
-| Package | Task Family | Lang | Main Metric | Value |
-| --- | --- | --- | --- | ---: |
-| `qmsum-query-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.753233` |
-| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `en` | `bert_score_f1` | `0.727891` |
-| `drcd-query-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.846113` |
-| `ttnews-multi-doc-summary-curated-pilot-v1` | `summary` | `zh-TW` | `bert_score_f1` | `0.732217` |
-| `cocotrip-compare-curated-pilot-v1` | `compare` | `en` | `pairwise_rubric_judge_win_rate` | `1.000000` |
+| Package | Family | Main Metric | Score | Run Quality |
+| --- | --- | --- | ---: | --- |
+| `qmsum-query-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.730954` | clean |
+| `multinews-multi-doc-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.709126` | clean |
+| `lcsts-news-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.624256` | clean |
+| `cnewsum-news-summary-curated-pilot-v1` | `summary` | `bert_score_f1` | `0.621386` | clean |
+| `cocotrip-compare-curated-pilot-v1` | `compare` | `pairwise_rubric_judge_win_rate` | `0.000000` | package run partial, but the two affected items were rerun separately and still stayed at `0.0` |
+
+目前可直接彙整的 task-family 主分數為：
+
+| Score | Value |
+| --- | ---: |
+| `summary_benchmark_score` | `0.671431` |
+| `compare_benchmark_score` | `0.000000` |
+
+其中 `summary_benchmark_score` 為四個 summary package 的等權平均：
+
+- `(0.730954 + 0.709126 + 0.624256 + 0.621386) / 4 = 0.671431`
+
+### 這輪分數代表什麼
+
+1. `QMSum` 與 `Multi-News` 都高於 `0.70`，表示在真實英文 summary 資料集上，主線 answer path 已具備中高強度的摘要相似度表現，但距離「可放心當 release gate」仍有差距。
+2. `LCSTS` 與 `CNewSum` 分數都落在 `0.62` 左右，顯示中文新聞摘要能力已有穩定基線，但仍低於英文 meeting/news summary 的結果，後續可再觀察中文文風與壓縮率對 `BERTScore` 的影響。
+3. `CoCoTrip` 目前主分數仍是 `0.0`。這不是因為技術性 judge 錯誤沒有排除，而是排除後仍維持 `0.0`，因此目前真正的問題在 compare answer quality 本身，而不是 benchmark 執行故障。
+4. `CoCoTrip` 原始 package run 雖有 `2` 題 `judge_failed`，但將 `cocotrip-compare-3` 與 `cocotrip-compare-9` 拉出來單獨 rerun 後，兩題都變成 `partial=false`，且 pairwise verdict 仍為 `reference`。所以 `0.0` 應視為目前真實 compare 基線，而不是暫時性執行噪音。
+5. `qafacteval_score` 仍未正式接線，因此這輪 summary package 分數仍主要反映 `BERTScore` 相似度，不代表 groundedness guardrail 已完整成立。
 
 ### 評分方法與欄位解讀
 
-雙語 summary/compare pilot suite 目前的評分方法固定如下：
+真資料 summary/compare suite 目前的評分方法固定如下：
 
 | Metric | 用途 | 方法來源 | `standard_level` | 實作說明 |
 | --- | --- | --- | --- | --- |
 | `bert_score_f1` | `summary` 主分數 | `BERTScore (Zhang et al., 2019)` | `standard` | 目前實作使用英文 `roberta-large` 與中文 `bert-base-chinese` 路徑；每個 summary package 的主分數直接取單題 `BERTScore F1` 平均值 |
 | `pairwise_rubric_judge_win_rate` | `compare` 主分數 | `LLM-as-a-judge rubric / pairwise evaluation` | `semi_standard` | compare 題把 candidate answer 與 `reference_answer` 做 pairwise judge；`candidate=1.0`、`tie=0.5`、`reference=0.0`，再對 package 內題目平均 |
-| `qafacteval_score` | `summary` groundedness guardrail | `QAFactEval (Fabbri et al., 2021)` | `semi_standard` | 目前 runner 已保留欄位與 registry，但尚未整合正式 scorer，因此本輪 artifact 仍是 `not_applicable` |
+| `qafacteval_score` | `summary` groundedness guardrail | `QAFactEval (Fabbri et al., 2021)` | `semi_standard` | runner 已保留欄位與 registry，但目前仍待正式 scorer 接線 |
 | `required_document_coverage` | supporting metric | `product evidence contract` | `project_contract` | 必需文件是否都有被 citation 命中 |
 | `citation_coverage` | supporting metric | `product evidence contract` | `project_contract` | citation 是否覆蓋 gold evidence spans |
 | `section_coverage` | supporting metric | `product evidence contract` | `project_contract` | summary 題是否涵蓋預期章節；compare 題目前多數會是 `0.0`，因 compare 不以章節聚焦為主 |
@@ -77,13 +90,9 @@
 | `insufficient_evidence_not_acknowledged_rate` | supporting metric | `product evidence contract` | `project_contract` | 允許證據不足的題目中，回答未承認證據不足的比例 |
 | `avg_overall_score` | supporting metric | `LLM judge rubric aggregate` | `project_contract` | 來自 supporting rubric judge 的四維平均值，不可取代主分數 |
 
-### 目前這組分數代表什麼
+### 舊分數狀態
 
-1. 目前 compare 正式保留的 package 只有 `CoCoTrip`，它得到 `1.0`，代表在這份極小 curated pilot 上，candidate answer 在 pairwise judge 下被判定優於或至少不弱於 `reference_answer`；這只能視為 pilot-level 正向訊號，不能外推成 compare 能力已封頂。
-2. summary 四個 package 的 `BERTScore F1` 目前落在 `0.727891 ~ 0.846113`。其中 `DRCD query summary` 最高，`Multi-News` 與 `TTNews` 較低，這和 multi-document synthesis 本來較難、措辭自由度更大相符。
-3. `required_document_coverage` 與 `citation_coverage` 在六個 package 目前都是 `1.0`，表示本輪 candidate answer 至少沒有出現明顯的 evidence contract 退化。
-4. `qafacteval_score` 目前仍是 `not_applicable`，所以這輪 summary 主分數雖已可用 `BERTScore` 比較，但 groundedness 的外部代表 guardrail 仍未真正接上；這是目前 summary lane 最明確的評估缺口。
-5. 因為目前每個 package 只有 `1` 題，這組數字只能當成 pipeline smoke + contract validation 的第一輪真實結果，還不能拿來做穩定的模型優劣判讀。
+先前 `summary-compare-bilingual-curated-pilot-v1` 的分數，是在手工 curated package 上跑出的歷史結果。由於目前 suite 已切換成只保留真資料集提取版 package，舊分數不得再與新 suite 混讀，也不應再作為 release / tuning 依據。
 
 ## 2026-04-11 目前基線範圍
 

@@ -1,8 +1,15 @@
 {
   "benchmark_name": "qmsum-query-summary-curated-pilot-v1",
-  "version": "1.0.0",
-  "description": "English query-conditioned single-document summary pilot package inspired by QMSum-style prompts.",
+  "version": "2.0.0",
+  "description": "Officially extracted QMSum query-conditioned summary package.",
   "language": "en",
   "task_family": "summary",
-  "item_count": 1
+  "item_count": 10,
+  "dataset_provenance": {
+    "source_name": "QMSum",
+    "upstream_url": "https://github.com/Yale-LILY/QMSum/blob/master/data/ALL/jsonl/test.jsonl",
+    "source_split": "test",
+    "extraction_rule": "Take the first 10 items from `specific_query_list` in test meetings, preserving original order.",
+    "note": "Each benchmark item records the source meeting index and the local query index used for extraction."
+  }
 }

@@ -1,8 +1,0 @@
-{
-  "benchmark_name": "drcd-query-summary-curated-pilot-v1",
-  "version": "1.0.0",
-  "description": "Traditional Chinese query-conditioned single-document summary pilot package adapted from DRCD-style evidence localization.",
-  "language": "zh-TW",
-  "task_family": "summary",
-  "item_count": 1
-}

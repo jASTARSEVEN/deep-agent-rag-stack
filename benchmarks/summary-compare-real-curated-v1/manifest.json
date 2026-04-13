@@ -1,0 +1,16 @@
+{
+  "benchmark_name": "summary-compare-real-curated-v1",
+  "version": "1.0.0",
+  "description": "Summary/compare suite generated from real external datasets.",
+  "dataset_packages": [
+    "../qmsum-query-summary-curated-pilot-v1",
+    "../multinews-multi-doc-summary-curated-pilot-v1",
+    "../cocotrip-compare-curated-pilot-v1",
+    "../lcsts-news-summary-curated-pilot-v1",
+    "../cnewsum-news-summary-curated-pilot-v1"
+  ],
+  "suite_provenance": {
+    "policy": "Every package must be reconstructable from public upstream files using recorded source split, row index, and original example id.",
+    "generated_by": "app.scripts.generate_true_summary_compare_packages"
+  }
+}

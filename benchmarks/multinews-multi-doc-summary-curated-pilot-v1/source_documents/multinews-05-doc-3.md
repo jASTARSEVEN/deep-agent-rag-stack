@@ -1,0 +1,3 @@
+WASHINGTON—The death penalty is shaping up to be a big issue for the Supreme Court as it begins a new term Monday, with at least six capital-punishment cases on the docket and a recent wave of executions keeping the justices up late to field last-minute appeals. 
+ 
+ In the weeks ahead, the court is set to hear arguments over the constitutionality of capital sentences in Florida, Georgia, Kansas and Pennsylvania. The focus on execution issues follows a 5-4 ruling last term involving a sedative used for lethal injections. The split...

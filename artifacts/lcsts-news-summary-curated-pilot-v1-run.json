@@ -1,0 +1,3311 @@
+{
+  "run_metadata": {
+    "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+    "benchmark_version": "1.0.0",
+    "area_id": "340d4857-044c-4092-ae43-c90211aa1f16",
+    "actor_sub": "benchmark-suite-runner",
+    "judge_model": "gpt-5-mini",
+    "generated_at": "2026-04-12T10:59:21.224790Z",
+    "dataset_count": 1,
+    "item_count": 10
+  },
+  "execution": {
+    "parallel_workers": 6,
+    "judge_items_count": 10,
+    "judge_failed_count": 0,
+    "partial_items_count": 0
+  },
+  "metric_registry": {
+    "bert_score_f1": {
+      "metric_name": "bert_score_f1",
+      "source_method": "BERTScore (Zhang et al., 2019)",
+      "standard_level": "standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "qafacteval_score": {
+      "metric_name": "qafacteval_score",
+      "source_method": "QAFactEval (Fabbri et al., 2021)",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "summary"
+      ]
+    },
+    "pairwise_rubric_judge_win_rate": {
+      "metric_name": "pairwise_rubric_judge_win_rate",
+      "source_method": "LLM-as-a-judge rubric / pairwise evaluation",
+      "standard_level": "semi_standard",
+      "applies_to": [
+        "compare"
+      ]
+    },
+    "required_document_coverage": {
+      "metric_name": "required_document_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "citation_coverage": {
+      "metric_name": "citation_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "section_coverage": {
+      "metric_name": "section_coverage",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "required_document_not_cited_rate": {
+      "metric_name": "required_document_not_cited_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "metric_name": "insufficient_evidence_not_acknowledged_rate",
+      "source_method": "product evidence contract",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    },
+    "avg_overall_score": {
+      "metric_name": "avg_overall_score",
+      "source_method": "LLM judge rubric aggregate",
+      "standard_level": "project_contract",
+      "applies_to": [
+        "summary",
+        "compare"
+      ]
+    }
+  },
+  "per_dataset_scores": [
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "benchmark_version": "1.0.0",
+      "language": "zh-TW",
+      "task_family": "summary",
+      "item_count": 10,
+      "main_score_metric": "bert_score_f1",
+      "main_score": {
+        "status": "scored",
+        "value": 0.624256,
+        "reason": null
+      },
+      "supporting_metrics": {
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "沒有可平均的有效 metric。"
+        },
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 0.9,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 0.9,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.1,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.375,
+          "reason": null
+        }
+      },
+      "partial": false
+    }
+  ],
+  "task_family_scores": {
+    "summary_benchmark_score": {
+      "status": "scored",
+      "value": 0.624256,
+      "reason": null
+    },
+    "compare_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    }
+  },
+  "language_rollups": {
+    "zh-TW_summary_score": {
+      "status": "scored",
+      "value": 0.624256,
+      "reason": null
+    }
+  },
+  "benchmark_overview": {
+    "summary_benchmark_score": {
+      "status": "scored",
+      "value": 0.624256,
+      "reason": null
+    },
+    "compare_benchmark_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "dataset_count": 1,
+    "not_applicable_metrics": [
+      "qafacteval_score"
+    ]
+  },
+  "aggregate_metrics": {
+    "qafacteval_score": {
+      "status": "not_applicable",
+      "value": null,
+      "reason": "沒有可平均的有效 metric。"
+    },
+    "required_document_coverage": {
+      "status": "scored",
+      "value": 0.9,
+      "reason": null
+    },
+    "citation_coverage": {
+      "status": "scored",
+      "value": 0.9,
+      "reason": null
+    },
+    "section_coverage": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "required_document_not_cited_rate": {
+      "status": "scored",
+      "value": 0.1,
+      "reason": null
+    },
+    "insufficient_evidence_not_acknowledged_rate": {
+      "status": "scored",
+      "value": 0.0,
+      "reason": null
+    },
+    "avg_overall_score": {
+      "status": "scored",
+      "value": 4.375,
+      "reason": null
+    }
+  },
+  "per_item_results": [
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-1",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "以下是該新聞（文件 C1）的重點摘要：\n\n- 文章列出十個可穿戴產品的設計原則，強調這些原則是可穿戴產業的吸引力來源。\n- 四項具體核心原則（節錄）：\n 1. 解決人們的重複性問題（以實用性為導向）。\n 2. 以人為本設計，而非先考慮機器或技術。\n 3. 要能吸引注意，但避免刻意張揚或干擾使用者生活。\n 4. 強調增能（提升使用者能力），而非取代人本身。\n\n若需要，我可以把十項完整原則全部列出、針對每一條提供實例，或依照目標族群（如健康、運動、工作場景）進行應用建議。",
+      "answer_blocks": [
+        {
+          "text": "以下是該新聞（文件 C1）的重點摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 文章列出十個可穿戴產品的設計原則，強調這些原則是可穿戴產業的吸引力來源。\n- 四項具體核心原則（節錄）：\n 1. 解決人們的重複性問題（以實用性為導向）。\n 2. 以人為本設計，而非先考慮機器或技術。\n 3. 要能吸引注意，但避免刻意張揚或干擾使用者生活。\n 4. 強調增能（提升使用者能力），而非取代人本身。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "993a2a25-fa06-4dc9-bd23-d76119cee180",
+              "document_name": "lcsts-article-01.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若需要，我可以把十項完整原則全部列出、針對每一條提供實例，或依照目標族群（如健康、運動、工作場景）進行應用建議。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "993a2a25-fa06-4dc9-bd23-d76119cee180",
+          "document_name": "lcsts-article-01.md",
+          "parent_chunk_id": "e13c6d93-75fe-4928-919e-67b225b410d0",
+          "child_chunk_ids": [
+            "e38fd107-fb09-4662-b369-5cc8d9a6eebf"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 103,
+          "excerpt": "本文总结了十个可穿戴产品的设计原则，而这些原则，同样也是笔者认为是这个行业最吸引人的地方：1.为人们解决重复性问题；2.从人开始，而不是从机器开始；3.要引起注意，但不要刻意；4.提升用户能力，而不是取代人",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "e38fd107-fb09-4662-b369-5cc8d9a6eebf",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.5183295550040047,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.34
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.92,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4128
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "993a2a25-fa06-4dc9-bd23-d76119cee180"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.34
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4128
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "993a2a25-fa06-4dc9-bd23-d76119cee180"
+          ],
+          "selected_parent_ids": [
+            "e13c6d93-75fe-4928-919e-67b225b410d0"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "e38fd107-fb09-4662-b369-5cc8d9a6eebf"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "e13c6d93-75fe-4928-919e-67b225b410d0",
+              "kept_chunk_ids": [
+                "e38fd107-fb09-4662-b369-5cc8d9a6eebf"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 19.563,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-01.md",
+          "document_id": "993a2a25-fa06-4dc9-bd23-d76119cee180",
+          "start_offset": 0,
+          "end_offset": 103,
+          "quote": "本文总结了十个可穿戴产品的设计原则，而这些原则，同样也是笔者认为是这个行业最吸引人的地方：1.为人们解决重复性问题；2.从人开始，而不是从机器开始；3.要引起注意，但不要刻意；4.提升用户能力，而不是取代人"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-01.md"
+        ],
+        "resolved_document_ids": [
+          "993a2a25-fa06-4dc9-bd23-d76119cee180"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 2.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 4.0,
+          "compare_coverage": 3.0
+        },
+        "rationale": "Citation (C1) 明確指出文章『总结了十个可穿戴产品的设计原则』並列出第1至第4項。回答忠實地陳述了原文指出有十項原則，並節錄且逐一列出第1–4項，未引入未被引用的資訊，因此 faithfulness 得分最高。由於題目與 required_claims_or_compare_axes 要求關注「可穿戴技术十大设计原则」，但回覆只提供了四項節錄而未列出其餘六項，造成資訊不完整，因此 completeness 評分偏低。回答格式清楚、條列分明並提出後續可擴充的選項，故 structure_quality 給予較高分。對於 section_focus_accuracy（非比較題目），回答確實聚焦於文件內容，但未完整覆蓋預期的十項原則，故此維度給出中等分數。",
+        "missing_points": [
+          "未列出該文件中全部十項可穿戴產品設計原則（缺少第5至第10項的內容）。",
+          "未提供每項原則的進一步細節或原文中的其他可能要點（若原文有）。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 3.5,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.600738,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-2",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "摘要重點：\n- 2007年喬布斯展示 iPhone 並宣稱「它將會改變世界」，當時有人質疑是否言過其實。\n- 8年後，觸控智慧型手機（以 iPhone 為代表）已風靡全球。\n- 展望未來，智慧型手機將成為「真正的個人電腦」，並為人類發展帶來更大貢獻。",
+      "answer_blocks": [
+        {
+          "text": "摘要重點：\n- 2007年喬布斯展示 iPhone 並宣稱「它將會改變世界」，當時有人質疑是否言過其實。\n- 8年後，觸控智慧型手機（以 iPhone 為代表）已風靡全球。\n- 展望未來，智慧型手機將成為「真正的個人電腦」，並為人類發展帶來更大貢獻。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4",
+              "document_name": "lcsts-article-02.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4",
+          "document_name": "lcsts-article-02.md",
+          "parent_chunk_id": "1083fd08-4215-437b-90a1-030a7eb7db1f",
+          "child_chunk_ids": [
+            "3a8acc61-9446-4f0e-a81b-2ec8f92c1c15"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 113,
+          "excerpt": "2007年乔布斯向人们展示iPhone并宣称“它将会改变世界”，还有人认为他在夸大其词，然而在8年后，以iPhone为代表的触屏智能手机已经席卷全球各个角落。未来，智能手机将会成为“真正的个人电脑”，为人类发展做出更大的贡献。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "3a8acc61-9446-4f0e-a81b-2ec8f92c1c15",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.5074489036729548,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.34
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4129
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.34
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4129
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4"
+          ],
+          "selected_parent_ids": [
+            "1083fd08-4215-437b-90a1-030a7eb7db1f"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "3a8acc61-9446-4f0e-a81b-2ec8f92c1c15"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "1083fd08-4215-437b-90a1-030a7eb7db1f",
+              "kept_chunk_ids": [
+                "3a8acc61-9446-4f0e-a81b-2ec8f92c1c15"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 18.0035,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-02.md",
+          "document_id": "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4",
+          "start_offset": 0,
+          "end_offset": 78,
+          "quote": "2007年乔布斯向人们展示iPhone并宣称“它将会改变世界”，还有人认为他在夸大其词，然而在8年后，以iPhone为代表的触屏智能手机已经席卷全球各个角落"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-02.md"
+        ],
+        "resolved_document_ids": [
+          "4ddb6095-c13e-4c2b-b1a6-97eea7b508d4"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答涵蓋了引文中的主要要點（2007年喬布斯展示iPhone並聲稱改變世界、8年後觸控智慧型手機席捲全球、智慧型手機將成為「真正的個人電腦」並為人類發展做出更大貢獻），符合 required_claims_or_compare_axes。 Faithfulness_to_citations: 回答內容直接對應並限於所提供的引文，未加入未被引用的資訊或推論。 Structure_quality: 以簡潔的要點列出摘要重點，可讀且符合 document_overview 的摘要格式。 Compare_coverage (section_focus_accuracy): 非比較題但回答聚焦於預期章節（文件主體），覆蓋重點且無偏離。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.677039,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-3",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "我已查詢相關授權文件並找到可用內容。摘要重點如下（依據文件 C1）：\n\n- 雅虎公布2014年第四季財報，並提出計畫以免稅方式剝離其持有的阿里巴巴集團約15%股權，將這項估值約400億美元的投資分配給股東。\n- 公告發出時，雅虎股價約上漲7%，達到51.45美元。\n\n若要我把這則新聞擴充成新聞稿或加入更多背景（如對阿里巴巴或雅虎財務影響的分析），我可以再幫你補充。",
+      "answer_blocks": [
+        {
+          "text": "我已查詢相關授權文件並找到可用內容。摘要重點如下（依據文件 C1）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 雅虎公布2014年第四季財報，並提出計畫以免稅方式剝離其持有的阿里巴巴集團約15%股權，將這項估值約400億美元的投資分配給股東。\n- 公告發出時，雅虎股價約上漲7%，達到51.45美元。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "2aec2800-4d26-4ec3-a9cf-02dd368e24a3",
+              "document_name": "lcsts-article-03.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若要我把這則新聞擴充成新聞稿或加入更多背景（如對阿里巴巴或雅虎財務影響的分析），我可以再幫你補充。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "2aec2800-4d26-4ec3-a9cf-02dd368e24a3",
+          "document_name": "lcsts-article-03.md",
+          "parent_chunk_id": "3e846aba-c578-4e7d-bdf8-fce053dcc58b",
+          "child_chunk_ids": [
+            "8040b8f5-2026-4b0a-a81d-dad0b82cc90f"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 97,
+          "excerpt": "雅虎发布2014年第四季度财报，并推出了免税方式剥离其持有的阿里巴巴集团15％股权的计划，打算将这一价值约400亿美元的宝贵投资分配给股东。截止发稿前，雅虎股价上涨了大约7％，至51.45美元。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "8040b8f5-2026-4b0a-a81d-dad0b82cc90f",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.45417588733732955,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.34
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.97,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4128
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "2aec2800-4d26-4ec3-a9cf-02dd368e24a3"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.34
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4128
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "2aec2800-4d26-4ec3-a9cf-02dd368e24a3"
+          ],
+          "selected_parent_ids": [
+            "3e846aba-c578-4e7d-bdf8-fce053dcc58b"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "8040b8f5-2026-4b0a-a81d-dad0b82cc90f"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "3e846aba-c578-4e7d-bdf8-fce053dcc58b",
+              "kept_chunk_ids": [
+                "8040b8f5-2026-4b0a-a81d-dad0b82cc90f"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 20.3896,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-03.md",
+          "document_id": "2aec2800-4d26-4ec3-a9cf-02dd368e24a3",
+          "start_offset": 0,
+          "end_offset": 69,
+          "quote": "雅虎发布2014年第四季度财报，并推出了免税方式剥离其持有的阿里巴巴集团15％股权的计划，打算将这一价值约400亿美元的宝贵投资分配给股东"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-03.md"
+        ],
+        "resolved_document_ids": [
+          "2aec2800-4d26-4ec3-a9cf-02dd368e24a3"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 4.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "completeness: 回答包含了 citation C1 中的主要要點—雅虎公布2014年第四季財報、計畫以免稅方式剥離約15%阿里巴巴股權（估值約400億美元），以及公告時股價約上漲7%至51.45美元，符合 required_claims_or_compare_axes，未遺漏主要重點。 faithfulness_to_citations: 摘要內容直接對應並引用了 C1 的可見證據，主體敘述忠實。但開頭的「我已查詢相關授權文件並找到可用內容」及後續提供擴寫服務為回答中未由 citation 支持的額外敘述，屬回答外的次要陳述，故將忠實度從最高分略降一級。 structure_quality: 答案以簡短前言加兩點列舉呈現，語句清楚、條理分明，符合 summary 的結構與可讀性。 compare_coverage (section_focus_accuracy): 此題非多文件比較，回答直接聚焦於預期章節（document）中新聞重點，覆蓋度良好且沒有離題。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.75,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.61617,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-4",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "以下為該新聞的重點摘要（依據授權文件 C1）：\n\n- 2014年，51信用卡管家與宜信等P2P公司合作推出線上信貸產品「瞬時貸」，此產品為純線上操作的信貸模式。\n- 51信用卡管家創辦人孫海濤表示，當時51每日放貸約1,000萬元，並預計2015年結合自營產品與瞬時貸後，放貸總額將遠超過30億元。",
+      "answer_blocks": [
+        {
+          "text": "以下為該新聞的重點摘要（依據授權文件 C1）：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 2014年，51信用卡管家與宜信等P2P公司合作推出線上信貸產品「瞬時貸」，此產品為純線上操作的信貸模式。\n- 51信用卡管家創辦人孫海濤表示，當時51每日放貸約1,000萬元，並預計2015年結合自營產品與瞬時貸後，放貸總額將遠超過30億元。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792",
+              "document_name": "lcsts-article-04.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792",
+          "document_name": "lcsts-article-04.md",
+          "parent_chunk_id": "77e96a35-58f5-4759-8afb-7ad49bea3700",
+          "child_chunk_ids": [
+            "e58f1e7a-2664-43b6-b312-b4d1c07b87e2"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 112,
+          "excerpt": "2014年，51信用卡管家跟宜信等P2P公司合作，推出线上信贷产品“瞬时贷”，其是一种纯在线操作的信贷模式。51信用卡管家创始人孙海涛说，51目前每天放贷1000万，预计2015年，自营产品加上瞬时贷，放贷额度将远超30亿。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "e58f1e7a-2664-43b6-b312-b4d1c07b87e2",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.8851206242397507,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.3399
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.95,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4129
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.3399
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4129
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792"
+          ],
+          "selected_parent_ids": [
+            "77e96a35-58f5-4759-8afb-7ad49bea3700"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "e58f1e7a-2664-43b6-b312-b4d1c07b87e2"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "77e96a35-58f5-4759-8afb-7ad49bea3700",
+              "kept_chunk_ids": [
+                "e58f1e7a-2664-43b6-b312-b4d1c07b87e2"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 20.1126,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-04.md",
+          "document_id": "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792",
+          "start_offset": 0,
+          "end_offset": 53,
+          "quote": "2014年，51信用卡管家跟宜信等P2P公司合作，推出线上信贷产品“瞬时贷”，其是一种纯在线操作的信贷模式"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-04.md"
+        ],
+        "resolved_document_ids": [
+          "1b5b9808-4c6d-4f8a-a3a8-ab16cfc6c792"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答涵蓋了 citation C1 中的所有主要資訊：2014 年 51 與宜信等 P2P 合作推出「瞬时贷」的純線上信貸模式，以及孫海濤指出當時每日放貸約 1000 萬並預計 2015 年放貸總額將遠超 30 億。沒有引入未被引用的額外資訊，語句結構清楚，以兩點式摘要呈現，符合 document_overview 的預期。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.692774,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-5",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "我已檢索授權文件並找到 1 筆相關內容可用於摘要（context label: C1）。以下為重點摘要：\n\n- 討論主題：面對數百種程式語言，如何選擇最適合學習的語言。\n- 作者觀點：認為答案很簡單——應該學 JavaScript。\n- 核心論點（隱含）：JavaScript 被作者視為對未來職涯或生活保障有實際價值的語言（文中以肯定口吻推薦）。\n\n若你要我做更完整的重寫摘要、列出作者提出支持 JavaScript 的具體理由、或比較 JavaScript 與其他語言的優劣，請告訴我，我會根據相同來源進一步整理。",
+      "answer_blocks": [
+        {
+          "text": "我已檢索授權文件並找到 1 筆相關內容可用於摘要（context label: C1）。以下為重點摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 討論主題：面對數百種程式語言，如何選擇最適合學習的語言。\n- 作者觀點：認為答案很簡單——應該學 JavaScript。\n- 核心論點（隱含）：JavaScript 被作者視為對未來職涯或生活保障有實際價值的語言（文中以肯定口吻推薦）。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "ffa470a6-a098-4fb2-b972-22e8821a0932",
+              "document_name": "lcsts-article-05.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "若你要我做更完整的重寫摘要、列出作者提出支持 JavaScript 的具體理由、或比較 JavaScript 與其他語言的優劣，請告訴我，我會根據相同來源進一步整理。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "ffa470a6-a098-4fb2-b972-22e8821a0932",
+          "document_name": "lcsts-article-05.md",
+          "parent_chunk_id": "250c8a4c-2870-4d86-956c-5561bce00c84",
+          "child_chunk_ids": [
+            "c9a0e748-a96e-4218-8a17-aeb3029f159f"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 117,
+          "excerpt": "目前世界上有着几百种编程语言，我应该学哪个?如何选择“正确”的编程语言进行学习?我所学的语言日后能否成为我获取好生活的保障?在这个问题上，很多人都曾经给出了他们都看法。但在我看来，这个问题答案其实非常简单：那就是JavaScript。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "c9a0e748-a96e-4218-8a17-aeb3029f159f",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.031238002219129465,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.3399
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.92,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4129
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "ffa470a6-a098-4fb2-b972-22e8821a0932"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.3399
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4129
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "ffa470a6-a098-4fb2-b972-22e8821a0932"
+          ],
+          "selected_parent_ids": [
+            "250c8a4c-2870-4d86-956c-5561bce00c84"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "c9a0e748-a96e-4218-8a17-aeb3029f159f"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "250c8a4c-2870-4d86-956c-5561bce00c84",
+              "kept_chunk_ids": [
+                "c9a0e748-a96e-4218-8a17-aeb3029f159f"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 19.5082,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-05.md",
+          "document_id": "ffa470a6-a098-4fb2-b972-22e8821a0932",
+          "start_offset": 0,
+          "end_offset": 83,
+          "quote": "目前世界上有着几百种编程语言，我应该学哪个?如何选择“正确”的编程语言进行学习?我所学的语言日后能否成为我获取好生活的保障?在这个问题上，很多人都曾经给出了他们都看法"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-05.md"
+        ],
+        "resolved_document_ids": [
+          "ffa470a6-a098-4fb2-b972-22e8821a0932"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 2.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答覆蓋了引用片段中明確的要點——提出問題（在數百種語言中如何選擇）、作者的結論性立場（應學 JavaScript），因此在必要主張上沒有遺漏。\nFaithfulness_to_citations: 回答在大部分內容上緊扣引用片段，但加入了超出引用明確文本的推論——「JavaScript 被作者視為對未來職涯或生活保障有實際價值」為評語中標為“隱含”，此結論並未在提供的摘錄中明確陳述。題目要求不允許憑空補腦，因此須對忠實度進行較大扣分。故給 2 分。 \nStructure_quality: 回答以清晰的條列方式呈現摘要，標示引用來源（C1），並提供後續可做的擴展選項，符合 summary 的可讀性與結構要求。 \nCompare_coverage (section_focus_accuracy): 這不是比較題；評估重點為是否聚焦到預期章節（document）。回答確實聚焦於引用的 document 內容與核心議題，故給予高分。",
+        "missing_points": [
+          "引用片段僅明確說明作者回答是「那就是JavaScript」，但沒有提供作者援引的具體理由或論據；回答若要列出支持理由，須有對應引用，否則屬於補腦。",
+          "回答把原文的提問（是否能成為獲取好生活的保障）與作者立場之間的因果推論表述為作者視為「實際價值」，該推論在提供的引用中並未明確證實，應標示為未證實或避免陳述。",
+          "若依題目允許之摘要策略，應避免超出引用證據的隱含推論；在本例中不允許不足證據時，應僅陳述引用中明確的內容（問題與直接結論）。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.25,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.577606,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-6",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "我先檢索公司授權文件與已整理的區域知識內容以確認是否有相關新聞摘要可用。請稍等。 (我將呼叫內部檢索工具以取得 assembled contexts。)",
+      "answer_blocks": [
+        {
+          "text": "我先檢索公司授權文件與已整理的區域知識內容以確認是否有相關新聞摘要可用。請稍等。 (我將呼叫內部檢索工具以取得 assembled contexts。)",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [],
+      "trace": {
+        "retrieval": {},
+        "assembler": {
+          "contexts": []
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 0,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": false,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 8.6987,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-06.md",
+          "document_id": "cb5af205-1fe6-4788-95d9-db84f46793df",
+          "start_offset": 0,
+          "end_offset": 34,
+          "quote": "受众在哪里，媒体就应该在哪里，媒体的体制、内容、技术就应该向哪里转变"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-06.md"
+        ],
+        "resolved_document_ids": [
+          "cb5af205-1fe6-4788-95d9-db84f46793df"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 0.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 0.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [
+        "required_document_not_cited"
+      ],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 1.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 1.0,
+          "compare_coverage": 1.0
+        },
+        "rationale": "回答僅為檢索說明，未提供任何新聞摘要內容或引用證據。根據 rubric：\n- completeness (1): 未覆蓋要求的重點（例如「媒体融合关键是以人为本」）或文章主要內容，完全缺乏摘要內容，且 allows_insufficient_evidence 為 false，故給最低分。 \n- faithfulness_to_citations (5): 回答未陳述與引用不符的任何事實，也未提供超出引用的內容；在沒有引用與主張的情況下，沒有不忠實之處，因此給最高分。 \n- structure_quality (1): 未遵從 summary/compare 固定輸出格式或提供可讀的摘要段落，僅為操作性檢索提示，故評為最低。 \n- compare_coverage / section_focus_accuracy (1): 此題非比較但期望聚焦於指定章節（document），回答未針對任何章節內容進行摘要或聚焦，因此評為最低。",
+        "missing_points": [
+          "未提供對 lcsts-article-06.md 的任何摘要或要點",
+          "未涵蓋 required_claims_or_compare_axes：『媒体融合关键是以人为本』",
+          "未提供引用或證據片段（citations 為空）",
+          "未表明實際使用的檢索查詢類型或摘要策略（trace_summary 中均為 null）",
+          "未遵循 summary 的輸出結構（缺乏段落/重點列點/結論）"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 2.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.523867,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-7",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "摘要重點：\n\n- 中國鐵路總公司宣布，自2015年1月5日起，禁止自行車進站帶上車。\n- 受影響的旅客（如騎友）若要攜帶自行車旅行，需先辦理托運手續，並可向12306客服諮詢最近的辦理方式。\n- 自行車托運費用按每公斤計價，且隨運輸里程不同而有差異。",
+      "answer_blocks": [
+        {
+          "text": "摘要重點：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 中國鐵路總公司宣布，自2015年1月5日起，禁止自行車進站帶上車。\n- 受影響的旅客（如騎友）若要攜帶自行車旅行，需先辦理托運手續，並可向12306客服諮詢最近的辦理方式。\n- 自行車托運費用按每公斤計價，且隨運輸里程不同而有差異。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa",
+              "document_name": "lcsts-article-07.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa",
+          "document_name": "lcsts-article-07.md",
+          "parent_chunk_id": "5ccf2cd6-735d-4400-a585-d4923c18b8f9",
+          "child_chunk_ids": [
+            "cfd4fc27-affc-42ce-94d2-aab2cc9d856c"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 110,
+          "excerpt": "中国铁路总公司消息，自2015年1月5日起，自行车不能进站乘车了。骑友大呼难以接受。这部分希望下车就能踏上骑游旅程的旅客，只能先办理托运业务，可咨询12306客服电话，就近提前办理。运费每公斤价格根据运输里程不同而不同。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "cfd4fc27-affc-42ce-94d2-aab2cc9d856c",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.6835034056900915,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.3399
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4128
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.3399
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4128
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa"
+          ],
+          "selected_parent_ids": [
+            "5ccf2cd6-735d-4400-a585-d4923c18b8f9"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "cfd4fc27-affc-42ce-94d2-aab2cc9d856c"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "5ccf2cd6-735d-4400-a585-d4923c18b8f9",
+              "kept_chunk_ids": [
+                "cfd4fc27-affc-42ce-94d2-aab2cc9d856c"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 14.3973,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-07.md",
+          "document_id": "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa",
+          "start_offset": 0,
+          "end_offset": 32,
+          "quote": "中国铁路总公司消息，自2015年1月5日起，自行车不能进站乘车了"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-07.md"
+        ],
+        "resolved_document_ids": [
+          "3be2ed4d-8de0-4b56-8db4-307ce8dc91fa"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答包含引文中所有主要事實：中國鐵路總公司自2015-01-05起禁止自行車進站乘車、受影響旅客需辦理托運並可諮詢12306、運費按公斤且隨里程不同而異。表述未引入未被引用的額外資訊，與引用內容高度一致。摘要以條列方式呈現，結構清楚，可讀性佳；且聚焦於文件（document）章節的核心資訊。",
+        "missing_points": [
+          "未提及文中對此規定的反應（例如：騎友大呼難以接受），該語句出現在引用片段但未被摘要包含。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.604604,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-8",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "摘要重點：\n\n- 有傳聞指出北京某小區一名光頭明星因吸毒被捕；北京警方於下午在官方微博發布聲明證實該案。\n- 被確認的涉案明星為李代沫。\n- 李代沫與另外6人，於17日晚在北京市朝陽區三里屯某小區的暫住處吸食毒品。\n- 6名共犯均已被警方抓獲，且當事人對犯罪事實供認不諱。",
+      "answer_blocks": [
+        {
+          "text": "摘要重點：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 有傳聞指出北京某小區一名光頭明星因吸毒被捕；北京警方於下午在官方微博發布聲明證實該案。\n- 被確認的涉案明星為李代沫。\n- 李代沫與另外6人，於17日晚在北京市朝陽區三里屯某小區的暫住處吸食毒品。\n- 6名共犯均已被警方抓獲，且當事人對犯罪事實供認不諱。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "eb5ee083-59ad-4132-ae74-a2ea57b46ca6",
+              "document_name": "lcsts-article-08.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "eb5ee083-59ad-4132-ae74-a2ea57b46ca6",
+          "document_name": "lcsts-article-08.md",
+          "parent_chunk_id": "112e2c01-777a-4353-bb70-abf9b5b3031e",
+          "child_chunk_ids": [
+            "0d6670e1-0728-42c8-b1ca-62860e882881"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 115,
+          "excerpt": "今天有传在北京某小区，一光头明星因吸毒被捕的消息。下午北京警方官方微博发布声明通报情况，证实该明星为李代沫。李代沫伙同另外6人，于17日晚在北京朝阳区三里屯某小区的暂住地内吸食毒品，6人全部被警方抓获，且当事人对犯案实施供认不讳。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "0d6670e1-0728-42c8-b1ca-62860e882881",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.1469289433949523,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.34
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4128
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "eb5ee083-59ad-4132-ae74-a2ea57b46ca6"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.34
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4128
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "eb5ee083-59ad-4132-ae74-a2ea57b46ca6"
+          ],
+          "selected_parent_ids": [
+            "112e2c01-777a-4353-bb70-abf9b5b3031e"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "0d6670e1-0728-42c8-b1ca-62860e882881"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "112e2c01-777a-4353-bb70-abf9b5b3031e",
+              "kept_chunk_ids": [
+                "0d6670e1-0728-42c8-b1ca-62860e882881"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 15.0328,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-08.md",
+          "document_id": "eb5ee083-59ad-4132-ae74-a2ea57b46ca6",
+          "start_offset": 0,
+          "end_offset": 24,
+          "quote": "今天有传在北京某小区，一光头明星因吸毒被捕的消息"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-08.md"
+        ],
+        "resolved_document_ids": [
+          "eb5ee083-59ad-4132-ae74-a2ea57b46ca6"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "Completeness: 回答包含引用片段中所有主要事實（警方微博證實、涉案為李代沫、與另外6人在17日晚於朝陽三里屯某小區暫住地吸毒、6人被捕且供認不諱），符合 required_claims_or_compare_axes。 Faithfulness_to_citations: 回答僅重述引用片段資訊，未加入未被引用的額外細節或推測，因此與引用完全一致。 Structure_quality: 使用條列清楚呈現要點，符合 document_overview 的摘要風格且易讀。 Compare_coverage (section_focus_accuracy): 該題非比較題，回答明確聚焦於預期章節內容（新聞要點），未偏離或遺漏重點。 綜上，四項均給最高分。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.661934,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-9",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "下面是該新聞的重點摘要：\n\n- 自黨的十八大以來，以習近平同志為總書記的黨中央制定長遠戰略，強調創新發展理念並大力推動生態文明建設。\n- 強調生態與文明的相互關係：生態興則文明興，生態衰則文明衰，將此作為對人類文明發展規律的深刻總結並作為治理方向。",
+      "answer_blocks": [
+        {
+          "text": "下面是該新聞的重點摘要：",
+          "citation_context_indices": [],
+          "display_citations": []
+        },
+        {
+          "text": "- 自黨的十八大以來，以習近平同志為總書記的黨中央制定長遠戰略，強調創新發展理念並大力推動生態文明建設。\n- 強調生態與文明的相互關係：生態興則文明興，生態衰則文明衰，將此作為對人類文明發展規律的深刻總結並作為治理方向。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "e63d83fc-dd57-46c9-a260-e90df5ea47b0",
+              "document_name": "lcsts-article-09.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "e63d83fc-dd57-46c9-a260-e90df5ea47b0",
+          "document_name": "lcsts-article-09.md",
+          "parent_chunk_id": "72f5bbf9-ea23-4ff4-bd31-c08ea63b0763",
+          "child_chunk_ids": [
+            "5c69a3f0-825a-4789-9ee9-90ff8e87e476"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 103,
+          "excerpt": "党的十八大以来，以习近平同志为总书记的党中央高瞻远瞩战略谋划，着力创新发展理念，大力建设生态文明，引领中华民族在伟大复兴的征途上奋勇前行。生态兴则文明兴，生态衰则文明衰——这是对人类文明发展规律的深刻总结。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "5c69a3f0-825a-4789-9ee9-90ff8e87e476",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.12458967019289581,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.3399
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.9,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4129
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "e63d83fc-dd57-46c9-a260-e90df5ea47b0"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.3399
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4129
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "e63d83fc-dd57-46c9-a260-e90df5ea47b0"
+          ],
+          "selected_parent_ids": [
+            "72f5bbf9-ea23-4ff4-bd31-c08ea63b0763"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "5c69a3f0-825a-4789-9ee9-90ff8e87e476"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "72f5bbf9-ea23-4ff4-bd31-c08ea63b0763",
+              "kept_chunk_ids": [
+                "5c69a3f0-825a-4789-9ee9-90ff8e87e476"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 13.3239,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-09.md",
+          "document_id": "e63d83fc-dd57-46c9-a260-e90df5ea47b0",
+          "start_offset": 0,
+          "end_offset": 68,
+          "quote": "党的十八大以来，以习近平同志为总书记的党中央高瞻远瞩战略谋划，着力创新发展理念，大力建设生态文明，引领中华民族在伟大复兴的征途上奋勇前行"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-09.md"
+        ],
+        "resolved_document_ids": [
+          "e63d83fc-dd57-46c9-a260-e90df5ea47b0"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 4.0,
+          "faithfulness_to_citations": 3.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "completeness (4): 回答覆蓋了引文 C1 中的關鍵要點：自黨的十八大以來的高瞻遠矚的戰略謀劃、創新發展理念、大力建設生態文明，並明確引述“生态兴则文明兴，生态衰则文明衰”這一要求，滿足 required_claims_or_compare_axes。但回應未提及引文中提到的“引领中华民族在伟大复兴的征途上奋勇前行”這一表述，故未達完全滿分。 faithfulness_to_citations (3): 回答大體忠於提供的引文 C1，但在第二點末尾加入了“並作為治理方向”之類的表述（“並作為治理方向”未出現在引文 C1 中），屬於超出所給證據的推論，因此降低分數。 structure_quality (5): 回答以清晰的要點列出，語句簡潔、結構明確，符合摘要的固定輸出與可讀性要求。 compare_coverage / section_focus_accuracy (5): 本題非比較題，且回答集中於預期的文件內容（文檔段落），直接對應引文 C1 的主題，聚焦正確。",
+        "missing_points": [
+          "引文 C1 中的表述“引领中华民族在伟大复兴的征途上奋勇前行”未被回答提及。",
+          "回答中出現的表述“並作為治理方向”或類似語句，未在引文 C1 中出現（屬於超出引用證據的額外推論），因此不應視為被引用支持的內容。"
+        ]
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 4.25,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.631598,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    },
+    {
+      "benchmark_name": "lcsts-news-summary-curated-pilot-v1",
+      "item_id": "lcsts-summary-10",
+      "language": "zh-TW",
+      "task_type": "document_summary",
+      "summary_strategy": "document_overview",
+      "question": "請摘要這篇新聞的重點。",
+      "answer": "摘要重點（根據公司授權文件）：\n\n- 昨晚一班中聯航空由成都飛往北京的航班上，有多人在機艙內吸菸，被發現。 \n- 因天候因素，該班機備降至太原機場。 \n- 有乘客在艙門旁吸菸被查獲，並有人要求重新安檢；機長決定繼續飛行，引發機組與未吸菸乘客之間衝突。 \n- 中聯航空已在聯繫機組，進一步核實事件情況。\n\n備註：目前可用授權文件僅包含上述內容，若需更多細節（如乘客人數、處置結果或相關調查後續），需查閱其他官方或媒體報導。",
+      "answer_blocks": [
+        {
+          "text": "摘要重點（根據公司授權文件）：",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "c6089eaa-287a-4d0d-9f16-7be6d0bed91a",
+              "document_name": "lcsts-article-10.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "- 昨晚一班中聯航空由成都飛往北京的航班上，有多人在機艙內吸菸，被發現。 \n- 因天候因素，該班機備降至太原機場。 \n- 有乘客在艙門旁吸菸被查獲，並有人要求重新安檢；機長決定繼續飛行，引發機組與未吸菸乘客之間衝突。 \n- 中聯航空已在聯繫機組，進一步核實事件情況。",
+          "citation_context_indices": [
+            0
+          ],
+          "display_citations": [
+            {
+              "context_index": 0,
+              "context_label": "C1",
+              "document_id": "c6089eaa-287a-4d0d-9f16-7be6d0bed91a",
+              "document_name": "lcsts-article-10.md",
+              "heading": null,
+              "page_start": null,
+              "page_end": null
+            }
+          ]
+        },
+        {
+          "text": "備註：目前可用授權文件僅包含上述內容，若需更多細節（如乘客人數、處置結果或相關調查後續），需查閱其他官方或媒體報導。",
+          "citation_context_indices": [],
+          "display_citations": []
+        }
+      ],
+      "citations": [
+        {
+          "context_index": 0,
+          "context_label": "C1",
+          "document_id": "c6089eaa-287a-4d0d-9f16-7be6d0bed91a",
+          "document_name": "lcsts-article-10.md",
+          "parent_chunk_id": "a03a6279-c94d-4b9d-8a8d-90d9f41f9ae5",
+          "child_chunk_ids": [
+            "aaea0a0a-7014-4866-b671-3b7c5577511d"
+          ],
+          "heading": null,
+          "structure_kind": "text",
+          "start_offset": 0,
+          "end_offset": 105,
+          "excerpt": "昨晚，中联航空成都飞北京一架航班被发现有多人吸烟。后因天气原因，飞机备降太原机场。几名乘客在舱门边吸烟被发现。有乘客要求重新安检，机长决定继续飞行，引起机组人员与未吸烟乘客冲突。目前中联航空正联系机组进行核实。",
+          "source": "vector",
+          "truncated": false,
+          "page_start": null,
+          "page_end": null,
+          "regions": []
+        }
+      ],
+      "trace": {
+        "retrieval": {
+          "query": "請摘要這篇新聞的重點。",
+          "vector_top_k": 45,
+          "fts_top_k": 45,
+          "max_candidates": 45,
+          "rerank_top_n": 1,
+          "candidates": [
+            {
+              "chunk_id": "aaea0a0a-7014-4866-b671-3b7c5577511d",
+              "source": "vector",
+              "vector_rank": 1,
+              "fts_rank": null,
+              "rrf_rank": 1,
+              "rrf_score": 0.01639344262295082,
+              "rerank_rank": 1,
+              "rerank_score": 0.6543637494912657,
+              "rerank_applied": true,
+              "rerank_fallback_reason": null
+            }
+          ],
+          "query_type": "document_summary",
+          "query_type_language": "zh-TW",
+          "query_type_source": "rule",
+          "query_type_confidence": 0.92,
+          "query_type_matched_rules": [
+            "摘要",
+            "重點"
+          ],
+          "query_type_rule_hits": [
+            {
+              "label": "document_summary",
+              "reason": "摘要",
+              "confidence": 0.92
+            },
+            {
+              "label": "document_summary",
+              "reason": "重點",
+              "confidence": 0.92
+            }
+          ],
+          "query_type_embedding_scores": [
+            {
+              "label": "document_summary",
+              "score": 0.5985
+            },
+            {
+              "label": "cross_document_compare",
+              "score": 0.3764
+            },
+            {
+              "label": "fact_lookup",
+              "score": 0.34
+            }
+          ],
+          "query_type_top_label": "document_summary",
+          "query_type_runner_up_label": "cross_document_compare",
+          "query_type_embedding_margin": 0.2221,
+          "query_type_fallback_used": false,
+          "query_type_fallback_reason": null,
+          "summary_scope": "multi_document",
+          "summary_strategy": "document_overview",
+          "summary_strategy_source": "llm_fallback",
+          "summary_strategy_confidence": 0.95,
+          "summary_strategy_rule_hits": [],
+          "summary_strategy_embedding_scores": [
+            {
+              "label": "document_overview",
+              "score": 0.5529
+            },
+            {
+              "label": "section_focused",
+              "score": 0.538
+            },
+            {
+              "label": "multi_document_theme",
+              "score": 0.4128
+            }
+          ],
+          "summary_strategy_top_label": "document_overview",
+          "summary_strategy_runner_up_label": "section_focused",
+          "summary_strategy_embedding_margin": 0.0149,
+          "summary_strategy_fallback_used": true,
+          "summary_strategy_fallback_reason": "low_embedding_confidence",
+          "document_scope": "explicit_document_ids",
+          "resolved_document_ids": [
+            "c6089eaa-287a-4d0d-9f16-7be6d0bed91a"
+          ],
+          "document_mention_source": "none",
+          "document_mention_confidence": 0.0,
+          "document_mention_candidates": [],
+          "selected_profile": "document_summary_multi_document_diversified_v1",
+          "profile_settings": {
+            "vector_top_k": 45,
+            "fts_top_k": 45,
+            "max_candidates": 45,
+            "document_recall_enabled": true,
+            "document_recall_top_k": 6,
+            "rerank_top_n": 36,
+            "selection_max_contexts": 12,
+            "assembler_max_contexts": 12,
+            "assembler_max_chars_per_context": 3600,
+            "assembler_max_children_per_parent": 7,
+            "task_type_embedding_scores": [
+              {
+                "label": "document_summary",
+                "score": 0.5985
+              },
+              {
+                "label": "cross_document_compare",
+                "score": 0.3764
+              },
+              {
+                "label": "fact_lookup",
+                "score": 0.34
+              }
+            ],
+            "task_type_embedding_margin": 0.2221,
+            "task_type_fallback_used": false,
+            "summary_strategy_embedding_scores": [
+              {
+                "label": "document_overview",
+                "score": 0.5529
+              },
+              {
+                "label": "section_focused",
+                "score": 0.538
+              },
+              {
+                "label": "multi_document_theme",
+                "score": 0.4128
+              }
+            ],
+            "summary_strategy_embedding_margin": 0.0149,
+            "summary_strategy_fallback_used": true
+          },
+          "selection_applied": true,
+          "selection_strategy": "multi_document_round_robin_fill_v1",
+          "selected_document_count": 1,
+          "selected_parent_count": 1,
+          "selected_document_ids": [
+            "c6089eaa-287a-4d0d-9f16-7be6d0bed91a"
+          ],
+          "selected_parent_ids": [
+            "a03a6279-c94d-4b9d-8a8d-90d9f41f9ae5"
+          ],
+          "dropped_by_diversity": [],
+          "fallback_reason": null
+        },
+        "assembler": {
+          "max_contexts": 12,
+          "max_chars_per_context": 3600,
+          "max_children_per_parent": 7,
+          "kept_chunk_ids": [
+            "aaea0a0a-7014-4866-b671-3b7c5577511d"
+          ],
+          "dropped_chunk_ids": [],
+          "contexts": [
+            {
+              "context_index": 0,
+              "parent_chunk_id": "a03a6279-c94d-4b9d-8a8d-90d9f41f9ae5",
+              "kept_chunk_ids": [
+                "aaea0a0a-7014-4866-b671-3b7c5577511d"
+              ],
+              "dropped_chunk_ids": [],
+              "truncated": false
+            }
+          ]
+        },
+        "agent": {
+          "provider": "deepagents",
+          "model": "gpt-5-mini",
+          "contexts_count": 1,
+          "used_fallback": false,
+          "agent_tasks": [],
+          "retrieval_invoked": true,
+          "sub_agents_invoked": [],
+          "answer_path": "deepagents_unified",
+          "thinking_mode": true,
+          "thinking_mode_ignored": true,
+          "runtime_latency_ms": null,
+          "map_reduce_trace": null
+        }
+      },
+      "latency_seconds": 14.6423,
+      "total_tokens": 0,
+      "resolved_gold_spans": [
+        {
+          "file_name": "lcsts-article-10.md",
+          "document_id": "c6089eaa-287a-4d0d-9f16-7be6d0bed91a",
+          "start_offset": 0,
+          "end_offset": 24,
+          "quote": "昨晚，中联航空成都飞北京一架航班被发现有多人吸烟"
+        }
+      ],
+      "benchmark_document_scope": {
+        "mode": "explicit_document_ids",
+        "requested_document_ids": [],
+        "requested_document_file_names": [
+          "lcsts-article-10.md"
+        ],
+        "resolved_document_ids": [
+          "c6089eaa-287a-4d0d-9f16-7be6d0bed91a"
+        ],
+        "validation_status": "validated",
+        "validation_errors": []
+      },
+      "required_document_coverage": 1.0,
+      "section_coverage": 0.0,
+      "citation_coverage": 1.0,
+      "fallback_triggered": false,
+      "hard_blocker_failures": [],
+      "rubric_judge_result": {
+        "model": "gpt-5-mini",
+        "scores": {
+          "completeness": 5.0,
+          "faithfulness_to_citations": 5.0,
+          "structure_quality": 5.0,
+          "compare_coverage": 5.0
+        },
+        "rationale": "回答逐條對應引用片段 C1 的內容：覆蓋到「多人在機艙吸菸被發現」、「因天候備降太原」、「有人在艙門邊吸菸被查獲」、「有乘客要求重新安檢、機長決定繼續飛行導致機組與未吸菸乘客衝突」以及「中聯航空正聯繫機組核實」。未引入未被引用的資訊，與引用證據完全一致，且摘要以條列方式呈現，清晰可讀。依據 rubric，各項目均符合最高分標準。",
+        "missing_points": []
+      },
+      "pairwise_judge_result": null,
+      "metrics": {
+        "required_document_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "citation_coverage": {
+          "status": "scored",
+          "value": 1.0,
+          "reason": null
+        },
+        "section_coverage": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "required_document_not_cited_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "insufficient_evidence_not_acknowledged_rate": {
+          "status": "scored",
+          "value": 0.0,
+          "reason": null
+        },
+        "avg_overall_score": {
+          "status": "scored",
+          "value": 5.0,
+          "reason": null
+        },
+        "bert_score_f1": {
+          "status": "scored",
+          "value": 0.656229,
+          "reason": null
+        },
+        "qafacteval_score": {
+          "status": "not_applicable",
+          "value": null,
+          "reason": "目前未整合 QAFactEval scorer。"
+        }
+      },
+      "partial": false
+    }
+  ],
+  "baseline_compare": {
+    "per_dataset": {
+      "lcsts-news-summary-curated-pilot-v1": {
+        "current": 0.624256,
+        "reference": 0.0,
+        "delta": 0.624256
+      }
+    },
+    "task_family": {
+      "summary": {
+        "current": 0.624256,
+        "reference": 0.0,
+        "delta": 0.624256
+      },
+      "compare": {
+        "current": null,
+        "reference": null,
+        "delta": null
+      }
+    }
+  }
+}

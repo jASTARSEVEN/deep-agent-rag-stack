@@ -1,0 +1,15 @@
+{
+  "benchmark_name": "cnewsum-news-summary-curated-pilot-v1",
+  "version": "1.0.0",
+  "description": "Officially extracted CNewSum Chinese news summary package.",
+  "language": "zh-TW",
+  "task_family": "summary",
+  "item_count": 10,
+  "dataset_provenance": {
+    "source_name": "CNewSum processed",
+    "upstream_url": "https://huggingface.co/datasets/ethanhao2077/cnewsum-processed",
+    "source_split": "test",
+    "extraction_rule": "Take the first 10 rows from the processed test parquet, preserving original article and summary.",
+    "note": "Each item stores the original `id`, zero-based row index, and `label` value from the processed dataset."
+  }
+}

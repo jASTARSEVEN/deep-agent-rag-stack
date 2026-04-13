@@ -1,0 +1,7 @@
+# Entity B
+
+This is such a great hotel it's highly recommended and you won't regret booking again and again. The rooms are a good size and with a good view. Some of the staff were not highly trained or had a bad attitude. The multicultural food was really welcomed as it was of great quality and taste. The hotel provided free DVDs for guests.
+
+The hotel was a great place to stay and comes highly recommended. The spa was incredible. The area the hotel is located in is not very nice to walk in. Generally a really nice room with great views. The bed was a bit firm but the room itself was lovely. It is clear that some of the staff need more training and a more professional attitude in dealing with problems. The food at the hotel offered a multi cultural selection .
+
+Langham Place does not disappoint with its new shopping mall and spa. This hotel is attached to the mall and cinema which was great because sometimes this location has unpredictable weather. Medium sized rooms that are to a high standard with excellent views. Rooms are well maintained, with standard beds. Some of the staff was lack training. A buffet style dinner is offered every evening, and the quality of the multi cultural cuisine is generally well liked amongst guests that visit. The food options can get repetitive if staying for a longer trip, however your money goes a long way when eating at this hotel. The daily cocktail hour is also worth a visit, alongside daily nibbles provided by the hotel. The hotel provided free DVDs for guests to watch.

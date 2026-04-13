@@ -973,7 +973,9 @@ def _build_checkpoint_item_from_benchmark_item(*, item: SummaryCompareBenchmarkI
             "expected_query_type": item.task_type,
             "expected_summary_strategy": item.summary_strategy if isinstance(item, SummaryBenchmarkItem) else None,
             "expected_document_names": item.expected_document_names,
-            "expected_section_headings": item.expected_section_headings if isinstance(item, SummaryBenchmarkItem) else ["compare"],
+            "expected_section_headings": (
+                item.expected_section_headings if isinstance(item, SummaryBenchmarkItem) and item.expected_section_headings else ["document"]
+            ) if isinstance(item, SummaryBenchmarkItem) else ["compare"],
             "required_claims_or_compare_axes": item.required_claims_or_axes,
             "gold_span_refs": [gold_ref.model_dump(mode="json") for gold_ref in item.gold_span_refs],
             "allows_insufficient_evidence": item.allows_insufficient_evidence,

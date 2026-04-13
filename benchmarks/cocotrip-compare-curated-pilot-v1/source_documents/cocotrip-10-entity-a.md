@@ -1,0 +1,7 @@
+# Entity A
+
+The hotel is a tranquil escape from the bustle of the Old Town. It is decorated in a modest and antiquated fashion. If you ask at this hotel you can get an amazing room with a sea-view. The bathroom seems updated and features a really great pressure shower. The continental-style breakfast was really good and served on the rooftop terrace. There are really great views at this hotel. Additionally found that their slippers are really comfortable and don't feel cheap.
+
+This hotel provides a lovely and thoroughly enjoyable stay. The rooms in the hotel are comfortable and some rooms can have a sea view. The bathroom was modern with a great pressure shower. The continental breakfast served on the roof is delicious. Drinks are a good price and served until 11pm on the roof terrace. The slippers provided by the hotel are long-lasting and very comfortable.
+
+This excellent hotel with the antique style decor is full of charm. Very enjoyable. The location is next to loudspeakers of multiple mosques. The rooms were clean and some offered views of the sea. They were comfortable for adults and young children and had a modern bathroom with great water pressure. Breakfast is a nice buffet continental style meal and drinks are available on the roof terrace until 11pm. The room came with really nice slippers.

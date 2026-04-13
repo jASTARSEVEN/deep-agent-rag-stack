@@ -1,8 +1,15 @@
 {
   "benchmark_name": "cocotrip-compare-curated-pilot-v1",
-  "version": "1.0.0",
-  "description": "English cross-document compare pilot package inspired by CoCoTrip-style comparisons.",
+  "version": "2.0.0",
+  "description": "Officially extracted CoCoTrip-derived compare package using annotated entity summaries.",
   "language": "en",
   "task_family": "compare",
-  "item_count": 1
+  "item_count": 10,
+  "dataset_provenance": {
+    "source_name": "CoCoTrip / CoCoSum",
+    "upstream_url": "https://github.com/megagonlabs/cocosum/blob/master/data/anno.json",
+    "source_split": "test",
+    "extraction_rule": "Take the first 10 entries from the official `anno.json` test split and preserve both entity summary lists plus common summary.",
+    "note": "Each item stores the original test index and both original entity ids."
+  }
 }

@@ -206,7 +206,7 @@ flowchart TD
 11. `avg_overall_score` 僅可作為彙總觀測值，不得單獨作為 release gate，也不得取代分面的代表主指標與 groundedness guardrails。
 12. 未來正式調教的 summary / compare 外部資料集最小可行組合固定為：`QMSum`（query-conditioned summary）、`Multi-News`（multi-document summary）與 `CoCoTrip`（cross-document compare）；`phase8a-summary-compare-v1` 持續作為唯一產品 release gate。
 13. `Multi-XScience`、`MS²` 與 `ORCHID` 等資料集在第一輪只屬於第二梯隊擴充候選，不得在 MVP 正式調教 lane 與主 gate 中搶先取代上述最小組合。
-14. repo 目前已另外落地一條雙語 curated pilot suite：英文 `QMSum + Multi-News + CoCoTrip`，中文目前保留 `DRCD query summary + TTNews multi-doc summary`；這條 suite 只用於 tuning / observability，不取代 `phase8a-summary-compare-v1` 的 release-gate 地位。
+14. repo 目前已另外落地一條真資料 summary/compare suite：英文 `QMSum + Multi-News + CoCoTrip`，中文 `LCSTS + CNewSum`；這條 suite 只用於 tuning / observability，不取代 `phase8a-summary-compare-v1` 的 release-gate 地位。
 15. 雙語 summary/compare benchmark suite 的正式主輸出只有 `summary_benchmark_score` 與 `compare_benchmark_score`；不額外定義跨任務單一總分。
 
 ### 外部 benchmark curation 流程
