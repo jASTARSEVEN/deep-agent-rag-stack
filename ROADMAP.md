@@ -237,13 +237,15 @@
 ## 近期建議順序
 
 1. 以 `2026-04-05` 的 current `production_like_v1` snapshot 固定九資料集 baseline，正式以 `generic_v1 + 9x3000` 作為後續所有 benchmark-driven 調整的唯一比較基準
-2. `Phase 8A` 已以 closeout accepted 方式結束；summary/compare 的 unified Deep Agents 主線與其 checkpoint artifacts 保留作為後續 phase 的 baseline
-3. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
-4. `Phase 8C` 改為 agentic evidence-seeking loop：讓主 `Deep Agents` agent 在初次 retrieval 證據不足時，可受控查看已授權 `ready` 文件名稱、讀取 selected synopsis hints，再以文件 scope 多次補 retrieval
-5. 8C 的 synopsis 只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
-6. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
-7. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
-8. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
+2. `Phase 8.1 ~ 8.3` 已完成，作為目前 `summary/compare` 與 `fact_lookup` 共用檢索骨架的基礎
+3. `Phase 8A` 已完成，固定目前的 unified `Deep Agents` answer path、checkpoint contract 與 benchmark 治理邊界
+4. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
+5. 未實現的 `Phase 8` 現在先聚焦 `summary/compare benchmark re-baseline`：新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後，先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`
+6. 只有在 rerun 後仍清楚顯示 coverage / faithfulness / compare quality / latency 問題適合用 agentic loop 解決時，才正式啟動 `Phase 8C`
+7. `Phase 8C` 若啟動，synopsis 仍只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
+8. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
+9. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
+10. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
 
 ## Phase 7 — Retrieval Correctness Evaluation
 
@@ -405,13 +407,13 @@
 - section-level synopsis 若未來要做，需等 document-level recall 的品質與成本先被驗證後，再另立 phase 規劃。
 
 狀態：
-- `已完成（closeout 已以 DRCD / NQ / QASPER sentinel rerun、public-entry smoke 與 document recall observability 驗證；其中 QASPER 100 的輕微退化被接受為可承受代價）`
+- `已完成（已以 DRCD / NQ / QASPER sentinel rerun、public-entry smoke 與 document recall observability 驗證）`
 
 ## Phase 8A — Unified Deep Agents Summary / Compare Stabilization
 
 ### Phase 8 Query Flow Overview
 
-本段落用來收斂 Phase 8 之後的 query-time 主線資料流，避免各 phase 各自描述卻缺少整體路徑。
+本段落只保留目前仍有效的 Phase 8 主線定義，不再保留舊的調參過程與過時敘事。
 
 共同原則：
 - 正式 retrieval 主線目前以 `child hybrid recall -> rerank -> diversified selection -> assembler` 為準，並以 routing scope / mention scope 做 SQL-first 收斂。
@@ -441,9 +443,9 @@ LLM 輸入規則：
 - 不得將 `document synopsis` 或 `section synopsis` 直接當作最終 citation payload。
 
 目標：
-- 以較少 phase 快速穩定 `document_summary` / `cross_document_compare` 的 unified Deep Agents answer path。
-- 把舊 `8.4 ~ 8.6` 收斂為單一交付批次：一次完成正式 task routing、unified answer path、selection contract 與最小 evaluation checkpoint。
-- summary/compare 的正式產品能力，以主 `Deep Agents` agent 搭配 `retrieve_area_contexts` tool 的端到端表現為準。
+- 穩定 `document_summary` / `cross_document_compare` 的 unified `Deep Agents` answer path。
+- 固定正式 task routing、unified answer path、selection contract 與 checkpoint 驗證方式。
+- 明確區分正式產品 contract 與未啟動的後續實驗 lane。
 
 內容：
 - 在 LangGraph chat runtime 將 `fact_lookup`、`document_summary` 與 `cross_document_compare` 統一到同一條主 `Deep Agents` answer path。
@@ -454,10 +456,6 @@ LLM 輸入規則：
   - 第二層 `summary_strategy`：僅在 `task_type=document_summary` 時啟用，至少支援 `document_overview | section_focused | multi_document_theme`
   - 兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`
   - `LLM fallback` 輸入僅限 query、language、document mention summary 與 label options，不得讀全文、不得改寫 query
-- rollout 優先順序以快速交付為原則：
-  - 先穩定 `document_summary`
-  - `document_overview` 與 `section_focused` 優先於 `multi_document_theme`
-  - `cross_document_compare` 在 `8A` 先以保守 coverage-first 版本落地，不導入額外 enrichment 依賴
 - 本 phase 不新增 enrichment schema、獨立 enrichment table 或新的 ingest stage。
 - citation contract 需維持可追溯到原始 document / parent / child chunks，不可只引用中間摘要節點。
 - trace metadata 需至少補上：
@@ -504,8 +502,8 @@ LLM 輸入規則：
 - `fact_lookup` 的 retrieval-only benchmark、evidence ranking 與 `nDCG@k / Recall@k / MRR@k` 等指標，由 `Phase 7 — Retrieval Correctness Evaluation` 統一負責。
 
 狀態：
-- `已完成（closeout accepted；已保留 unified answer path、兩層 routing 與 CLI-first checkpoint artifacts 作為後續 baseline。最新 accepted 驗收 run 雖未滿足原先全部 gate，但經產品決策接受目前 ceiling，8A 不再繼續調參收分）`
-- `2026-04-10` 以目前 task routing / unified Deep Agents 主線重跑 `phase8a-summary-compare-v1`：`task_type_accuracy=1.0000` 已滿分，但整體仍為 `passed=false`，`summary_strategy_accuracy=0.9375`，未過 gate 主要來自 hard blockers 與 `p95_latency_seconds=31.4785` 超過 `30.0000` 門檻；因此此 run 作為 post-closeout regression 記錄，不改變 8A 已結案且不繼續調分的判定
+- `已完成`
+- `8A` 現在只保留三個正式產物：unified `Deep Agents` 主線、`phase8a-summary-compare-v1` checkpoint、summary/compare metric registry
 
 ### Summary / Compare Metric Registry Governance
 
@@ -588,14 +586,14 @@ MVP 組合：
 
 建議 rollout 順序：
 1. `phase8a-summary-compare-v1` 維持唯一正式 gate，不變
-2. 先接 `QMSum`
-3. 再接 `CoCoTrip`
-4. 最後接 `Multi-News`
+2. 先固定 `summary-compare-real-curated-v1` 的五 package re-baseline，將 `QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum` 視為同一條 tuning / observability suite
+3. 再依 rerun 結果判斷下一輪最值得優先處理的是 `compare` 品質、中文 summary 壓縮率，或 latency / evidence contract 問題
+4. 只有在 suite rerun 仍指向同一類 summary/compare 缺口時，才進入 `Phase 8C` 的 agentic loop 實作
 
 補充：
 - 第一輪正式調教完成前，不擴充 `Multi-XScience`、`MS²`、`ORCHID` 等第二梯隊資料集，避免 signal 尚未穩定就增加 benchmark 面向
 
-## Phase 8B — Canceled Retrieval Enrichment Lane
+## Phase 8B — Removed Retrieval Enrichment Lane
 
 目標：
 - 取消先前規劃的 enrichment lane，將正式 retrieval 主線維持在 `child hybrid recall -> rerank -> diversified selection -> assembler`。
@@ -610,14 +608,19 @@ MVP 組合：
 - 保留 `document synopsis` 與 opt-in `section synopsis` 既有能力；它們不得成為 citation payload。
 
 狀態：
-- `已取消並移除（後續工作回到 child-based retrieval hardening 與 benchmark regression guardrails）`
+- `已取消並移除`
 
 ## Phase 8C — Agentic Evidence-Seeking Loop for Summary / Compare
 
 目標：
 - 讓 `document_summary` 與 `cross_document_compare` 在初次 retrieval 證據不足時，能由主 `Deep Agents` agent 以受控方式補查文件範圍與證據。
 - 將既有 `document synopsis` / opt-in `section synopsis` 定位為文件選擇與 retrieval planning hints，而不是 recall gate、selection gate、citation 單位或最終回答證據。
-- 改善 `phase8a-summary-compare-v1` 中仍存在的 required document coverage、insufficient evidence acknowledgement 與 faithfulness 問題，同時避免 p95 latency 與 token budget 繼續惡化。
+- 改善 `phase8a-summary-compare-v1` 中仍存在的 required document coverage、insufficient evidence acknowledgement 與 faithfulness 問題，盡量避免 p95 latency 與 token budget 繼續惡化 (latency僅提醒)。
+
+啟動前提：
+- 先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，把新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後的主線 benchmark baseline 固定下來。
+- rerun 報告必須先回答三件事：目前主要缺口是否真的集中在 agentic evidence-seeking 可解的 coverage / faithfulness 問題、是否其實是 compare answer quality 本身不足、以及 latency ceiling 是否已經讓多一步 loop 不划算。
+- 若 rerun 顯示 gap 主要來自 judge / dataset contract、compare answer formulation 或非 loop 類問題，則優先調整 benchmark 治理或 prompt / answer contract，不直接進入 8C runtime 實作。
 
 內容：
 - 新增 agent 可見但安全受控的文件清單工具，例如 `list_authorized_ready_documents`：
@@ -656,4 +659,5 @@ MVP 組合：
   - 若品質沒有穩定提升，或 latency / token 成本超過 gate，應回退 runtime 改動，只保留分析文件
 
 狀態：
-- `未開始（已改為 agentic evidence-seeking loop 路線；下一步是設計工具契約、guardrails 與 checkpoint before / after 驗證）`
+- `未開始`
+- `是否啟動以 rerun 後的 benchmark 證據為準`

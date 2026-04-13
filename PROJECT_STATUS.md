@@ -21,7 +21,7 @@
 
 ## 目前狀態
 
-當前主階段：`Post-Phase 8A — Child-Based Retrieval Hardening (In Progress)`
+當前主階段：`Post-Phase 8A — Summary/Compare Benchmark Re-Baselining (In Progress)`
 
 目前判定：
 - `Phase 0` 核心骨架已完成
@@ -82,49 +82,21 @@
   - `benchmarks/uda-curated-v1-100`：官方 `UDA-QA` `nq` full-source 子集、`140` oversampled items、`102` auto-matched、無需 LLM review；目前 benchmark runner 會依 gold span 指定文件查詢，最新指定文件 run assembled `Recall@10=0.7900`、`nDCG@10=0.6492`、`MRR@10=0.6044`
   - `benchmarks/qasper-curated-v1-100`：`50` 篇 paper oversampling、`132` filtered items、`122` auto-matched、`2` 個 `OpenAI` review overrides；目前 benchmark runner 會依 gold span 指定文件查詢，最新指定文件 run assembled `Recall@10=0.9200`、`nDCG@10=0.6105`、`MRR@10=0.5127`
 - 已將 `production_like_v1` benchmark profile 固定為目前主線設定；目前 current baseline 以最新 `production_like_v1` benchmark artifact 為準
-- 已將 `task_type + summary_strategy` routing 收斂為統一 classifier framework：兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`，並保留 `source / confidence / embedding margin / fallback_used / fallback_reason` 可觀測欄位
-- `Phase 8A` 的規劃已將 runtime routing 收斂為 2 層模型：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `document_summary` 下細分為 `document_overview | section_focused | multi_document_theme`
-- 已新增 runtime retrieval profile registry，依 query type 套用 skeleton profile，並將 `query_type`、routing source/confidence、selected profile 與 resolved settings 寫入 retrieval trace、evaluation preview 與 benchmark per-query detail
-- 已將 evaluation datasets / items / preview / run report / snapshot tooling 擴充為三種 query type，Web `EvaluationDrawer` 亦可建立並檢視三種題型
-- 查詢改寫功能已自 runtime、settings、trace 與 evaluation profile lane 移除；routing skeleton 不再保留其相容欄位或 knobs
-- 已為 `document_summary` 新增 `single_document | multi_document` 第二層 routing，透過 `documents.file_name` 的 deterministic mention resolver 解析單文件摘要與多文件摘要 scope，且只在已授權 `ready` 文件集合內運作
-- 已在 `rerank -> assembler` 間新增 scope-aware diversified selection layer：`fact_lookup` 維持 bypass，`document_summary` 採 coverage-first + fill 策略，`cross_document_compare` 採雙輪 coverage pass 後再依 rerank 補位
-- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已新增 `summary_scope`、`resolved_document_ids`、document mention 與 selection metadata；`document_summary` 與 `cross_document_compare` 已不再停留在 skeleton profile
-- 已為 `documents` 新增 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`，作為 document-level representation 的正式持久化欄位
-- worker ingest / reindex 正式納入 document synopsis 生成：以全 parent coverage 壓縮後交給 LLM 產生 `synopsis_text`，再寫入 synopsis embedding；若 synopsis 生成或 embedding 失敗，文件不得進入 `ready`
-- worker ingest / reindex 目前正式預設只生成 `document synopsis`；`section synopsis` 已改為 repo-wide opt-in，避免在主線與 benchmark 預設路徑增加成本
-- `document_summary` 與 `cross_document_compare` 的 retrieval 正式主線已回到 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler`；`fact_lookup` 維持同一路徑
-- retrieval routing 已將文件 mention scope 調整為與 `task_type` 正交：`fact_lookup` 若高信心提及已授權且 `ready` 文件，也會保留 `resolved_document_ids` 並用於 recall 收斂，不再只把 scope 視為 summary / compare 的附屬資訊
-- Deep Agents 可見的 retrieval tool contract 已移除舊的單一 `retrieval_strategy`，且不再讓 agent 提供 `task_type`、`document_scope` 或 `summary_strategy`；三者保留為後端 router 的正交 trace / evaluation contract，實際文件白名單只由後端 mention resolver 在已授權且 `ready` 文件中解析
-- `Phase 8B` 的 enrichment lane 已取消並移除：worker 不再生成該 enrichment，API 不再執行 query-time merge，evaluation / chat trace 不再輸出其欄位，schema 由 migration 回收
-- `Phase 8A` 已將 query-time routing 正式擴充為 `task_type + summary_strategy`；`document_summary` 會依 query 與 scope 走 `document_overview | section_focused | multi_document_theme`
-- `Phase 8A` routing 現已不再是單層 rule-only 決策；第一層 `task_type` 與第二層 `summary_strategy` 皆共用相同 routing engine，低信心時會正式啟用 `LLM fallback`
-- `Phase 8A` routing 仍維持 `task_type + summary_strategy` 的兩層統一 classifier framework，但其下游正式主線已改為 unified `Deep Agents` answer path
-- chat runtime 現在統一為單一路徑 `deepagents_unified`：`fact_lookup`、`document_summary` 與 `cross_document_compare` 都由主 `Deep Agents` agent 自行決定何時呼叫 `retrieve_area_contexts` 並完成回答
-- `thinking_mode` 前後端欄位與 checkpoint metadata 仍保留相容，但後端不再用它分流；trace 只保留 `answer_path="deepagents_unified"`、`thinking_mode` 與 `thinking_mode_ignored`
-- retrieval trace、chat tool output summary、evaluation preview 與 benchmark per-query detail 已移除 `document_recall`、`section_recall` 與 `selected_synopsis_level` 等 synopsis-stage contract
-- `Phase 8A` 已新增 CLI-first 的 summary/compare evaluation checkpoint：`python -m app.scripts.run_summary_compare_checkpoint`
-- checkpoint 會以固定 dataset 直接跑真實 chat runtime，再用 `LLM-as-judge` 評 `completeness / faithfulness / structure / compare_coverage`，並以 deterministic hard blockers 擋 `task_type`、`summary_strategy`、`ready-only citations`、必需文件覆蓋、timeout 與 token budget
-- checkpoint run metadata 已新增固定 `answer_path="deepagents_unified"`，用來明確標示目前正式驗證的是主 Deep Agents answer path
-- `Phase 8A` 目前的正式驗收定義已不再要求 query-time synopsis recall 或 summary/compare 專用 synthesis lane；驗收核心改為 unified Deep Agents path 是否能在固定 checkpoint 上穩定過線
+- `Phase 8.1 ~ 8.3` 已完成，現行 retrieval 主線已固定為 query-aware routing、mention-scoped diversified selection 與 document-level synopsis persistence 的組合
+- `task_type + summary_strategy` routing 已收斂為統一 classifier framework：兩層都採 `deterministic anchors -> embedding classifier -> LLM fallback`
+- `document_summary` 與 `cross_document_compare` 目前正式共用 `mention-scoped or area-scoped child recall -> rerank -> selection -> assembler` 檢索骨架；`fact_lookup` 也沿用同一主線
+- 已完成 scope-aware diversified selection 與 mention resolver；文件白名單只由後端在已授權且 `ready` 文件中解析，不允許 agent 或 public chat 直接覆寫 `document_id`
+- `documents` 已具備 SQL-first `synopsis_text`、`synopsis_embedding` 與 `synopsis_updated_at`；worker 正式預設只生成 `document synopsis`，`section synopsis` 維持 repo-wide opt-in
+- query-time 主線已移除 `document_recall`、`section_recall` 與 `selected_synopsis_level` 等 synopsis-stage contract；synopsis 目前不屬於正式 recall stage
+- `Phase 8A` 已完成，chat runtime 現在統一為 `deepagents_unified`；`fact_lookup`、`document_summary` 與 `cross_document_compare` 都由主 `Deep Agents` agent 搭配 `retrieve_area_contexts` 完成回答
+- `Phase 8A` 已固定 CLI-first checkpoint：`python -m app.scripts.run_summary_compare_checkpoint`；其職責是以固定 dataset 驗證 unified answer path，而不是延續 retrieval-only benchmark
 - 已新增雙語 summary/compare benchmark scoring lane：`python -m app.scripts.run_summary_compare_benchmark`
-- 新 lane 目前已改為 `benchmarks/summary-compare-real-curated-v1`，只保留真實資料集提取版 packages：`QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS` 與 `CNewSum`
-- 新 benchmark report 固定產出 `summary_benchmark_score`、`compare_benchmark_score`、`per_dataset_scores`、`task_family_scores`、`language_rollups`、`benchmark_overview` 與 `baseline_compare`
-- 新 lane 已落地 metric registry，對每個 summary/compare 指標標示 `source_method` 與 `standard_level`；目前主分數為 `bert_score_f1` 與 `pairwise_rubric_judge_win_rate`
-- 新 lane 已支援 benchmark/test retrieval 的 `explicit_document_ids` scope contract；runner 會先重新驗證 area、權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`
-- public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override；`document_id` 直指定能力只屬於 benchmark/test contract
-- summary/compare benchmark runner 已固定 bounded parallel execution，上限 `6` 條 item lanes；若中途需要 `LLM judge`，judge 也在同一條 lane 內執行，不做二次無上限 fan-out
-- synopsis 的再利用目前不屬於 `Phase 8A` 或 `Phase 8B` 正式交付；`Phase 8C` 已改為 agentic evidence-seeking loop，synopsis 僅能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
-- repo 已新增固定 benchmark package `benchmarks/phase8a-summary-compare-v1`，包含 `16` 題 summary/compare checkpoint fixtures 與對應 source documents
-- `Phase 8A` 已完成最新一輪正式驗收 checkpoint；最新 accepted artifact 為 `parallel-6` runner 輸出，雖未通過原先 `passed=true` gate，但專案已判定目前優化接近現階段上限，因此接受當前 ceiling 並以現況結案
-- 最新 accepted checkpoint 觀測值為：`task_type_accuracy=0.75`、`summary_strategy_accuracy=0.5`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_completeness=4.8125`、`avg_faithfulness_to_citations=4.375`、`avg_structure_quality=4.875`、`avg_compare_coverage=4.625`、`avg_overall_score=4.6719`、`p95_latency_seconds=21.0378`
-- `2026-04-10` 已用目前 task routing / unified Deep Agents 主線重跑 `phase8a-summary-compare-v1` 正式 checkpoint，artifact 位於 `artifacts/phase8a-summary-compare-report-20260410-task-routing.json`。最新結果確認 `task_type_accuracy=1.0000` 已滿分，但整體 `passed=false`，`summary_strategy_accuracy=0.9375`、`required_document_coverage=0.9062`、`citation_coverage=0.9062`、`section_coverage=0.9062`、`avg_faithfulness_to_citations=4.5625`、`avg_overall_score=4.6562`、`p95_latency_seconds=31.4785`；未過 gate 的主因為 `hard_blocker_failures=6` 與 `p95_latency_seconds` 超過 `30.0000` 門檻
-- 此輪 `phase8a-summary-compare-v1` 未達「滿分」：失敗分布為 `summary_strategy_mismatch=1`、`required_document_not_cited=3`、`insufficient_evidence_not_acknowledged=2`，另有 judge 低分分類 `judge_low_faithfulness=5`、`judge_low_completeness=1`、`judge_low_coverage=1`
-- 已完成 `Phase 8.3` closeout 所需的三條 sentinel rerun：
-  - `DRCD 100`：assembled `nDCG@10` 由 `0.8650` 提升到 `0.9900`，`Recall@10` 由 `0.9700` 提升到 `0.9900`
-  - `NQ 100`：最新 mainline rerun assembled `nDCG@10=0.7600`、`Recall@10=0.7600`
-  - `QASPER 100`：assembled `nDCG@10` 由 `0.3797` 降至 `0.3739`、`Recall@10` 由 `0.5900` 降至 `0.5800`
-- 依本輪結案判定，`QASPER 100` 的小幅回歸已被接受為可承受代價，因此 `Phase 8.3` 仍視為完成；相關 compare artifacts 保留於 `/tmp/phase83-sentinel-reruns/{drcd,nq,qasper}`
+- 目前正式 tuning / observability suite 為 `benchmarks/summary-compare-real-curated-v1`，只保留真實資料集提取版 packages：`QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum`
+- summary/compare benchmark report 已固定輸出 `summary_benchmark_score`、`compare_benchmark_score`、`per_dataset_scores`、`task_family_scores`、`language_rollups`、`benchmark_overview` 與 `baseline_compare`
+- summary/compare metric registry 已落地；主分數目前為 `bert_score_f1` 與 `pairwise_rubric_judge_win_rate`
+- benchmark/test runner 允許 `explicit_document_ids`，但 public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override
+- `Phase 8B` enrichment lane 已取消並移除；後續不得重新引入已刪除的 enrichment schema、query-time merge lane 或查詢改寫 lane
+- `Phase 8C` 尚未開始；目前只保留為候選路線，且 synopsis 若未來接回，也只能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
 - 已於 `2026-04-05` 將長期 benchmark 文件收斂為七個正式 dataset：六個 external `100Q` package 加上自家 `tw-insurance-rag-benchmark-v1`；舊的 `UDA` / `QASPER` 小樣本 package 已移出 current benchmark 集合。目前 `QASPER 100`、`UDA 100` 與 `DRCD 100` 的 benchmark contract 已改為使用 gold span `document_id` 作為指定文件 scope，避免把原始資料集的文件上下文誤當成 area-wide ambiguous query。
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為七資料集 current 基線，並把 `External 100Q` 壓力測試集合維持為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
 - 已完成 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100` 的最新 external `100Q` 基線判讀：指定文件後 `QASPER 100` 最新 mainline assembled `Recall@10=0.9200`、`nDCG@10=0.6105`、`MRR@10=0.5127`；`DRCD 100` 指定文件後 assembled `Recall@10=1.0000`、`nDCG@10=0.8894`、`MRR@10=0.8517`；`UDA 100` 指定文件後 latest mainline assembled `Recall@10=0.7900`、`nDCG@10=0.6492`、`MRR@10=0.6044`。`NQ` 仍是 assembler 壓力測試 lane，`DuReader-robust` 與 `MS MARCO` 維持 sanity-check lane；舊的 [`docs/external-100q-miss-analysis-2026-04-04.md`](docs/external-100q-miss-analysis-2026-04-04.md) 仍保留舊版 `QASPER + UDA` 詳細 miss 清單
@@ -330,22 +302,23 @@
 ## 目前階段重點
 
 ### Current Focus
-- `Phase 8B` enrichment lane 已取消；目前 focus 回到既有 `child hybrid recall -> rerank -> selection -> assembler` 主線的 benchmark 驗證與 regression guardrails
-- `Phase 8C` 路線已改為 agentic evidence-seeking loop：主 `Deep Agents` agent 可在初次 retrieval 證據不足時，受控查看已授權 `ready` 文件名稱、讀取 selected synopsis hints，並以文件 scope 多次補 retrieval
+- `Phase 8B` enrichment lane 已取消；目前 focus 先改為 summary/compare benchmark re-baseline，而不是直接開始新的 query-time runtime lane
+- 新增 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` 後，需先重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，重新確認目前 unified Deep Agents 主線的 ceiling、退化點與 latency 成本
+- `Phase 8C` 路線仍保留為 agentic evidence-seeking loop 候選，但只有在 rerun 後仍清楚顯示 coverage / faithfulness 問題適合用 loop 解決時才啟動
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
-- 保留 `phase8a-summary-compare-v1` checkpoint 作為已接受 closeout artifact；`2026-04-10` 重跑已確認 task type routing 達 `1.0000`，但整體 checkpoint 仍因 hard blockers 與 p95 latency 未通過，因此不把 8A 調分重新升為當前主線目標
+- `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準，不再承載額外的舊決策敘事
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
-2. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
-3. 以 `phase8a-summary-compare-v1` 建立 8C 前後對照，優先觀測 `required_document_not_cited`、`insufficient_evidence_not_acknowledged`、faithfulness、overall score 與 p95 latency；同時跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵
-4. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
-5. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
-6. 依最新 roadmap 收斂未來正式調教資料集 MVP 組合：內部 gate 維持 `phase8a-summary-compare-v1`，外部主資料集依序為 `QMSum`、`CoCoTrip`、`Multi-News`
+1. 重跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，把新增 `QMSum`、`Multi-News`、`CoCoTrip`、`LCSTS`、`CNewSum` 後的最新 summary/compare baseline 固定下來
+2. 先分析 rerun 結果，判斷主要缺口究竟是 compare answer quality、中文 summary 壓縮率、evidence contract，還是 agentic evidence-seeking 真能改善的 coverage 問題
+3. 只有在 rerun 仍顯示 loop 具明確 ROI 時，才設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
+4. 補一輪 `reindex` consistency 驗證，確認 `section synopsis` 預設關閉後 worker 仍可穩定 `ready`
+5. 在 `PUBLIC_HOST + Caddy` 環境驗證 `messages-tuple`、`custom`、`values` 與前後端 chat stream debug 的時序一致性
+6. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
 
 ## 尚未開始的功能
 
