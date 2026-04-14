@@ -240,11 +240,11 @@
 2. `Phase 8.1 ~ 8.3` 已完成，作為目前 `summary/compare` 與 `fact_lookup` 共用檢索骨架的基礎
 3. `Phase 8A` 已完成，固定目前的 unified `Deep Agents` answer path、checkpoint contract 與 benchmark 治理邊界
 4. `Phase 8B` enrichment lane 已取消並移除；後續不得再以已移除的 enrichment schema、query-time merge lane 或查詢改寫 lane 作為 summary/compare 改善前提
-5. 未實現的 `Phase 8` 現在先聚焦 `summary/compare benchmark baseline consolidation`：先整併既有 `QMSum + Multi-News + CoCoTrip + LCSTS + CNewSum` package 分數，固定 `summary-compare-real-curated-v1` 的 canonical suite baseline，再決定何時補跑
-6. baseline consolidation 完成前，所有文件都必須明確區分 `summary-compare-real-curated-v1` 是 tuning / observability suite、`phase8a-summary-compare-v1` 是唯一 product gate；後者在未補跑前不得宣稱已固定 numeric baseline
-7. 若後續新增新的 suite aggregate artifact，預設只視為觀測輸出；只有文件明確升格後，才可覆蓋 canonical suite baseline
-8. `2026-04-14` 的 `phase8a-summary-compare-v1` rerun 已提供 `Phase 8C` 啟動依據：`CHAT_MODEL=gpt-5.4-mini` + `codex-cli` 離線 judge 下，若不將 `insufficient_evidence_not_acknowledged` 視為當前階段 blocker，則 checkpoint 可視為實質過線；後續可正式展開 `Phase 8C`
-9. `Phase 8C` 若啟動，synopsis 仍只作為文件選擇與檢索規劃 hint，不得作為 citation payload、SQL scope 的唯一依據或最終回答證據；最終答案仍必須引用 assembled `parent/child` evidence contexts
+5. `summary-compare-real-curated-v1` 的 canonical suite baseline 已完成整併；後續新產生的 aggregate artifact 預設只視為觀測輸出，除非文件明確升格，否則不得覆蓋目前 baseline
+6. `2026-04-14` 的 `phase8a-summary-compare-v1` rerun 已提供 `Phase 8C` 啟動依據：`CHAT_MODEL=gpt-5.4-mini` + `codex-cli` 離線 judge 下，若不將 `insufficient_evidence_not_acknowledged` 視為當前階段 blocker，則 checkpoint 可視為實質過線
+7. `Phase 8C` 先只做 compare / multi-document 題的 agentic evidence-seeking loop，重點是 bounded follow-up retrieval、coverage gap 訊號、`query_variants` 與 evidence-insufficient 收斂；本 phase 不新增新的 retrieval 主查詢單位
+8. `Phase 8C` 中 `document synopsis` 仍只作為 planning hint；最終答案與 citations 必須維持在 assembled `parent/child` evidence contexts
+9. `Phase 8D` 再處理 `section_bundle` retrieval mode、bundle scoring / rerank / dedup / citation 映射，作為 compare / summary 的進一步 retrieval 結構升級，而不是 `8C` 的前置條件
 10. benchmark 驅動優化仍先聚焦 `QASPER 100` 的 `recall_only` semantic-gap 問題；同時把 `NQ 100` 視為 assembler / synthesis materialization regression 哨兵、`DRCD 100` 視為繁體中文 rerank regression 哨兵
 11. 補齊真實 `PUBLIC_HOST + Caddy + Keycloak /auth` 的 smoke 與 E2E 驗證，確認正式部署路徑不影響 retrieval / evaluation / chat
 12. 補強 area management 與 access / documents / chat / evaluation 狀態切換交界的回歸驗證
@@ -615,9 +615,9 @@ MVP 組合：
 ## Phase 8C — Agentic Evidence-Seeking Loop for Summary / Compare
 
 目標：
-- 讓 `document_summary` 與 `cross_document_compare` 在初次 retrieval 證據不足時，能由主 `Deep Agents` agent 以受控方式補查文件範圍與證據。
-- 將既有 `document synopsis` / opt-in `section synopsis` 定位為文件選擇與 retrieval planning hints，而不是 recall gate、selection gate、citation 單位或最終回答證據。
-- 改善 `phase8a-summary-compare-v1` 中仍存在的 required document coverage、insufficient evidence acknowledgement 與 faithfulness 問題，盡量避免 p95 latency 與 token budget 繼續惡化 (latency僅提醒)。
+- 讓 `document_summary` 與 `cross_document_compare` 在初次 retrieval 證據不足時，能由主 `Deep Agents` agent 以受控方式進行最多數回合的 evidence-seeking follow-up。
+- 將 `retrieve_area_contexts` 演進為「agent 可規劃但受 budget 約束」的 retrieval contract，優先補足 compare / multi-document 題的文件 coverage 與 evidence acknowledgement。
+- 在不改動正式 retrieval 主查詢單位的前提下，改善 `phase8a-summary-compare-v1` 中仍存在的 `insufficient_evidence_not_acknowledged` 與 compare coverage 問題，並盡量避免 p95 latency 與 token budget 顯著惡化。
 
 啟動前提：
 - 先完成 `summary-compare-real-curated-v1` 的 canonical baseline consolidation；目前正式採信的是 package-level consolidated baseline，而不是單一 aggregate suite artifact。
@@ -627,41 +627,102 @@ MVP 組合：
 - `Phase 8C` 啟動後，`phase8a-summary-compare-v1` 持續作為 before / after checkpoint；`summary-compare-real-curated-v1` 則維持 tuning / observability suite 身分，不取代 checkpoint gate
 
 內容：
-- 新增 agent 可見但安全受控的文件清單工具，例如 `list_authorized_ready_documents`：
-  - 僅回傳目前使用者在該 area 已授權且 `status=ready` 的文件名稱與短期 handle
+- 先擴充 `retrieve_area_contexts` 的 agentic contract，但維持單一工具入口：
+  - 開放 agent 提供有限數量的 `query_variants`，作為多角度 evidence probe 與 coverage repair 輔助
+  - `query_variants` 只允許 internal / agent runtime 使用，不作為 public client 可直接覆寫的自由介面
+  - 後端需保留原始 query、variants 與每筆 evidence 的 variant attribution，供 trace / benchmark 分析
+- 新增 compare / multi-document 題所需的 coverage 訊號：
+  - `missing_document_names`
+  - `supports_compare`
+  - `insufficient_evidence`
+  - `next_best_followups`
+  - coverage 訊號屬於 planning / stopping contract，不屬於 citation payload
+- 新增 agent 可見但安全受控的文件規劃能力：
+  - 僅能列出目前使用者在該 area 已授權且 `status=ready` 的文件名稱與短期 handle
+  - 可選擇檢視 `document synopsis` 作為 planning hint，但 synopsis 不得直接形成最終結論或 citation
   - 不回傳全文、不回傳非 ready 文件、不暴露未授權文件是否存在
-  - 仍以 SQL gate / deny-by-default / same-404 為保護邊界
-- 新增 agent 可見的 synopsis inspection / ranking 工具，例如 `inspect_document_synopses` 或 `rank_document_synopses`：
-  - 只允許查詢已授權且 `ready` 的文件
-  - synopsis 僅作為 orientation / planning hint
-  - synopsis 不得產生 citation，不得直接餵成最終答案依據
-  - 輸出需控制長度、文件數與呼叫次數
-- 將 `retrieve_area_contexts` 從單次零參數快取模型演進為 bounded multi-call retrieval：
-  - agent 第一次仍以原始問題做 area-scoped retrieval
-  - 若 assembled contexts 對必要文件、章節或比較軸覆蓋不足，可依工具回傳的短期 handle 指定一份或多份文件做 scoped retrieval
-  - scoped retrieval 必須在後端重新驗證 handle 對應的 area、使用者權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`
-  - 不允許 agent 直接提供原始 `document_id` 作為權限繞路
+- 將 `retrieve_area_contexts` 演進為 bounded multi-call retrieval，但 `8C` 仍沿用既有 retrieval 主線：
+  - 第一次呼叫仍使用現有 `child hybrid recall -> rerank -> selection -> assembler`
+  - follow-up 僅允許在已授權 ready 文件集合內做 bounded scoped retrieval
+  - `8C` 不新增新的正式 retrieval 主查詢單位；evidence granularity 仍以既有 `child / parent` + assembled contexts 為主
+  - 不允許 agent 直接提供原始 `document_id`；只能用後端核發的短期 handle 或後端已解析的安全文件範圍
 - 加入 loop guardrails：
   - 每回合最大 retrieval 呼叫次數
+  - 每回合最大 `query_variants` 數量與總 token 長度
   - 每回合最大 synopsis inspection 次數
   - 每次 scoped retrieval 的最大文件數
   - 全回合 token budget、context budget 與 latency budget
-  - 無新增 evidence 時停止補查，並要求回答明確標示證據不足
+  - 無新增 evidence、無新增 required-document coverage 或無新增 compare-axis coverage 時停止補查，並要求回答明確標示證據不足
+- 補上 query-time `evidence_cue_text`：
+  - 不新增 ingest LLM 成本
+  - 由 query-time 依已命中的 evidence 產生短摘錄，作為 agent / UI 快速理解證據的輕量 cue
+  - `evidence_cue_text` 不改變正式 citation 來源，也不要求額外的細粒度 span extraction 成為 `8C` 前置工作
 - 最終回答規則：
-  - 最終 citation 一律來自 scoped retrieval 回傳的 assembled contexts
-  - synopsis hints、文件名稱清單與 agent planning trace 不得成為 citation
-  - 若某個比較面向或文件沒有 citation-ready evidence，回答必須明確說明證據不足，不得用 synopsis 補結論
+  - 最終 citation 一律來自 follow-up retrieval 回傳的 assembled contexts
+  - `document synopsis`、文件名稱清單、coverage 訊號與 agent planning trace 不得成為 citation
+  - 若某個比較面向或文件沒有 citation-ready evidence，回答必須明確說明證據不足，不得用 planning hints 補結論
 - trace / evaluation 需補上：
-  - 初次 retrieval 與每次 scoped retrieval 的 tool call summary
+  - 原始 query 與每個 `query_variant`
+  - 初次 retrieval 與每次 follow-up retrieval 的 tool call summary
   - 文件清單工具是否被呼叫、回傳文件數與被選文件 handles
   - synopsis hint 是否被使用、其來源文件與壓縮長度
-  - 每次補查帶來的新文件 / section / citation coverage
-  - 停止補查原因
+  - 每次補查帶來的新文件 / citation / compare coverage
+  - loop stop reason 與是否因 evidence insufficient 提前收斂
 - 驗證方式：
   - 先以 `phase8a-summary-compare-v1` 建立 before / after，比較 `required_document_not_cited`、`insufficient_evidence_not_acknowledged`、faithfulness、overall score 與 p95 latency
-  - 同步跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵，避免 summary/compare 的 agentic loop 破壞 generic-first retrieval 主線
+  - 同步跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵，避免 `8C` 的 agentic loop 破壞 generic-first retrieval 主線
   - 若品質沒有穩定提升，或 latency / token 成本超過 gate，應回退 runtime 改動，只保留分析文件
+
+Exit Criteria：
+- compare / multi-document 題的 follow-up loop 已能在 bounded budget 內穩定運作
+- `phase8a-summary-compare-v1` 的 `insufficient_evidence_not_acknowledged` 具可觀測改善，且未造成 `required_document_coverage`、`citation_coverage` 或 faithfulness 明顯退化
+- trace / benchmark / checkpoint report 已能明確說明 agent 為何補查、補查了什麼、何時停止
+- `8C` 完成後，正式 retrieval 主查詢單位仍未改動；`section_bundle` 只保留為 `8D` 的後續策略空間
 
 狀態：
 - `未開始`
 - `是否啟動以前置 baseline consolidation 完成後的 rerun 證據為準`
+
+## Phase 8D — Section Bundle Retrieval for Summary / Compare
+
+目標：
+- 在 `8C` 的 agentic follow-up loop 已穩定後，將 `section_bundle` 納入 compare / summary 的候選 retrieval mode，作為較高階的 evidence working set，而不是取代 citation-ready `parent/child` contract。
+- 降低 summary / compare 在多 parent section 上的語意碎片化，提升 compare 軸 coverage 與 multi-document synthesis 的上下文完整度。
+- 驗證 `section_bundle` 是否真的能提升品質；若不能穩定提升，就維持 `8C` 的既有 retrieval backbone，不強行升格。
+
+前置條件：
+- `Phase 8C` 已完成，且 bounded follow-up loop、coverage signals 與 trace 已穩定
+- `section_bundle` 的導入不應與 `8C` 同時評估，避免無法區分改善來自 agent loop 或 retrieval unit 改動
+- `phase8a-summary-compare-v1` 與 summary/compare suite 已可作為 `8D` 的 before / after 比較基準
+
+內容：
+- 定義 `section_bundle` formation 規則：
+  - 以既有 `heading_path`、相鄰 `parent`、position 與語義相近度形成 bundle
+  - 不以固定中文詞綴或 heading cue 作為主要形成依據，維持 generic-first
+  - bundle 僅作為 retrieval / rerank / planning 單位，不直接取代 citation 單位
+- 新增 bundle-level retrieval mode：
+  - 適用於 compare / multi-document summary
+  - 可作為 `8C` follow-up loop 的第二階段可選策略，而非預設主路徑
+  - fact lookup 預設不啟用
+- 實作 bundle-level scoring / rerank / dedup：
+  - 先決定 bundle 代表文字
+  - 再做 bundle 間的 rerank、document/section diversity 與 coverage-first fill
+  - 避免同一 section 重複 bundle 佔滿 context budget
+- 補上 bundle -> citation-ready evidence 映射：
+  - bundle 本身不是 citation
+  - 最終回答仍需回投到對應的 `parent/child` evidence contexts
+  - 若 bundle 命中但回投後無法形成足夠 citation-ready evidence，必須明確標示不足
+- 驗證方式：
+  - 以 `phase8a-summary-compare-v1` 比較 compare coverage、faithfulness、latency 與 token
+  - 以 summary/compare suite 比較 `summary_benchmark_score` 與 `compare_benchmark_score`
+  - 持續跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵
+  - 若 `section_bundle` 提升不足或顯著拉低 precision / citation 對齊，則維持 `8C` 設計，不升格為正式模式
+
+Exit Criteria：
+- `section_bundle` 已具明確 formation、scoring、dedup 與 citation mapping 規則
+- compare / summary 題在至少一條正式 benchmark lane 上有穩定可重現的改善
+- 未造成 fact lookup、citation precision、latency 或 generic-first retrieval 主線明顯退化
+
+狀態：
+- `未開始`
+- `以前置 8C 完成與 regression 穩定為啟動條件`
