@@ -514,49 +514,49 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
 
     assert build_assembled_context_payload(None, None) == []
     assert build_agent_tool_context_payload(None, None) == []
-    assert build_tool_call_output_summary(None, None) == {
-        "contexts_count": 0,
-        "citations_count": 0,
-        "query_type": None,
-        "query_type_language": None,
-        "query_type_source": None,
-        "query_type_confidence": None,
-        "query_type_matched_rules": [],
-        "query_type_rule_hits": [],
-        "query_type_embedding_scores": [],
-        "query_type_top_label": None,
-        "query_type_runner_up_label": None,
-        "query_type_embedding_margin": None,
-        "query_type_fallback_used": None,
-        "query_type_fallback_reason": None,
-        "summary_scope": None,
-        "summary_strategy": None,
-        "summary_strategy_source": None,
-        "summary_strategy_confidence": None,
-        "summary_strategy_rule_hits": [],
-        "summary_strategy_embedding_scores": [],
-        "summary_strategy_top_label": None,
-        "summary_strategy_runner_up_label": None,
-        "summary_strategy_embedding_margin": None,
-        "summary_strategy_fallback_used": None,
-        "summary_strategy_fallback_reason": None,
-        "document_scope": None,
-        "resolved_document_ids": [],
-        "document_mention_source": None,
-        "document_mention_confidence": None,
-        "document_mention_candidates": [],
-        "selected_profile": None,
-        "fallback_reason": None,
-        "selection_applied": None,
-        "selection_strategy": None,
-        "selected_document_count": None,
-        "selected_parent_count": None,
-        "selected_document_ids": [],
-        "selected_parent_ids": [],
-        "dropped_by_diversity": [],
-        "profile_settings": {},
-        "contexts": [],
-    }
+    summary_payload = build_tool_call_output_summary(None, None)
+
+    assert summary_payload["contexts_count"] == 0
+    assert summary_payload["citations_count"] == 0
+    assert summary_payload["query_type"] is None
+    assert summary_payload["query_type_language"] is None
+    assert summary_payload["query_type_source"] is None
+    assert summary_payload["query_type_confidence"] is None
+    assert summary_payload["query_type_matched_rules"] == []
+    assert summary_payload["query_type_rule_hits"] == []
+    assert summary_payload["query_type_embedding_scores"] == []
+    assert summary_payload["query_type_top_label"] is None
+    assert summary_payload["query_type_runner_up_label"] is None
+    assert summary_payload["query_type_embedding_margin"] is None
+    assert summary_payload["query_type_fallback_used"] is None
+    assert summary_payload["query_type_fallback_reason"] is None
+    assert summary_payload["summary_scope"] is None
+    assert summary_payload["summary_strategy"] is None
+    assert summary_payload["summary_strategy_source"] is None
+    assert summary_payload["summary_strategy_confidence"] is None
+    assert summary_payload["summary_strategy_rule_hits"] == []
+    assert summary_payload["summary_strategy_embedding_scores"] == []
+    assert summary_payload["summary_strategy_top_label"] is None
+    assert summary_payload["summary_strategy_runner_up_label"] is None
+    assert summary_payload["summary_strategy_embedding_margin"] is None
+    assert summary_payload["summary_strategy_fallback_used"] is None
+    assert summary_payload["summary_strategy_fallback_reason"] is None
+    assert summary_payload["document_scope"] is None
+    assert summary_payload["resolved_document_ids"] == []
+    assert summary_payload["document_mention_source"] is None
+    assert summary_payload["document_mention_confidence"] is None
+    assert summary_payload["document_mention_candidates"] == []
+    assert summary_payload["selected_profile"] is None
+    assert summary_payload["fallback_reason"] is None
+    assert summary_payload["selection_applied"] is None
+    assert summary_payload["selection_strategy"] is None
+    assert summary_payload["selected_document_count"] is None
+    assert summary_payload["selected_parent_count"] is None
+    assert summary_payload["selected_document_ids"] == []
+    assert summary_payload["selected_parent_ids"] == []
+    assert summary_payload["dropped_by_diversity"] == []
+    assert summary_payload["profile_settings"] == {}
+    assert summary_payload["contexts"] == []
 
 
 def test_build_chat_citations_normalizes_uuid_ids() -> None:

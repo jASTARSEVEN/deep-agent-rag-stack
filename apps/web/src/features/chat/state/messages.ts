@@ -141,13 +141,32 @@ export function applyStreamUpdate(
   }
   if (streamUpdate.toolCall) {
     const nextToolCall = streamUpdate.toolCall;
-    nextMessages = updateLastAssistantMessage(nextMessages, (current) => ({
-      ...current,
-      toolCalls: [
-        ...current.toolCalls.filter((item: ChatToolCallState) => item.name !== nextToolCall.name),
-        nextToolCall,
-      ],
-    }));
+    nextMessages = updateLastAssistantMessage(nextMessages, (current) => {
+      const nextToolCalls = [...current.toolCalls];
+      if (nextToolCall.status === "started") {
+        nextToolCalls.push(nextToolCall);
+        return {
+          ...current,
+          toolCalls: nextToolCalls,
+        };
+      }
+
+      const pendingIndex = [...nextToolCalls]
+        .map((item, index) => ({ item, index }))
+        .reverse()
+        .find(({ item }) => item.name === nextToolCall.name && item.status === "started")
+        ?.index;
+
+      if (typeof pendingIndex === "number") {
+        nextToolCalls[pendingIndex] = nextToolCall;
+      } else {
+        nextToolCalls.push(nextToolCall);
+      }
+      return {
+        ...current,
+        toolCalls: nextToolCalls,
+      };
+    });
   }
   if (streamUpdate.completed) {
     nextMessages = updateLastAssistantMessage(nextMessages, (current) => {

@@ -90,6 +90,14 @@ This module contains the project's FastAPI service. It currently provides:
 - `CHAT_INCLUDE_TRACE`
 - `CHAT_STREAM_CHUNK_SIZE`
 - `CHAT_STREAM_DEBUG`
+- `CHAT_AGENTIC_ENABLED`
+- `CHAT_AGENTIC_MAX_TOOL_CALLS_PER_TURN`
+- `CHAT_AGENTIC_MAX_QUERY_VARIANTS_PER_CALL`
+- `CHAT_AGENTIC_MAX_QUERY_VARIANT_CHARS`
+- `CHAT_AGENTIC_MAX_SCOPED_DOCUMENTS_PER_CALL`
+- `CHAT_AGENTIC_MAX_SYNOPSIS_INSPECTIONS_PER_TURN`
+- `CHAT_AGENTIC_TARGET_LATENCY_SECONDS`
+- `CHAT_AGENTIC_MAX_LATENCY_SECONDS`
 - `LANGGRAPH_SERVICE_PORT`
 - `LANGSMITH_TRACING`
 - `LANGSMITH_API_KEY`
@@ -167,7 +175,8 @@ Notes:
 - `document_chunks` include `structure_kind=text|table` for downstream retrieval and observability.
 - Text children are split with `LangChain RecursiveCharacterTextSplitter`; table children preserve whole tables or split by row groups.
 - `ready` now means chunk tree, embeddings, and PGroonga-indexed retrieval content have all been written.
-- `document_summary` and `cross_document_compare` now use a two-stage retrieval path: document synopsis recall first, then child recall constrained by SQL `allowed_document_ids`.
+- `retrieve_area_contexts` remains the only agent-visible retrieval tool. When `CHAT_AGENTIC_ENABLED=true`, compare and multi-document summary questions may trigger bounded follow-up retrieval with `query_variants`, scoped `document_handles`, and optional `synopsis_hints`, but final citations still come only from assembled contexts.
+- `CHAT_AGENTIC_TARGET_LATENCY_SECONDS=20` and `CHAT_AGENTIC_MAX_LATENCY_SECONDS=40` are warning thresholds for trace / benchmark visibility. They do not hard-stop the API or terminate an active chat session.
 - `documents` now persist `synopsis_text`, `synopsis_embedding`, and `synopsis_updated_at`; these fields are part of the formal Phase 8.3 document-level representation contract.
 - The default embedding path remains `EMBEDDING_PROVIDER=openai` with `EMBEDDING_MODEL=text-embedding-3-small`, and the retrieval schema expects `1536` dimensions.
 - `EMBEDDING_PROVIDER=huggingface` is available for local/self-hosted embedding with `Qwen/Qwen3-Embedding-0.6B`; the provider applies the official query instruction format for query embeddings, zero-pads the model's `1024`-dim output into the current `1536`-dim schema, and uses the current process CPU / GPU resources.

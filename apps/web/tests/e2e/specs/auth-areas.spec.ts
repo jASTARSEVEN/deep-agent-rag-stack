@@ -52,6 +52,7 @@ const DOCUMENT_MAINTAINER_READY_ID = "00000000-0000-0000-0000-000000000102";
 const CHUNK_READER_CHILD_ID = "00000000-0000-0000-0000-000000000202";
 const CHUNK_MAINTAINER_CHILD_ID = "00000000-0000-0000-0000-000000000204";
 const SHARED_DOCUMENT_NAME = "playwright-notes.md";
+const COMPARE_AREA_NAME = "Compare Travel Area";
 
 let sharedAreaName = "";
 
@@ -66,6 +67,39 @@ let sharedAreaName = "";
 async function loginAs(page, role: "admin" | "maintainer" | "reader" | "outsider"): Promise<void> {
   await page.goto("/");
   await page.getByTestId(`test-login-${role}`).click();
+}
+
+
+/**
+ * 切換到指定 area。
+ *
+ * @param page Playwright page 物件。
+ * @param areaName 目標 area 名稱。
+ * @returns 無；僅切換目前選取的 area。
+ */
+async function selectArea(page, areaName: string): Promise<void> {
+  await page
+    .getByTestId("areas-list")
+    .locator("button")
+    .filter({ hasText: areaName })
+    .first()
+    .click();
+  await expect(page.getByTestId("area-detail-panel")).toContainText(areaName);
+}
+
+
+/**
+ * 送出 chat 問題並等待 assistant 回應結束。
+ *
+ * @param page Playwright page 物件。
+ * @param question 要送出的問題。
+ * @returns 無；僅推進 chat 流程。
+ */
+async function submitChatQuestion(page, question: string): Promise<void> {
+  await page.getByTestId("chat-question").fill(question);
+  await page.getByTestId("chat-submit").click();
+  await expect(page.getByTestId("chat-message-user").last()).toContainText(question);
+  await expect(page.getByTestId("chat-message-assistant").last()).not.toContainText("回應中...");
 }
 
 
@@ -171,14 +205,10 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
   await expect(page.getByTestId("document-preview-pane")).toContainText("ready");
   await page.getByLabel("Close documents drawer").click(); // 關閉 Drawer
 
-  await page.getByTestId("chat-question").fill("reader policy");
-  await page.getByTestId("chat-submit").click();
-  await expect(page.getByTestId("chat-messages")).toContainText("reader policy");
-  // 暫時跳過 Chat API 404 相關斷言
-  // await expect(page.getByTestId("chat-messages")).toContainText("Reader Intro");
-  // await expect(page.getByTestId("chat-citations")).toContainText("Assembled Contexts");
-  // await expect(page.getByTestId("chat-citations")).toContainText("chunk-reader-parent");
-  // await expect(page.getByTestId("chat-citations")).toContainText("chunk-reader-child");
+  await submitChatQuestion(page, "reader policy");
+  await expect(page.getByTestId("chat-message-assistant").last()).toContainText("Reader Handbook");
+  await expect(page.getByTestId("chat-tool-calls")).toContainText("retrieve_area_contexts");
+  await expect(page.getByTestId("chat-tool-call-0")).toContainText("20s 內");
   
   // 再次打開確認權限限制
   await page.getByRole("button", { name: "管理文件" }).click();
@@ -187,18 +217,41 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
 });
 
 
-/* 暫時跳過，因為 Chat API 目前回傳 404
-test("chat 會顯示 assembled context 而不是 child-level citations", async ({ page }) => {
+test("reader compare 題會顯示 follow-up tool debug 與證據不足回覆", async ({ page }) => {
   await loginAs(page, "reader");
+  await selectArea(page, COMPARE_AREA_NAME);
 
-  await page.getByTestId("chat-question").fill("reader policy");
-  await page.getByTestId("chat-submit").click();
+  await submitChatQuestion(page, "Compare Travel Policy and Expense Guidelines approval rules.");
 
-  await expect(page.getByTestId("chat-citations")).toContainText("Assembled Contexts");
-  await expect(page.getByTestId("chat-citations")).toContainText("parent: chunk-reader-parent");
-  await expect(page.getByTestId("chat-citations")).toContainText("children: chunk-reader-child");
+  await expect(page.getByTestId("chat-message-assistant").last()).toContainText("證據不足以完成完整比較");
+  await expect(page.getByTestId("chat-message-assistant").last()).toContainText("Travel Policy");
+  await expect(page.getByTestId("chat-tool-call-0")).toContainText("共 1 次");
+  await expect(page.getByTestId("chat-tool-call-0")).toContainText("20s 內");
+  await expect(page.getByTestId("chat-tool-call-0")).toContainText("停止：followup_requested");
+  await expect(page.getByTestId("chat-tool-call-1")).toContainText("共 2 次");
+  await expect(page.getByTestId("chat-tool-call-1")).toContainText("follow-up 1 次");
+  await expect(page.getByTestId("chat-tool-call-1")).toContainText("延遲降級");
+  await expect(page.getByTestId("chat-tool-call-1")).toContainText("停止：latency_budget_soft_limit");
+  await expect(page.getByTestId("chat-tool-call-1")).toContainText("證據不足");
 });
-*/
+
+
+test("reader 對未授權文件提問時不會從回答與 tool debug 洩漏文件名稱", async ({ page }) => {
+  await loginAs(page, "reader");
+  await selectArea(page, "Reader Handbook Area");
+
+  await submitChatQuestion(page, "Compare reader handbook with maintainer guide.");
+
+  await expect(page.getByTestId("chat-message-assistant").last()).toContainText("證據不足");
+  await expect(page.getByTestId("chat-message-assistant").last()).not.toContainText("maintainer-guide.md");
+  await expect(page.getByTestId("chat-message-assistant").last()).not.toContainText("processing-draft.md");
+
+  const toolCall = page.getByTestId("chat-tool-call-0");
+  await toolCall.locator("summary").first().click();
+  await expect(toolCall).toContainText("reader-handbook.md");
+  await expect(toolCall).not.toContainText("maintainer-guide.md");
+  await expect(toolCall).not.toContainText("processing-draft.md");
+});
 
 
 test("maintainer 可看 detail 但 access 管理區不可操作", async ({ page }) => {

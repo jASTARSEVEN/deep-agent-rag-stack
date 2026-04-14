@@ -307,6 +307,57 @@ export interface ChatContextReference {
 /** LangGraph custom event 對應的高層 chat 階段。 */
 export type ChatPhase = "preparing" | "thinking" | "searching" | "tool_calling" | "drafting";
 
+/** Phase 8C tool debug summary 的 latency budget 狀態。 */
+export type ChatToolCallLatencyBudgetStatus = "within_budget" | "normal" | "degraded" | "warning" | "failed";
+
+/** Tool output 內單一 planning document 的最小顯示型別。 */
+export interface ChatToolCallPlanningDocument {
+  /** 後端核發的短期文件 handle。 */
+  handle?: string;
+  /** 文件名稱。 */
+  document_name?: string;
+  /** 是否由 query 直接提及。 */
+  mentioned_by_query?: boolean;
+  /** 本輪是否命中。 */
+  hit_in_current_round?: boolean;
+  /** 是否可檢視 synopsis hint。 */
+  synopsis_available?: boolean;
+}
+
+/** Tool output 的可選 coverage signals。 */
+export interface ChatToolCallCoverageSignals {
+  /** 目前仍缺少直接證據的文件名稱。 */
+  missing_document_names?: string[];
+  /** 目前是否已具備可比較的基礎。 */
+  supports_compare?: boolean;
+  /** 是否仍屬證據不足。 */
+  insufficient_evidence?: boolean;
+  /** 目前仍缺少的比較面向。 */
+  missing_compare_axes?: string[];
+  /** follow-up 是否找到新證據。 */
+  new_evidence_found?: boolean;
+}
+
+/** Tool output 的最小 debug summary 型別。 */
+export interface ChatToolCallOutputSummary extends Record<string, unknown> {
+  /** 本輪 tool call 次數。 */
+  tool_call_count?: number;
+  /** follow-up 次數。 */
+  followup_call_count?: number;
+  /** synopsis 檢視次數。 */
+  synopsis_inspection_count?: number;
+  /** latency budget 狀態。 */
+  latency_budget_status?: ChatToolCallLatencyBudgetStatus | string;
+  /** loop 停止原因。 */
+  stop_reason?: string;
+  /** coverage planning 訊號。 */
+  coverage_signals?: ChatToolCallCoverageSignals;
+  /** planning document 清單。 */
+  planning_documents?: ChatToolCallPlanningDocument[];
+  /** 建議的下一步 follow-up。 */
+  next_best_followups?: string[];
+}
+
 
 /** 前端顯示用的 chat 階段狀態。 */
 export interface ChatPhaseState {
@@ -328,7 +379,7 @@ export interface ChatToolCallState {
   /** 工具輸入參數。 */
   input: Record<string, unknown>;
   /** 工具輸出摘要。 */
-  output: Record<string, unknown> | null;
+  output: ChatToolCallOutputSummary | null;
 }
 
 /** 全文預覽使用的 child chunk 範圍。 */

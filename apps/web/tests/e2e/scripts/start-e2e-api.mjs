@@ -17,6 +17,9 @@ const apiRoot = resolve(webRoot, "../api");
 /** `apps/worker` 模組根目錄。 */
 const workerRoot = resolve(webRoot, "../worker");
 
+/** E2E API 啟動 wrapper 腳本。 */
+const e2eApiWrapperPath = join(currentDirectory, "run_e2e_api.py");
+
 /** Playwright E2E 共用的 SQLite 測試資料庫路徑。 */
 const databasePath = join(webRoot, ".tmp", "playwright-e2e.sqlite");
 
@@ -68,12 +71,13 @@ const apiEnv = {
   API_HOST: "127.0.0.1",
   API_PORT: "18001",
   API_CORS_ORIGINS: "http://127.0.0.1:13001",
-  CHAT_PROVIDER: "deterministic",
-  CHAT_MODEL: "deterministic-chat",
+  CHAT_PROVIDER: "deepagents",
+  CHAT_MODEL: "gpt-5.4-mini",
   CHAT_MAX_OUTPUT_TOKENS: "700",
   CHAT_TIMEOUT_SECONDS: "30",
   CHAT_INCLUDE_TRACE: "true",
   CHAT_STREAM_CHUNK_SIZE: "24",
+  OPENAI_API_KEY: "test-key",
   LANGGRAPH_SERVICE_PORT: "18001",
 };
 
@@ -98,7 +102,7 @@ const workerProcess = spawn(
 /** API server 啟動用子行程。 */
 const apiProcess = spawn(
   "python",
-  ["-m", "uvicorn", "app.chat.runtime.langgraph_http_app:app", "--app-dir", "src", "--host", "127.0.0.1", "--port", "18001"],
+  [e2eApiWrapperPath],
   {
     cwd: apiRoot,
     stdio: "inherit",

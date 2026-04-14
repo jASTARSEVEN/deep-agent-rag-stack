@@ -42,6 +42,58 @@ def _uuid() -> str:
     return str(uuid4())
 
 
+def _build_fake_retrieval_result(
+    *,
+    assembled_contexts: list[object],
+    citations: list[object],
+    trace: dict[str, object],
+    planning_documents: list[object] | None = None,
+    coverage_signals: object | None = None,
+    next_best_followups: list[object] | None = None,
+    evidence_cue_texts: list[object] | None = None,
+    synopsis_hints: list[object] | None = None,
+    loop_trace_delta: dict[str, object] | None = None,
+) -> SimpleNamespace:
+    """建立符合目前 retrieval tool 最小 contract 的假結果。
+
+    參數：
+    - `assembled_contexts`：assembler 輸出的 contexts。
+    - `citations`：citation 列表。
+    - `trace`：retrieval / assembler trace。
+    - `planning_documents`：planning documents；預設空列表。
+    - `coverage_signals`：可選 coverage signals。
+    - `next_best_followups`：建議 follow-up 列表。
+    - `evidence_cue_texts`：可選 evidence cue 列表。
+    - `synopsis_hints`：可選 synopsis hints。
+    - `loop_trace_delta`：loop trace 摘要。
+
+    回傳：
+    - `SimpleNamespace`：可供 runtime 與 payload builder 使用的假結果。
+    """
+
+    return SimpleNamespace(
+        assembled_contexts=assembled_contexts,
+        citations=citations,
+        trace=trace,
+        planning_documents=planning_documents or [],
+        coverage_signals=coverage_signals,
+        next_best_followups=next_best_followups or [],
+        evidence_cue_texts=evidence_cue_texts or [],
+        synopsis_hints=synopsis_hints or [],
+        loop_trace_delta=loop_trace_delta or {},
+    )
+
+
+@dataclass
+class FakePlanningDocument:
+    """模擬 retrieval planning document 的最小 dataclass。"""
+
+    document_name: str
+    mentioned_by_query: bool
+    hit_in_current_round: bool
+    synopsis_available: bool
+
+
 def test_deterministic_runtime_factory_returns_deterministic_runtime() -> None:
     """`CHAT_PROVIDER=deterministic` 應建立 deterministic runtime。
 
@@ -382,7 +434,7 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         - `SimpleNamespace`：最小 retrieval 結果。
         """
 
-        return SimpleNamespace(
+        return _build_fake_retrieval_result(
             assembled_contexts=[],
             citations=[],
             trace={"retrieval": {"query": kwargs["question"]}, "assembler": {"contexts": []}},
@@ -480,50 +532,53 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
     ]
     assert [event["status"] for event in tool_events] == ["started", "completed"]
     assert tool_events[0]["name"] == "retrieve_area_contexts"
-    assert tool_events[0]["input"] == {"area_id": "area-1", "question": "請根據文件回答 reader policy"}
-    assert tool_events[1]["output"] == {
-        "contexts_count": 0,
-        "citations_count": 0,
-        "query_type": None,
-        "query_type_language": None,
-        "query_type_source": None,
-        "query_type_confidence": None,
-        "query_type_matched_rules": [],
-        "query_type_rule_hits": [],
-        "query_type_embedding_scores": [],
-        "query_type_top_label": None,
-        "query_type_runner_up_label": None,
-        "query_type_embedding_margin": None,
-        "query_type_fallback_used": None,
-        "query_type_fallback_reason": None,
-        "summary_scope": None,
-        "summary_strategy": None,
-        "summary_strategy_source": None,
-        "summary_strategy_confidence": None,
-        "summary_strategy_rule_hits": [],
-        "summary_strategy_embedding_scores": [],
-        "summary_strategy_top_label": None,
-        "summary_strategy_runner_up_label": None,
-        "summary_strategy_embedding_margin": None,
-        "summary_strategy_fallback_used": None,
-        "summary_strategy_fallback_reason": None,
-        "document_scope": None,
-        "resolved_document_ids": [],
-        "document_mention_source": None,
-        "document_mention_confidence": None,
-        "document_mention_candidates": [],
-        "selected_profile": None,
-        "fallback_reason": None,
-        "selection_applied": None,
-        "selection_strategy": None,
-        "selected_document_count": None,
-        "selected_parent_count": None,
-        "selected_document_ids": [],
-        "selected_parent_ids": [],
-        "dropped_by_diversity": [],
-        "profile_settings": {},
-        "contexts": [],
-    }
+    assert tool_events[0]["input"]["area_id"] == "area-1"
+    assert tool_events[0]["input"]["question"] == "請根據文件回答 reader policy"
+    assert tool_events[0]["input"]["query_variants"] == []
+    assert tool_events[0]["input"]["document_handles"] == []
+    assert tool_events[0]["input"]["inspect_synopsis_handles"] == []
+    assert tool_events[0]["input"]["followup_reason"] == ""
+    assert tool_events[1]["output"]["contexts_count"] == 0
+    assert tool_events[1]["output"]["citations_count"] == 0
+    assert tool_events[1]["output"]["query_type"] is None
+    assert tool_events[1]["output"]["query_type_language"] is None
+    assert tool_events[1]["output"]["query_type_source"] is None
+    assert tool_events[1]["output"]["query_type_confidence"] is None
+    assert tool_events[1]["output"]["query_type_matched_rules"] == []
+    assert tool_events[1]["output"]["query_type_rule_hits"] == []
+    assert tool_events[1]["output"]["query_type_embedding_scores"] == []
+    assert tool_events[1]["output"]["query_type_top_label"] is None
+    assert tool_events[1]["output"]["query_type_runner_up_label"] is None
+    assert tool_events[1]["output"]["query_type_embedding_margin"] is None
+    assert tool_events[1]["output"]["query_type_fallback_used"] is None
+    assert tool_events[1]["output"]["query_type_fallback_reason"] is None
+    assert tool_events[1]["output"]["summary_scope"] is None
+    assert tool_events[1]["output"]["summary_strategy"] is None
+    assert tool_events[1]["output"]["summary_strategy_source"] is None
+    assert tool_events[1]["output"]["summary_strategy_confidence"] is None
+    assert tool_events[1]["output"]["summary_strategy_rule_hits"] == []
+    assert tool_events[1]["output"]["summary_strategy_embedding_scores"] == []
+    assert tool_events[1]["output"]["summary_strategy_top_label"] is None
+    assert tool_events[1]["output"]["summary_strategy_runner_up_label"] is None
+    assert tool_events[1]["output"]["summary_strategy_embedding_margin"] is None
+    assert tool_events[1]["output"]["summary_strategy_fallback_used"] is None
+    assert tool_events[1]["output"]["summary_strategy_fallback_reason"] is None
+    assert tool_events[1]["output"]["document_scope"] is None
+    assert tool_events[1]["output"]["resolved_document_ids"] == []
+    assert tool_events[1]["output"]["document_mention_source"] is None
+    assert tool_events[1]["output"]["document_mention_confidence"] is None
+    assert tool_events[1]["output"]["document_mention_candidates"] == []
+    assert tool_events[1]["output"]["selected_profile"] is None
+    assert tool_events[1]["output"]["fallback_reason"] is None
+    assert tool_events[1]["output"]["selection_applied"] is None
+    assert tool_events[1]["output"]["selection_strategy"] is None
+    assert tool_events[1]["output"]["selected_document_count"] is None
+    assert tool_events[1]["output"]["selected_parent_count"] is None
+    assert tool_events[1]["output"]["selected_document_ids"] == []
+    assert tool_events[1]["output"]["selected_parent_ids"] == []
+    assert tool_events[1]["output"]["dropped_by_diversity"] == []
+    assert tool_events[1]["output"]["profile_settings"] == {}
+    assert tool_events[1]["output"]["contexts"] == []
     reference_events = [event for event in emitted_events if event["type"] == "references"]
     assert reference_events == [{"type": "references", "references": []}]
     token_events = [event for event in emitted_events if event["type"] == "token"]
@@ -574,7 +629,7 @@ def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch)
     def fake_retrieve_area_contexts_tool(**kwargs):
         """回傳最小 retrieval 結果。"""
 
-        return SimpleNamespace(
+        return _build_fake_retrieval_result(
             assembled_contexts=[],
             citations=[],
             trace={"retrieval": {"query": kwargs["question"]}, "assembler": {"contexts": []}},
@@ -712,7 +767,7 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
     def fake_retrieve_area_contexts_tool(**kwargs):
         """回傳包含單一 assembled context 的 retrieval 結果。"""
 
-        return SimpleNamespace(
+        return _build_fake_retrieval_result(
             assembled_contexts=[
                 AssembledContext(
                     document_id="doc-1",
@@ -798,15 +853,324 @@ def test_deepagents_tool_call_completed_event_includes_context_excerpt(monkeypat
 
     completed_tool_event = [
         event for event in emitted_events if event["type"] == "tool_call" and event["status"] == "completed"
-    ][0]
+    ][-1]
     context_payload = completed_tool_event["output"]["contexts"][0]
 
     assert context_payload["excerpt"] == "這是一段組裝後的內容。"
     assert "assembled_text" not in context_payload
 
 
-def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> None:
-    """Deep Agents tool 回傳給 LLM 時應只包含最小 assembled contexts。
+def test_deepagents_runtime_accepts_phase8c_tool_summary_and_preserves_debug_safe_planning_fields(monkeypatch) -> None:
+    """Phase 8C rich tool summary 應可進 debug event，且 planning payload 不得帶出 raw id。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 debug summary 與 LLM payload 邊界。
+    """
+
+    emitted_events: list[dict[str, object]] = []
+    captured_tool_result: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    @dataclass
+    class FakeCitation:
+        """模擬 citation 的最小 `model_dump` 介面。"""
+
+        context_index: int
+        context_label: str
+        document_id: str
+        document_name: str
+        parent_chunk_id: str | None
+        child_chunk_ids: list[str]
+        heading: str | None
+        structure_kind: str
+        start_offset: int
+        end_offset: int
+        excerpt: str
+        source: str
+        truncated: bool
+        page_start: int | None = None
+        page_end: int | None = None
+        regions: list[dict[str, object]] | None = None
+
+        def model_dump(self, *, mode: str = "json") -> dict[str, object]:
+            """回傳與 Pydantic model 類似的 dump 結果。
+
+            參數：
+            - `mode`：序列化模式。
+
+            回傳：
+            - `dict[str, object]`：序列化後字典。
+            """
+
+            assert mode == "json"
+            return {
+                "context_index": self.context_index,
+                "context_label": self.context_label,
+                "document_id": self.document_id,
+                "document_name": self.document_name,
+                "parent_chunk_id": self.parent_chunk_id,
+                "child_chunk_ids": self.child_chunk_ids,
+                "heading": self.heading,
+                "structure_kind": self.structure_kind,
+                "start_offset": self.start_offset,
+                "end_offset": self.end_offset,
+                "excerpt": self.excerpt,
+                "source": self.source,
+                "truncated": self.truncated,
+                "page_start": self.page_start,
+                "page_end": self.page_end,
+                "regions": self.regions or [],
+            }
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+
+    def fake_retrieve_area_contexts_internal(**kwargs):
+        """回傳 compare query 的最小 retrieval 結果。"""
+
+        return _build_fake_retrieval_result(
+            assembled_contexts=[
+                AssembledContext(
+                    document_id="doc-1",
+                    parent_chunk_id="parent-1",
+                    chunk_ids=["child-1"],
+                    structure_kind=ChunkStructureKind.text,
+                    heading="Travel Policy",
+                    assembled_text="Travel Policy 規定出差前需取得主管同意。",
+                    source="travel-policy.md",
+                    start_offset=0,
+                    end_offset=28,
+                )
+            ],
+            citations=[
+                FakeCitation(
+                    context_index=0,
+                    context_label="C1",
+                    document_id="doc-1",
+                    document_name="travel-policy.md",
+                    parent_chunk_id="parent-1",
+                    child_chunk_ids=["child-1"],
+                    heading="Travel Policy",
+                    structure_kind="text",
+                    start_offset=0,
+                    end_offset=28,
+                    excerpt="Travel Policy 規定出差前需取得主管同意。",
+                    source="hybrid",
+                    truncated=False,
+                )
+            ],
+            trace={
+                "retrieval": {"query": kwargs["question"], "query_type": "cross_document_compare"},
+                "assembler": {"contexts": [{"context_index": 0, "truncated": False}]},
+            },
+            planning_documents=[
+                FakePlanningDocument(
+                    document_name="travel-policy.md",
+                    mentioned_by_query=True,
+                    hit_in_current_round=True,
+                    synopsis_available=True,
+                )
+            ],
+        )
+
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
+    monkeypatch.setattr(
+        "app.chat.agent.runtime.build_tool_call_output_summary",
+        lambda _session, _result: {
+            "contexts_count": 1,
+            "citations_count": 1,
+            "tool_call_count": 2,
+            "followup_call_count": 1,
+            "synopsis_inspection_count": 1,
+            "latency_budget_status": "degraded",
+            "stop_reason": "latency_budget_soft_limit",
+            "coverage_signals": {
+                "missing_document_names": ["employee-handbook.md"],
+                "supports_compare": True,
+                "insufficient_evidence": True,
+                "missing_compare_axes": ["approval requirement"],
+                "new_evidence_found": False,
+            },
+            "planning_documents": [
+                {
+                    "handle": "doc-handle-1",
+                    "document_name": "travel-policy.md",
+                    "mentioned_by_query": True,
+                    "hit_in_current_round": True,
+                    "synopsis_available": True,
+                }
+            ],
+            "next_best_followups": ["補查 employee handbook 是否明示 approval requirement"],
+            "contexts": [
+                {
+                    "context_index": 0,
+                    "context_label": "C1",
+                    "document_id": "doc-1",
+                    "document_name": "travel-policy.md",
+                    "parent_chunk_id": "parent-1",
+                    "child_chunk_ids": ["child-1"],
+                    "heading": "Travel Policy",
+                    "structure_kind": "text",
+                    "source": "hybrid",
+                    "truncated": False,
+                    "excerpt": "Travel Policy 規定出差前需取得主管同意。",
+                }
+            ],
+        },
+    )
+
+    class FakeAgent:
+        """模擬主 agent，並擷取 tool 回傳字串。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。
+
+            參數：
+            - `tools`：主 agent 可用工具。
+
+            回傳：
+            - `None`：僅保存工具列表。
+            """
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先執行 retrieval，再回傳證據不足的比較回答。
+
+            參數：
+            - `_input`：agent 輸入。
+            - `stream_mode`：要求的 stream modes。
+
+            回傳：
+            - `list[tuple[str, object]]`：固定串流結果。
+            """
+
+            assert stream_mode == ["messages", "values"]
+            captured_tool_result.update(json.loads(self.tools[0]()))
+            return iter(
+                [
+                    ("messages", ({"content": "目前引用內容不足以完成完整比較。[[C1]]"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "目前引用內容不足以完成完整比較。[[C1]]"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5.4-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5.4-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+
+    result = provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="Compare the travel policy and employee handbook approval rules.",
+        writer=emitted_events.append,
+    )
+
+    completed_tool_event = [
+        event for event in emitted_events if event["type"] == "tool_call" and event["status"] == "completed"
+    ][-1]
+    reference_event = [event for event in emitted_events if event["type"] == "references"][0]
+
+    assert result["answer"] == "目前引用內容不足以完成完整比較。"
+    assert completed_tool_event["output"]["tool_call_count"] >= 1
+    assert completed_tool_event["output"]["followup_call_count"] >= 0
+    assert completed_tool_event["output"]["synopsis_inspection_count"] >= 0
+    assert isinstance(completed_tool_event["output"]["latency_budget_status"], str)
+    assert completed_tool_event["output"]["stop_reason"]
+    assert completed_tool_event["output"]["coverage_signals"]["insufficient_evidence"] is True
+    assert completed_tool_event["output"]["planning_documents"] == [
+        {
+            "handle": "doc-handle-1",
+            "document_name": "travel-policy.md",
+            "mentioned_by_query": True,
+            "hit_in_current_round": True,
+            "synopsis_available": True,
+        }
+    ]
+    assert reference_event["references"] == [
+        {
+            "context_index": 0,
+            "context_label": "C1",
+            "document_id": "doc-1",
+            "document_name": "travel-policy.md",
+            "parent_chunk_id": "parent-1",
+            "child_chunk_ids": ["child-1"],
+            "structure_kind": "text",
+            "heading": "Travel Policy",
+            "excerpt": "Travel Policy 規定出差前需取得主管同意。",
+            "assembled_text": "Travel Policy 規定出差前需取得主管同意。",
+            "source": "travel-policy.md",
+            "start_offset": 0,
+            "end_offset": 28,
+            "page_start": None,
+            "page_end": None,
+            "regions": [],
+            "truncated": False,
+        }
+    ]
+    assert set(captured_tool_result.keys()) >= {
+        "assembled_contexts",
+        "coverage_signals",
+        "planning_documents",
+        "next_best_followups",
+        "evidence_cue_texts",
+        "loop_trace_delta",
+        "response_contract",
+    }
+    assert captured_tool_result["assembled_contexts"] == [
+        {
+            "context_label": "C1",
+            "context_index": 0,
+            "document_name": "travel-policy.md",
+            "heading": "Travel Policy",
+            "assembled_text": "Travel Policy 規定出差前需取得主管同意。",
+        }
+    ]
+    assert captured_tool_result["response_contract"]["task_type"] == "cross_document_compare"
+    assert captured_tool_result["response_contract"]["required_document_names"] == ["travel-policy.md"]
+    assert captured_tool_result["planning_documents"] == [
+        {
+            "document_name": "travel-policy.md",
+            "mentioned_by_query": True,
+            "hit_in_current_round": True,
+            "synopsis_available": True,
+        }
+    ]
+    assert "document_id" not in captured_tool_result["planning_documents"][0]
+
+
+def test_deepagents_runtime_returns_debug_safe_tool_payload_to_llm(monkeypatch) -> None:
+    """Deep Agents tool 回傳給 LLM 時應維持 debug-safe，且不暴露 raw 文件識別碼。
 
     參數：
     - `monkeypatch`：pytest monkeypatch fixture。
@@ -889,7 +1253,7 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
     def fake_retrieve_area_contexts_tool(**kwargs):
         """回傳包含單一 assembled context 的 retrieval 結果。"""
 
-        return SimpleNamespace(
+        return _build_fake_retrieval_result(
             assembled_contexts=[
                 AssembledContext(
                     document_id="doc-1",
@@ -972,7 +1336,6 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
         question="請根據文件回答 reader policy",
     )
 
-    assert list(captured_tool_result.keys()) == ["assembled_contexts"]
     assert captured_tool_result["assembled_contexts"] == [
         {
             "context_label": "C1",
@@ -982,6 +1345,187 @@ def test_deepagents_runtime_returns_slim_tool_payload_to_llm(monkeypatch) -> Non
             "assembled_text": "這是一段組裝後的內容。",
         }
     ]
+    assert captured_tool_result["coverage_signals"] is None
+    assert all("document_id" not in item for item in captured_tool_result["planning_documents"])
+    assert captured_tool_result["next_best_followups"] == []
+    assert captured_tool_result["evidence_cue_texts"] == []
+    assert captured_tool_result.get("synopsis_hints", []) == []
+    assert captured_tool_result["loop_trace_delta"]["latency_budget_status"] == "normal"
+    assert captured_tool_result["loop_trace_delta"]["followup_call_count"] == 0
+
+
+def test_deepagents_runtime_short_circuits_duplicate_initial_tool_call(monkeypatch) -> None:
+    """重複的空參數 tool call 應直接回 cached payload，而不是重跑 retrieval。
+
+    參數：
+    - `monkeypatch`：pytest monkeypatch fixture。
+
+    回傳：
+    - `None`：以斷言驗證 duplicate initial call 會 short-circuit。
+    """
+
+    retrieval_call_count = 0
+    captured_first_payload: dict[str, object] = {}
+    captured_second_payload: dict[str, object] = {}
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    @dataclass
+    class FakeCitation:
+        """模擬 citation 的最小 `model_dump` 介面。"""
+
+        context_index: int
+        context_label: str
+        document_id: str
+        document_name: str
+        parent_chunk_id: str | None
+        child_chunk_ids: list[str]
+        heading: str | None
+        structure_kind: str
+        start_offset: int
+        end_offset: int
+        excerpt: str
+        source: str
+        truncated: bool
+
+        def model_dump(self, *, mode: str = "json") -> dict[str, object]:
+            """回傳與 Pydantic model 類似的 dump 結果。
+
+            參數：
+            - `mode`：序列化模式。
+
+            回傳：
+            - `dict[str, object]`：序列化後字典。
+            """
+
+            assert mode == "json"
+            return {
+                "context_index": self.context_index,
+                "context_label": self.context_label,
+                "document_id": self.document_id,
+                "document_name": self.document_name,
+                "parent_chunk_id": self.parent_chunk_id,
+                "child_chunk_ids": self.child_chunk_ids,
+                "heading": self.heading,
+                "structure_kind": self.structure_kind,
+                "start_offset": self.start_offset,
+                "end_offset": self.end_offset,
+                "excerpt": self.excerpt,
+                "source": self.source,
+                "truncated": self.truncated,
+                "page_start": None,
+                "page_end": None,
+                "regions": [],
+            }
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+
+    def fake_retrieve_area_contexts_internal(**kwargs):
+        """建立最小 retrieval 結果，並統計實際執行次數。"""
+
+        nonlocal retrieval_call_count
+        retrieval_call_count += 1
+        return _build_fake_retrieval_result(
+            assembled_contexts=[
+                AssembledContext(
+                    document_id="doc-1",
+                    parent_chunk_id="parent-1",
+                    chunk_ids=["child-1"],
+                    structure_kind=ChunkStructureKind.text,
+                    heading="Reader Policy",
+                    assembled_text="這是一段組裝後的內容。",
+                    source="reader-policy.md",
+                    start_offset=10,
+                    end_offset=40,
+                )
+            ],
+            citations=[
+                FakeCitation(
+                    context_index=0,
+                    context_label="C1",
+                    document_id="doc-1",
+                    document_name="reader-policy.md",
+                    parent_chunk_id="parent-1",
+                    child_chunk_ids=["child-1"],
+                    heading="Reader Policy",
+                    structure_kind="text",
+                    start_offset=10,
+                    end_offset=40,
+                    excerpt="這是一段組裝後的內容。",
+                    source="hybrid",
+                    truncated=False,
+                )
+            ],
+            trace={
+                "retrieval": {"query": kwargs["question"]},
+                "assembler": {"contexts": [{"context_index": 0, "truncated": False}]},
+            },
+        )
+
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
+
+    class FakeAgent:
+        """模擬主 agent，連續呼叫兩次空參數 tool。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。"""
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先後執行兩次空參數 tool call，再回傳固定回答。"""
+
+            assert stream_mode == ["messages", "values"]
+            captured_first_payload.update(json.loads(self.tools[0]()))
+            captured_second_payload.update(json.loads(self.tools[0]()))
+            return iter(
+                [
+                    ("messages", ({"content": "這是回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5.4-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5.4-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+    )
+
+    provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="請根據文件回答 reader policy",
+    )
+
+    assert retrieval_call_count == 1
+    assert captured_first_payload["assembled_contexts"] == captured_second_payload["assembled_contexts"]
+    assert captured_second_payload["loop_trace_delta"]["stop_reason"] == "duplicate_initial_call_cached"
 
 
 def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatch) -> None:
@@ -1061,7 +1605,7 @@ def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatc
     def fake_retrieve_area_contexts_internal(**kwargs):
         """回傳 compare query 的最小 retrieval 結果。"""
 
-        return SimpleNamespace(
+        return _build_fake_retrieval_result(
             assembled_contexts=[
                 AssembledContext(
                     document_id="doc-1",
@@ -1122,6 +1666,20 @@ def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatc
                 "retrieval": {"query": kwargs["question"], "query_type": "cross_document_compare"},
                 "assembler": {"contexts": [{"context_index": 0, "truncated": False}, {"context_index": 1, "truncated": False}]},
             },
+            planning_documents=[
+                FakePlanningDocument(
+                    document_name="travel-policy.md",
+                    mentioned_by_query=True,
+                    hit_in_current_round=True,
+                    synopsis_available=True,
+                ),
+                FakePlanningDocument(
+                    document_name="employee-handbook.md",
+                    mentioned_by_query=True,
+                    hit_in_current_round=True,
+                    synopsis_available=True,
+                ),
+            ],
         )
 
     monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
@@ -1170,15 +1728,17 @@ def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatc
         question="Compare the travel policy and employee handbook.",
     )
 
-    assert captured_tool_result["response_contract"] == {
-        "task_type": "cross_document_compare",
-        "required_document_names": ["travel-policy.md", "employee-handbook.md"],
-        "compare_answer_template": [
-            "先逐一說明每份文件的直接證據與立場。",
-            "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
-            "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
-        ],
-    }
+    assert captured_tool_result["response_contract"]["task_type"] == "cross_document_compare"
+    assert captured_tool_result["response_contract"]["required_document_names"] == [
+        "travel-policy.md",
+        "employee-handbook.md",
+    ]
+    assert captured_tool_result["response_contract"]["compare_answer_template"] == [
+        "先逐一說明每份文件的直接證據與立場。",
+        "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
+        "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
+    ]
+    assert captured_tool_result["response_contract"]["coverage_signals"] is None
 
 
 def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contract(
@@ -1407,17 +1967,18 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
     assert result["used_knowledge_base"] is True
     assert result["message_artifact"]["assistant_turn_index"] == 0
     assert result["message_artifact"]["used_knowledge_base"] is True
-    assert captured_tool_result == {
-        "assembled_contexts": [
-            {
-                "context_label": "C1",
-                "context_index": 0,
-                "document_name": "reader-policy.md",
-                "heading": "Reader Policy",
-                "assembled_text": "alpha intro\n\nalpha details",
-            }
-        ]
-    }
+    assert captured_tool_result["assembled_contexts"] == [
+        {
+            "context_label": "C1",
+            "context_index": 0,
+            "document_name": "reader-policy.md",
+            "heading": "Reader Policy",
+            "assembled_text": "alpha intro\n\nalpha details",
+        }
+    ]
+    assert captured_tool_result["coverage_signals"] is None
+    assert captured_tool_result["planning_documents"]
+    assert all("document_id" not in item for item in captured_tool_result["planning_documents"])
     completed_tool_event = [
         event for event in emitted_events if event["type"] == "tool_call" and event["status"] == "completed"
     ][0]

@@ -18,12 +18,11 @@ from app.chat.tools.retrieval import (
     RetrievalToolResult,
     _retrieve_area_contexts_internal,
     build_agent_response_contract_payload,
-    build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,
-    retrieve_area_contexts_tool,
 )
 from app.core.settings import AppSettings
+from app.db.models import EvaluationQueryType
 from app.services.retrieval_assembler import AssembledContext
 from app.services.retrieval_routing import build_query_routing_decision
 
@@ -260,6 +259,20 @@ class DeepAgentsChatRuntime:
         citations_payload: list[dict[str, object]] = []
         assembled_contexts_payload: list[dict[str, object]] = []
         llm_tool_contexts_payload: list[dict[str, object]] = []
+        llm_response_contract_payload: dict[str, object] | None = None
+        latest_coverage_signals_payload: dict[str, object] | None = None
+        latest_planning_documents_payload: list[dict[str, object]] = []
+        latest_next_best_followups: list[str] = []
+        latest_evidence_cue_texts_payload: list[dict[str, object]] = []
+        latest_synopsis_hints_payload: list[dict[str, object]] = []
+        latest_loop_trace_delta: dict[str, object] = {}
+        aggregated_contexts_by_key: dict[tuple[object, ...], dict[str, object]] = {}
+        agentic_round_summaries: list[dict[str, object]] = []
+        tool_call_count = 0
+        followup_call_count = 0
+        synopsis_inspection_count = 0
+        latency_budget_status = "normal"
+        last_agentic_stop_reason = "not_started"
         stream_started_at = time.perf_counter()
         first_token_emitted = False
 
@@ -355,85 +368,343 @@ class DeepAgentsChatRuntime:
             principal=principal,
             area_id=area_id,
         )
+        agentic_followup_enabled = bool(
+            settings.chat_agentic_enabled
+            and (
+                _routing_decision.query_type == EvaluationQueryType.cross_document_compare
+                or _routing_decision.summary_scope == "multi_document"
+            )
+        )
 
-        def ensure_retrieval_result() -> RetrievalToolResult:
-            """確保本輪 retrieval 已執行並回傳快取結果。"""
+        def resolve_latency_budget_status() -> str:
+            """計算目前回合的 latency budget 狀態。
 
-            nonlocal retrieval_invoked, retrieval_result, citations_payload, assembled_contexts_payload, llm_tool_contexts_payload, llm_response_contract_payload
+            參數：
+            - 無。
 
-            if retrieval_result is not None:
-                return retrieval_result
+            回傳：
+            - `str`：`normal | degraded | warning`。
+            """
+
+            elapsed_seconds = time.perf_counter() - stream_started_at
+            if elapsed_seconds > settings.chat_agentic_max_latency_seconds:
+                return "warning"
+            if elapsed_seconds > settings.chat_agentic_target_latency_seconds:
+                return "degraded"
+            return "normal"
+
+        def merge_retrieval_result(round_result: RetrievalToolResult) -> tuple[int, list[str]]:
+            """將單回合 retrieval 結果合併為全 turn 穩定引用集合。
+
+            參數：
+            - `round_result`：本輪 retrieval 結果。
+
+            回傳：
+            - `tuple[int, list[str]]`：新增 contexts 數量與新增文件名稱。
+            """
+
+            nonlocal citations_payload
+            nonlocal assembled_contexts_payload
+            nonlocal llm_tool_contexts_payload
+            nonlocal llm_response_contract_payload
+            nonlocal latest_coverage_signals_payload
+            nonlocal latest_planning_documents_payload
+            nonlocal latest_next_best_followups
+            nonlocal latest_evidence_cue_texts_payload
+            nonlocal latest_synopsis_hints_payload
+            nonlocal latest_loop_trace_delta
+
+            round_contexts_payload = build_assembled_context_payload(session, round_result)
+            new_document_names: list[str] = []
+            new_context_count = 0
+            for context in round_contexts_payload:
+                context_key = (
+                    context.get("document_id"),
+                    context.get("parent_chunk_id"),
+                    context.get("start_offset"),
+                    context.get("end_offset"),
+                )
+                if context_key in aggregated_contexts_by_key:
+                    continue
+                context_index = len(aggregated_contexts_by_key)
+                merged_context = {
+                    **context,
+                    "context_index": context_index,
+                    "context_label": f"C{context_index + 1}",
+                }
+                aggregated_contexts_by_key[context_key] = merged_context
+                new_context_count += 1
+                document_name = str(merged_context.get("document_name") or "")
+                if document_name and document_name not in new_document_names:
+                    new_document_names.append(document_name)
+
+            assembled_contexts_payload = list(aggregated_contexts_by_key.values())
+            citations_payload = [
+                {
+                    "context_index": int(context["context_index"]),
+                    "context_label": str(context["context_label"]),
+                    "document_id": str(context["document_id"]),
+                    "document_name": str(context["document_name"]),
+                    "parent_chunk_id": context["parent_chunk_id"],
+                    "child_chunk_ids": list(context["child_chunk_ids"]),
+                    "heading": context["heading"],
+                    "structure_kind": context["structure_kind"],
+                    "start_offset": int(context["start_offset"]),
+                    "end_offset": int(context["end_offset"]),
+                    "excerpt": str(context["excerpt"]),
+                    "source": str(context["source"]),
+                    "truncated": bool(context["truncated"]),
+                    "page_start": context.get("page_start"),
+                    "page_end": context.get("page_end"),
+                    "regions": list(context.get("regions", [])),
+                }
+                for context in assembled_contexts_payload
+            ]
+            llm_tool_contexts_payload = [
+                {
+                    "context_label": str(context["context_label"]),
+                    "context_index": int(context["context_index"]),
+                    "document_name": str(context["document_name"]),
+                    "heading": context.get("heading"),
+                    "assembled_text": str(context.get("assembled_text") or context.get("excerpt") or ""),
+                }
+                for context in assembled_contexts_payload
+            ]
+            llm_response_contract_payload = build_agent_response_contract_payload(session, round_result)
+            latest_coverage_signals_payload = (
+                asdict(round_result.coverage_signals)
+                if round_result.coverage_signals is not None
+                else None
+            )
+            latest_planning_documents_payload = [asdict(item) for item in round_result.planning_documents]
+            latest_next_best_followups = list(round_result.next_best_followups)
+            latest_evidence_cue_texts_payload = [asdict(item) for item in round_result.evidence_cue_texts]
+            latest_synopsis_hints_payload = [asdict(item) for item in round_result.synopsis_hints]
+            latest_loop_trace_delta = dict(round_result.loop_trace_delta)
+            return new_context_count, new_document_names
+
+        def build_current_agent_payload(*, stop_reason_override: str | None = None) -> dict[str, object]:
+            """建立回傳給 agent 的當前整體 tool payload。
+
+            參數：
+            - `stop_reason_override`：若有額外 stop reason，覆蓋目前回合的 stop reason。
+
+            回傳：
+            - `dict[str, object]`：序列化前的 agent payload。
+            """
+
+            include_loop_trace = bool(
+                latest_loop_trace_delta
+                or followup_call_count > 0
+                or synopsis_inspection_count > 0
+                or latency_budget_status != "normal"
+                or (stop_reason_override or last_agentic_stop_reason) not in {"not_started", "continue"}
+            )
+            payload: dict[str, object] = {
+                "assembled_contexts": llm_tool_contexts_payload,
+                "coverage_signals": latest_coverage_signals_payload,
+                "planning_documents": latest_planning_documents_payload,
+                "next_best_followups": latest_next_best_followups,
+                "evidence_cue_texts": latest_evidence_cue_texts_payload,
+                "synopsis_hints": latest_synopsis_hints_payload,
+                "loop_trace_delta": (
+                    {
+                        **latest_loop_trace_delta,
+                        "tool_call_count": tool_call_count,
+                        "followup_call_count": followup_call_count,
+                        "synopsis_inspection_count": synopsis_inspection_count,
+                        "latency_budget_status": latency_budget_status,
+                        "stop_reason": stop_reason_override or last_agentic_stop_reason,
+                    }
+                    if include_loop_trace
+                    else {}
+                ),
+            }
+            if llm_response_contract_payload is not None:
+                payload["response_contract"] = llm_response_contract_payload
+            return payload
+
+        def execute_retrieval_round(
+            *,
+            query_variants: list[str] | None = None,
+            document_handles: list[str] | None = None,
+            inspect_synopsis_handles: list[str] | None = None,
+            followup_reason: str | None = None,
+        ) -> RetrievalToolResult:
+            """執行單回合 retrieval，並更新全 turn 聚合狀態。
+
+            參數：
+            - `query_variants`：本輪 follow-up 的 query variants。
+            - `document_handles`：本輪限定的文件 handles。
+            - `inspect_synopsis_handles`：本輪想查看 synopsis 的文件 handles。
+            - `followup_reason`：本輪補查原因。
+
+            回傳：
+            - `RetrievalToolResult`：本輪 retrieval 結果。
+            """
+
+            nonlocal retrieval_invoked
+            nonlocal retrieval_result
+            nonlocal tool_call_count
+            nonlocal followup_call_count
+            nonlocal synopsis_inspection_count
+            nonlocal latency_budget_status
+            nonlocal last_agentic_stop_reason
 
             tool_input = {
                 "area_id": area_id,
                 "question": question,
+                "query_variants": list(query_variants or []),
+                "document_handles": list(document_handles or []),
+                "inspect_synopsis_handles": list(inspect_synopsis_handles or []),
+                "followup_reason": (followup_reason or "").strip(),
             }
             emit_phase(phase="tool_calling", status="started", message="正在呼叫知識庫工具")
             emit_phase(phase="searching", status="started", message="正在搜尋知識庫內容")
             emit_tool_call(name="retrieve_area_contexts", status="started", input_payload=tool_input)
-            retrieval_result = _retrieve_area_contexts_internal(
+            round_result = _retrieve_area_contexts_internal(
                 session=session,
                 principal=principal,
                 settings=settings,
                 area_id=area_id,
-                question=str(tool_input["question"]),
+                question=question,
+                query_variants=query_variants,
+                document_handles=document_handles,
+                inspect_synopsis_handles=inspect_synopsis_handles,
+                followup_reason=followup_reason,
                 allowed_document_ids_override=benchmark_document_ids,
             )
-            citations_payload = [item.model_dump(mode="json") for item in retrieval_result.citations]
-            assembled_contexts_payload = build_assembled_context_payload(session, retrieval_result)
-            llm_tool_contexts_payload = build_agent_tool_context_payload(session, retrieval_result)
-            llm_response_contract_payload = build_agent_response_contract_payload(session, retrieval_result)
+            retrieval_result = round_result
             retrieval_invoked = True
+            tool_call_count += 1
+            if any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)):
+                followup_call_count += 1
+            synopsis_inspection_count += len(inspect_synopsis_handles or [])
+            latency_budget_status = resolve_latency_budget_status()
+            new_context_count, new_document_names = merge_retrieval_result(round_result)
+            coverage_signals = latest_coverage_signals_payload or {}
+            if coverage_signals and not bool(coverage_signals.get("insufficient_evidence")):
+                last_agentic_stop_reason = "coverage_satisfied"
+            elif tool_call_count >= settings.chat_agentic_max_tool_calls_per_turn:
+                last_agentic_stop_reason = "tool_call_limit_reached"
+            elif any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)) and new_context_count == 0:
+                last_agentic_stop_reason = "no_new_evidence"
+            else:
+                last_agentic_stop_reason = "continue"
+            latest_loop_trace_delta.update(
+                {
+                    "tool_call_index": tool_call_count,
+                    "new_context_count": new_context_count,
+                    "new_document_names": new_document_names,
+                }
+            )
+            round_summary = {
+                "tool_call_index": tool_call_count,
+                "followup": bool(any((query_variants, document_handles, inspect_synopsis_handles, followup_reason))),
+                "query_variants": list(query_variants or []),
+                "scoped_document_count": len(document_handles or []),
+                "synopsis_inspection_count": len(inspect_synopsis_handles or []),
+                "new_context_count": new_context_count,
+                "new_document_names": new_document_names,
+                "latency_budget_status": latency_budget_status,
+                "stop_reason": last_agentic_stop_reason,
+            }
+            agentic_round_summaries.append(round_summary)
             emit_references(assembled_contexts_payload)
             log_stream_debug(
                 event="retrieval_complete",
-                contexts_count=len(retrieval_result.assembled_contexts),
-                citations_count=len(retrieval_result.citations),
+                contexts_count=len(assembled_contexts_payload),
+                citations_count=len(citations_payload),
+                tool_call_index=tool_call_count,
+                latency_budget_status=latency_budget_status,
             )
             emit_phase(
                 phase="searching",
                 status="completed",
-                message=f"知識庫搜尋完成，找到 {len(retrieval_result.assembled_contexts)} 個候選片段",
+                message=f"知識庫搜尋完成，累積 {len(assembled_contexts_payload)} 個候選片段",
             )
             emit_phase(
                 phase="tool_calling",
                 status="completed",
-                message=f"知識庫工具呼叫完成，整理出 {len(retrieval_result.citations)} 則引用",
+                message=f"知識庫工具呼叫完成，累積 {len(citations_payload)} 則引用",
             )
+            tool_output = build_tool_call_output_summary(session, round_result)
+            tool_output.setdefault("agentic_tool_call_index", tool_call_count)
+            tool_output.setdefault("tool_call_count", tool_call_count)
+            tool_output.setdefault("followup_call_count", followup_call_count)
+            tool_output.setdefault("synopsis_inspection_count", synopsis_inspection_count)
+            tool_output.setdefault("latency_budget_status", latency_budget_status)
+            tool_output.setdefault("stop_reason", last_agentic_stop_reason)
+            tool_output.setdefault("new_context_count", new_context_count)
+            tool_output.setdefault("new_document_names", new_document_names)
             emit_tool_call(
                 name="retrieve_area_contexts",
                 status="completed",
                 input_payload=tool_input,
-                output_payload=build_tool_call_output_summary(session, retrieval_result),
+                output_payload=tool_output,
             )
-            return retrieval_result
+            return round_result
 
         @tool
-        def retrieve_area_contexts() -> str:
-            """回傳目前 area 與問題的 assembled contexts、references 與 trace。
+        def retrieve_area_contexts(
+            query_variants: list[str] | None = None,
+            document_handles: list[str] | None = None,
+            inspect_synopsis_handles: list[str] | None = None,
+            followup_reason: str | None = None,
+        ) -> str:
+            """回傳目前 area 與問題的 assembled contexts、planning signals 與 trace。
 
             參數：
-            - 無；routing 由後端根據原始問題與已授權 ready 文件範圍自動決定。
+            - `query_variants`：agent follow-up 使用的 query variants。第一次呼叫通常不要提供；只有在需要換角度補查 compare / multi-document 缺口時才提供，且應保持少量。
+            - `document_handles`：agent follow-up 使用的文件 handles。當你已知缺的是特定文件 coverage，而不是整體查詢角度時，優先使用這個欄位縮小範圍。
+            - `inspect_synopsis_handles`：要查看 synopsis hint 的文件 handles。只用於判斷下一步是否值得補查某份文件，不可把 synopsis hint 當成 citation 或最終結論。
+            - `followup_reason`：本次 follow-up 的簡短原因。只有在你真的要做第二次以上的補查時才提供；若沒有新的 `query_variants`、`document_handles` 或 `inspect_synopsis_handles`，不要再次呼叫同一工具。
 
             回傳：
-            - `str`：序列化後的 assembled context payload。
-            """
-            ensure_retrieval_result()
-            emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
+            - `str`：序列化後的 assembled context 與 planning payload。第一次呼叫通常只讀 `assembled_contexts`；之後可根據 `planning_documents`、`next_best_followups`、`evidence_cue_texts`、`coverage_signals` 與可選 `synopsis_hints` 規劃 follow-up。
 
-            return json.dumps(
-                (
-                    {
-                        "assembled_contexts": llm_tool_contexts_payload,
-                        "response_contract": llm_response_contract_payload,
-                    }
-                    if llm_response_contract_payload is not None
-                    else {
-                        "assembled_contexts": llm_tool_contexts_payload,
-                    }
-                ),
-                ensure_ascii=False,
+            Follow-up 決策規則：
+            - 若 `next_best_followups` 非空，且你尚未達到工具或 budget 限制，通常應優先再呼叫一次 `retrieve_area_contexts`，而不是立刻收斂成「證據不足」回答。
+            - 若已知缺的是特定文件 coverage，優先使用 `document_handles`；若缺的是比較面向或提問角度，再使用少量 `query_variants`。
+            - 只有在 `loop_trace_delta.stop_reason` 已明確顯示無新證據、已達工具上限、已達 synopsis 檢視上限，或你無法提出新的 follow-up 參數時，才直接承認證據不足並結束。
+
+            使用範例：
+            - 第一次呼叫：`retrieve_area_contexts()`
+            - 若缺少特定文件 coverage：`retrieve_area_contexts(document_handles=["<tool 回傳的 handle>"], followup_reason="補查缺少的文件直接證據")`
+            - 若缺少比較面向：`retrieve_area_contexts(query_variants=["理賠審核需要哪些核准條件"], followup_reason="補查 compare 缺少的審核面向")`
+            - 若想先看 synopsis hint 再決定是否補查：`retrieve_area_contexts(inspect_synopsis_handles=["<tool 回傳的 handle>"], followup_reason="先看 synopsis 判斷是否值得補查")`
+            """
+
+            nonlocal last_agentic_stop_reason
+            nonlocal latency_budget_status
+
+            followup_requested = bool(any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)))
+            projected_synopsis_count = synopsis_inspection_count + len(inspect_synopsis_handles or [])
+            if tool_call_count >= settings.chat_agentic_max_tool_calls_per_turn:
+                last_agentic_stop_reason = "tool_call_limit_reached"
+                latency_budget_status = resolve_latency_budget_status()
+                return json.dumps(build_current_agent_payload(), ensure_ascii=False)
+            if retrieval_result is not None and not followup_requested:
+                last_agentic_stop_reason = "duplicate_initial_call_cached"
+                latency_budget_status = resolve_latency_budget_status()
+                return json.dumps(build_current_agent_payload(), ensure_ascii=False)
+            if followup_requested and not agentic_followup_enabled:
+                last_agentic_stop_reason = "followup_not_allowed"
+                latency_budget_status = resolve_latency_budget_status()
+                return json.dumps(build_current_agent_payload(), ensure_ascii=False)
+            if projected_synopsis_count > settings.chat_agentic_max_synopsis_inspections_per_turn:
+                last_agentic_stop_reason = "synopsis_inspection_limit_reached"
+                latency_budget_status = resolve_latency_budget_status()
+                return json.dumps(build_current_agent_payload(), ensure_ascii=False)
+
+            execute_retrieval_round(
+                query_variants=query_variants,
+                document_handles=document_handles,
+                inspect_synopsis_handles=inspect_synopsis_handles,
+                followup_reason=followup_reason,
             )
+            emit_phase(phase="thinking", status="started", message="正在根據檢索結果思考答案")
+            return json.dumps(build_current_agent_payload(), ensure_ascii=False)
 
         llm_kwargs: dict[str, object] = {
             "model": self.model,
@@ -472,7 +743,6 @@ class DeepAgentsChatRuntime:
 
         result: object | None = None
         streamed_answer_parts: list[str] = []
-        llm_response_contract_payload: dict[str, object] | None = None
         with tracing_manager:
             for stream_item in main_agent.stream(
                 {
@@ -511,6 +781,14 @@ class DeepAgentsChatRuntime:
                     result = stream_payload
 
         raw_answer = _extract_final_answer_text(result) or "".join(streamed_answer_parts).strip() or "目前無法根據現有內容生成穩定回答。"
+        if (
+            latest_coverage_signals_payload is not None
+            and bool(latest_coverage_signals_payload.get("insufficient_evidence"))
+            and not _answer_mentions_insufficient_evidence(raw_answer)
+        ):
+            raw_answer = (
+                f"{raw_answer}\n\n目前引用內容仍不足以完成完整比較；以下僅整理目前可直接支持的證據。"
+            ).strip()
         answer, answer_blocks = _build_answer_blocks_from_markers(
             answer=raw_answer,
             citations_payload=citations_payload,
@@ -521,27 +799,41 @@ class DeepAgentsChatRuntime:
             token_events=len(streamed_answer_parts),
             answer_length=len(answer),
             retrieval_invoked=retrieval_invoked,
+            tool_call_count=tool_call_count,
+            latency_budget_status=latency_budget_status,
         )
         emit_phase(phase="drafting", status="completed", message="回答草稿已完成")
         emit_phase(phase="thinking", status="completed", message="回答內容已整理完成")
 
+        runtime_latency_ms = round((time.perf_counter() - stream_started_at) * 1000, 2)
+        agent_trace_payload = asdict(
+            AgentTrace(
+                provider=self.provider_name,
+                model=self.model,
+                contexts_count=len(assembled_contexts_payload),
+                used_fallback=False,
+                agent_tasks=[],
+                retrieval_invoked=retrieval_invoked,
+                sub_agents_invoked=[],
+                answer_path="deepagents_unified",
+                thinking_mode=thinking_mode,
+                thinking_mode_ignored=bool(thinking_mode),
+                runtime_latency_ms=runtime_latency_ms,
+            )
+        )
+        agent_trace_payload["agentic_loop"] = {
+            "enabled": agentic_followup_enabled,
+            "tool_call_count": tool_call_count,
+            "followup_call_count": followup_call_count,
+            "synopsis_inspection_count": synopsis_inspection_count,
+            "latency_budget_status": latency_budget_status,
+            "stop_reason": last_agentic_stop_reason,
+            "rounds": agentic_round_summaries,
+        }
         trace = {
             "retrieval": retrieval_result.trace["retrieval"] if retrieval_result is not None else {},
             "assembler": retrieval_result.trace["assembler"] if retrieval_result is not None else {"contexts": []},
-            "agent": asdict(
-                AgentTrace(
-                    provider=self.provider_name,
-                    model=self.model,
-                    contexts_count=len(retrieval_result.assembled_contexts) if retrieval_result is not None else 0,
-                    used_fallback=False,
-                    agent_tasks=[],
-                    retrieval_invoked=retrieval_invoked,
-                    sub_agents_invoked=[],
-                    answer_path="deepagents_unified",
-                    thinking_mode=thinking_mode,
-                    thinking_mode_ignored=bool(thinking_mode),
-                )
-            ),
+            "agent": agent_trace_payload,
         }
         return {
             "answer": answer,
@@ -628,6 +920,31 @@ def _build_answer_blocks_from_markers(
     fallback_answer = CITATION_MARKER_PATTERN.sub("", answer).strip()
     fallback_text = fallback_answer or answer.strip()
     return fallback_text, [ChatAnswerBlock(text=fallback_text, citation_context_indices=[], display_citations=[])]
+
+
+def _answer_mentions_insufficient_evidence(answer: str) -> bool:
+    """判斷回答是否已明確承認證據不足。
+
+    參數：
+    - `answer`：目前回答文字。
+
+    回傳：
+    - `bool`：若回答已包含證據不足語句則為 `True`。
+    """
+
+    normalized = answer.lower()
+    return any(
+        phrase in normalized
+        for phrase in (
+            "證據不足",
+            "資訊不足",
+            "無法確認",
+            "目前引用內容仍不足",
+            "insufficient evidence",
+            "not enough evidence",
+            "cannot confirm",
+        )
+    )
 
 
 def _resolve_openai_reasoning_effort(*, model_name: str) -> str | None:

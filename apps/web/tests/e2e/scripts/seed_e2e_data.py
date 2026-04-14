@@ -17,16 +17,24 @@ API_SRC_DIRECTORY = Path(__file__).resolve().parents[4] / "api" / "src"
 AREA_ADMIN_ID = "00000000-0000-0000-0000-000000000001"
 AREA_READER_ID = "00000000-0000-0000-0000-000000000002"
 AREA_MAINTAINER_ID = "00000000-0000-0000-0000-000000000003"
+AREA_COMPARE_ID = "00000000-0000-0000-0000-000000000004"
 
 # 固定 seed 用的 document UUID。
 DOCUMENT_READER_READY_ID = "00000000-0000-0000-0000-000000000101"
 DOCUMENT_MAINTAINER_READY_ID = "00000000-0000-0000-0000-000000000102"
+DOCUMENT_COMPARE_TRAVEL_ID = "00000000-0000-0000-0000-000000000301"
+DOCUMENT_COMPARE_EXPENSE_ID = "00000000-0000-0000-0000-000000000302"
+DOCUMENT_COMPARE_PROCESSING_ID = "00000000-0000-0000-0000-000000000303"
 
 # 固定 seed 用的 chunk UUID。
 CHUNK_READER_PARENT_ID = "00000000-0000-0000-0000-000000000201"
 CHUNK_READER_CHILD_ID = "00000000-0000-0000-0000-000000000202"
 CHUNK_MAINTAINER_PARENT_ID = "00000000-0000-0000-0000-000000000203"
 CHUNK_MAINTAINER_CHILD_ID = "00000000-0000-0000-0000-000000000204"
+CHUNK_COMPARE_TRAVEL_PARENT_ID = "00000000-0000-0000-0000-000000000401"
+CHUNK_COMPARE_TRAVEL_CHILD_ID = "00000000-0000-0000-0000-000000000402"
+CHUNK_COMPARE_EXPENSE_PARENT_ID = "00000000-0000-0000-0000-000000000403"
+CHUNK_COMPARE_EXPENSE_CHILD_ID = "00000000-0000-0000-0000-000000000404"
 
 
 def build_engine(database_path: Path):
@@ -72,6 +80,7 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                 Area(id=AREA_ADMIN_ID, name="Admin Control Area", description="供 admin 驗證 access management 使用。"),
                 Area(id=AREA_READER_ID, name="Reader Handbook Area", description="供 reader 驗證唯讀存取使用。"),
                 Area(id=AREA_MAINTAINER_ID, name="Maintainer Docs Area", description="供 maintainer 驗證 detail 顯示使用。"),
+                Area(id=AREA_COMPARE_ID, name="Compare Travel Area", description="供 chat compare 與 no-leak E2E 驗證使用。"),
             ]
         )
         session.add_all(
@@ -79,6 +88,7 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                 AreaUserRole(area_id=AREA_ADMIN_ID, user_sub="user-admin", role=Role.admin),
                 AreaUserRole(area_id=AREA_READER_ID, user_sub="user-reader", role=Role.reader),
                 AreaUserRole(area_id=AREA_MAINTAINER_ID, user_sub="user-maintainer", role=Role.maintainer),
+                AreaGroupRole(area_id=AREA_COMPARE_ID, group_path="/group/reader", role=Role.reader),
                 AreaGroupRole(area_id=AREA_READER_ID, group_path="/group/reader", role=Role.reader),
                 AreaGroupRole(area_id=AREA_MAINTAINER_ID, group_path="/group/maintainer", role=Role.maintainer),
             ]
@@ -108,6 +118,41 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     normalized_text="Maintainer intro content explains upload, reindex, and chat behavior.",
                     status=DocumentStatus.ready,
                     indexed_at=datetime(2026, 3, 13, 0, 5, tzinfo=UTC),
+                ),
+                Document(
+                    id=DOCUMENT_COMPARE_TRAVEL_ID,
+                    area_id=AREA_COMPARE_ID,
+                    file_name="travel-policy.md",
+                    content_type="text/markdown",
+                    file_size=180,
+                    storage_key="seed/travel-policy.md",
+                    display_text="Travel Policy requires manager approval before business travel.",
+                    normalized_text="Travel Policy requires manager approval before business travel.",
+                    status=DocumentStatus.ready,
+                    indexed_at=datetime(2026, 3, 13, 0, 10, tzinfo=UTC),
+                ),
+                Document(
+                    id=DOCUMENT_COMPARE_EXPENSE_ID,
+                    area_id=AREA_COMPARE_ID,
+                    file_name="expense-guidelines.md",
+                    content_type="text/markdown",
+                    file_size=180,
+                    storage_key="seed/expense-guidelines.md",
+                    display_text="Expense Guidelines describe reimbursement limits but do not mention approval flow.",
+                    normalized_text="Expense Guidelines describe reimbursement limits but do not mention approval flow.",
+                    status=DocumentStatus.ready,
+                    indexed_at=datetime(2026, 3, 13, 0, 12, tzinfo=UTC),
+                ),
+                Document(
+                    id=DOCUMENT_COMPARE_PROCESSING_ID,
+                    area_id=AREA_COMPARE_ID,
+                    file_name="processing-draft.md",
+                    content_type="text/markdown",
+                    file_size=96,
+                    storage_key="seed/processing-draft.md",
+                    display_text="Processing draft should never appear in citations or planning results.",
+                    normalized_text="Processing draft should never appear in citations or planning results.",
+                    status=DocumentStatus.processing,
                 ),
             ]
         )
@@ -179,6 +224,72 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
                     end_offset=69,
                     embedding=[0.21] * 1536,
                 ),
+                DocumentChunk(
+                    id=CHUNK_COMPARE_TRAVEL_PARENT_ID,
+                    document_id=DOCUMENT_COMPARE_TRAVEL_ID,
+                    parent_chunk_id=None,
+                    chunk_type=ChunkType.parent,
+                    structure_kind=ChunkStructureKind.text,
+                    position=0,
+                    section_index=0,
+                    child_index=None,
+                    heading="Approval Rule",
+                    content="Travel Policy requires manager approval before business travel.",
+                    content_preview="Travel Policy requires manager approval",
+                    char_count=61,
+                    start_offset=0,
+                    end_offset=61,
+                ),
+                DocumentChunk(
+                    id=CHUNK_COMPARE_TRAVEL_CHILD_ID,
+                    document_id=DOCUMENT_COMPARE_TRAVEL_ID,
+                    parent_chunk_id=CHUNK_COMPARE_TRAVEL_PARENT_ID,
+                    chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.text,
+                    position=1,
+                    section_index=0,
+                    child_index=0,
+                    heading="Approval Rule",
+                    content="Travel Policy requires manager approval before business travel.",
+                    content_preview="Travel Policy requires manager approval",
+                    char_count=61,
+                    start_offset=0,
+                    end_offset=61,
+                    embedding=[0.22] * 1536,
+                ),
+                DocumentChunk(
+                    id=CHUNK_COMPARE_EXPENSE_PARENT_ID,
+                    document_id=DOCUMENT_COMPARE_EXPENSE_ID,
+                    parent_chunk_id=None,
+                    chunk_type=ChunkType.parent,
+                    structure_kind=ChunkStructureKind.text,
+                    position=2,
+                    section_index=0,
+                    child_index=None,
+                    heading="Reimbursement Limits",
+                    content="Expense Guidelines describe reimbursement limits but do not mention approval flow.",
+                    content_preview="Expense Guidelines describe reimbursement limits",
+                    char_count=81,
+                    start_offset=0,
+                    end_offset=81,
+                ),
+                DocumentChunk(
+                    id=CHUNK_COMPARE_EXPENSE_CHILD_ID,
+                    document_id=DOCUMENT_COMPARE_EXPENSE_ID,
+                    parent_chunk_id=CHUNK_COMPARE_EXPENSE_PARENT_ID,
+                    chunk_type=ChunkType.child,
+                    structure_kind=ChunkStructureKind.text,
+                    position=3,
+                    section_index=0,
+                    child_index=0,
+                    heading="Reimbursement Limits",
+                    content="Expense Guidelines describe reimbursement limits but do not mention approval flow.",
+                    content_preview="Expense Guidelines describe reimbursement limits",
+                    char_count=81,
+                    start_offset=0,
+                    end_offset=81,
+                    embedding=[0.23] * 1536,
+                ),
             ]
         )
         session.commit()
@@ -187,6 +298,18 @@ def seed_e2e_database(database_path: Path, storage_path: Path) -> None:
     (storage_path / "seed" / "reader-handbook.md").write_text("# Reader Intro\nReader intro content\n", encoding="utf-8")
     (storage_path / "seed" / "maintainer-guide.md").write_text(
         "# Maintainer Intro\nMaintainer intro content\n",
+        encoding="utf-8",
+    )
+    (storage_path / "seed" / "travel-policy.md").write_text(
+        "# Approval Rule\nTravel Policy requires manager approval before business travel.\n",
+        encoding="utf-8",
+    )
+    (storage_path / "seed" / "expense-guidelines.md").write_text(
+        "# Reimbursement Limits\nExpense Guidelines describe reimbursement limits but do not mention approval flow.\n",
+        encoding="utf-8",
+    )
+    (storage_path / "seed" / "processing-draft.md").write_text(
+        "# Processing Draft\nThis document should remain unavailable while processing.\n",
         encoding="utf-8",
     )
 

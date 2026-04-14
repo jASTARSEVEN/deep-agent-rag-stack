@@ -103,7 +103,7 @@
 - 已驗證 `required_document_not_cited` 的三個主要 blocker 根因在 document mention / scope policy，而非 answer layer；修正 compare / multi-document summary 題不再被高分單文件 mention 過早壓成 `single_document` 後，切片 rerun 已確認三題的 `required_document_coverage` 與 `citation_coverage` 均提升為 `1.0`
 - benchmark/test runner 允許 `explicit_document_ids`，但 public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override
 - `Phase 8B` enrichment lane 已取消並移除；後續不得重新引入已刪除的 enrichment schema、query-time merge lane 或查詢改寫 lane
-- `Phase 8C` 尚未開始；目前 checkpoint 剩餘 hard blocker 已收斂到 `insufficient_evidence_not_acknowledged` 的兩題 compare 題。若此項在目前階段只視為 LLM 行為邊界與觀測指標，而非系統性 blocker，則可將 `Phase 8A` 視為實質過線，並具備啟動 `Phase 8C` 的條件
+- `Phase 8C` 單一工具版已落地於 API/runtime、chat debug payload 與 targeted E2E；目前仍以 feature flag 關閉，且尚未完成完整 checkpoint / benchmark rerun
 - `phase8a-summary-compare-v1` 仍保留唯一 product gate 身分，但本輪不虛構 checkpoint numeric baseline；repo 目前只固定 gate dataset 與 runner contract，尚未在這次 consolidation pass 內凍結單一可追溯的 checkpoint artifact 分數
 - 已於 `2026-04-05` 將長期 benchmark 文件收斂為七個正式 dataset：六個 external `100Q` package 加上自家 `tw-insurance-rag-benchmark-v1`；舊的 `UDA` / `QASPER` 小樣本 package 已移出 current benchmark 集合。目前 `QASPER 100`、`UDA 100` 與 `DRCD 100` 的 benchmark contract 已改為使用 gold span `document_id` 作為指定文件 scope，避免把原始資料集的文件上下文誤當成 area-wide ambiguous query。
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為七資料集 current 基線，並把 `External 100Q` 壓力測試集合維持為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
@@ -311,10 +311,12 @@
 
 ### Current Focus
 - `Phase 8B` enrichment lane 已取消；目前 focus 已從 baseline 文件整併轉為 `Phase 8C` 啟動前判讀與 agentic evidence-seeking loop 範圍界定
+- `Phase 8C v1` 已先以單一 `retrieve_area_contexts` tool 落地：agent follow-up 仍走同一工具 contract，不新增獨立 planning tool
 - summary/compare current baseline 已先收斂為 package-level consolidated baseline：`summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
 - 目前正式採信的 canonical baseline 來源固定為 `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`、`artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`、`artifacts/lcsts-news-summary-curated-pilot-v1-run.json`、`artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`、`artifacts/cocotrip-compare-curated-pilot-v1-run.json` 與 `artifacts/cocotrip-rerun-subset.json`
 - `phase8a-summary-compare-v1` 的 `2026-04-14` checkpoint rerun 顯示：若不將 `insufficient_evidence_not_acknowledged` 視為當前階段 blocker，則主線已實質過線；接下來的核心問題已收斂到 compare / multi-document 題的 evidence-seeking ROI，而非一般 routing / citation scope 缺陷
 - `Phase 8C` 路線現已具備正式啟動依據；設計重點應聚焦 compare / multi-document 題的 bounded evidence-seeking 與 coverage 補強，而不是重新擴張已移除的 enrichment lane
+- `Phase 8C` runtime 現已加入 planning payload、document handles、bounded follow-up loop 與 latency budget 狀態；`20s` 為 target、`40s` 為 warning，兩者只作觀測訊號，不會硬中止對話或 API
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
@@ -324,10 +326,10 @@
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 以 `2026-04-14` 的 checkpoint rerun 判讀為依據，正式展開 `Phase 8C` 的 agentic evidence-seeking loop 設計與最小實作
-2. `Phase 8C` 第一輪只聚焦 compare / multi-document 題的 bounded evidence-seeking，不重新引入 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
-3. 先定義 `Phase 8C` 的工具契約與 guardrails：已授權 ready 文件清單、bounded scoped retrieval、必要時的文件再查詢與 compare coverage 補強，並限制每回合工具呼叫數、文件數、token 與 latency
-4. `phase8a-summary-compare-v1` 持續作為 `Phase 8C` 的 before / after checkpoint；若後續完整 suite rerun 需要更新觀測數字，仍須明確標示其是否 canonical
+1. 對 `Phase 8C` 已落地的單一工具版執行完整 `phase8a-summary-compare-v1` before / after rerun，確認 `insufficient_evidence_not_acknowledged` 是否下降
+2. 同步跑 `QASPER 100`、`NQ 100`、`DRCD 100` regression 哨兵，確認 bounded follow-up 沒有破壞 generic-first retrieval 主線
+3. 依 rerun 結果決定是否將 `CHAT_AGENTIC_ENABLED` 從 feature flag 升格為預設主線，或只保留 trace/debug 能力
+4. 若 rerun 顯示 compare 題仍主要受 evidence working set 單位限制，再評估 `Phase 8D` 的 `section_bundle` 是否值得啟動
 
 ## 尚未開始的功能
 

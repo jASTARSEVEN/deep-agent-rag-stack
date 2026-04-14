@@ -73,6 +73,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - If area APIs keep returning `401`, verify the Keycloak token still contains the `groups` claim and that the API issuer / JWKS settings are correct.
 - `VITE_AUTH_MODE=test` is only for Playwright and local testing. It must not be treated as evidence of a production login flow.
 - `npm run test:e2e` uses test auth mode and does not validate real Keycloak issuer, callback, logout, or SSO behavior. Use `npm run test:smoke:keycloak` for that coverage.
+- `npm run test:e2e` now starts `tests/e2e/scripts/run_e2e_api.py`, which adds a test-only fake Deep Agents runtime while still serving the same LangGraph SDK `assistants / threads / runs.stream` contract expected by the frontend.
 - `npm run test:smoke:keycloak` defaults to `http://localhost` as the public entry instead of the old direct `web` / `keycloak` container ports. If you use another public entry, set `SMOKE_WEB_URL` accordingly.
 - Files remain integrated into `/areas`; chat is mounted there through `src/features/chat`. Chat uses LangGraph SDK default thread/run endpoints, consumes Deep Agents task progress, and shows assembled contexts rather than child-level citations.
 - Admins can now edit area name/description and hard-delete areas from the dashboard header; deleting an area also removes its document assets server-side.

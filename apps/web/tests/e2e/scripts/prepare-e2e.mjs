@@ -33,6 +33,10 @@ rmSync(storagePath, { recursive: true, force: true });
 rmSync(celeryBrokerPath, { recursive: true, force: true });
 rmSync(join(workerRoot, "control"), { recursive: true, force: true });
 rmSync(join(workerRoot, "processed"), { recursive: true, force: true });
+mkdirSync(celeryBrokerPath, { recursive: true });
+mkdirSync(join(celeryBrokerPath, "in"), { recursive: true });
+mkdirSync(join(celeryBrokerPath, "out"), { recursive: true });
+mkdirSync(join(celeryBrokerPath, "processed"), { recursive: true });
 
 const seedProcess = spawnSync("python", [join(currentDirectory, "seed_e2e_data.py"), databasePath, storagePath], {
   cwd: webRoot,

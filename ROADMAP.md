@@ -657,6 +657,9 @@ MVP 組合：
   - 不新增 ingest LLM 成本
   - 由 query-time 依已命中的 evidence 產生短摘錄，作為 agent / UI 快速理解證據的輕量 cue
   - `evidence_cue_text` 不改變正式 citation 來源，也不要求額外的細粒度 span extraction 成為 `8C` 前置工作
+- `Phase 8C v1` 目前已先以單一工具版落地：
+  - 不新增獨立 `document list` 或 `synopsis` tool，而是維持單一 `retrieve_area_contexts`
+  - `20s` 為 target latency、`40s` 為 warning latency；兩者只作觀測與 debug / benchmark 標記，不作 API hard stop
 - 最終回答規則：
   - 最終 citation 一律來自 follow-up retrieval 回傳的 assembled contexts
   - `document synopsis`、文件名稱清單、coverage 訊號與 agent planning trace 不得成為 citation
@@ -680,8 +683,8 @@ Exit Criteria：
 - `8C` 完成後，正式 retrieval 主查詢單位仍未改動；`section_bundle` 只保留為 `8D` 的後續策略空間
 
 狀態：
-- `未開始`
-- `是否啟動以前置 baseline consolidation 完成後的 rerun 證據為準`
+- `進行中（單一工具版已落地，feature flag 預設關閉）`
+- `完整 checkpoint / benchmark rerun 與 promotion gate 尚待執行`
 
 ## Phase 8D — Section Bundle Retrieval for Summary / Compare
 

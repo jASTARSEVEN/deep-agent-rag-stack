@@ -73,6 +73,7 @@
 - 若 area API 一直出現 `401`，請確認 Keycloak token 內仍含 `groups` claim，且 API issuer / JWKS 設定正確。
 - `VITE_AUTH_MODE=test` 僅供 Playwright 與本機測試，不可當成正式登入驗證結論。
 - `npm run test:e2e` 使用 test auth mode，不會覆蓋真實 Keycloak issuer、callback、logout 與 SSO 行為；這些問題需由 `npm run test:smoke:keycloak` 補驗。
+- `npm run test:e2e` 現在會啟動 `tests/e2e/scripts/run_e2e_api.py`；它會注入 test-only fake Deep Agents runtime，但仍維持前端既有的 LangGraph SDK `assistants / threads / runs.stream` contract，不會額外引入第二條 chat transport。
 - `npm run test:smoke:keycloak` 預設會用 `http://localhost` 當作公開入口，而不是舊的 `web` / `keycloak` container 直連埠；若你改用公開網域或自訂入口，請同步設定 `SMOKE_WEB_URL`。
 - files 仍整合在 `/areas` 頁；chat 則透過 `src/features/chat` 掛載，並使用 LangGraph SDK 預設 thread/run 端點串接。UI 會顯示 Deep Agents 任務進度，並顯示 assembler 後的 contexts，而不是 child-level citations。
 - admin 現在可直接在 Dashboard header 編輯 area 名稱/說明，或執行 area hard delete；刪除 area 時後端也會一併清理相關文件資產。
