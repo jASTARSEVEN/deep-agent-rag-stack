@@ -99,9 +99,11 @@
 - 已新增 `docs/summary-compare-benchmark-rerun-guide.md`，固定 suite / checkpoint 的 rerun CLI、artifact 角色與 baseline 引用規則
 - 已新增 `summary/compare` 離線 judge packet workflow：`run_summary_compare_checkpoint` 與 `run_summary_compare_benchmark` CLI 現支援 `offline-export` / `offline-import`，可先匯出 judge packets，交由 `Codex / ChatGPT Pro` 人工回填，再匯入產生正式 report
 - `Phase 8A` checkpoint 與 `summary-compare-real-curated-v1` compare/rubric judge 現在不再被 `OPENAI_API_KEY` 綁死；若不想用 API key，可改走離線 packet + decision JSONL 流程，但仍維持同一套 report schema 與 gate / baseline compare 契約
+- 已完成 `phase8a-summary-compare-v1` 的 `2026-04-14` rerun：正式 answer path 改用 `CHAT_MODEL=gpt-5.4-mini`，judge 採 `codex-cli` 離線評分；目前 `task_type_accuracy=1.0`、`summary_strategy_accuracy=1.0`、`required_document_coverage=1.0`、`citation_coverage=1.0`、`section_coverage=1.0`、`avg_faithfulness_to_citations=4.625`、`avg_overall_score=4.5625`、`p95_latency_seconds=21.8645`
+- 已驗證 `required_document_not_cited` 的三個主要 blocker 根因在 document mention / scope policy，而非 answer layer；修正 compare / multi-document summary 題不再被高分單文件 mention 過早壓成 `single_document` 後，切片 rerun 已確認三題的 `required_document_coverage` 與 `citation_coverage` 均提升為 `1.0`
 - benchmark/test runner 允許 `explicit_document_ids`，但 public chat 與 `retrieve_area_contexts` tool 仍不接受原始 `document_id` override
 - `Phase 8B` enrichment lane 已取消並移除；後續不得重新引入已刪除的 enrichment schema、query-time merge lane 或查詢改寫 lane
-- `Phase 8C` 尚未開始；本輪只固定 canonical baseline，不做 go/no-go 判斷，且 synopsis 若未來接回，也只能作為文件選擇與補檢索 planning hint，不得作為 citation payload 或最終回答證據
+- `Phase 8C` 尚未開始；目前 checkpoint 剩餘 hard blocker 已收斂到 `insufficient_evidence_not_acknowledged` 的兩題 compare 題。若此項在目前階段只視為 LLM 行為邊界與觀測指標，而非系統性 blocker，則可將 `Phase 8A` 視為實質過線，並具備啟動 `Phase 8C` 的條件
 - `phase8a-summary-compare-v1` 仍保留唯一 product gate 身分，但本輪不虛構 checkpoint numeric baseline；repo 目前只固定 gate dataset 與 runner contract，尚未在這次 consolidation pass 內凍結單一可追溯的 checkpoint artifact 分數
 - 已於 `2026-04-05` 將長期 benchmark 文件收斂為七個正式 dataset：六個 external `100Q` package 加上自家 `tw-insurance-rag-benchmark-v1`；舊的 `UDA` / `QASPER` 小樣本 package 已移出 current benchmark 集合。目前 `QASPER 100`、`UDA 100` 與 `DRCD 100` 的 benchmark contract 已改為使用 gold span `document_id` 作為指定文件 scope，避免把原始資料集的文件上下文誤當成 area-wide ambiguous query。
 - `docs/retrieval-benchmark-strategy-analysis.md` 已更新為七資料集 current 基線，並把 `External 100Q` 壓力測試集合維持為 `QASPER 100`、`UDA 100`、`MS MARCO 100`、`NQ 100`、`DRCD 100` 與 `DuReader-robust 100`
@@ -308,26 +310,24 @@
 ## 目前階段重點
 
 ### Current Focus
-- `Phase 8B` enrichment lane 已取消；目前 focus 先改為整併既有 summary/compare baseline artifact，暫不重跑 benchmark，也不直接開始新的 query-time runtime lane
+- `Phase 8B` enrichment lane 已取消；目前 focus 已從 baseline 文件整併轉為 `Phase 8C` 啟動前判讀與 agentic evidence-seeking loop 範圍界定
 - summary/compare current baseline 已先收斂為 package-level consolidated baseline：`summary_benchmark_score=0.671431`、`compare_benchmark_score=0.000000`
 - 目前正式採信的 canonical baseline 來源固定為 `artifacts/qmsum-query-summary-curated-pilot-v1-run.json`、`artifacts/multinews-multi-doc-summary-curated-pilot-v1-run.json`、`artifacts/lcsts-news-summary-curated-pilot-v1-run.json`、`artifacts/cnewsum-news-summary-curated-pilot-v1-run.json`、`artifacts/cocotrip-compare-curated-pilot-v1-run.json` 與 `artifacts/cocotrip-rerun-subset.json`
-- 先把 canonical baseline 文件定稿，避免後續 before / after 比較基準漂移
-- `Phase 8C` 路線仍保留為 agentic evidence-seeking loop 候選，但只有在下一輪真的要做 prompt/runtime 調整前補跑 checkpoint / suite 後，才重新判斷是否啟動
+- `phase8a-summary-compare-v1` 的 `2026-04-14` checkpoint rerun 顯示：若不將 `insufficient_evidence_not_acknowledged` 視為當前階段 blocker，則主線已實質過線；接下來的核心問題已收斂到 compare / multi-document 題的 evidence-seeking ROI，而非一般 routing / citation scope 缺陷
+- `Phase 8C` 路線現已具備正式啟動依據；設計重點應聚焦 compare / multi-document 題的 bounded evidence-seeking 與 coverage 補強，而不是重新擴張已移除的 enrichment lane
 - 持續以 Phase 7 benchmark 驗證 retrieval ranking、coverage 與 baseline regression
 - 驗證 `PUBLIC_HOST + Caddy + Keycloak /auth` 的真實部署路徑與登入流程不影響既有 retrieval / evaluation / chat
 - 保持 deny-by-default、same-404、ready-only 與 rerank fail-open fallback 不退化
-- `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準，不再承載額外的舊決策敘事；在未補跑前不宣稱已固定 numeric baseline
+- `phase8a-summary-compare-v1` 目前只作為正式 product gate 與後續 rerun 比較基準；`2026-04-14` rerun 已提供可追溯的最新 checkpoint 判讀依據
 - 若後續產生新的 suite aggregate artifact，除非文件明確升格為 canonical baseline，否則一律只視為觀測輸出，不得直接覆蓋 current baseline
 
 ## 下一步
 
 ### 最適合立即進行的工作
-1. 先完成 summary/compare baseline 文件定稿，讓 `PROJECT_STATUS.md`、`ROADMAP.md`、README 與 benchmark 分析文件都只採信同一套 canonical baseline
-2. 若後續新增新的 suite aggregate artifact，必須先明確標示其是否 canonical；未被明確升格前，不得直接作 current baseline
-3. 若要開始下一輪 prompt / runtime 調整，先補跑 `phase8a-summary-compare-v1` 與 `summary-compare-real-curated-v1`，再用本輪已整併的 canonical suite baseline 做 before / after 比較
-4. 補跑後再判斷主要缺口究竟是 compare answer quality、中文 summary 壓縮率、evidence contract，還是 agentic evidence-seeking 真能改善的 coverage 問題
-5. 只有在新的 rerun 仍顯示 loop 具明確 ROI 時，才設計 `Phase 8C` 的 agentic evidence-seeking 工具契約與 guardrails，包含已授權 ready 文件清單工具、synopsis inspection / ranking 工具、bounded scoped retrieval，以及每回合工具呼叫 / 文件數 / token / latency 上限
-6. 不得重新引入已移除的 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
+1. 以 `2026-04-14` 的 checkpoint rerun 判讀為依據，正式展開 `Phase 8C` 的 agentic evidence-seeking loop 設計與最小實作
+2. `Phase 8C` 第一輪只聚焦 compare / multi-document 題的 bounded evidence-seeking，不重新引入 enrichment schema、query-time merge lane、查詢改寫 lane，也不得讓 synopsis hints 成為 citation 或 SQL gate 的替代品
+3. 先定義 `Phase 8C` 的工具契約與 guardrails：已授權 ready 文件清單、bounded scoped retrieval、必要時的文件再查詢與 compare coverage 補強，並限制每回合工具呼叫數、文件數、token 與 latency
+4. `phase8a-summary-compare-v1` 持續作為 `Phase 8C` 的 before / after checkpoint；若後續完整 suite rerun 需要更新觀測數字，仍須明確標示其是否 canonical
 
 ## 尚未開始的功能
 
