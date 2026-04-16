@@ -18,8 +18,6 @@ interface AssistantMessageOverrides {
   citations?: ChatMessageViewModel["citations"];
   /** 是否使用知識庫。 */
   usedKnowledgeBase?: ChatMessageViewModel["usedKnowledgeBase"];
-  /** 是否啟用 thinking mode。 */
-  thinkingMode?: ChatMessageViewModel["thinkingMode"];
   /** 本輪 synthesis mode。 */
   synthesisMode?: ChatMessageViewModel["synthesisMode"];
   /** 預設選取的 citation context。 */
@@ -59,7 +57,6 @@ export function createAssistantMessage(overrides: AssistantMessageOverrides = {}
     isStreaming: overrides.isStreaming ?? true,
     isError: false,
     usedKnowledgeBase: overrides.usedKnowledgeBase ?? null,
-    thinkingMode: overrides.thinkingMode ?? null,
     synthesisMode: overrides.synthesisMode ?? null,
     selectedCitationContextIndex: overrides.selectedCitationContextIndex ?? null,
   };

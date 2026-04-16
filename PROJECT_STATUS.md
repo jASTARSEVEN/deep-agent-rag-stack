@@ -250,6 +250,7 @@
 - 已實作 `AreaSidebar` 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺
 - 已實作 `ChatPanel` 作為中央視窗核心，負責多輪對話、串流狀態顯示與工具調用檢視
 - 已將 `ChatPanel` 升級為雙欄佈局：左側回答與 citation chips、右側全文預覽欄
+- 已補上 area 內多 session chat UX，支援開新 session、切換既有 session，並以首個 user 問題自動命名 session
 - 已新增 `DocumentPreviewPane`，支援依 citation 自動 scroll 到全文對應位置，並以 child chunk 做 active / related / hover 高亮
 - 已實作 `DocumentsDrawer` 負責右側滑出式文件管理，支援在不中斷對話的情況下上傳、編輯與刪除文件
 - 已將 `DocumentsDrawer` 擴充為列表 + chunk-aware 檢視器，可直接開啟 ready 文件的 child chunk 清單與全文預覽
@@ -292,9 +293,9 @@
 - 已新增 LangGraph `agent` graph、custom auth 與 LangGraph HTTP app 入口
 - 已將 `CHAT_PROVIDER=deepagents` 改為真正使用 `create_deep_agent()` 的主 agent 回答路徑，不再映射為 OpenAI Responses provider
 - 已將 SQL gate、ready-only、vector recall、FTS recall、RRF、rerank 與 assembler 收斂為單一 `retrieve_area_contexts` tool，交由主 agent 自行判斷是否呼叫
-- Web `/areas` 已新增多輪 thread chat panel，以 `area_id -> thread_id` 維持同 area 對話脈絡
+- Web `/areas` 已新增 area-scoped 多 session thread chat panel；同一 area 可建立多個 thread 並切換既有對話脈絡
 - 已將既有 Web chat transport 改為 LangGraph SDK 預設 thread/run 端點，不再以自訂 bridge chat routes 作正式路徑
-- 已將 LangGraph built-in thread state 正式接上 `messages` 累積記憶；同一 area thread 的多輪對話可延續先前上下文，前端切回既有 thread 時也會回填歷史訊息
+- 已將 LangGraph built-in thread state 正式接上 `messages` 累積記憶；同一 area session 的多輪對話可延續先前上下文，前端切回既有 thread 時也會回填歷史訊息
 - 已將 graph 輸出升級為 assembled-context level contract，前端顯示單位與實際送進 LLM 的 context 單位對齊
 - 已將 Web chat stream 收斂為 LangGraph SDK `messages-tuple`、`custom` 與 `values` 事件；最終 answer / citations / assembled contexts / trace 直接來自 graph state
 - `custom` 事件目前已收斂為 `phase` 與 `tool_call`；token delta 正式透過 `messages-tuple` 傳遞

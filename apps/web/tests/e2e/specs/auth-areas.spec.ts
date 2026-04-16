@@ -217,6 +217,26 @@ test("reader 可看 detail 但不能管理 access", async ({ page }) => {
 });
 
 
+test("reader 可在同一 area 開新 session 並切回既有 session", async ({ page }) => {
+  await loginAs(page, "reader");
+  await selectArea(page, sharedAreaName);
+
+  await submitChatQuestion(page, "reader policy");
+  await expect(page.getByTestId("chat-session-select")).toContainText("reader policy");
+  const originalSessionId = await page.getByTestId("chat-session-select").inputValue();
+
+  await page.getByTestId("chat-new-session").click();
+  const newSessionId = await page.getByTestId("chat-session-select").inputValue();
+  expect(newSessionId).not.toBe(originalSessionId);
+  await expect(page.getByTestId("chat-message-user")).toHaveCount(0);
+  await expect(page.getByTestId("chat-message-assistant")).toHaveCount(0);
+
+  await page.getByTestId("chat-session-select").selectOption(originalSessionId);
+  await expect(page.getByTestId("chat-message-user").last()).toContainText("reader policy");
+  await expect(page.getByTestId("chat-message-assistant").last()).toContainText("Reader Handbook");
+});
+
+
 test("reader compare 題會顯示 follow-up tool debug 與證據不足回覆", async ({ page }) => {
   await loginAs(page, "reader");
   await selectArea(page, COMPARE_AREA_NAME);

@@ -8,15 +8,22 @@ import type {
   ChatAnswerBlock,
   ChatContextReference,
   ChatPhaseState,
+  ChatSessionSummary,
   ChatToolCallState,
 } from "../../../lib/types";
 import { resolveAnswerBlocks } from "../state/answerBlocks";
 
 
-/** 前端 session storage 使用的 area-thread mapping key。 */
-const AREA_THREAD_STORAGE_KEY = "deep-agent.langgraph.area-threads";
+/** 舊版前端 session storage 使用的 area-thread mapping key。 */
+const LEGACY_AREA_THREAD_STORAGE_KEY = "deep-agent.langgraph.area-threads";
+/** 新版前端 session storage 使用的 area-sessions mapping key。 */
+const AREA_SESSION_STORAGE_KEY = "deep-agent.langgraph.area-sessions";
 /** 前端 session storage 使用的 LangGraph assistant id key。 */
 const ASSISTANT_ID_STORAGE_KEY = "deep-agent.langgraph.assistant-id";
+/** 新建 session 的預設標題。 */
+const DEFAULT_SESSION_TITLE = "新對話";
+/** 由問題自動產生 session 標題時的最大長度。 */
+const SESSION_TITLE_MAX_LENGTH = 48;
 
 /** LangGraph graph id；對應 `apps/api/langgraph.json` 的公開 graph 名稱。 */
 const GRAPH_ID = "agent";
@@ -65,12 +72,6 @@ export interface LangGraphChatStreamUpdate {
   usedKnowledgeBase?: boolean;
 }
 
-/** 單次 chat 送出時可攜帶的選項。 */
-export interface LangGraphChatRunOptions {
-  /** 是否啟用 thinking mode。 */
-  thinkingMode?: boolean;
-}
-
 /** 等待 run 結束後再提交到 UI 的最終 state 摘要。 */
 interface PendingCompletionUpdate {
   /** 最終 references。 */
@@ -84,6 +85,29 @@ interface PendingCompletionUpdate {
   /** 本輪是否有使用知識庫 references。 */
   usedKnowledgeBase: boolean;
 }
+
+/** session storage 內單一 area session 的持久化格式。 */
+interface StoredAreaSession {
+  /** LangGraph thread 識別碼。 */
+  threadId: string;
+  /** 前端顯示用 session 標題。 */
+  title: string;
+  /** session 建立時間。 */
+  createdAt: string;
+  /** 最近一次互動時間。 */
+  updatedAt: string;
+}
+
+/** session storage 內單一 area 的 session 狀態。 */
+interface StoredAreaSessionState {
+  /** 目前啟用中的 LangGraph thread 識別碼。 */
+  activeThreadId: string | null;
+  /** 此 area 內所有可切換的 session。 */
+  sessions: StoredAreaSession[];
+}
+
+/** session storage 內 area -> sessions 的持久化格式。 */
+type StoredAreaSessionMap = Record<string, StoredAreaSessionState>;
 
 /** 正式 token 串流來源；`custom` 僅承載 phase 與 tool_call 等產品事件。 */
 const PRIMARY_TOKEN_STREAM_EVENT = "messages-tuple";
@@ -291,44 +315,322 @@ function createLangGraphClient(token: string) {
 }
 
 
-/** 從 session storage 讀取 area-thread mapping。 */
-function readAreaThreadMap(): Record<string, string> {
-  const rawValue = window.sessionStorage.getItem(AREA_THREAD_STORAGE_KEY);
+/**
+ * 判斷未知資料是否為已持久化的單一 session。
+ *
+ * @param value 待檢查的未知資料。
+ * @returns 若格式正確則回傳正規化後的 session，否則回傳 `null`。
+ */
+function normalizeStoredAreaSession(value: unknown): StoredAreaSession | null {
+  if (!isRecord(value) || typeof value.threadId !== "string" || !value.threadId.trim()) {
+    return null;
+  }
+  const createdAt = typeof value.createdAt === "string" && value.createdAt.trim()
+    ? value.createdAt
+    : new Date().toISOString();
+  const updatedAt = typeof value.updatedAt === "string" && value.updatedAt.trim()
+    ? value.updatedAt
+    : createdAt;
+  return {
+    threadId: value.threadId,
+    title: normalizeSessionTitle(typeof value.title === "string" ? value.title : DEFAULT_SESSION_TITLE),
+    createdAt,
+    updatedAt,
+  };
+}
+
+
+/**
+ * 將 area session state 正規化為可安全持久化的格式。
+ *
+ * @param value 待檢查的未知資料。
+ * @returns 正規化後的 area session state。
+ */
+function normalizeStoredAreaSessionState(value: unknown): StoredAreaSessionState {
+  if (!isRecord(value)) {
+    return { activeThreadId: null, sessions: [] };
+  }
+  const sessions = Array.isArray(value.sessions)
+    ? value.sessions
+        .map((session) => normalizeStoredAreaSession(session))
+        .filter((session): session is StoredAreaSession => session !== null)
+    : [];
+  const dedupedSessions = [...new Map(sessions.map((session) => [session.threadId, session])).values()]
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const activeThreadId =
+    typeof value.activeThreadId === "string" && dedupedSessions.some((session) => session.threadId === value.activeThreadId)
+      ? value.activeThreadId
+      : (dedupedSessions[0]?.threadId ?? null);
+  return {
+    activeThreadId,
+    sessions: dedupedSessions,
+  };
+}
+
+
+/**
+ * 從舊版單一 thread storage 遷移為新版多 session 格式。
+ *
+ * @returns 遷移後的 area session map。
+ */
+function migrateLegacyAreaThreadMap(): StoredAreaSessionMap {
+  const rawValue = window.sessionStorage.getItem(LEGACY_AREA_THREAD_STORAGE_KEY);
   if (!rawValue) {
     return {};
   }
   try {
     const parsed = JSON.parse(rawValue) as Record<string, string>;
-    return typeof parsed === "object" && parsed !== null ? parsed : {};
+    const now = new Date().toISOString();
+    const nextSessionMap = Object.fromEntries(
+      Object.entries(parsed)
+        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[1].trim().length > 0)
+        .map(([areaId, threadId]) => [
+          areaId,
+          {
+            activeThreadId: threadId,
+            sessions: [
+              {
+                threadId,
+                title: "既有對話",
+                createdAt: now,
+                updatedAt: now,
+              },
+            ],
+          } satisfies StoredAreaSessionState,
+        ]),
+    );
+    window.sessionStorage.removeItem(LEGACY_AREA_THREAD_STORAGE_KEY);
+    window.sessionStorage.setItem(AREA_SESSION_STORAGE_KEY, JSON.stringify(nextSessionMap));
+    return nextSessionMap;
   } catch {
     return {};
   }
 }
 
 
-/** 將 area-thread mapping 寫回 session storage。 */
-function saveAreaThreadMap(threadMap: Record<string, string>): void {
-  window.sessionStorage.setItem(AREA_THREAD_STORAGE_KEY, JSON.stringify(threadMap));
+/**
+ * 從 session storage 讀取 area-sessions mapping。
+ *
+ * @returns area -> sessions 的正規化對應表。
+ */
+function readAreaSessionMap(): StoredAreaSessionMap {
+  const rawValue = window.sessionStorage.getItem(AREA_SESSION_STORAGE_KEY);
+  if (!rawValue) {
+    return migrateLegacyAreaThreadMap();
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+    if (!isRecord(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).map(([areaId, sessionState]) => [areaId, normalizeStoredAreaSessionState(sessionState)]),
+    );
+  } catch {
+    return {};
+  }
 }
 
 
-/** 清除指定 area 對應的 thread mapping。 */
-function clearAreaThreadId(areaId: string): void {
-  const nextThreadMap = readAreaThreadMap();
-  delete nextThreadMap[areaId];
-  saveAreaThreadMap(nextThreadMap);
+/**
+ * 將 area-sessions mapping 寫回 session storage。
+ *
+ * @param sessionMap 要持久化的 area session map。
+ * @returns 無；僅更新 session storage。
+ */
+function saveAreaSessionMap(sessionMap: StoredAreaSessionMap): void {
+  window.sessionStorage.setItem(AREA_SESSION_STORAGE_KEY, JSON.stringify(sessionMap));
+}
+
+
+/**
+ * 取得單一 area 的 session state。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @returns 該 area 的 session state；若不存在則回傳空狀態。
+ */
+function getAreaSessionState(areaId: string): StoredAreaSessionState {
+  return readAreaSessionMap()[areaId] ?? { activeThreadId: null, sessions: [] };
+}
+
+
+/**
+ * 以單一 area 為單位更新 session state。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param sessionState 更新後的 session state。
+ * @returns 無；僅更新 session storage。
+ */
+function saveAreaSessionState(areaId: string, sessionState: StoredAreaSessionState): void {
+  const nextSessionMap = readAreaSessionMap();
+  const normalizedState = normalizeStoredAreaSessionState(sessionState);
+  if (normalizedState.sessions.length === 0) {
+    delete nextSessionMap[areaId];
+  } else {
+    nextSessionMap[areaId] = normalizedState;
+  }
+  saveAreaSessionMap(nextSessionMap);
+}
+
+
+/**
+ * 將單一持久化 session 轉為前端摘要型別。
+ *
+ * @param session 已持久化的 session。
+ * @returns 前端顯示用摘要。
+ */
+function toChatSessionSummary(session: StoredAreaSession): ChatSessionSummary {
+  return {
+    threadId: session.threadId,
+    title: session.title,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+  };
+}
+
+
+/**
+ * 正規化 session 標題，避免空白與過長值污染 UI。
+ *
+ * @param value 原始標題。
+ * @returns 清理後標題。
+ */
+function normalizeSessionTitle(value: string): string {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return DEFAULT_SESSION_TITLE;
+  }
+  if (trimmedValue.length <= SESSION_TITLE_MAX_LENGTH) {
+    return trimmedValue;
+  }
+  return `${trimmedValue.slice(0, SESSION_TITLE_MAX_LENGTH - 1).trimEnd()}…`;
+}
+
+
+/**
+ * 由使用者問題自動產生 session 標題。
+ *
+ * @param question 本輪送出的問題。
+ * @returns 可安全顯示於 session selector 的標題。
+ */
+function deriveSessionTitleFromQuestion(question: string): string {
+  return normalizeSessionTitle(question.replace(/\s+/g, " "));
+}
+
+
+/**
+ * 回傳指定 area 目前可切換的 session 摘要，依最近互動時間排序。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @returns 目前 area 內所有 session 摘要。
+ */
+export function listAreaSessions(areaId: string): ChatSessionSummary[] {
+  return getAreaSessionState(areaId).sessions.map((session) => toChatSessionSummary(session));
+}
+
+
+/**
+ * 讀取指定 area 目前啟用中的 session 識別碼。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @returns 啟用中的 LangGraph thread id；若尚未建立則回傳 `null`。
+ */
+export function getActiveAreaSessionId(areaId: string): string | null {
+  return getAreaSessionState(areaId).activeThreadId;
+}
+
+
+/**
+ * 將指定 session 設為目前 area 的啟用 session。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 要切換的 LangGraph thread id。
+ * @returns 若切換成功則回傳 `true`，否則回傳 `false`。
+ */
+export function setActiveAreaSessionId(areaId: string, threadId: string): boolean {
+  const currentState = getAreaSessionState(areaId);
+  if (!currentState.sessions.some((session) => session.threadId === threadId)) {
+    return false;
+  }
+  saveAreaSessionState(areaId, {
+    ...currentState,
+    activeThreadId: threadId,
+  });
+  return true;
+}
+
+
+/**
+ * 以 immutable 方式更新單一 area session 的 metadata。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 目標 LangGraph thread id。
+ * @param updater 接收目前 session 並回傳更新後 session 的函式。
+ * @returns 無；僅更新 session storage。
+ */
+function updateStoredAreaSession(
+  areaId: string,
+  threadId: string,
+  updater: (session: StoredAreaSession) => StoredAreaSession,
+): void {
+  const currentState = getAreaSessionState(areaId);
+  const targetSession = currentState.sessions.find((session) => session.threadId === threadId);
+  if (!targetSession) {
+    return;
+  }
+  saveAreaSessionState(areaId, {
+    ...currentState,
+    sessions: currentState.sessions.map((session) => (session.threadId === threadId ? updater(targetSession) : session)),
+  });
+}
+
+
+/**
+ * 標記單一 session 最近被互動，必要時同步更新標題。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 目標 LangGraph thread id。
+ * @param options 互動後的 metadata 覆寫選項。
+ * @returns 無；僅更新 session storage。
+ */
+function touchAreaSession(
+  areaId: string,
+  threadId: string,
+  options: {
+    title?: string;
+    preserveCustomTitle?: boolean;
+  } = {},
+): void {
+  updateStoredAreaSession(areaId, threadId, (session) => ({
+    ...session,
+    title:
+      options.title && (!options.preserveCustomTitle || session.title === DEFAULT_SESSION_TITLE)
+        ? normalizeSessionTitle(options.title)
+        : session.title,
+    updatedAt: new Date().toISOString(),
+  }));
+}
+
+
+/**
+ * 移除指定 area 中已失效的 session。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 失效的 LangGraph thread id。
+ * @returns 無；僅更新 session storage。
+ */
+function removeAreaSession(areaId: string, threadId: string): void {
+  const currentState = getAreaSessionState(areaId);
+  saveAreaSessionState(areaId, {
+    activeThreadId: currentState.activeThreadId === threadId ? null : currentState.activeThreadId,
+    sessions: currentState.sessions.filter((session) => session.threadId !== threadId),
+  });
 }
 
 
 /** 清除目前 session 內的 assistant id。 */
 function clearAssistantId(): void {
   window.sessionStorage.removeItem(ASSISTANT_ID_STORAGE_KEY);
-}
-
-
-/** 讀取指定 area 目前 session 內的 thread id。 */
-function getAreaThreadId(areaId: string): string | null {
-  return readAreaThreadMap()[areaId] ?? null;
 }
 
 
@@ -344,13 +646,17 @@ function ensureAssistantId(): string {
 }
 
 
-/** 確保指定 area 有對應的 thread id。 */
-async function ensureAreaThreadId(areaId: string, accessTokenGetter: AccessTokenGetter): Promise<string> {
-  const existingThreadId = getAreaThreadId(areaId);
-  if (existingThreadId) {
-    return existingThreadId;
-  }
-
+/**
+ * 建立新的 area session 並設為目前啟用中的 session。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param accessTokenGetter 取得最新 access token 的函式。
+ * @returns 新建立的 session 摘要。
+ */
+export async function createAreaSession(
+  areaId: string,
+  accessTokenGetter: AccessTokenGetter,
+): Promise<ChatSessionSummary> {
   const token = await accessTokenGetter();
   if (!token) {
     throw new Error("目前尚未登入，無法建立 LangGraph thread。");
@@ -366,11 +672,56 @@ async function ensureAreaThreadId(areaId: string, accessTokenGetter: AccessToken
   if (!nextThreadId) {
     throw new Error("LangGraph thread 建立成功，但回應缺少 thread_id。");
   }
+  const now = new Date().toISOString();
+  const nextSession = {
+    threadId: nextThreadId,
+    title: DEFAULT_SESSION_TITLE,
+    createdAt: now,
+    updatedAt: now,
+  } satisfies StoredAreaSession;
+  const currentState = getAreaSessionState(areaId);
+  saveAreaSessionState(areaId, {
+    activeThreadId: nextThreadId,
+    sessions: [nextSession, ...currentState.sessions],
+  });
+  return toChatSessionSummary(nextSession);
+}
 
-  const nextThreadMap = readAreaThreadMap();
-  nextThreadMap[areaId] = nextThreadId;
-  saveAreaThreadMap(nextThreadMap);
-  return nextThreadId;
+
+/**
+ * 確保指定 area 至少存在一個可用 session，若無則自動建立。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param accessTokenGetter 取得最新 access token 的函式。
+ * @returns 目前啟用中的 session 摘要。
+ */
+export async function ensureAreaSession(
+  areaId: string,
+  accessTokenGetter: AccessTokenGetter,
+): Promise<ChatSessionSummary> {
+  const activeThreadId = getActiveAreaSessionId(areaId);
+  const currentState = getAreaSessionState(areaId);
+  const existingSession = currentState.sessions.find((session) => session.threadId === activeThreadId);
+  if (existingSession) {
+    return toChatSessionSummary(existingSession);
+  }
+  return createAreaSession(areaId, accessTokenGetter);
+}
+
+
+/**
+ * 以第一個使用者問題初始化 session 標題。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 目標 LangGraph thread id。
+ * @param question 本輪送出的第一個問題。
+ * @returns 無；僅在標題仍為預設值時更新 session metadata。
+ */
+export function seedAreaSessionTitleFromQuestion(areaId: string, threadId: string, question: string): void {
+  touchAreaSession(areaId, threadId, {
+    title: deriveSessionTitleFromQuestion(question),
+    preserveCustomTitle: true,
+  });
 }
 
 
@@ -479,7 +830,7 @@ export async function loadAreaThreadHistory(
   citations: ChatContextReference[];
   usedKnowledgeBase: boolean | null;
 }>> {
-  const threadId = getAreaThreadId(areaId);
+  const threadId = getActiveAreaSessionId(areaId);
   if (!threadId) {
     return [];
   }
@@ -503,7 +854,7 @@ export async function loadAreaThreadHistory(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("Thread") && message.includes("not found")) {
-      clearAreaThreadId(areaId);
+      removeAreaSession(areaId, threadId);
       return [];
     }
     throw error;
@@ -517,11 +868,9 @@ export async function streamAreaThreadChat(
   question: string,
   accessTokenGetter: AccessTokenGetter,
   onUpdate: (update: LangGraphChatStreamUpdate) => void,
-  options?: LangGraphChatRunOptions,
 ): Promise<void> {
-  await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, true, options);
+  await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, true);
 }
-
 
 /** 以 LangGraph SDK stream 指定 area 的多輪 chat，並在 in-memory 資源遺失時自動重建一次。 */
 async function streamAreaThreadChatInternal(
@@ -530,7 +879,6 @@ async function streamAreaThreadChatInternal(
   accessTokenGetter: AccessTokenGetter,
   onUpdate: (update: LangGraphChatStreamUpdate) => void,
   allowRetry: boolean,
-  options?: LangGraphChatRunOptions,
 ): Promise<void> {
   const token = await accessTokenGetter();
   if (!token) {
@@ -543,12 +891,11 @@ async function streamAreaThreadChatInternal(
   let hasPrimaryTokenStream = false;
   try {
     const assistantId = await ensureAssistant(client);
-    const threadId = await ensureAreaThreadId(areaId, accessTokenGetter);
+    const threadId = (await ensureAreaSession(areaId, accessTokenGetter)).threadId;
     const stream = client.runs.stream(threadId, assistantId, {
       input: {
         area_id: areaId,
         question,
-        thinking_mode: Boolean(options?.thinkingMode),
         messages: [
           {
             role: "user",
@@ -677,6 +1024,7 @@ async function streamAreaThreadChatInternal(
       }
     }
     if (pendingCompletion) {
+      touchAreaSession(areaId, threadId);
       logChatStreamDebug(streamStartedAt, "completion_commit", {
         answerLength: pendingCompletion.answer.length,
         referencesCount: pendingCompletion.references.length,
@@ -690,9 +1038,12 @@ async function streamAreaThreadChatInternal(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (allowRetry && message.includes("Thread or assistant not found")) {
-      clearAreaThreadId(areaId);
+      const activeThreadId = getActiveAreaSessionId(areaId);
+      if (activeThreadId) {
+        removeAreaSession(areaId, activeThreadId);
+      }
       clearAssistantId();
-      await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, false, options);
+      await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, false);
       return;
     }
     throw error;

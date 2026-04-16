@@ -50,6 +50,18 @@ export interface AuthSessionState {
   principal: AuthContextPayload | null;
 }
 
+/** 前端 area chat session 摘要。 */
+export interface ChatSessionSummary {
+  /** LangGraph thread 識別碼。 */
+  threadId: string;
+  /** 前端顯示用 session 標題。 */
+  title: string;
+  /** session 建立時間。 */
+  createdAt: string;
+  /** 最近一次互動時間。 */
+  updatedAt: string;
+}
+
 /** Chat 的可選思考模式。 */
 export type ChatSynthesisMode = "disabled" | "summary_compare";
 
@@ -722,8 +734,6 @@ export interface ChatMessageViewModel {
   isError: boolean;
   /** 本輪是否使用知識庫 references。 */
   usedKnowledgeBase: boolean | null;
-  /** 本輪是否啟用 thinking mode。 */
-  thinkingMode?: boolean | null;
   /** 本輪使用的 synthesis mode。 */
   synthesisMode?: ChatSynthesisMode | null;
   /** 目前被選取的 citation context。 */

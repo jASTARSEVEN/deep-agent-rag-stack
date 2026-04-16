@@ -174,7 +174,7 @@
 - **一頁式戰情室 (Dashboard) UI 重構 (已完成)**
 - LangGraph Server 啟動與 `langgraph.json`
 - LangGraph built-in thread/run 與 custom auth
-- LangGraph SDK 前端 transport 與 `area_id -> thread_id` 多輪 thread UX
+- LangGraph SDK 前端 transport 與 area-scoped 多 session thread UX
 - Deep Agents 主 agent + 單一 `retrieve_area_contexts` tool
 - assembled-context level citations / references contract
 - `messages-tuple`、`custom`、`values` stream contract
