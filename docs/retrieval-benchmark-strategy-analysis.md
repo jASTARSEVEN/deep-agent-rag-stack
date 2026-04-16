@@ -1,4 +1,4 @@
-# Retrieval Benchmark Strategy Analysis（截至 2026-04-13）
+# Retrieval Benchmark Strategy Analysis（截至 2026-04-16）
 
 ## 文件目的
 
@@ -85,6 +85,48 @@
 3. `CoCoTrip` 目前主分數仍是 `0.0`。這不是因為技術性 judge 錯誤沒有排除，而是排除後仍維持 `0.0`，因此目前真正的問題在 compare answer quality 本身，而不是 benchmark 執行故障。
 4. `CoCoTrip` 原始 package run 雖有 `2` 題 `judge_failed`，但將 `cocotrip-compare-3` 與 `cocotrip-compare-9` 拉出來單獨 rerun 後，兩題都變成 `partial=false`，且 pairwise verdict 仍為 `reference`。所以 `0.0` 應視為目前真實 compare 基線，而不是暫時性執行噪音。
 5. `qafacteval_score` 仍未正式接線，因此這輪 summary package 分數仍主要反映 `BERTScore` 相似度，不代表 groundedness guardrail 已完整成立。
+
+### 2026-04-16 CoCoTrip Compare Rerun 觀測更新
+
+`2026-04-16` 另外補跑了一輪 `cocotrip-compare-curated-pilot-v1`，本輪使用：
+
+- `CHAT_PROVIDER=deepagents`
+- `CHAT_MODEL=gpt-5.4`
+- `CHAT_AGENTIC_ENABLED=true`
+- judge 改為 `Codex CLI / offline-codex`
+
+對應 artifact：
+
+- `artifacts/cocotrip-compare-curated-pilot-v1-defaults-codex-cli-rerun-2026-04-16.json`
+- `artifacts/cocotrip-compare-curated-pilot-v1-defaults-codex-cli-rerun-2026-04-16.md`
+- `artifacts/cocotrip-compare-curated-pilot-v1-defaults-codex-cli-rerun-2026-04-16-judge-packets.jsonl`
+- `artifacts/cocotrip-compare-curated-pilot-v1-defaults-codex-cli-rerun-2026-04-16-judge-decisions.jsonl`
+
+本輪結果：
+
+| Package | Family | Main Metric | Score | Judge | 備註 |
+| --- | --- | --- | ---: | --- | --- |
+| `cocotrip-compare-curated-pilot-v1` | `compare` | `pairwise_rubric_judge_win_rate` | `0.100000` | `offline-codex` | `candidate=1`、`reference=9` |
+
+本輪 supporting 指標：
+
+- `required_document_coverage = 1.0`
+- `citation_coverage = 1.0`
+- `section_coverage = 0.0`
+- `avg_overall_score = 3.775`
+
+判讀：
+
+1. 這輪分數明確高於 `2026-04-13` consolidated baseline 中 `CoCoTrip = 0.0` 的結果，表示在目前 `deepagents + gpt-5.4 + agentic=true` 主線下，compare answer 品質已經比舊 baseline 有實質改善。
+2. 但 `candidate=1 / reference=9` 也顯示，目前 `Codex CLI` judge 仍明顯偏好更貼近 reference summary wording、且更嚴格受 citation 約束的答案形狀。
+3. 從本輪 decision JSONL 觀察，`candidate` 最常見的扣分點不是 retrieval miss，而是 `faithfulness_to_citations` 偏低：答案雖然通常覆蓋到主要比較軸，但常把多個 citation 訊號抽象化為更強的整體結論，或加入 citation 未直接明示的設施 / 體驗 / 評價。
+4. 因此，這輪結果不應解讀成「compare answer 失敗」，而應解讀成：目前主線答案內容對人類讀者已可接受，甚至在實際閱讀體驗上可能已達可用；只是 `Codex CLI` judge 對 `oracle-style wording` 與 `strict evidence faithfulness` 的偏好，仍會讓 `reference` 在 pairwise 判定上佔優。
+5. 後續若要再繼續優化 `CoCoTrip`，最高 ROI 仍不是擴大 retrieval，而是進一步收緊 compare synthesis：減少 citation 未明示的抽象化結論、共通點只保留雙邊可直接支持的交集、並讓最終句型更貼近 benchmark reference 的對照格式。
+
+基線治理補充：
+
+- 這輪 `2026-04-16` rerun 目前先視為 `CoCoTrip` compare lane 的最新觀測輸出與分析依據。
+- 除非後續文件明確升格，否則本文件前面列的 `2026-04-13` package-level consolidated baseline 仍維持 canonical before / after 基線身份，不因單一 `CoCoTrip` rerun 自動改寫整條 suite baseline。
 
 ### 評分方法與欄位解讀
 

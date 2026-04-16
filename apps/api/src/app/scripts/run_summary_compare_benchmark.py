@@ -15,7 +15,10 @@ from app.services.summary_compare_benchmark import (
     run_summary_compare_benchmark_from_offline_packets,
     write_summary_compare_benchmark_artifacts,
 )
-from app.services.summary_compare_offline_judge import write_offline_judge_packets
+from app.services.summary_compare_offline_judge import (
+    run_codex_cli_on_offline_judge_packets,
+    write_offline_judge_packets,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -35,9 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--judge-model", default=None, help="覆寫預設 judge model。")
     parser.add_argument(
         "--judge-mode",
-        choices=("openai", "offline-export", "offline-import"),
-        default="openai",
-        help="judge 模式：openai、離線匯出 packet、或從離線結果匯入。",
+        choices=("openai", "offline-export", "offline-import", "codex-cli"),
+        default="codex-cli",
+        help="judge 模式：openai、離線匯出 packet、從離線結果匯入，或直接用 Codex CLI 執行離線 judge。",
     )
     parser.add_argument(
         "--judge-packets-path",
@@ -47,7 +50,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--judge-results-path",
         default=None,
-        help="離線 judge 回填結果 JSONL 路徑；僅 offline-import 需要。",
+        help="離線 judge 回填結果 JSONL 路徑；offline-import 需要，codex-cli 可選。",
+    )
+    parser.add_argument(
+        "--codex-cli-bin",
+        default="codex",
+        help="`judge-mode=codex-cli` 時使用的 Codex CLI 執行檔。",
+    )
+    parser.add_argument(
+        "--codex-cli-model",
+        default="gpt-5.4",
+        help="`judge-mode=codex-cli` 時使用的 Codex CLI judge 模型。",
     )
     parser.add_argument(
         "--max-parallel-workers",
@@ -111,6 +124,71 @@ def main() -> None:
                         "benchmark_name": suite_manifest.benchmark_name,
                         "judge_packets_path": str(packet_path),
                         "packet_count": len(packets),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        if args.judge_mode == "codex-cli":
+            output_path = Path(args.output_path).resolve()
+            packet_path = (
+                Path(args.judge_packets_path).resolve()
+                if args.judge_packets_path
+                else output_path.with_name(f"{output_path.stem}-judge-packets.jsonl")
+            )
+            decision_path = (
+                Path(args.judge_results_path).resolve()
+                if args.judge_results_path
+                else output_path.with_name(f"{output_path.stem}-judge-decisions.jsonl")
+            )
+            suite_manifest, _, packets = export_summary_compare_benchmark_offline_packets(
+                session=session,
+                settings=settings,
+                area_id=args.area_id,
+                actor_sub=args.actor_sub,
+                dataset_dir=Path(args.dataset_dir).resolve(),
+                judge_label=args.judge_model or "offline-codex",
+                max_parallel_workers=args.max_parallel_workers,
+            )
+            packet_path = write_offline_judge_packets(
+                packets=packets,
+                output_path=packet_path,
+            )
+            decision_path = run_codex_cli_on_offline_judge_packets(
+                packet_path=packet_path,
+                output_path=decision_path,
+                working_directory=Path.cwd(),
+                codex_cli_bin=args.codex_cli_bin,
+                codex_cli_model=args.codex_cli_model,
+                max_parallel_workers=args.max_parallel_workers,
+                progress_reporter=report_progress,
+            )
+            report = run_summary_compare_benchmark_from_offline_packets(
+                settings=settings,
+                area_id=args.area_id,
+                actor_sub=args.actor_sub,
+                dataset_dir=Path(args.dataset_dir).resolve(),
+                judge_packets_path=packet_path,
+                judge_results_path=decision_path,
+                judge_label=args.judge_model or "offline-codex",
+            )
+            json_path, markdown_path = write_summary_compare_benchmark_artifacts(
+                report=report,
+                output_path=output_path,
+            )
+            print(
+                json.dumps(
+                    {
+                        "mode": args.judge_mode,
+                        "benchmark_name": suite_manifest.benchmark_name,
+                        "judge_packets_path": str(packet_path),
+                        "judge_results_path": str(decision_path),
+                        "json_report_path": str(json_path),
+                        "markdown_summary_path": str(markdown_path),
+                        "summary_benchmark_score": report.task_family_scores["summary_benchmark_score"].model_dump(mode="json"),
+                        "compare_benchmark_score": report.task_family_scores["compare_benchmark_score"].model_dump(mode="json"),
+                        "parallel_workers": report.execution.parallel_workers,
                     },
                     ensure_ascii=False,
                 )

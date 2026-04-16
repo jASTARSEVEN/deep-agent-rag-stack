@@ -28,7 +28,7 @@ MAX_EVIDENCE_CUE_CHARS = 220
 COMPARE_ANSWER_TEMPLATE = [
     "先逐一說明每份文件的直接證據與立場。",
     "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
-    "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
+    "若目前已具備雙邊直接證據，直接完成比較，不要加入 required documents 或 tool coverage 狀態前言；只有真的缺少其中一方證據時，才簡短說明證據不足。",
 ]
 
 

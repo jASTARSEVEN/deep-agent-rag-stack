@@ -72,6 +72,9 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.assembler_max_contexts == 9
     assert settings.assembler_max_chars_per_context == 3000
     assert settings.assembler_max_children_per_parent == 7
+    assert settings.chat_provider == "deepagents"
+    assert settings.chat_model == "gpt-5.4"
+    assert settings.chat_agentic_enabled is True
     assert settings.chat_agentic_max_tool_calls_per_turn == 6
     assert settings.chat_agentic_max_query_variant_chars == 160
     assert settings.summary_compare_eval_judge_model == "gpt-5.4-mini"

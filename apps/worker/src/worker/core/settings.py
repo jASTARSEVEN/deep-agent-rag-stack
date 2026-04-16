@@ -139,7 +139,7 @@ class WorkerSettings(BaseSettings):
     document_synopsis_max_output_chars: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_CHARS")] = 1600
     document_synopsis_max_output_tokens: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_MAX_OUTPUT_TOKENS")] = 2000
     document_synopsis_parallelism: Annotated[int, Field(alias="DOCUMENT_SYNOPSIS_PARALLELISM")] = 6
-    document_synopsis_reasoning_effort: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_REASONING_EFFORT")] = "minimal"
+    document_synopsis_reasoning_effort: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_REASONING_EFFORT")] = "low"
     document_synopsis_text_verbosity: Annotated[str, Field(alias="DOCUMENT_SYNOPSIS_TEXT_VERBOSITY")] = "low"
     @model_validator(mode="before")
     @classmethod

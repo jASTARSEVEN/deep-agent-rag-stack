@@ -75,7 +75,7 @@ def test_worker_settings_uses_defaults_for_empty_string_env_values() -> None:
     assert settings.document_synopsis_max_output_chars == 1600
     assert settings.document_synopsis_max_output_tokens == 2000
     assert settings.document_synopsis_parallelism == 6
-    assert settings.document_synopsis_reasoning_effort == "minimal"
+    assert settings.document_synopsis_reasoning_effort == "low"
     assert settings.document_synopsis_text_verbosity == "low"
     assert settings.opendataloader_use_struct_tree is True
     assert settings.opendataloader_quiet is True

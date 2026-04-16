@@ -244,6 +244,8 @@ def test_deep_agents_system_prompt_requires_split_retrieval_for_multiple_subject
 
     assert "有兩個以上主體" in DEEP_AGENTS_SYSTEM_PROMPT
     assert "分別為不同主體呼叫 `retrieve_area_contexts`" in DEEP_AGENTS_SYSTEM_PROMPT
+    assert "最終回答預設使用使用者提問語言" in DEEP_AGENTS_SYSTEM_PROMPT
+    assert "不要把 `required_document_names`、coverage gap、tool 狀態" in DEEP_AGENTS_SYSTEM_PROMPT
 
 
 def test_build_agent_input_messages_prefers_thread_history() -> None:
@@ -1912,7 +1914,7 @@ def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatc
     assert captured_tool_result["response_contract"]["compare_answer_template"] == [
         "先逐一說明每份文件的直接證據與立場。",
         "再整理共同點與差異；只有雙方都有直接證據時才能寫成共同點。",
-        "若任一 required document 缺少可支持比較的引用內容，必須明講目前引用內容不足以完成完整比較。",
+        "若目前已具備雙邊直接證據，直接完成比較，不要加入 required documents 或 tool coverage 狀態前言；只有真的缺少其中一方證據時，才簡短說明證據不足。",
     ]
     assert "coverage_signals" not in captured_tool_result["response_contract"]
 

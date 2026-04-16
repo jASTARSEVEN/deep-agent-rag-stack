@@ -48,7 +48,7 @@ LOGGER = logging.getLogger(__name__)
 # 回答中的 citation marker，例如 `[[C1]]` 或 `[[C1,C2]]`。
 CITATION_MARKER_PATTERN = re.compile(r"\[\[(?P<labels>C\d+(?:\s*,\s*C\d+)*)\]\]")
 # summary/compare 與一般 context answer 屬於低複雜度整理任務，固定採最小 reasoning effort。
-OPENAI_REASONING_EFFORT_MINIMAL = "minimal"
+OPENAI_REASONING_EFFORT = "low"
 
 
 @dataclass(slots=True)
@@ -960,7 +960,7 @@ def _resolve_openai_reasoning_effort(*, model_name: str) -> str | None:
     normalized = model_name.strip().lower()
     if normalized.startswith("gpt-5.4"):
         return None
-    return OPENAI_REASONING_EFFORT_MINIMAL
+    return OPENAI_REASONING_EFFORT
 
 
 def _count_assistant_turns(conversation_messages: list[object] | None) -> int:
