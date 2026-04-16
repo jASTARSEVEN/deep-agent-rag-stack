@@ -526,7 +526,7 @@ class DeepAgentsChatRuntime:
 
         def execute_retrieval_round(
             *,
-            query_variants: list[str] | None = None,
+            query_variant: str | None = None,
             document_handles: list[str] | None = None,
             inspect_synopsis_handles: list[str] | None = None,
             followup_reason: str | None = None,
@@ -534,7 +534,7 @@ class DeepAgentsChatRuntime:
             """執行單回合 retrieval，並更新全 turn 聚合狀態。
 
             參數：
-            - `query_variants`：本輪 follow-up 的 query variants。
+            - `query_variant`：本輪 follow-up 的單一 query variant。
             - `document_handles`：本輪限定的文件 handles。
             - `inspect_synopsis_handles`：本輪想查看 synopsis 的文件 handles。
             - `followup_reason`：本輪補查原因。
@@ -554,7 +554,7 @@ class DeepAgentsChatRuntime:
             tool_input = {
                 "area_id": area_id,
                 "question": question,
-                "query_variants": list(query_variants or []),
+                "query_variant": (query_variant or "").strip(),
                 "document_handles": list(document_handles or []),
                 "inspect_synopsis_handles": list(inspect_synopsis_handles or []),
                 "followup_reason": (followup_reason or "").strip(),
@@ -568,7 +568,7 @@ class DeepAgentsChatRuntime:
                 settings=settings,
                 area_id=area_id,
                 question=question,
-                query_variants=query_variants,
+                query_variant=query_variant,
                 document_handles=document_handles,
                 inspect_synopsis_handles=inspect_synopsis_handles,
                 followup_reason=followup_reason,
@@ -577,7 +577,7 @@ class DeepAgentsChatRuntime:
             retrieval_result = round_result
             retrieval_invoked = True
             tool_call_count += 1
-            if any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)):
+            if any((query_variant, document_handles, inspect_synopsis_handles, followup_reason)):
                 followup_call_count += 1
             synopsis_inspection_count += len(inspect_synopsis_handles or [])
             latency_budget_status = resolve_latency_budget_status()
@@ -587,7 +587,7 @@ class DeepAgentsChatRuntime:
                 last_agentic_stop_reason = "coverage_satisfied"
             elif tool_call_count >= settings.chat_agentic_max_tool_calls_per_turn:
                 last_agentic_stop_reason = "tool_call_limit_reached"
-            elif any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)) and new_context_count == 0:
+            elif any((query_variant, document_handles, inspect_synopsis_handles, followup_reason)) and new_context_count == 0:
                 last_agentic_stop_reason = "no_new_evidence"
             else:
                 last_agentic_stop_reason = "continue"
@@ -600,8 +600,8 @@ class DeepAgentsChatRuntime:
             )
             round_summary = {
                 "tool_call_index": tool_call_count,
-                "followup": bool(any((query_variants, document_handles, inspect_synopsis_handles, followup_reason))),
-                "query_variants": list(query_variants or []),
+                "followup": bool(any((query_variant, document_handles, inspect_synopsis_handles, followup_reason))),
+                "query_variant": (query_variant or "").strip(),
                 "scoped_document_count": len(document_handles or []),
                 "synopsis_inspection_count": len(inspect_synopsis_handles or []),
                 "new_context_count": new_context_count,
@@ -647,7 +647,7 @@ class DeepAgentsChatRuntime:
 
         @tool
         def retrieve_area_contexts(
-            query_variants: list[str] | None = None,
+            query_variant: str | None = None,
             document_handles: list[str] | None = None,
             inspect_synopsis_handles: list[str] | None = None,
             followup_reason: str | None = None,
@@ -655,30 +655,30 @@ class DeepAgentsChatRuntime:
             """回傳目前 area 與問題的 assembled contexts、planning signals 與 trace。
 
             參數：
-            - `query_variants`：agent follow-up 使用的 query variants。第一次呼叫通常不要提供；只有在需要換角度補查 compare / multi-document 缺口時才提供，且應保持少量。
+            - `query_variant`：agent follow-up 使用的單一 query variant。第一次呼叫通常不要提供；只有在需要換角度補查 compare / multi-document 缺口時才提供，且應保持明確簡短。
             - `document_handles`：agent follow-up 使用的文件 handles。當你已知缺的是特定文件 coverage，而不是整體查詢角度時，優先使用這個欄位縮小範圍。
             - `inspect_synopsis_handles`：要查看 synopsis hint 的文件 handles。只用於判斷下一步是否值得補查某份文件，不可把 synopsis hint 當成 citation 或最終結論。
-            - `followup_reason`：本次 follow-up 的簡短原因。只有在你真的要做第二次以上的補查時才提供；若沒有新的 `query_variants`、`document_handles` 或 `inspect_synopsis_handles`，不要再次呼叫同一工具。
+            - `followup_reason`：本次 follow-up 的簡短原因。只有在你真的要做第二次以上的補查時才提供；若沒有新的 `query_variant`、`document_handles` 或 `inspect_synopsis_handles`，不要再次呼叫同一工具。
 
             回傳：
             - `str`：序列化後的 assembled context 與 planning payload。第一次呼叫通常只讀 `assembled_contexts`；之後可根據 `planning_documents`、`next_best_followups`、`evidence_cue_texts`、`coverage_signals` 與可選 `synopsis_hints` 規劃 follow-up。
 
             Follow-up 決策規則：
             - 若 `next_best_followups` 非空，且你尚未達到工具或 budget 限制，通常應優先再呼叫一次 `retrieve_area_contexts`，而不是立刻收斂成「證據不足」回答。
-            - 若已知缺的是特定文件 coverage，優先使用 `document_handles`；若缺的是比較面向或提問角度，再使用少量 `query_variants`。
+            - 若已知缺的是特定文件 coverage，優先使用 `document_handles`；若缺的是比較面向或提問角度，再使用單一且明確的 `query_variant`。
             - 只有在 `loop_trace_delta.stop_reason` 已明確顯示無新證據、已達工具上限、已達 synopsis 檢視上限，或你無法提出新的 follow-up 參數時，才直接承認證據不足並結束。
 
             使用範例：
             - 第一次呼叫：`retrieve_area_contexts()`
             - 若缺少特定文件 coverage：`retrieve_area_contexts(document_handles=["<tool 回傳的 handle>"], followup_reason="補查缺少的文件直接證據")`
-            - 若缺少比較面向：`retrieve_area_contexts(query_variants=["理賠審核需要哪些核准條件"], followup_reason="補查 compare 缺少的審核面向")`
+            - 若缺少比較面向：`retrieve_area_contexts(query_variant="理賠審核需要哪些核准條件", followup_reason="補查 compare 缺少的審核面向")`
             - 若想先看 synopsis hint 再決定是否補查：`retrieve_area_contexts(inspect_synopsis_handles=["<tool 回傳的 handle>"], followup_reason="先看 synopsis 判斷是否值得補查")`
             """
 
             nonlocal last_agentic_stop_reason
             nonlocal latency_budget_status
 
-            followup_requested = bool(any((query_variants, document_handles, inspect_synopsis_handles, followup_reason)))
+            followup_requested = bool(any((query_variant, document_handles, inspect_synopsis_handles, followup_reason)))
             projected_synopsis_count = synopsis_inspection_count + len(inspect_synopsis_handles or [])
             if tool_call_count >= settings.chat_agentic_max_tool_calls_per_turn:
                 last_agentic_stop_reason = "tool_call_limit_reached"
@@ -698,7 +698,7 @@ class DeepAgentsChatRuntime:
                 return json.dumps(build_current_agent_payload(), ensure_ascii=False)
 
             execute_retrieval_round(
-                query_variants=query_variants,
+                query_variant=query_variant,
                 document_handles=document_handles,
                 inspect_synopsis_handles=inspect_synopsis_handles,
                 followup_reason=followup_reason,
@@ -958,7 +958,7 @@ def _resolve_openai_reasoning_effort(*, model_name: str) -> str | None:
     """
 
     normalized = model_name.strip().lower()
-    if normalized.startswith("gpt-5.4-mini"):
+    if normalized.startswith("gpt-5.4"):
         return None
     return OPENAI_REASONING_EFFORT_MINIMAL
 

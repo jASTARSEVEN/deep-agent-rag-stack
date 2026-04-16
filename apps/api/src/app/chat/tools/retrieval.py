@@ -122,7 +122,7 @@ def retrieve_area_contexts_tool(
     task_type: EvaluationQueryType | str | None = None,
     document_scope: DocumentScope | str | None = None,
     summary_strategy: SummaryStrategy | str | None = None,
-    query_variants: list[str] | tuple[str, ...] | None = None,
+    query_variant: str | None = None,
     document_handles: list[str] | tuple[str, ...] | None = None,
     inspect_synopsis_handles: list[str] | tuple[str, ...] | None = None,
     followup_reason: str | None = None,
@@ -138,7 +138,7 @@ def retrieve_area_contexts_tool(
     - `task_type`：可選的任務類型提示；不提供時由後端自動 routing。
     - `document_scope`：可選的文件範圍提示；不得攜帶 document ids，實際 ids 仍由後端解析。
     - `summary_strategy`：可選的摘要策略提示；只在 `document_summary` 下有效。
-    - `query_variants`：agent follow-up 使用的有限 query variants。
+    - `query_variant`：agent follow-up 使用的單一 query variant。
     - `document_handles`：agent follow-up 使用的安全文件 handles。
     - `inspect_synopsis_handles`：要查看 synopsis hint 的安全文件 handles。
     - `followup_reason`：本次 follow-up 的簡短原因。
@@ -159,7 +159,7 @@ def retrieve_area_contexts_tool(
         task_type=task_type,
         document_scope=document_scope,
         summary_strategy=summary_strategy,
-        query_variants=query_variants,
+        query_variant=query_variant,
         document_handles=document_handles,
         inspect_synopsis_handles=inspect_synopsis_handles,
         followup_reason=followup_reason,
@@ -177,7 +177,7 @@ def _retrieve_area_contexts_internal(
     task_type: EvaluationQueryType | str | None = None,
     document_scope: DocumentScope | str | None = None,
     summary_strategy: SummaryStrategy | str | None = None,
-    query_variants: list[str] | tuple[str, ...] | None = None,
+    query_variant: str | None = None,
     document_handles: list[str] | tuple[str, ...] | None = None,
     inspect_synopsis_handles: list[str] | tuple[str, ...] | None = None,
     followup_reason: str | None = None,
@@ -194,7 +194,7 @@ def _retrieve_area_contexts_internal(
     - `task_type`：可選的任務類型提示。
     - `document_scope`：可選的文件範圍提示。
     - `summary_strategy`：可選的摘要策略提示。
-    - `query_variants`：agent follow-up 使用的 query variants。
+    - `query_variant`：agent follow-up 使用的單一 query variant。
     - `document_handles`：agent follow-up 使用的安全文件 handles。
     - `inspect_synopsis_handles`：要求檢視 synopsis hint 的安全文件 handles。
     - `followup_reason`：本次 follow-up 的簡短原因。
@@ -217,8 +217,8 @@ def _retrieve_area_contexts_internal(
         for document in authorized_ready_documents
     }
     authorized_document_ids = tuple(document_name_by_id.keys())
-    normalized_query_variants = _normalize_query_variants(
-        query_variants=query_variants,
+    normalized_query_variant = _normalize_query_variant(
+        query_variant=query_variant,
         settings=settings,
     )
     scoped_document_ids = _resolve_document_handles(
@@ -232,7 +232,7 @@ def _retrieve_area_contexts_internal(
         settings=settings,
         max_items=settings.chat_agentic_max_synopsis_inspections_per_turn,
     )
-    effective_query = normalized_query_variants[0] if normalized_query_variants else question
+    effective_query = normalized_query_variant or question
     explicit_query_type = _coerce_optional_query_type(task_type=task_type)
     retrieval_result = retrieve_area_candidates(
         session=session,
@@ -293,7 +293,7 @@ def _retrieve_area_contexts_internal(
         loop_trace_delta={
             "base_question": question,
             "effective_query": effective_query,
-            "query_variants": list(normalized_query_variants),
+            "query_variant": normalized_query_variant or "",
             "scoped_document_ids": list(scoped_document_ids or ()),
             "inspect_synopsis_document_ids": list(synopsis_document_ids or ()),
             "followup_reason": (followup_reason or "").strip(),
@@ -454,11 +454,6 @@ def build_agent_response_contract_payload(
         "task_type": EvaluationQueryType.cross_document_compare.value,
         "required_document_names": required_document_names,
         "compare_answer_template": list(COMPARE_ANSWER_TEMPLATE),
-        "coverage_signals": (
-            asdict(retrieval_result.coverage_signals)
-            if retrieval_result.coverage_signals is not None
-            else None
-        ),
     }
 
 
@@ -728,35 +723,28 @@ def _load_authorized_ready_documents(
     )
 
 
-def _normalize_query_variants(
+def _normalize_query_variant(
     *,
-    query_variants: list[str] | tuple[str, ...] | None,
+    query_variant: str | None,
     settings: AppSettings,
-) -> tuple[str, ...]:
-    """清理並限制 agent follow-up 的 query variants。
+) -> str | None:
+    """清理並限制 agent follow-up 的單一 query variant。
 
     參數：
-    - `query_variants`：原始 query variants。
+    - `query_variant`：原始 query variant。
     - `settings`：應用程式設定。
 
     回傳：
-    - `tuple[str, ...]`：正規化後的 query variants。
+    - `str | None`：正規化後的單一 query variant；若未提供則回傳空值。
     """
 
-    if not query_variants:
-        return ()
+    if query_variant is None:
+        return None
 
-    normalized: list[str] = []
-    for raw_variant in query_variants:
-        variant = str(raw_variant).strip()
-        if not variant:
-            continue
-        clipped_variant = variant[: settings.chat_agentic_max_query_variant_chars]
-        if clipped_variant not in normalized:
-            normalized.append(clipped_variant)
-    if len(normalized) > settings.chat_agentic_max_query_variants_per_call:
-        raise ValueError("query_variants 超出單次 tool call 允許上限。")
-    return tuple(normalized)
+    normalized = str(query_variant).strip()
+    if not normalized:
+        return None
+    return normalized[: settings.chat_agentic_max_query_variant_chars]
 
 
 def _resolve_document_handles(

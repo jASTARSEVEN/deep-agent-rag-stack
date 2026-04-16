@@ -35,6 +35,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
         ASSEMBLER_MAX_CONTEXTS="",
         ASSEMBLER_MAX_CHARS_PER_CONTEXT="",
         ASSEMBLER_MAX_CHILDREN_PER_PARENT="",
+        CHAT_AGENTIC_MAX_TOOL_CALLS_PER_TURN="",
+        CHAT_AGENTIC_MAX_QUERY_VARIANT_CHARS="",
         SUMMARY_COMPARE_EVAL_JUDGE_MODEL="",
         SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS="",
         SUMMARY_COMPARE_EVAL_MAX_TOTAL_TOKENS_PER_ITEM="",
@@ -70,6 +72,8 @@ def test_app_settings_uses_defaults_for_empty_string_env_values(monkeypatch) -> 
     assert settings.assembler_max_contexts == 9
     assert settings.assembler_max_chars_per_context == 3000
     assert settings.assembler_max_children_per_parent == 7
+    assert settings.chat_agentic_max_tool_calls_per_turn == 6
+    assert settings.chat_agentic_max_query_variant_chars == 160
     assert settings.summary_compare_eval_judge_model == "gpt-5.4-mini"
     assert settings.summary_compare_eval_max_p95_latency_seconds == 30.0
     assert settings.summary_compare_eval_max_total_tokens_per_item == 12000

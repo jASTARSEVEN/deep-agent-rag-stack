@@ -53,7 +53,6 @@ EMPTY_STRING_ENV_KEYS = {
     "CHAT_STREAM_DEBUG",
     "CHAT_AGENTIC_ENABLED",
     "CHAT_AGENTIC_MAX_TOOL_CALLS_PER_TURN",
-    "CHAT_AGENTIC_MAX_QUERY_VARIANTS_PER_CALL",
     "CHAT_AGENTIC_MAX_QUERY_VARIANT_CHARS",
     "CHAT_AGENTIC_MAX_SCOPED_DOCUMENTS_PER_CALL",
     "CHAT_AGENTIC_MAX_SYNOPSIS_INSPECTIONS_PER_TURN",
@@ -174,13 +173,10 @@ class AppSettings(BaseSettings):
     chat_include_trace: Annotated[bool, Field(alias="CHAT_INCLUDE_TRACE")] = False
     chat_stream_chunk_size: Annotated[int, Field(alias="CHAT_STREAM_CHUNK_SIZE")] = 64
     chat_stream_debug: Annotated[bool, Field(alias="CHAT_STREAM_DEBUG")] = False
-    chat_agentic_enabled: Annotated[bool, Field(alias="CHAT_AGENTIC_ENABLED")] = False
+    chat_agentic_enabled: Annotated[bool, Field(alias="CHAT_AGENTIC_ENABLED")] = True
     chat_agentic_max_tool_calls_per_turn: Annotated[
         int, Field(alias="CHAT_AGENTIC_MAX_TOOL_CALLS_PER_TURN")
-    ] = 3
-    chat_agentic_max_query_variants_per_call: Annotated[
-        int, Field(alias="CHAT_AGENTIC_MAX_QUERY_VARIANTS_PER_CALL")
-    ] = 2
+    ] = 6
     chat_agentic_max_query_variant_chars: Annotated[
         int, Field(alias="CHAT_AGENTIC_MAX_QUERY_VARIANT_CHARS")
     ] = 160
