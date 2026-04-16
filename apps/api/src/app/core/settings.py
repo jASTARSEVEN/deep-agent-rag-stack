@@ -58,6 +58,7 @@ EMPTY_STRING_ENV_KEYS = {
     "CHAT_AGENTIC_MAX_SYNOPSIS_INSPECTIONS_PER_TURN",
     "CHAT_AGENTIC_TARGET_LATENCY_SECONDS",
     "CHAT_AGENTIC_MAX_LATENCY_SECONDS",
+    "LANGGRAPH_API_URL",
     "SUMMARY_COMPARE_EVAL_JUDGE_MODEL",
     "SUMMARY_COMPARE_EVAL_MAX_P95_LATENCY_SECONDS",
     "SUMMARY_COMPARE_EVAL_MAX_TOTAL_TOKENS_PER_ITEM",
@@ -203,6 +204,7 @@ class AppSettings(BaseSettings):
         float, Field(alias="SUMMARY_COMPARE_EVAL_PASS_MIN_AVG_SCORE")
     ] = 4.2
     langgraph_service_port: Annotated[int, Field(alias="LANGGRAPH_SERVICE_PORT")] = 8000
+    langgraph_api_url: Annotated[str, Field(alias="LANGGRAPH_API_URL")] = "http://127.0.0.1:8000"
     langsmith_tracing: Annotated[bool, Field(alias="LANGSMITH_TRACING")] = False
     langsmith_api_key: Annotated[str | None, Field(alias="LANGSMITH_API_KEY")] = None
     langsmith_project: Annotated[str, Field(alias="LANGSMITH_PROJECT")] = "deep-agent-rag-stack"

@@ -226,8 +226,8 @@ test("reader 可在同一 area 開新 session 並切回既有 session", async ({
   const originalSessionId = await page.getByTestId("chat-session-select").inputValue();
 
   await page.getByTestId("chat-new-session").click();
+  await expect.poll(async () => page.getByTestId("chat-session-select").inputValue()).not.toBe(originalSessionId);
   const newSessionId = await page.getByTestId("chat-session-select").inputValue();
-  expect(newSessionId).not.toBe(originalSessionId);
   await expect(page.getByTestId("chat-message-user")).toHaveCount(0);
   await expect(page.getByTestId("chat-message-assistant")).toHaveCount(0);
 

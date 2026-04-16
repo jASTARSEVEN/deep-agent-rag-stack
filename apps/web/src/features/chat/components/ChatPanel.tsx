@@ -12,6 +12,7 @@ import type {
 } from "../../../lib/types";
 import { applyStreamUpdate, createAssistantMessage, createUserMessage, updateLastAssistantMessage } from "../state/messages";
 import {
+  clearActiveAreaSessionId,
   createAreaSession,
   ensureAreaSession,
   getActiveAreaSessionId,
@@ -115,9 +116,18 @@ export function ChatPanel({
    * @param nextAreaId 目標 area 識別碼。
    * @returns 無；僅更新元件狀態。
    */
-  function syncChatSessions(nextAreaId: string): void {
-    setChatSessions(listAreaSessions(nextAreaId));
-    setActiveSessionId(getActiveAreaSessionId(nextAreaId));
+  async function syncChatSessions(nextAreaId: string): Promise<void> {
+    const nextSessions = await listAreaSessions(nextAreaId);
+    let nextActiveSessionId = getActiveAreaSessionId(nextAreaId);
+    if ((!nextActiveSessionId || !nextSessions.some((session) => session.threadId === nextActiveSessionId)) && nextSessions[0]) {
+      setActiveAreaSessionId(nextAreaId, nextSessions[0].threadId);
+      nextActiveSessionId = nextSessions[0].threadId;
+    } else if (!nextSessions.some((session) => session.threadId === nextActiveSessionId)) {
+      clearActiveAreaSessionId(nextAreaId);
+      nextActiveSessionId = null;
+    }
+    setChatSessions(nextSessions);
+    setActiveSessionId(nextActiveSessionId);
   }
 
   /**
@@ -153,20 +163,20 @@ export function ChatPanel({
     }
 
     let isActive = true;
-    syncChatSessions(areaId);
-    void loadAreaThreadHistory(areaId, accessTokenGetter)
+    void syncChatSessions(areaId)
+      .then(() => loadAreaThreadHistory(areaId, accessTokenGetter))
       .then((historyMessages) => {
         if (!isActive) {
           return;
         }
         setChatMessages(mapHistoryMessagesToViewModels(historyMessages));
-        syncChatSessions(areaId);
+        void syncChatSessions(areaId);
       })
       .catch((historyError) => {
         if (!isActive) {
           return;
         }
-        syncChatSessions(areaId);
+        void syncChatSessions(areaId);
         const errorMessage = historyError instanceof Error ? historyError.message : "無法載入對話歷史。";
         setChatMessages([]);
         onError(errorMessage);
@@ -191,10 +201,10 @@ export function ChatPanel({
     setIsCreatingSession(true);
     onError(null);
     try {
-      const nextSession = await createAreaSession(areaId, accessTokenGetter);
+      const nextSession = await createAreaSession(areaId);
       setChatMessages([]);
       clearPreviewSelection();
-      syncChatSessions(areaId);
+      await syncChatSessions(areaId);
       setActiveSessionId(nextSession.threadId);
     } catch (error) {
       onError(error instanceof Error ? error.message : "無法建立新 session。");
@@ -222,11 +232,11 @@ export function ChatPanel({
     onError(null);
     setChatMessages([]);
     clearPreviewSelection();
-    syncChatSessions(areaId);
+    await syncChatSessions(areaId);
     try {
       const historyMessages = await loadAreaThreadHistory(areaId, accessTokenGetter);
       setChatMessages(mapHistoryMessagesToViewModels(historyMessages));
-      syncChatSessions(areaId);
+      await syncChatSessions(areaId);
     } catch (error) {
       onError(error instanceof Error ? error.message : "無法切換 session。");
     }
@@ -296,11 +306,15 @@ export function ChatPanel({
     isChatSubmitLockedRef.current = true;
     setIsSubmittingChat(true);
 
+    let shouldRenameSessionAfterFirstAnswer = false;
     try {
-      const activeSession = await ensureAreaSession(areaId, accessTokenGetter);
-      seedAreaSessionTitleFromQuestion(areaId, activeSession.threadId, trimmedQuestion);
-      syncChatSessions(areaId);
+      const nextSessionTitle = trimmedQuestion.replace(/\s+/g, " ").trim();
+      const activeSession = await ensureAreaSession(areaId, {
+        titleOnCreate: nextSessionTitle,
+      });
       setActiveSessionId(activeSession.threadId);
+      shouldRenameSessionAfterFirstAnswer = activeSession.title === "新對話";
+      await syncChatSessions(areaId);
       setChatQuestion(EMPTY_CHAT_INPUT);
       setChatMessages((current) => [...current, createUserMessage(trimmedQuestion), createAssistantMessage()]);
 
@@ -312,6 +326,15 @@ export function ChatPanel({
           setChatMessages((current) => applyStreamUpdate(current, streamUpdate));
         },
       );
+
+      if (shouldRenameSessionAfterFirstAnswer) {
+        try {
+          await seedAreaSessionTitleFromQuestion(areaId, activeSession.threadId, trimmedQuestion);
+          await syncChatSessions(areaId);
+        } catch {
+          // session metadata 正式保存失敗時，不應阻擋本輪實際對話。
+        }
+      }
     } catch (streamError) {
       const errorMessage = streamError instanceof Error ? streamError.message : "chat 失敗。";
       setChatMessages((current) =>
@@ -331,7 +354,7 @@ export function ChatPanel({
     } finally {
       isChatSubmitLockedRef.current = false;
       setIsSubmittingChat(false);
-      syncChatSessions(areaId);
+      await syncChatSessions(areaId);
     }
   }
 

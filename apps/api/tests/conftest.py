@@ -86,6 +86,7 @@ def app_settings(tmp_path: Path) -> AppSettings:
         CHAT_INCLUDE_TRACE=True,
         CHAT_STREAM_CHUNK_SIZE=24,
         LANGGRAPH_SERVICE_PORT=18000,
+        LANGGRAPH_API_URL="http://127.0.0.1:18000",
         KEYCLOAK_URL="http://keycloak:8080",
         KEYCLOAK_ISSUER="http://localhost:18080/realms/deep-agent-dev",
         KEYCLOAK_JWKS_URL="http://keycloak:8080/realms/deep-agent-dev/protocol/openid-connect/certs",

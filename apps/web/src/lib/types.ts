@@ -62,6 +62,12 @@ export interface ChatSessionSummary {
   updatedAt: string;
 }
 
+/** 指定 area 目前使用者可見的 chat session 清單。 */
+export interface ChatSessionListPayload {
+  /** 依最近使用時間排序的 chat sessions。 */
+  items: ChatSessionSummary[];
+}
+
 /** Chat 的可選思考模式。 */
 export type ChatSynthesisMode = "disabled" | "summary_compare";
 

@@ -2,7 +2,13 @@
 
 import { Client } from "@langchain/langgraph-sdk";
 
-import type { AccessTokenGetter } from "../../../lib/api";
+import {
+  deleteAreaChatSession,
+  fetchAreaChatSessions,
+  registerAreaChatSession,
+  type AccessTokenGetter,
+  updateAreaChatSession,
+} from "../../../lib/api";
 import { appConfig } from "../../../lib/config";
 import type {
   ChatAnswerBlock,
@@ -16,8 +22,10 @@ import { resolveAnswerBlocks } from "../state/answerBlocks";
 
 /** 舊版前端 session storage 使用的 area-thread mapping key。 */
 const LEGACY_AREA_THREAD_STORAGE_KEY = "deep-agent.langgraph.area-threads";
-/** 新版前端 session storage 使用的 area-sessions mapping key。 */
-const AREA_SESSION_STORAGE_KEY = "deep-agent.langgraph.area-sessions";
+/** 舊版前端 session storage 使用的 area-sessions metadata key。 */
+const LEGACY_AREA_SESSION_STORAGE_KEY = "deep-agent.langgraph.area-sessions";
+/** 目前前端 session storage 使用的 area-active-thread mapping key。 */
+const ACTIVE_AREA_THREAD_STORAGE_KEY = "deep-agent.langgraph.active-area-threads";
 /** 前端 session storage 使用的 LangGraph assistant id key。 */
 const ASSISTANT_ID_STORAGE_KEY = "deep-agent.langgraph.assistant-id";
 /** 新建 session 的預設標題。 */
@@ -98,16 +106,8 @@ interface StoredAreaSession {
   updatedAt: string;
 }
 
-/** session storage 內單一 area 的 session 狀態。 */
-interface StoredAreaSessionState {
-  /** 目前啟用中的 LangGraph thread 識別碼。 */
-  activeThreadId: string | null;
-  /** 此 area 內所有可切換的 session。 */
-  sessions: StoredAreaSession[];
-}
-
-/** session storage 內 area -> sessions 的持久化格式。 */
-type StoredAreaSessionMap = Record<string, StoredAreaSessionState>;
+/** session storage 內 area -> active thread 的持久化格式。 */
+type StoredAreaThreadMap = Record<string, string>;
 
 /** 正式 token 串流來源；`custom` 僅承載 phase 與 tool_call 等產品事件。 */
 const PRIMARY_TOKEN_STREAM_EVENT = "messages-tuple";
@@ -341,90 +341,24 @@ function normalizeStoredAreaSession(value: unknown): StoredAreaSession | null {
 
 
 /**
- * 將 area session state 正規化為可安全持久化的格式。
+ * 從 session storage 讀取 area-active-thread mapping。
  *
- * @param value 待檢查的未知資料。
- * @returns 正規化後的 area session state。
+ * @returns area -> active thread 的對應表。
  */
-function normalizeStoredAreaSessionState(value: unknown): StoredAreaSessionState {
-  if (!isRecord(value)) {
-    return { activeThreadId: null, sessions: [] };
-  }
-  const sessions = Array.isArray(value.sessions)
-    ? value.sessions
-        .map((session) => normalizeStoredAreaSession(session))
-        .filter((session): session is StoredAreaSession => session !== null)
-    : [];
-  const dedupedSessions = [...new Map(sessions.map((session) => [session.threadId, session])).values()]
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  const activeThreadId =
-    typeof value.activeThreadId === "string" && dedupedSessions.some((session) => session.threadId === value.activeThreadId)
-      ? value.activeThreadId
-      : (dedupedSessions[0]?.threadId ?? null);
-  return {
-    activeThreadId,
-    sessions: dedupedSessions,
-  };
-}
-
-
-/**
- * 從舊版單一 thread storage 遷移為新版多 session 格式。
- *
- * @returns 遷移後的 area session map。
- */
-function migrateLegacyAreaThreadMap(): StoredAreaSessionMap {
-  const rawValue = window.sessionStorage.getItem(LEGACY_AREA_THREAD_STORAGE_KEY);
+function readActiveAreaThreadMap(): StoredAreaThreadMap {
+  const rawValue = window.sessionStorage.getItem(ACTIVE_AREA_THREAD_STORAGE_KEY);
   if (!rawValue) {
     return {};
   }
   try {
     const parsed = JSON.parse(rawValue) as Record<string, string>;
-    const now = new Date().toISOString();
-    const nextSessionMap = Object.fromEntries(
-      Object.entries(parsed)
-        .filter((entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[1].trim().length > 0)
-        .map(([areaId, threadId]) => [
-          areaId,
-          {
-            activeThreadId: threadId,
-            sessions: [
-              {
-                threadId,
-                title: "既有對話",
-                createdAt: now,
-                updatedAt: now,
-              },
-            ],
-          } satisfies StoredAreaSessionState,
-        ]),
-    );
-    window.sessionStorage.removeItem(LEGACY_AREA_THREAD_STORAGE_KEY);
-    window.sessionStorage.setItem(AREA_SESSION_STORAGE_KEY, JSON.stringify(nextSessionMap));
-    return nextSessionMap;
-  } catch {
-    return {};
-  }
-}
-
-
-/**
- * 從 session storage 讀取 area-sessions mapping。
- *
- * @returns area -> sessions 的正規化對應表。
- */
-function readAreaSessionMap(): StoredAreaSessionMap {
-  const rawValue = window.sessionStorage.getItem(AREA_SESSION_STORAGE_KEY);
-  if (!rawValue) {
-    return migrateLegacyAreaThreadMap();
-  }
-  try {
-    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
-    if (!isRecord(parsed)) {
+    if (!parsed || typeof parsed !== "object") {
       return {};
     }
     return Object.fromEntries(
-      Object.entries(parsed).map(([areaId, sessionState]) => [areaId, normalizeStoredAreaSessionState(sessionState)]),
+      Object.entries(parsed).filter(
+        (entry): entry is [string, string] => typeof entry[0] === "string" && typeof entry[1] === "string" && entry[1].trim().length > 0,
+      ),
     );
   } catch {
     return {};
@@ -433,59 +367,37 @@ function readAreaSessionMap(): StoredAreaSessionMap {
 
 
 /**
- * 將 area-sessions mapping 寫回 session storage。
+ * 將 area-active-thread mapping 寫回 session storage。
  *
- * @param sessionMap 要持久化的 area session map。
+ * @param threadMap 要持久化的 area -> active thread 對應表。
  * @returns 無；僅更新 session storage。
  */
-function saveAreaSessionMap(sessionMap: StoredAreaSessionMap): void {
-  window.sessionStorage.setItem(AREA_SESSION_STORAGE_KEY, JSON.stringify(sessionMap));
+function saveActiveAreaThreadMap(threadMap: StoredAreaThreadMap): void {
+  window.sessionStorage.setItem(ACTIVE_AREA_THREAD_STORAGE_KEY, JSON.stringify(threadMap));
 }
 
 
 /**
- * 取得單一 area 的 session state。
+ * 讀取指定 area 目前啟用中的 session 識別碼。
  *
  * @param areaId 目標 area 識別碼。
- * @returns 該 area 的 session state；若不存在則回傳空狀態。
+ * @returns 啟用中的 LangGraph thread id；若尚未建立則回傳 `null`。
  */
-function getAreaSessionState(areaId: string): StoredAreaSessionState {
-  return readAreaSessionMap()[areaId] ?? { activeThreadId: null, sessions: [] };
+export function getActiveAreaSessionId(areaId: string): string | null {
+  return readActiveAreaThreadMap()[areaId] ?? null;
 }
 
 
 /**
- * 以單一 area 為單位更新 session state。
+ * 清除指定 area 的本機 active thread 選取。
  *
  * @param areaId 目標 area 識別碼。
- * @param sessionState 更新後的 session state。
  * @returns 無；僅更新 session storage。
  */
-function saveAreaSessionState(areaId: string, sessionState: StoredAreaSessionState): void {
-  const nextSessionMap = readAreaSessionMap();
-  const normalizedState = normalizeStoredAreaSessionState(sessionState);
-  if (normalizedState.sessions.length === 0) {
-    delete nextSessionMap[areaId];
-  } else {
-    nextSessionMap[areaId] = normalizedState;
-  }
-  saveAreaSessionMap(nextSessionMap);
-}
-
-
-/**
- * 將單一持久化 session 轉為前端摘要型別。
- *
- * @param session 已持久化的 session。
- * @returns 前端顯示用摘要。
- */
-function toChatSessionSummary(session: StoredAreaSession): ChatSessionSummary {
-  return {
-    threadId: session.threadId,
-    title: session.title,
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
-  };
+export function clearActiveAreaSessionId(areaId: string): void {
+  const nextThreadMap = readActiveAreaThreadMap();
+  delete nextThreadMap[areaId];
+  saveActiveAreaThreadMap(nextThreadMap);
 }
 
 
@@ -524,19 +436,10 @@ function deriveSessionTitleFromQuestion(question: string): string {
  * @param areaId 目標 area 識別碼。
  * @returns 目前 area 內所有 session 摘要。
  */
-export function listAreaSessions(areaId: string): ChatSessionSummary[] {
-  return getAreaSessionState(areaId).sessions.map((session) => toChatSessionSummary(session));
-}
-
-
-/**
- * 讀取指定 area 目前啟用中的 session 識別碼。
- *
- * @param areaId 目標 area 識別碼。
- * @returns 啟用中的 LangGraph thread id；若尚未建立則回傳 `null`。
- */
-export function getActiveAreaSessionId(areaId: string): string | null {
-  return getAreaSessionState(areaId).activeThreadId;
+export async function listAreaSessions(areaId: string): Promise<ChatSessionSummary[]> {
+  await migrateLegacyAreaSessions(areaId);
+  const payload = await fetchAreaChatSessions(areaId);
+  return payload.items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 
@@ -545,86 +448,109 @@ export function getActiveAreaSessionId(areaId: string): string | null {
  *
  * @param areaId 目標 area 識別碼。
  * @param threadId 要切換的 LangGraph thread id。
- * @returns 若切換成功則回傳 `true`，否則回傳 `false`。
+ * @returns 永遠回傳 `true`；後端存在性由 caller 自行驗證。
  */
 export function setActiveAreaSessionId(areaId: string, threadId: string): boolean {
-  const currentState = getAreaSessionState(areaId);
-  if (!currentState.sessions.some((session) => session.threadId === threadId)) {
-    return false;
-  }
-  saveAreaSessionState(areaId, {
-    ...currentState,
-    activeThreadId: threadId,
-  });
+  const nextThreadMap = readActiveAreaThreadMap();
+  nextThreadMap[areaId] = threadId;
+  saveActiveAreaThreadMap(nextThreadMap);
   return true;
 }
 
 
 /**
- * 以 immutable 方式更新單一 area session 的 metadata。
+ * 讀取舊版 local area-sessions metadata，供一次性後端遷移使用。
+ *
+ * @returns 舊版 local metadata；無法解析時回傳空物件。
+ */
+function readLegacyAreaSessionMap(): Record<string, { activeThreadId: string | null; sessions: StoredAreaSession[] }> {
+  const rawValue = window.sessionStorage.getItem(LEGACY_AREA_SESSION_STORAGE_KEY);
+  if (!rawValue) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(rawValue) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed).map(([areaId, value]) => {
+        if (!isRecord(value)) {
+          return [areaId, { activeThreadId: null, sessions: [] }];
+        }
+        const sessions = Array.isArray(value.sessions)
+          ? value.sessions
+              .map((session) => normalizeStoredAreaSession(session))
+              .filter((session): session is StoredAreaSession => session !== null)
+          : [];
+        const activeThreadId = typeof value.activeThreadId === "string" ? value.activeThreadId : null;
+        return [areaId, { activeThreadId, sessions }];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+
+/**
+ * 將舊版 local metadata best-effort 註冊到後端，成功後移除舊 key。
  *
  * @param areaId 目標 area 識別碼。
- * @param threadId 目標 LangGraph thread id。
- * @param updater 接收目前 session 並回傳更新後 session 的函式。
- * @returns 無；僅更新 session storage。
+ * @returns Promise<void>：遷移嘗試完成後結束。
  */
-function updateStoredAreaSession(
-  areaId: string,
-  threadId: string,
-  updater: (session: StoredAreaSession) => StoredAreaSession,
-): void {
-  const currentState = getAreaSessionState(areaId);
-  const targetSession = currentState.sessions.find((session) => session.threadId === threadId);
-  if (!targetSession) {
+async function migrateLegacyAreaSessions(areaId: string): Promise<void> {
+  const legacyAreaSessions = readLegacyAreaSessionMap();
+  const legacyThreadMap = (() => {
+    const rawValue = window.sessionStorage.getItem(LEGACY_AREA_THREAD_STORAGE_KEY);
+    if (!rawValue) {
+      return {} as Record<string, string>;
+    }
+    try {
+      const parsed = JSON.parse(rawValue) as Record<string, string>;
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  })();
+
+  const sessions = legacyAreaSessions[areaId]?.sessions ?? [];
+  const legacyThreadId = legacyThreadMap[areaId];
+  const migrationTargets = [
+    ...sessions,
+    ...(legacyThreadId && !sessions.some((session) => session.threadId === legacyThreadId)
+      ? [{
+          threadId: legacyThreadId,
+          title: DEFAULT_SESSION_TITLE,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } satisfies StoredAreaSession]
+      : []),
+  ];
+
+  if (migrationTargets.length === 0) {
     return;
   }
-  saveAreaSessionState(areaId, {
-    ...currentState,
-    sessions: currentState.sessions.map((session) => (session.threadId === threadId ? updater(targetSession) : session)),
-  });
-}
 
+  let didAllSucceed = true;
+  for (const item of migrationTargets) {
+    try {
+      await registerAreaChatSession(areaId, {
+        threadId: item.threadId,
+        title: item.title,
+      });
+      if (legacyAreaSessions[areaId]?.activeThreadId === item.threadId || legacyThreadId === item.threadId) {
+        setActiveAreaSessionId(areaId, item.threadId);
+      }
+    } catch {
+      didAllSucceed = false;
+    }
+  }
 
-/**
- * 標記單一 session 最近被互動，必要時同步更新標題。
- *
- * @param areaId 目標 area 識別碼。
- * @param threadId 目標 LangGraph thread id。
- * @param options 互動後的 metadata 覆寫選項。
- * @returns 無；僅更新 session storage。
- */
-function touchAreaSession(
-  areaId: string,
-  threadId: string,
-  options: {
-    title?: string;
-    preserveCustomTitle?: boolean;
-  } = {},
-): void {
-  updateStoredAreaSession(areaId, threadId, (session) => ({
-    ...session,
-    title:
-      options.title && (!options.preserveCustomTitle || session.title === DEFAULT_SESSION_TITLE)
-        ? normalizeSessionTitle(options.title)
-        : session.title,
-    updatedAt: new Date().toISOString(),
-  }));
-}
-
-
-/**
- * 移除指定 area 中已失效的 session。
- *
- * @param areaId 目標 area 識別碼。
- * @param threadId 失效的 LangGraph thread id。
- * @returns 無；僅更新 session storage。
- */
-function removeAreaSession(areaId: string, threadId: string): void {
-  const currentState = getAreaSessionState(areaId);
-  saveAreaSessionState(areaId, {
-    activeThreadId: currentState.activeThreadId === threadId ? null : currentState.activeThreadId,
-    sessions: currentState.sessions.filter((session) => session.threadId !== threadId),
-  });
+  if (didAllSucceed) {
+    window.sessionStorage.removeItem(LEGACY_AREA_SESSION_STORAGE_KEY);
+    window.sessionStorage.removeItem(LEGACY_AREA_THREAD_STORAGE_KEY);
+  }
 }
 
 
@@ -655,36 +581,13 @@ function ensureAssistantId(): string {
  */
 export async function createAreaSession(
   areaId: string,
-  accessTokenGetter: AccessTokenGetter,
+  title: string = DEFAULT_SESSION_TITLE,
 ): Promise<ChatSessionSummary> {
-  const token = await accessTokenGetter();
-  if (!token) {
-    throw new Error("目前尚未登入，無法建立 LangGraph thread。");
-  }
-
-  const client = createLangGraphClient(token);
-  const thread = await (client.threads.create({
-    metadata: {
-      area_id: areaId,
-    },
-  }) as Promise<{ thread_id?: string; threadId?: string }>);
-  const nextThreadId = thread.thread_id ?? thread.threadId;
-  if (!nextThreadId) {
-    throw new Error("LangGraph thread 建立成功，但回應缺少 thread_id。");
-  }
-  const now = new Date().toISOString();
-  const nextSession = {
-    threadId: nextThreadId,
-    title: DEFAULT_SESSION_TITLE,
-    createdAt: now,
-    updatedAt: now,
-  } satisfies StoredAreaSession;
-  const currentState = getAreaSessionState(areaId);
-  saveAreaSessionState(areaId, {
-    activeThreadId: nextThreadId,
-    sessions: [nextSession, ...currentState.sessions],
+  const registeredSession = await registerAreaChatSession(areaId, {
+    title,
   });
-  return toChatSessionSummary(nextSession);
+  setActiveAreaSessionId(areaId, registeredSession.threadId);
+  return registeredSession;
 }
 
 
@@ -697,15 +600,24 @@ export async function createAreaSession(
  */
 export async function ensureAreaSession(
   areaId: string,
-  accessTokenGetter: AccessTokenGetter,
+  options: {
+    titleOnCreate?: string;
+  } = {},
 ): Promise<ChatSessionSummary> {
   const activeThreadId = getActiveAreaSessionId(areaId);
-  const currentState = getAreaSessionState(areaId);
-  const existingSession = currentState.sessions.find((session) => session.threadId === activeThreadId);
+  const currentSessions = await listAreaSessions(areaId);
+  const existingSession = currentSessions.find((session) => session.threadId === activeThreadId);
   if (existingSession) {
-    return toChatSessionSummary(existingSession);
+    return existingSession;
   }
-  return createAreaSession(areaId, accessTokenGetter);
+  if (activeThreadId) {
+    clearActiveAreaSessionId(areaId);
+  }
+  if (currentSessions[0]) {
+    setActiveAreaSessionId(areaId, currentSessions[0].threadId);
+    return currentSessions[0];
+  }
+  return createAreaSession(areaId, options.titleOnCreate ?? DEFAULT_SESSION_TITLE);
 }
 
 
@@ -717,10 +629,10 @@ export async function ensureAreaSession(
  * @param question 本輪送出的第一個問題。
  * @returns 無；僅在標題仍為預設值時更新 session metadata。
  */
-export function seedAreaSessionTitleFromQuestion(areaId: string, threadId: string, question: string): void {
-  touchAreaSession(areaId, threadId, {
-    title: deriveSessionTitleFromQuestion(question),
-    preserveCustomTitle: true,
+export async function seedAreaSessionTitleFromQuestion(areaId: string, threadId: string, question: string): Promise<void> {
+  const nextTitle = deriveSessionTitleFromQuestion(question);
+  await updateAreaChatSession(areaId, threadId, {
+    title: nextTitle,
   });
 }
 
@@ -854,7 +766,12 @@ export async function loadAreaThreadHistory(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("Thread") && message.includes("not found")) {
-      removeAreaSession(areaId, threadId);
+      try {
+        await deleteAreaChatSession(areaId, threadId);
+      } catch {
+        // stale session metadata 清理失敗時，不阻擋前端先回空狀態。
+      }
+      clearActiveAreaSessionId(areaId);
       return [];
     }
     throw error;
@@ -891,7 +808,7 @@ async function streamAreaThreadChatInternal(
   let hasPrimaryTokenStream = false;
   try {
     const assistantId = await ensureAssistant(client);
-    const threadId = (await ensureAreaSession(areaId, accessTokenGetter)).threadId;
+    const threadId = (await ensureAreaSession(areaId)).threadId;
     const stream = client.runs.stream(threadId, assistantId, {
       input: {
         area_id: areaId,
@@ -1024,7 +941,11 @@ async function streamAreaThreadChatInternal(
       }
     }
     if (pendingCompletion) {
-      touchAreaSession(areaId, threadId);
+      try {
+        await updateAreaChatSession(areaId, threadId);
+      } catch {
+        // chat 主流程已完成時，不讓 metadata 同步失敗中斷回答。
+      }
       logChatStreamDebug(streamStartedAt, "completion_commit", {
         answerLength: pendingCompletion.answer.length,
         referencesCount: pendingCompletion.references.length,
@@ -1040,7 +961,7 @@ async function streamAreaThreadChatInternal(
     if (allowRetry && message.includes("Thread or assistant not found")) {
       const activeThreadId = getActiveAreaSessionId(areaId);
       if (activeThreadId) {
-        removeAreaSession(areaId, activeThreadId);
+        clearActiveAreaSessionId(areaId);
       }
       clearAssistantId();
       await streamAreaThreadChatInternal(areaId, question, accessTokenGetter, onUpdate, false);

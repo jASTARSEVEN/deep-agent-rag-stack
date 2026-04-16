@@ -6,6 +6,8 @@ import type {
   AreaAccessPayload,
   AreaListPayload,
   AreaSummary,
+  ChatSessionListPayload,
+  ChatSessionSummary,
   UpdateAreaPayload,
   DocumentListPayload,
   DocumentPreviewPayload,
@@ -289,6 +291,114 @@ export async function createArea(payload: { name: string; description: string })
 export async function fetchAreaDetail(areaId: string): Promise<AreaSummary> {
   const response = await fetchProtected(`/areas/${areaId}`);
   return (await response.json()) as AreaSummary;
+}
+
+
+/**
+ * 讀取指定 area 目前使用者可見的 chat sessions。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @returns chat session 清單 payload。
+ */
+export async function fetchAreaChatSessions(areaId: string): Promise<ChatSessionListPayload> {
+  const response = await fetchProtected(`/areas/${areaId}/chat-sessions`);
+  const payload = (await response.json()) as {
+    items: Array<{
+      thread_id: string;
+      title: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+  };
+  return {
+    items: payload.items.map((item) => ({
+      threadId: item.thread_id,
+      title: item.title,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+    })),
+  };
+}
+
+
+/**
+ * 註冊既有 LangGraph thread 為正式 chat session metadata。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param payload 要註冊的 thread 與可選 title。
+ * @returns 建立或既有的 chat session 摘要。
+ */
+export async function registerAreaChatSession(
+  areaId: string,
+  payload: { threadId?: string | null; title?: string | null } = {},
+): Promise<ChatSessionSummary> {
+  const response = await fetchProtected(`/areas/${areaId}/chat-sessions`, {
+    method: "POST",
+    body: JSON.stringify({
+      thread_id: payload.threadId ?? null,
+      title: payload.title ?? null,
+    }),
+  });
+  const item = (await response.json()) as {
+    thread_id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+  };
+  return {
+    threadId: item.thread_id,
+    title: item.title,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
+}
+
+
+/**
+ * 更新既有 chat session metadata。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 目標 thread 識別碼。
+ * @param payload 可選的新 title；缺省時只 touch `updated_at`。
+ * @returns 更新後的 chat session 摘要。
+ */
+export async function updateAreaChatSession(
+  areaId: string,
+  threadId: string,
+  payload: { title?: string | null } = {},
+): Promise<ChatSessionSummary> {
+  const response = await fetchProtected(`/areas/${areaId}/chat-sessions/${threadId}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      title: payload.title ?? null,
+    }),
+  });
+  const item = (await response.json()) as {
+    thread_id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+  };
+  return {
+    threadId: item.thread_id,
+    title: item.title,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  };
+}
+
+
+/**
+ * 刪除既有 chat session metadata。
+ *
+ * @param areaId 目標 area 識別碼。
+ * @param threadId 目標 thread 識別碼。
+ * @returns Promise<void>：刪除成功後結束。
+ */
+export async function deleteAreaChatSession(areaId: string, threadId: string): Promise<void> {
+  await fetchProtected(`/areas/${areaId}/chat-sessions/${threadId}`, {
+    method: "DELETE",
+  });
 }
 
 

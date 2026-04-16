@@ -3,10 +3,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import get_current_principal
+from app.auth.dependencies import get_bearer_token, get_current_principal
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import get_app_settings
 from app.db.session import get_database_session
+from app.schemas.chat_sessions import ChatSessionListResponse, ChatSessionSummaryResponse, RegisterChatSessionRequest, UpdateChatSessionRequest
 from app.schemas.access import AreaAccessResponse
 from app.schemas.areas import (
     AreaAccessManagementResponse,
@@ -16,6 +17,7 @@ from app.schemas.areas import (
     ReplaceAreaAccessRequest,
     UpdateAreaRequest,
 )
+from app.services.chat_sessions import delete_area_chat_session, list_area_chat_sessions, register_area_chat_session, update_area_chat_session
 from app.services.access import require_area_access
 from app.services.areas import (
     create_area,
@@ -232,3 +234,111 @@ def replace_area_access_route(
         area_id=area_id,
         payload=payload,
     )
+
+
+@router.get("/{area_id}/chat-sessions", response_model=ChatSessionListResponse)
+def list_area_chat_sessions_route(
+    area_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    session: Session = Depends(get_database_session),
+) -> ChatSessionListResponse:
+    """列出指定 area 且屬於目前使用者的 chat sessions。
+
+    參數：
+    - `area_id`：目標 area 識別碼。
+    - `principal`：目前已驗證使用者。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `ChatSessionListResponse`：依最近使用時間排序的 chat sessions。
+    """
+
+    return ChatSessionListResponse(items=list_area_chat_sessions(session=session, principal=principal, area_id=area_id))
+
+
+@router.post("/{area_id}/chat-sessions", response_model=ChatSessionSummaryResponse, status_code=status.HTTP_201_CREATED)
+def register_area_chat_session_route(
+    area_id: str,
+    payload: RegisterChatSessionRequest,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    bearer_token: str = Depends(get_bearer_token),
+    settings=Depends(get_app_settings),
+    session: Session = Depends(get_database_session),
+) -> ChatSessionSummaryResponse:
+    """註冊既有 LangGraph thread 為正式 chat session metadata。
+
+    參數：
+    - `area_id`：目標 area 識別碼。
+    - `payload`：要註冊的 thread 與可選 title。
+    - `principal`：目前已驗證使用者。
+    - `bearer_token`：目前 request 的 Bearer token。
+    - `settings`：目前 API 設定。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `ChatSessionSummaryResponse`：建立或既有的 chat session 摘要。
+    """
+
+    return register_area_chat_session(
+        session=session,
+        principal=principal,
+        settings=settings,
+        area_id=area_id,
+        bearer_token=bearer_token,
+        thread_id=payload.thread_id,
+        title=payload.title,
+    )
+
+
+@router.patch("/{area_id}/chat-sessions/{thread_id}", response_model=ChatSessionSummaryResponse)
+def update_area_chat_session_route(
+    area_id: str,
+    thread_id: str,
+    payload: UpdateChatSessionRequest,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    bearer_token: str = Depends(get_bearer_token),
+    settings=Depends(get_app_settings),
+    session: Session = Depends(get_database_session),
+) -> ChatSessionSummaryResponse:
+    """更新既有 chat session metadata。
+
+    參數：
+    - `area_id`：目標 area 識別碼。
+    - `thread_id`：要更新的 LangGraph thread id。
+    - `payload`：可選的新 title。
+    - `principal`：目前已驗證使用者。
+    - `bearer_token`：目前 request 的 Bearer token。
+    - `settings`：目前 API 設定。
+    - `session`：目前 request 的資料庫 session。
+
+    回傳：
+    - `ChatSessionSummaryResponse`：更新後的 chat session 摘要。
+    """
+
+    return update_area_chat_session(
+        session=session,
+        principal=principal,
+        settings=settings,
+        area_id=area_id,
+        bearer_token=bearer_token,
+        thread_id=thread_id,
+        title=payload.title,
+    )
+
+
+@router.delete("/{area_id}/chat-sessions/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_area_chat_session_route(
+    area_id: str,
+    thread_id: str,
+    principal: CurrentPrincipal = Depends(get_current_principal),
+    session: Session = Depends(get_database_session),
+) -> Response:
+    """刪除既有 chat session metadata。"""
+
+    delete_area_chat_session(
+        session=session,
+        principal=principal,
+        area_id=area_id,
+        thread_id=thread_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

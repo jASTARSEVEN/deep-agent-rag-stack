@@ -79,6 +79,7 @@ const apiEnv = {
   CHAT_STREAM_CHUNK_SIZE: "24",
   OPENAI_API_KEY: "test-key",
   LANGGRAPH_SERVICE_PORT: "18001",
+  LANGGRAPH_API_URL: "http://127.0.0.1:18001",
 };
 
 /** E2E worker 環境變數。 */

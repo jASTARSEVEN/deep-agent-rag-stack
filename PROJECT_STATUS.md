@@ -251,6 +251,7 @@
 - 已實作 `ChatPanel` 作為中央視窗核心，負責多輪對話、串流狀態顯示與工具調用檢視
 - 已將 `ChatPanel` 升級為雙欄佈局：左側回答與 citation chips、右側全文預覽欄
 - 已補上 area 內多 session chat UX，支援開新 session、切換既有 session，並以首個 user 問題自動命名 session
+- 已將 area chat sessions 正式落為後端 metadata schema / API，前端改為以後端 session list 為 source of truth，本機只保留 active session 選擇
 - 已新增 `DocumentPreviewPane`，支援依 citation 自動 scroll 到全文對應位置，並以 child chunk 做 active / related / hover 高亮
 - 已實作 `DocumentsDrawer` 負責右側滑出式文件管理，支援在不中斷對話的情況下上傳、編輯與刪除文件
 - 已將 `DocumentsDrawer` 擴充為列表 + chunk-aware 檢視器，可直接開啟 ready 文件的 child chunk 清單與全文預覽
@@ -296,6 +297,7 @@
 - Web `/areas` 已新增 area-scoped 多 session thread chat panel；同一 area 可建立多個 thread 並切換既有對話脈絡
 - 已將既有 Web chat transport 改為 LangGraph SDK 預設 thread/run 端點，不再以自訂 bridge chat routes 作正式路徑
 - 已將 LangGraph built-in thread state 正式接上 `messages` 累積記憶；同一 area session 的多輪對話可延續先前上下文，前端切回既有 thread 時也會回填歷史訊息
+- 已新增 `GET/POST/PATCH /areas/{area_id}/chat-sessions` 與 `area_chat_sessions` schema，正式保存 session metadata，並以 server-side LangGraph thread 驗證維持 owner/area 一致性
 - 已將 graph 輸出升級為 assembled-context level contract，前端顯示單位與實際送進 LLM 的 context 單位對齊
 - 已將 Web chat stream 收斂為 LangGraph SDK `messages-tuple`、`custom` 與 `values` 事件；最終 answer / citations / assembled contexts / trace 直接來自 graph state
 - `custom` 事件目前已收斂為 `phase` 與 `tool_call`；token delta 正式透過 `messages-tuple` 傳遞

@@ -144,6 +144,30 @@ class AreaGroupRole(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
+class AreaChatSession(Base):
+    """Knowledge Area 內 chat session metadata。"""
+
+    __tablename__ = "area_chat_sessions"
+    __table_args__ = (
+        UniqueConstraint("thread_id", name="uq_area_chat_sessions_thread_id"),
+    )
+
+    # session 唯一識別碼。
+    id: Mapped[str] = mapped_column(String(UUID_LENGTH), primary_key=True, default=generate_uuid)
+    # session 所屬 area。
+    area_id: Mapped[str] = mapped_column(ForeignKey("areas.id", ondelete="CASCADE"), nullable=False)
+    # 建立此 session 的使用者 `sub`。
+    owner_sub: Mapped[str] = mapped_column(String(255), nullable=False)
+    # LangGraph thread 識別碼。
+    thread_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 前端顯示用 session 標題。
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    # session 建立時間。
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    # session 最後更新時間。
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
+
+
 class Document(Base):
     """文件上傳與 ingest 流程使用的文件資料。"""
 

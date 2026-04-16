@@ -11,7 +11,7 @@
 - React + Tailwind / Shadcn UI
 - **DashboardLayout**: 負責全螢幕網格佈局與頂部全局狀態管理。
 - **AreaSidebar**: 負責 Knowledge Areas 的導覽切換與快速建立，支援側邊欄收摺以最大化對話空間。
-- **ChatPanel**: 視窗核心，負責 area 內多 session 對話切換、新建 session、串流狀態顯示、句尾 citation chips、工具調用透明化檢視，以及右側全文預覽欄的互動狀態。
+- **ChatPanel**: 視窗核心，負責 area 內多 session 對話切換、新建 session、串流狀態顯示、句尾 citation chips、工具調用透明化檢視，以及右側全文預覽欄的互動狀態；session metadata 會正式回寫後端。
 - **DocumentPreviewPane**: 右側固定全文預覽欄，依 citation 所屬 `start_offset/end_offset` scroll 到對應位置，並以 child chunk 邊界做強/弱/hover 高亮。
 - **DocumentsDrawer**: 負責不中斷對話的文件生命週期管理，透過右側滑出式抽屜提供文件上傳、列表、狀態追蹤，以及 ready 文件的 chunk-aware 全文檢視。
 - **EvaluationDrawer**: 負責 area 內部的 retrieval correctness reviewer workflow，提供 dataset 建立、`fact_lookup` 題目管理、候選複核、source span 標註、`retrieval_miss` 標記與 benchmark run 檢視；其責任獨立於 `ChatPanel` 與 `DocumentsDrawer`。
@@ -129,16 +129,17 @@ flowchart TD
 
 ### 問答流程
 1. Web 於 area 內維護多個 LangGraph thread 作為 chat sessions；使用者可建立新 session、切換既有 session，並以目前啟用中的 thread 送出 chat run。每次 run 只附帶新的 user message，既有多輪歷史由 LangGraph thread state 保存
-2. LangGraph Server 先透過 custom auth 驗證 Bearer token
-3. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
-4. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
-5. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 必須維持 SQL gate、deny-by-default 與 ready-only 邊界。以目前正式主線而言，後端會依序執行 document mention / scope 解析、兩層 routing、child hybrid recall、Python `RRF`、minimal ranking policy、parent-level rerank、scope-aware selection 與 assembler；query-time 主線目前不接 `document synopsis recall` 或 `section synopsis recall`
-6. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 `citations`、`assembled_contexts`、`answer_blocks` 與 `used_knowledge_base`；其中回答引用由 `[[C1]]` marker 解析為 UI 可用的 `answer_blocks`
-7. LangGraph thread state 除 `messages` 外，另保存 `message_artifacts`；每個 assistant turn 會持久化 `answer_blocks`、`citations` 與 `used_knowledge_base`，供前端在切回既有 session 或 reload 後還原 chips 與預覽互動
-8. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
-9. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
-10. 前端正式引用 UX 為回答句尾 chips + 右側全文預覽欄；`Assembled Contexts`、工具輸入與工具輸出保留為 debug/details
-11. `document_summary / cross_document_compare` 與 `fact_lookup` 一樣，都統一走主 `Deep Agents` answer path；前端不再提供 `thinking mode` 切換
+2. API 另外以 `area_chat_sessions` 正式保存 session metadata（`thread_id`、`owner_sub`、`area_id`、`title`、timestamps）；真正的對話內容仍以 LangGraph thread state 為主
+3. LangGraph Server 先透過 custom auth 驗證 Bearer token
+4. Web 透過 LangGraph SDK 預設 thread/run 端點送出 `area_id` 與 `question`
+5. LangGraph auth 在 server 端將已驗證 `sub/groups` 注入 graph input
+6. graph 內的主 Deep Agent 可自行判斷是否需要呼叫單一 `retrieve_area_contexts` tool；該 tool 必須維持 SQL gate、deny-by-default 與 ready-only 邊界。以目前正式主線而言，後端會依序執行 document mention / scope 解析、兩層 routing、child hybrid recall、Python `RRF`、minimal ranking policy、parent-level rerank、scope-aware selection 與 assembler；query-time 主線目前不接 `document synopsis recall` 或 `section synopsis recall`
+7. 若主 agent 呼叫 retrieval tool，最終 graph state 會帶出 `citations`、`assembled_contexts`、`answer_blocks` 與 `used_knowledge_base`；其中回答引用由 `[[C1]]` marker 解析為 UI 可用的 `answer_blocks`
+8. LangGraph thread state 除 `messages` 外，另保存 `message_artifacts`；每個 assistant turn 會持久化 `answer_blocks`、`citations` 與 `used_knowledge_base`，供前端在切回既有 session 或 reload 後還原 chips 與預覽互動
+9. Web 直接消費 LangGraph SDK 的 `messages-tuple`、`custom` 與 `values` 事件：token delta 來自 `messages-tuple`，最終 answer / artifacts / citations 來自 `values`
+10. `custom` 事件目前承載 `phase` 與 `tool_call`；前端可即時顯示搜尋 / 思考 / 工具呼叫狀態，以及 `retrieve_area_contexts` 的輸入 / 輸出
+11. 前端正式引用 UX 為回答句尾 chips + 右側全文預覽欄；`Assembled Contexts`、工具輸入與工具輸出保留為 debug/details
+12. `document_summary / cross_document_compare` 與 `fact_lookup` 一樣，都統一走主 `Deep Agents` answer path；前端不再提供 `thinking mode` 切換
 
 ```mermaid
 flowchart TD
@@ -326,7 +327,7 @@ flowchart TD
 19.12.9. summary/compare benchmark/test runner 目前允許依資料集特性直接指定 `explicit_document_ids`；但這只屬於 benchmark contract，public chat、`retrieve_area_contexts` tool 與 Deep Agents 主線都不得接受原始 `document_id` override。runner 必須先驗證 area、權限與 `ready` 狀態，再轉成 SQL `allowed_document_ids`。
 19.13. 真實 smoke 驗證一律走 `Caddy` 單一公開入口；Keycloak smoke 不再依賴舊的 `web` / `keycloak` 直連埠，而是固定驗證 `/auth/*` 路徑與公開入口 callback / logout 行為
 20. public chat 採 LangGraph Server runtime，前端正式透過 LangGraph SDK 預設端點與 thread/run 模型互動；`CHAT_PROVIDER=deepagents` 時會以 `create_deep_agent()` 建立主 agent，並只暴露單一 `retrieve_area_contexts` tool
-21. 多輪對話記憶必須以 LangGraph built-in thread state 為主；前端只維護 area 內的 session 清單、active session 與本機顯示 metadata，不能只在前端記住訊息列表卻不回寫 server-side state
+21. 多輪對話記憶必須以 LangGraph built-in thread state 為主；前端只在本機維護 active session 選擇，session 清單與顯示 metadata 則由後端 `area_chat_sessions` 提供，不能只在前端記住訊息列表卻不回寫 server-side state
 22. retrieval pipeline 對 agent 僅以單一 tool 形式暴露，不允許 agent 直接拆呼叫 vector / FTS / rerank，也不再以關鍵字 heuristics 先行分流
 23. Deep Agents 的對外 citations 已收斂為 assembled-context level references；前端顯示上限與送進 LLM 的 context 單位上限同為 `ASSEMBLER_MAX_CONTEXTS`
 24. custom auth 會將 Bearer token 解析為 `identity/sub/groups`，供 LangGraph built-in routes 與 API app 共用

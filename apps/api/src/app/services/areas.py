@@ -8,7 +8,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.auth.verifier import CurrentPrincipal
-from app.db.models import Area, AreaGroupRole, AreaUserRole, Document, DocumentChunk, IngestJob, Role
+from app.db.models import Area, AreaChatSession, AreaGroupRole, AreaUserRole, Document, DocumentChunk, IngestJob, Role
 from app.schemas.areas import (
     AccessGroupEntry,
     AccessUserEntry,
@@ -190,6 +190,7 @@ def delete_area(
         session.execute(delete(DocumentChunk).where(DocumentChunk.document_id.in_(document_ids)))
         session.execute(delete(IngestJob).where(IngestJob.document_id.in_(document_ids)))
         session.execute(delete(Document).where(Document.id.in_(document_ids)))
+    session.execute(delete(AreaChatSession).where(AreaChatSession.area_id == area_id))
     session.execute(delete(AreaUserRole).where(AreaUserRole.area_id == area_id))
     session.execute(delete(AreaGroupRole).where(AreaGroupRole.area_id == area_id))
     session.delete(area)

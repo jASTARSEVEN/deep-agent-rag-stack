@@ -29,6 +29,26 @@ from app.chat.agent.runtime import DeepAgentsChatRuntime
 REGISTERED_ASSISTANT_IDS: set[str] = set()
 # E2E wrapper 內記錄 thread state。
 THREAD_STATE_BY_ID: dict[str, dict[str, Any]] = {}
+# E2E wrapper 內記錄已失效 thread。
+STALE_THREAD_IDS: set[str] = set()
+
+
+def _resolve_principal_from_request(request: Request) -> CurrentPrincipal:
+    """從目前 request 的 Bearer token 解析 principal。
+
+    參數：
+    - `request`：目前 HTTP request。
+
+    回傳：
+    - `CurrentPrincipal`：由 Bearer token 或 fallback 建立的 principal。
+    """
+
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return CurrentPrincipal(sub="e2e-user", groups=(), authenticated=True)
+    token = authorization.removeprefix("Bearer ").strip()
+    verifier = request.app.state.token_verifier
+    return verifier.verify(token)
 
 
 def _build_answer_block(
@@ -613,16 +633,47 @@ def main() -> None:
         """
 
         payload = await request.json()
+        principal = _resolve_principal_from_request(request)
         thread_id = str(payload.get("thread_id") or uuid4())
+        metadata = dict(payload.get("metadata", {}) or {})
+        metadata["owner"] = principal.sub
         THREAD_STATE_BY_ID.setdefault(
             thread_id,
             {
                 "messages": [],
                 "message_artifacts": [],
-                "metadata": payload.get("metadata", {}),
+                "metadata": metadata,
             },
         )
         return {"thread_id": thread_id}
+
+    @app.get("/threads/{thread_id}")
+    async def get_thread(thread_id: str) -> JSONResponse:
+        """回傳 E2E thread metadata。
+
+        參數：
+        - `thread_id`：目標 thread 識別碼。
+
+        回傳：
+        - `JSONResponse`：最小 thread payload；找不到時回 404。
+        """
+
+        if thread_id in STALE_THREAD_IDS:
+            return JSONResponse({"detail": "Thread not found"}, status_code=404)
+        state = THREAD_STATE_BY_ID.get(thread_id)
+        if state is None:
+            return JSONResponse({"detail": "Thread not found"}, status_code=404)
+        return JSONResponse(
+            {
+                "thread_id": thread_id,
+                "created_at": "2026-04-16T00:00:00Z",
+                "updated_at": "2026-04-16T00:00:00Z",
+                "metadata": state.get("metadata", {}),
+                "status": "idle",
+                "values": state,
+                "interrupts": {},
+            }
+        )
 
     @app.get("/threads/{thread_id}/state")
     async def get_thread_state(thread_id: str) -> JSONResponse:
@@ -635,10 +686,19 @@ def main() -> None:
         - `JSONResponse`：LangGraph thread state 相容 payload。
         """
 
+        if thread_id in STALE_THREAD_IDS:
+            return JSONResponse({"detail": "Thread not found"}, status_code=404)
         state = THREAD_STATE_BY_ID.get(thread_id)
         if state is None:
             return JSONResponse({"detail": "Thread not found"}, status_code=404)
         return JSONResponse({"values": state})
+
+    @app.post("/__e2e/threads/{thread_id}/mark-stale")
+    async def mark_thread_stale(thread_id: str) -> dict[str, Any]:
+        """將指定 thread 標記為 stale，讓後續 metadata/state 查詢回 404。"""
+
+        STALE_THREAD_IDS.add(thread_id)
+        return {"thread_id": thread_id, "stale": True}
 
     @app.post("/threads/{thread_id}/runs/stream", response_model=None)
     async def stream_thread_run(thread_id: str, request: Request) -> Any:
