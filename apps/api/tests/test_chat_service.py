@@ -1545,8 +1545,8 @@ def test_deepagents_runtime_short_circuits_duplicate_initial_tool_call(monkeypat
     assert captured_second_payload["loop_trace_delta"]["stop_reason"] == "duplicate_initial_call_cached"
 
 
-def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeypatch) -> None:
-    """預設 agentic tool call 上限放寬後，第 4 次 retrieval 仍應可執行。
+def test_deepagents_runtime_allows_followup_tool_calls_when_agentic_enabled(monkeypatch) -> None:
+    """只要 `CHAT_AGENTIC_ENABLED=true`，非 compare 題也應允許 follow-up tool call。
 
     參數：
     - `monkeypatch`：pytest monkeypatch fixture。
@@ -1573,21 +1573,6 @@ def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeyp
 
             self.kwargs = kwargs
 
-    def fake_build_query_routing_decision(**_kwargs):
-        """固定回傳 compare routing，讓 follow-up 在測試中啟用。
-
-        參數：
-        - `**_kwargs`：routing 決策參數。
-
-        回傳：
-        - `SimpleNamespace`：最小 routing 決策結果。
-        """
-
-        return SimpleNamespace(
-            query_type=EvaluationQueryType.cross_document_compare,
-            summary_scope=None,
-        )
-
     def fake_retrieve_area_contexts_internal(**kwargs):
         """每次呼叫都回傳最小 retrieval 結果，並記錄實際執行次數。
 
@@ -1606,7 +1591,7 @@ def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeyp
             trace={
                 "retrieval": {
                     "query": kwargs["question"],
-                    "query_type": EvaluationQueryType.cross_document_compare.value,
+                    "query_type": EvaluationQueryType.fact_lookup.value,
                 },
                 "assembler": {"contexts": []},
             },
@@ -1644,24 +1629,24 @@ def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeyp
             captured_payloads.append(
                 json.loads(
                     self.tools[0](
-                        query_variant="比較主體 A 的規定",
-                        followup_reason="補查主體 A 直接證據",
+                        query_variant="reader policy 的例外條件",
+                        followup_reason="補查例外情況",
                     )
                 )
             )
             captured_payloads.append(
                 json.loads(
                     self.tools[0](
-                        query_variant="比較主體 B 的規定",
-                        followup_reason="補查主體 B 直接證據",
+                        query_variant="reader policy 的申請流程",
+                        followup_reason="補查申請流程",
                     )
                 )
             )
             captured_payloads.append(
                 json.loads(
                     self.tools[0](
-                        query_variant="比較主體 C 的規定",
-                        followup_reason="補查主體 C 直接證據",
+                        query_variant="reader policy 的限制條件",
+                        followup_reason="補查限制條件",
                     )
                 )
             )
@@ -1674,7 +1659,6 @@ def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeyp
 
     monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
     monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
-    monkeypatch.setattr("app.chat.agent.runtime.build_query_routing_decision", fake_build_query_routing_decision)
     monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
     monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
 
@@ -1698,12 +1682,119 @@ def test_deepagents_runtime_allows_fourth_retrieval_tool_call_by_default(monkeyp
         principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
         settings=settings,
         area_id="area-1",
-        question="比較主體 A、主體 B 與主體 C 的規定差異",
+        question="請根據文件回答 reader policy",
     )
 
     assert retrieval_call_count == 4
     assert captured_payloads[-1]["loop_trace_delta"]["tool_call_count"] == 4
     assert captured_payloads[-1]["loop_trace_delta"]["stop_reason"] != "tool_call_limit_reached"
+
+
+def test_deepagents_runtime_blocks_followup_tool_calls_when_agentic_disabled(monkeypatch) -> None:
+    """`CHAT_AGENTIC_ENABLED=false` 時，follow-up tool call 應被拒絕。"""
+
+    retrieval_call_count = 0
+    captured_payloads: list[dict[str, object]] = []
+
+    class FakeChatOpenAI:
+        """模擬 Deep Agents 使用的 ChatOpenAI。"""
+
+        def __init__(self, **kwargs) -> None:
+            """初始化假 LLM。
+
+            參數：
+            - `**kwargs`：LLM 初始化參數。
+
+            回傳：
+            - `None`：僅保存初始化參數。
+            """
+
+            self.kwargs = kwargs
+
+    def fake_retrieve_area_contexts_internal(**kwargs):
+        """每次真正執行 retrieval 時回傳最小結果。"""
+
+        nonlocal retrieval_call_count
+        retrieval_call_count += 1
+        return _build_fake_retrieval_result(
+            assembled_contexts=[],
+            citations=[],
+            trace={
+                "retrieval": {
+                    "query": kwargs["question"],
+                    "query_type": EvaluationQueryType.fact_lookup.value,
+                },
+                "assembler": {"contexts": []},
+            },
+            loop_trace_delta={"effective_query": kwargs["question"]},
+        )
+
+    class FakeAgent:
+        """模擬主 agent，先做首次檢索，再嘗試一次 follow-up。"""
+
+        def __init__(self, tools) -> None:
+            """初始化假 agent。
+
+            參數：
+            - `tools`：主 agent 可用工具。
+
+            回傳：
+            - `None`：僅保存工具列表。
+            """
+
+            self.tools = tools
+
+        def stream(self, _input, *, stream_mode):
+            """先執行首次檢索，再嘗試 follow-up 工具呼叫。"""
+
+            assert stream_mode == ["messages", "values"]
+            captured_payloads.append(json.loads(self.tools[0]()))
+            captured_payloads.append(
+                json.loads(
+                    self.tools[0](
+                        query_variant="reader policy 的例外條件",
+                        followup_reason="補查例外情況",
+                    )
+                )
+            )
+            return iter(
+                [
+                    ("messages", ({"content": "這是回答。"}, {"tags": []})),
+                    ("values", {"messages": [{"role": "assistant", "content": "這是回答。"}]}),
+                ]
+            )
+
+    monkeypatch.setattr("app.chat.agent.runtime.ChatOpenAI", FakeChatOpenAI)
+    monkeypatch.setattr("app.chat.agent.runtime.tool", lambda func: func)
+    monkeypatch.setattr("app.chat.agent.runtime._retrieve_area_contexts_internal", fake_retrieve_area_contexts_internal)
+    monkeypatch.setattr("app.chat.agent.deep_agents.create_deep_agent", lambda **kwargs: FakeAgent(kwargs.get("tools", [])))
+
+    provider = DeepAgentsChatRuntime(
+        model="gpt-5.4-mini",
+        api_key="test-key",
+        max_output_tokens=512,
+        timeout_seconds=30,
+    )
+    settings = AppSettings(
+        CHAT_PROVIDER="deepagents",
+        CHAT_MODEL="gpt-5.4-mini",
+        CHAT_MAX_OUTPUT_TOKENS=512,
+        CHAT_TIMEOUT_SECONDS=30,
+        OPENAI_API_KEY="test-key",
+        CHAT_AGENTIC_ENABLED=False,
+    )
+
+    provider.run(
+        session=None,
+        principal=CurrentPrincipal(sub="user-1", groups=("/group/reader",), authenticated=True),
+        settings=settings,
+        area_id="area-1",
+        question="請根據文件回答 reader policy",
+    )
+
+    assert retrieval_call_count == 1
+    assert captured_payloads[-1]["loop_trace_delta"]["tool_call_count"] == 1
+    assert captured_payloads[-1]["loop_trace_delta"]["stop_reason"] == "followup_not_allowed"
 
 
 def test_deepagents_runtime_compare_queries_include_response_contract(monkeypatch) -> None:

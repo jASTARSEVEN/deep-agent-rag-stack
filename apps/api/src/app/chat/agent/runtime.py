@@ -17,14 +17,12 @@ from app.chat.contracts.types import ChatAnswerBlock, ChatMessageArtifact
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
     _retrieve_area_contexts_internal,
-    build_agent_response_contract_payload,
+    build_agent_tool_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,
 )
 from app.core.settings import AppSettings
-from app.db.models import EvaluationQueryType
 from app.services.retrieval_assembler import AssembledContext
-from app.services.retrieval_routing import build_query_routing_decision
 
 try:
     from langchain_core.tools import tool
@@ -259,12 +257,7 @@ class DeepAgentsChatRuntime:
         citations_payload: list[dict[str, object]] = []
         assembled_contexts_payload: list[dict[str, object]] = []
         llm_tool_contexts_payload: list[dict[str, object]] = []
-        llm_response_contract_payload: dict[str, object] | None = None
-        latest_coverage_signals_payload: dict[str, object] | None = None
-        latest_planning_documents_payload: list[dict[str, object]] = []
-        latest_next_best_followups: list[str] = []
-        latest_evidence_cue_texts_payload: list[dict[str, object]] = []
-        latest_synopsis_hints_payload: list[dict[str, object]] = []
+        latest_retrieval_result: RetrievalToolResult | None = None
         latest_loop_trace_delta: dict[str, object] = {}
         aggregated_contexts_by_key: dict[tuple[object, ...], dict[str, object]] = {}
         agentic_round_summaries: list[dict[str, object]] = []
@@ -361,20 +354,7 @@ class DeepAgentsChatRuntime:
                 return
             writer({"type": "references", "references": references})
 
-        _routing_decision = build_query_routing_decision(
-            settings=settings,
-            query=question,
-            session=session,
-            principal=principal,
-            area_id=area_id,
-        )
-        agentic_followup_enabled = bool(
-            settings.chat_agentic_enabled
-            and (
-                _routing_decision.query_type == EvaluationQueryType.cross_document_compare
-                or _routing_decision.summary_scope == "multi_document"
-            )
-        )
+        agentic_followup_enabled = bool(settings.chat_agentic_enabled)
 
         def resolve_latency_budget_status() -> str:
             """計算目前回合的 latency budget 狀態。
@@ -406,12 +386,7 @@ class DeepAgentsChatRuntime:
             nonlocal citations_payload
             nonlocal assembled_contexts_payload
             nonlocal llm_tool_contexts_payload
-            nonlocal llm_response_contract_payload
-            nonlocal latest_coverage_signals_payload
-            nonlocal latest_planning_documents_payload
-            nonlocal latest_next_best_followups
-            nonlocal latest_evidence_cue_texts_payload
-            nonlocal latest_synopsis_hints_payload
+            nonlocal latest_retrieval_result
             nonlocal latest_loop_trace_delta
 
             round_contexts_payload = build_assembled_context_payload(session, round_result)
@@ -470,16 +445,7 @@ class DeepAgentsChatRuntime:
                 }
                 for context in assembled_contexts_payload
             ]
-            llm_response_contract_payload = build_agent_response_contract_payload(session, round_result)
-            latest_coverage_signals_payload = (
-                asdict(round_result.coverage_signals)
-                if round_result.coverage_signals is not None
-                else None
-            )
-            latest_planning_documents_payload = [asdict(item) for item in round_result.planning_documents]
-            latest_next_best_followups = list(round_result.next_best_followups)
-            latest_evidence_cue_texts_payload = [asdict(item) for item in round_result.evidence_cue_texts]
-            latest_synopsis_hints_payload = [asdict(item) for item in round_result.synopsis_hints]
+            latest_retrieval_result = round_result
             latest_loop_trace_delta = dict(round_result.loop_trace_delta)
             return new_context_count, new_document_names
 
@@ -493,36 +459,17 @@ class DeepAgentsChatRuntime:
             - `dict[str, object]`：序列化前的 agent payload。
             """
 
-            include_loop_trace = bool(
-                latest_loop_trace_delta
-                or followup_call_count > 0
-                or synopsis_inspection_count > 0
-                or latency_budget_status != "normal"
-                or (stop_reason_override or last_agentic_stop_reason) not in {"not_started", "continue"}
+            return build_agent_tool_payload(
+                session,
+                latest_retrieval_result,
+                assembled_contexts_payload=llm_tool_contexts_payload,
+                loop_trace_delta=latest_loop_trace_delta,
+                tool_call_count=tool_call_count,
+                followup_call_count=followup_call_count,
+                synopsis_inspection_count=synopsis_inspection_count,
+                latency_budget_status=latency_budget_status,
+                stop_reason=stop_reason_override or last_agentic_stop_reason,
             )
-            payload: dict[str, object] = {
-                "assembled_contexts": llm_tool_contexts_payload,
-                "coverage_signals": latest_coverage_signals_payload,
-                "planning_documents": latest_planning_documents_payload,
-                "next_best_followups": latest_next_best_followups,
-                "evidence_cue_texts": latest_evidence_cue_texts_payload,
-                "synopsis_hints": latest_synopsis_hints_payload,
-                "loop_trace_delta": (
-                    {
-                        **latest_loop_trace_delta,
-                        "tool_call_count": tool_call_count,
-                        "followup_call_count": followup_call_count,
-                        "synopsis_inspection_count": synopsis_inspection_count,
-                        "latency_budget_status": latency_budget_status,
-                        "stop_reason": stop_reason_override or last_agentic_stop_reason,
-                    }
-                    if include_loop_trace
-                    else {}
-                ),
-            }
-            if llm_response_contract_payload is not None:
-                payload["response_contract"] = llm_response_contract_payload
-            return payload
 
         def execute_retrieval_round(
             *,
@@ -582,8 +529,8 @@ class DeepAgentsChatRuntime:
             synopsis_inspection_count += len(inspect_synopsis_handles or [])
             latency_budget_status = resolve_latency_budget_status()
             new_context_count, new_document_names = merge_retrieval_result(round_result)
-            coverage_signals = latest_coverage_signals_payload or {}
-            if coverage_signals and not bool(coverage_signals.get("insufficient_evidence")):
+            coverage_signals = latest_retrieval_result.coverage_signals if latest_retrieval_result is not None else None
+            if coverage_signals is not None and not bool(coverage_signals.insufficient_evidence):
                 last_agentic_stop_reason = "coverage_satisfied"
             elif tool_call_count >= settings.chat_agentic_max_tool_calls_per_turn:
                 last_agentic_stop_reason = "tool_call_limit_reached"
@@ -782,8 +729,9 @@ class DeepAgentsChatRuntime:
 
         raw_answer = _extract_final_answer_text(result) or "".join(streamed_answer_parts).strip() or "目前無法根據現有內容生成穩定回答。"
         if (
-            latest_coverage_signals_payload is not None
-            and bool(latest_coverage_signals_payload.get("insufficient_evidence"))
+            latest_retrieval_result is not None
+            and latest_retrieval_result.coverage_signals is not None
+            and bool(latest_retrieval_result.coverage_signals.insufficient_evidence)
             and not _answer_mentions_insufficient_evidence(raw_answer)
         ):
             raw_answer = (

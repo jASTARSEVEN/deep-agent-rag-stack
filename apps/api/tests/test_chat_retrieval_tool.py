@@ -6,6 +6,7 @@ import pytest
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.tools.retrieval import (
+    build_agent_tool_payload,
     build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_chat_citations,
@@ -557,6 +558,132 @@ def test_retrieval_tool_payload_builders_accept_none() -> None:
     assert summary_payload["dropped_by_diversity"] == []
     assert summary_payload["profile_settings"] == {}
     assert summary_payload["contexts"] == []
+
+
+def test_build_agent_tool_payload_returns_consolidated_llm_contract(db_session, app_settings) -> None:
+    """LLM tool payload 應集中由單一 helper 產生。
+
+    參數：
+    - `db_session`：測試資料庫 session fixture。
+    - `app_settings`：測試設定 fixture。
+
+    回傳：
+    - `None`：以斷言驗證提供給 LLM 的欄位契約。
+    """
+
+    area = Area(id=_uuid(), name="LLM Payload Area")
+    document = Document(
+        id=_uuid(),
+        area_id=area.id,
+        file_name="llm-payload.md",
+        storage_key="documents/llm-payload.md",
+        content_type="text/markdown",
+        file_size=123,
+        status=DocumentStatus.ready,
+        synopsis_text="這份文件主要描述 alpha policy。",
+    )
+    parent = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=None,
+        chunk_type=ChunkType.parent,
+        structure_kind=ChunkStructureKind.text,
+        position=0,
+        section_index=0,
+        child_index=None,
+        heading="Alpha Policy",
+        content="alpha intro alpha detail",
+        content_preview="alpha intro alpha detail",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+        embedding=None,
+    )
+    child = DocumentChunk(
+        id=_uuid(),
+        document_id=document.id,
+        parent_chunk_id=parent.id,
+        chunk_type=ChunkType.child,
+        structure_kind=ChunkStructureKind.text,
+        position=1,
+        section_index=0,
+        child_index=0,
+        heading="Alpha Policy",
+        content="alpha intro alpha detail",
+        content_preview="alpha intro alpha detail",
+        char_count=24,
+        start_offset=0,
+        end_offset=24,
+        embedding=[0.1] * app_settings.embedding_dimensions,
+    )
+    db_session.add_all(
+        [
+            area,
+            AreaUserRole(area_id=area.id, user_sub="user-reader", role=Role.reader),
+            document,
+            parent,
+            child,
+        ]
+    )
+    db_session.commit()
+
+    result = retrieve_area_contexts_tool(
+        session=db_session,
+        principal=CurrentPrincipal(sub="user-reader", groups=("/group/reader",)),
+        settings=app_settings,
+        area_id=area.id,
+        question="compare alpha policy",
+        task_type=EvaluationQueryType.cross_document_compare,
+    )
+
+    payload = build_agent_tool_payload(
+        db_session,
+        result,
+        tool_call_count=2,
+        followup_call_count=1,
+        synopsis_inspection_count=0,
+        latency_budget_status="degraded",
+        stop_reason="continue",
+    )
+
+    assert payload["assembled_contexts"] == [
+        {
+            "context_label": "C1",
+            "context_index": 0,
+            "document_name": "llm-payload.md",
+            "heading": "Alpha Policy",
+            "assembled_text": "alpha intro alpha detail",
+        }
+    ]
+    assert payload["planning_documents"] == [
+        {
+            "handle": result.planning_documents[0].handle,
+            "document_name": "llm-payload.md",
+            "mentioned_by_query": False,
+            "hit_in_current_round": True,
+            "synopsis_available": True,
+        }
+    ]
+    assert payload["coverage_signals"] == {
+        "missing_document_names": [],
+        "supports_compare": False,
+        "insufficient_evidence": True,
+        "missing_compare_axes": ["共同點與差異都缺少雙邊直接證據"],
+        "new_evidence_found": True,
+    }
+    assert payload["next_best_followups"] == ["優先找出每份文件對同一 compare 面向的直接引文，再整理共同點與差異。"]
+    assert payload["evidence_cue_texts"] == [
+        {
+            "context_label": "C1",
+            "document_name": "llm-payload.md",
+            "cue_text": "alpha intro alpha detail",
+        }
+    ]
+    assert payload["synopsis_hints"] == []
+    assert payload["loop_trace_delta"]["tool_call_count"] == 2
+    assert payload["loop_trace_delta"]["followup_call_count"] == 1
+    assert payload["loop_trace_delta"]["latency_budget_status"] == "degraded"
+    assert payload["response_contract"]["task_type"] == "cross_document_compare"
 
 
 def test_build_chat_citations_normalizes_uuid_ids() -> None:

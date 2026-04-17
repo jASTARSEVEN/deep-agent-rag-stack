@@ -422,6 +422,80 @@ def build_agent_tool_context_payload(
     ]
 
 
+def build_agent_tool_payload(
+    session,
+    retrieval_result: RetrievalToolResult | None,
+    *,
+    assembled_contexts_payload: list[dict[str, object]] | None = None,
+    loop_trace_delta: dict[str, object] | None = None,
+    tool_call_count: int,
+    followup_call_count: int,
+    synopsis_inspection_count: int,
+    latency_budget_status: str,
+    stop_reason: str,
+) -> dict[str, object]:
+    """建立 `retrieve_area_contexts` 回傳給 LLM 的正式 payload。
+
+    參數：
+    - `session`：目前資料庫 session。
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+    - `assembled_contexts_payload`：可選的累積 context payload；未提供時使用本次 round 結果。
+    - `loop_trace_delta`：可選的 runtime 級 loop trace 覆寫。
+    - `tool_call_count`：目前回合已執行的 tool call 次數。
+    - `followup_call_count`：目前回合的 follow-up 次數。
+    - `synopsis_inspection_count`：目前回合已檢視的 synopsis 次數。
+    - `latency_budget_status`：目前 latency budget 狀態。
+    - `stop_reason`：目前 agentic loop stop reason。
+
+    回傳：
+    - `dict[str, object]`：提供給 LLM 的單一 tool payload。
+    """
+
+    tool_contexts_payload = (
+        list(assembled_contexts_payload)
+        if assembled_contexts_payload is not None
+        else build_agent_tool_context_payload(session, retrieval_result)
+    )
+    effective_loop_trace_delta = (
+        dict(loop_trace_delta)
+        if loop_trace_delta is not None
+        else dict(retrieval_result.loop_trace_delta)
+        if retrieval_result is not None
+        else {}
+    )
+    include_loop_trace = bool(
+        effective_loop_trace_delta
+        or followup_call_count > 0
+        or synopsis_inspection_count > 0
+        or latency_budget_status != "normal"
+        or stop_reason not in {"not_started", "continue"}
+    )
+    payload: dict[str, object] = {
+        "assembled_contexts": tool_contexts_payload,
+        "coverage_signals": _build_agent_coverage_signals_payload(retrieval_result),
+        "planning_documents": _build_agent_planning_documents_payload(retrieval_result),
+        "next_best_followups": list(retrieval_result.next_best_followups) if retrieval_result is not None else [],
+        "evidence_cue_texts": _build_agent_evidence_cue_payload(retrieval_result),
+        "synopsis_hints": _build_agent_synopsis_hints_payload(retrieval_result),
+        "loop_trace_delta": (
+            {
+                **effective_loop_trace_delta,
+                "tool_call_count": tool_call_count,
+                "followup_call_count": followup_call_count,
+                "synopsis_inspection_count": synopsis_inspection_count,
+                "latency_budget_status": latency_budget_status,
+                "stop_reason": stop_reason,
+            }
+            if include_loop_trace
+            else {}
+        ),
+    }
+    response_contract = build_agent_response_contract_payload(session, retrieval_result)
+    if response_contract is not None:
+        payload["response_contract"] = response_contract
+    return payload
+
+
 def build_agent_response_contract_payload(
     session,
     retrieval_result: RetrievalToolResult | None,
@@ -625,6 +699,123 @@ def build_chat_citations(
             )
         )
     return references
+
+
+def _build_agent_planning_documents_payload(
+    retrieval_result: RetrievalToolResult | None,
+) -> list[dict[str, object]]:
+    """建立提供給 LLM 的 planning documents 欄位。
+
+    參數：
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `list[dict[str, object]]`：不暴露 raw document id 的 planning documents。
+    """
+
+    if retrieval_result is None:
+        return []
+
+    payload: list[dict[str, object]] = []
+    for item in retrieval_result.planning_documents:
+        planning_document = {
+            "document_name": str(getattr(item, "document_name", "") or ""),
+            "mentioned_by_query": bool(getattr(item, "mentioned_by_query", False)),
+            "hit_in_current_round": bool(getattr(item, "hit_in_current_round", False)),
+            "synopsis_available": bool(getattr(item, "synopsis_available", False)),
+        }
+        handle = getattr(item, "handle", None)
+        if isinstance(handle, str) and handle:
+            planning_document["handle"] = handle
+        payload.append(planning_document)
+    return payload
+
+
+def _build_agent_coverage_signals_payload(
+    retrieval_result: RetrievalToolResult | None,
+) -> dict[str, object] | None:
+    """建立提供給 LLM 的 coverage signals 欄位。
+
+    參數：
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `dict[str, object] | None`：compare / multi-document planning 訊號。
+    """
+
+    if retrieval_result is None or retrieval_result.coverage_signals is None:
+        return None
+
+    coverage_signals = retrieval_result.coverage_signals
+    if isinstance(coverage_signals, dict):
+        return {
+            "missing_document_names": list(coverage_signals.get("missing_document_names", [])),
+            "supports_compare": bool(coverage_signals.get("supports_compare", False)),
+            "insufficient_evidence": bool(coverage_signals.get("insufficient_evidence", False)),
+            "missing_compare_axes": list(coverage_signals.get("missing_compare_axes", [])),
+            "new_evidence_found": bool(coverage_signals.get("new_evidence_found", False)),
+        }
+
+    return {
+        "missing_document_names": list(getattr(coverage_signals, "missing_document_names", [])),
+        "supports_compare": bool(getattr(coverage_signals, "supports_compare", False)),
+        "insufficient_evidence": bool(getattr(coverage_signals, "insufficient_evidence", False)),
+        "missing_compare_axes": list(getattr(coverage_signals, "missing_compare_axes", [])),
+        "new_evidence_found": bool(getattr(coverage_signals, "new_evidence_found", False)),
+    }
+
+
+def _build_agent_evidence_cue_payload(
+    retrieval_result: RetrievalToolResult | None,
+) -> list[dict[str, object]]:
+    """建立提供給 LLM 的 evidence cues 欄位。
+
+    參數：
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `list[dict[str, object]]`：簡短 evidence cue 清單。
+    """
+
+    if retrieval_result is None:
+        return []
+
+    return [
+        {
+            "context_label": str(getattr(item, "context_label", "") or ""),
+            "document_name": str(getattr(item, "document_name", "") or ""),
+            "cue_text": str(getattr(item, "cue_text", "") or ""),
+        }
+        for item in retrieval_result.evidence_cue_texts
+    ]
+
+
+def _build_agent_synopsis_hints_payload(
+    retrieval_result: RetrievalToolResult | None,
+) -> list[dict[str, object]]:
+    """建立提供給 LLM 的 synopsis hints 欄位。
+
+    參數：
+    - `retrieval_result`：單次 retrieval tool 執行結果。
+
+    回傳：
+    - `list[dict[str, object]]`：可選的 synopsis hints。
+    """
+
+    if retrieval_result is None:
+        return []
+
+    payload: list[dict[str, object]] = []
+    for item in retrieval_result.synopsis_hints:
+        synopsis_hint = {
+            "document_name": str(getattr(item, "document_name", "") or ""),
+            "synopsis_text": str(getattr(item, "synopsis_text", "") or ""),
+        }
+        handle = getattr(item, "handle", None)
+        if isinstance(handle, str) and handle:
+            synopsis_hint["handle"] = handle
+        payload.append(synopsis_hint)
+    return payload
 
 
 def _build_context_label(context_index: int) -> str:
