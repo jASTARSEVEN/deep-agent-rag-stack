@@ -3,6 +3,18 @@
 import React, { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { MarkdownContent } from "../../../components/MarkdownContent";
+import type {
+  AreaRole,
+  DocumentPreviewPayload,
+  EvaluationCandidatePreviewPayload,
+  EvaluationDatasetDetailPayload,
+  EvaluationDatasetSummary,
+  EvaluationLanguage,
+  EvaluationProfile,
+  EvaluationPreviewDebugPayload,
+  EvaluationQueryType,
+  EvaluationRunReportPayload,
+} from "../../../generated/rest";
 import {
   createEvaluationDataset,
   createEvaluationItem,
@@ -17,19 +29,6 @@ import {
   markEvaluationMiss,
   runEvaluationDataset,
 } from "../../../lib/api";
-import type {
-  AreaRole,
-  DocumentPreviewPayload,
-  EvaluationCandidatePreviewPayload,
-  EvaluationDatasetDetailPayload,
-  EvaluationDatasetSummary,
-  EvaluationDocumentRecallDetail,
-  EvaluationLanguage,
-  EvaluationProfile,
-  EvaluationQueryType,
-  EvaluationPreviewDebugPayload,
-  EvaluationRunReportPayload,
-} from "../../../lib/types";
 
 
 interface EvaluationDrawerProps {
@@ -1365,7 +1364,9 @@ function buildPreviewSegments(previewDocument: DocumentPreviewPayload): PreviewS
 
 
 function formatDocumentRecallDocuments(
-  documentRecall: EvaluationDocumentRecallDetail,
+  documentRecall: {
+    candidates: Array<{ document_id: string; file_name: string }>;
+  },
   documentIds: string[],
 ): string {
   /** 將 document recall 的文件 id 列表轉成可閱讀標籤。 */
@@ -1379,7 +1380,9 @@ function formatDocumentRecallDocuments(
 }
 
 
-function formatDocumentRecallCandidates(documentRecall: EvaluationDocumentRecallDetail): string {
+function formatDocumentRecallCandidates(documentRecall: {
+  candidates: Array<{ file_name: string; rrf_rank: number }>;
+}): string {
   /** 將 document recall candidates 轉成單行摘要，便於 preview 與 run report 顯示。 */
 
   if (documentRecall.candidates.length === 0) {

@@ -2,6 +2,7 @@
 
 import { Client } from "@langchain/langgraph-sdk";
 
+import type { ChatSessionSummary as RestChatSessionSummary } from "../../../generated/rest";
 import {
   deleteAreaChatSession,
   fetchAreaChatSessions,
@@ -14,7 +15,7 @@ import type {
   ChatAnswerBlock,
   ChatContextReference,
   ChatPhaseState,
-  ChatSessionSummary,
+  ChatSessionViewModel,
   ChatToolCallState,
 } from "../../../lib/types";
 import { resolveAnswerBlocks } from "../state/answerBlocks";
@@ -111,6 +112,17 @@ type StoredAreaThreadMap = Record<string, string>;
 
 /** 正式 token 串流來源；`custom` 僅承載 phase 與 tool_call 等產品事件。 */
 const PRIMARY_TOKEN_STREAM_EVENT = "messages-tuple";
+
+
+/** 將 REST chat session 摘要轉成前端 view-model。 */
+function mapRestChatSessionToViewModel(session: RestChatSessionSummary): ChatSessionViewModel {
+  return {
+    threadId: session.thread_id,
+    title: session.title,
+    createdAt: session.created_at,
+    updatedAt: session.updated_at,
+  };
+}
 
 
 /** 判斷未知資料是否為一般 record。 */
@@ -436,10 +448,12 @@ function deriveSessionTitleFromQuestion(question: string): string {
  * @param areaId 目標 area 識別碼。
  * @returns 目前 area 內所有 session 摘要。
  */
-export async function listAreaSessions(areaId: string): Promise<ChatSessionSummary[]> {
+export async function listAreaSessions(areaId: string): Promise<ChatSessionViewModel[]> {
   await migrateLegacyAreaSessions(areaId);
   const payload = await fetchAreaChatSessions(areaId);
-  return payload.items.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return payload.items
+    .map((item) => mapRestChatSessionToViewModel(item))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 
@@ -536,7 +550,7 @@ async function migrateLegacyAreaSessions(areaId: string): Promise<void> {
   for (const item of migrationTargets) {
     try {
       await registerAreaChatSession(areaId, {
-        threadId: item.threadId,
+        thread_id: item.threadId,
         title: item.title,
       });
       if (legacyAreaSessions[areaId]?.activeThreadId === item.threadId || legacyThreadId === item.threadId) {
@@ -582,10 +596,10 @@ function ensureAssistantId(): string {
 export async function createAreaSession(
   areaId: string,
   title: string = DEFAULT_SESSION_TITLE,
-): Promise<ChatSessionSummary> {
-  const registeredSession = await registerAreaChatSession(areaId, {
+): Promise<ChatSessionViewModel> {
+  const registeredSession = mapRestChatSessionToViewModel(await registerAreaChatSession(areaId, {
     title,
-  });
+  }));
   setActiveAreaSessionId(areaId, registeredSession.threadId);
   return registeredSession;
 }
@@ -603,7 +617,7 @@ export async function ensureAreaSession(
   options: {
     titleOnCreate?: string;
   } = {},
-): Promise<ChatSessionSummary> {
+): Promise<ChatSessionViewModel> {
   const activeThreadId = getActiveAreaSessionId(areaId);
   const currentSessions = await listAreaSessions(areaId);
   const existingSession = currentSessions.find((session) => session.threadId === activeThreadId);

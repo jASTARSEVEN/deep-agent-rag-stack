@@ -1,5 +1,12 @@
 import React, { useState, useEffect, type FormEvent, useCallback } from "react";
-import type { AreaAccessPayload, AreaRole, AccessUserEntry, AccessGroupEntry, UserSearchResult, GroupSearchResult } from "../../../lib/types";
+import type {
+  AccessGroupEntry,
+  AccessUserEntry,
+  AreaAccessPayload,
+  AreaRole,
+  GroupSearchResult,
+  UserSearchResult,
+} from "../../../generated/rest";
 import { fetchAreaAccess, replaceAreaAccess, searchUsers, searchGroups } from "../../../lib/api";
 
 /** Area access 編輯支援的固定角色。 */

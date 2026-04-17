@@ -1,6 +1,6 @@
 /** 前端 auth session 持久化所需的 sessionStorage 輔助函式。 */
 
-import type { AuthContextPayload } from "../lib/types";
+import type { AuthContextPayload } from "../generated/rest";
 
 
 /** access token 在 sessionStorage 使用的 key。 */

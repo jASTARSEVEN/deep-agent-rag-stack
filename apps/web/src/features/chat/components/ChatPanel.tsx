@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { MarkdownContent } from "../../../components/MarkdownContent";
+import type { DocumentPreviewPayload } from "../../../generated/rest";
 import { fetchDocumentPreview, type AccessTokenGetter } from "../../../lib/api";
 import type {
   ChatContextReference,
   ChatMessageViewModel,
-  ChatSessionSummary,
-  DocumentPreviewPayload,
+  ChatSessionViewModel,
 } from "../../../lib/types";
 import { applyStreamUpdate, createAssistantMessage, createUserMessage, updateLastAssistantMessage } from "../state/messages";
 import {
@@ -80,7 +80,7 @@ function mapHistoryMessagesToViewModels(
  * @param session 要顯示的 session 摘要。
  * @returns 單行標題與最近互動時間。
  */
-function formatSessionOptionLabel(session: ChatSessionSummary): string {
+function formatSessionOptionLabel(session: ChatSessionViewModel): string {
   const formattedTime = new Intl.DateTimeFormat("zh-TW", {
     month: "2-digit",
     day: "2-digit",
@@ -100,7 +100,7 @@ export function ChatPanel({
 }: ChatPanelProps): JSX.Element {
   const [chatQuestion, setChatQuestion] = useState(EMPTY_CHAT_INPUT);
   const [chatMessages, setChatMessages] = useState<ChatMessageViewModel[]>([]);
-  const [chatSessions, setChatSessions] = useState<ChatSessionSummary[]>([]);
+  const [chatSessions, setChatSessions] = useState<ChatSessionViewModel[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [isSubmittingChat, setIsSubmittingChat] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);

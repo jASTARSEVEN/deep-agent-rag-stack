@@ -3,9 +3,10 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 
+import type { AuthContextPayload } from "../generated/rest";
 import { fetchAuthContext, registerAccessTokenGetter } from "../lib/api";
 import { appConfig } from "../lib/config";
-import type { AuthContextPayload, AuthSessionState } from "../lib/types";
+import type { AuthSessionState } from "../lib/types";
 import { getKeycloakClient, initializeKeycloak, resetKeycloakClient } from "./keycloak";
 import { TEST_ROLE_TOKENS, type TestAuthRole } from "./testTokens";
 import {

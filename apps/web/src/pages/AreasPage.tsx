@@ -10,15 +10,13 @@ import { AreaEditModal } from "../features/areas/components/AreaEditModal";
 import { DocumentsDrawer } from "../features/documents/components/DocumentsDrawer";
 import { EvaluationDrawer } from "../features/evaluation/components/EvaluationDrawer";
 import { ChatPanel } from "../features/chat/components/ChatPanel";
+import type { AreaSummary } from "../generated/rest";
 import {
   deleteArea,
   fetchAreas,
   fetchAuthContext,
   fetchAreaDetail,
 } from "../lib/api";
-import type {
-  AreaSummary,
-} from "../lib/types";
 
 
 /** 登入後的 Areas 管理頁。 */

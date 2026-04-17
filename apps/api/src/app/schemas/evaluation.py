@@ -3,12 +3,31 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import EvaluationLanguage, EvaluationQueryType, EvaluationRunStatus
-from app.services.evaluation_profiles import SUPPORTED_EVALUATION_PROFILES
+from app.services.evaluation_profiles import (
+    DETERMINISTIC_GATE_V1,
+    GENERIC_GUARDED_ASSEMBLER_V1,
+    GENERIC_GUARDED_ASSEMBLER_V1_GATE,
+    GENERIC_GUARDED_ASSEMBLER_V2,
+    GENERIC_GUARDED_ASSEMBLER_V2_GATE,
+    PRODUCTION_LIKE_V1,
+)
+
+
+class EvaluationProfile(str, Enum):
+    """Retrieval evaluation profile 正式型別。"""
+
+    production_like_v1 = PRODUCTION_LIKE_V1
+    deterministic_gate_v1 = DETERMINISTIC_GATE_V1
+    generic_guarded_assembler_v1 = GENERIC_GUARDED_ASSEMBLER_V1
+    generic_guarded_assembler_v2 = GENERIC_GUARDED_ASSEMBLER_V2
+    generic_guarded_assembler_v1_gate = GENERIC_GUARDED_ASSEMBLER_V1_GATE
+    generic_guarded_assembler_v2_gate = GENERIC_GUARDED_ASSEMBLER_V2_GATE
 
 
 class CreateEvaluationDatasetRequest(BaseModel):
@@ -108,18 +127,7 @@ class RunEvaluationDatasetRequest(BaseModel):
     """執行 benchmark run 的請求 payload。"""
 
     top_k: int = Field(default=10, ge=1, le=20)
-    evaluation_profile: str = Field(default="production_like_v1", min_length=1, max_length=64)
-
-    @field_validator("evaluation_profile")
-    @classmethod
-    def validate_evaluation_profile(cls, value: str) -> str:
-        """限制 evaluation profile 僅接受已知 profile。"""
-
-        allowed_profiles = set(SUPPORTED_EVALUATION_PROFILES)
-        if value not in allowed_profiles:
-            allowed_profiles_text = "、".join(SUPPORTED_EVALUATION_PROFILES)
-            raise ValueError(f"evaluation_profile 只支援：{allowed_profiles_text}。")
-        return value
+    evaluation_profile: EvaluationProfile = EvaluationProfile.production_like_v1
 
 
 class EvaluationDatasetSummary(BaseModel):
@@ -349,7 +357,7 @@ class EvaluationRunSummary(BaseModel):
     baseline_run_id: UUID | None
     created_by_sub: str
     total_items: int
-    evaluation_profile: str
+    evaluation_profile: EvaluationProfile
     config_snapshot: dict[str, object]
     error_message: str | None
     created_at: datetime

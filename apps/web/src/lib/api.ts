@@ -2,29 +2,37 @@
 
 import { appConfig } from "./config";
 import type {
-  ApiHealthPayload,
   AreaAccessPayload,
   AreaListPayload,
   AreaSummary,
+  ApiHealthPayload,
+  AuthContextPayload,
   ChatSessionListPayload,
   ChatSessionSummary,
-  UpdateAreaPayload,
+  CreateAreaPayload,
+  CreateEvaluationDatasetPayload,
+  CreateEvaluationItemPayload,
   DocumentListPayload,
   DocumentPreviewPayload,
   DocumentSummary,
-  AuthContextPayload,
-  IngestJobSummary,
-  ReindexDocumentPayload,
-  UploadDocumentPayload,
   EvaluationCandidatePreviewPayload,
   EvaluationDatasetDetailPayload,
   EvaluationDatasetSummary,
   EvaluationItemSummary,
-  EvaluationProfile,
   EvaluationPreviewDebugPayload,
-  EvaluationQueryType,
+  EvaluationProfile,
   EvaluationRunReportPayload,
-} from "./types";
+  GroupSearchResult,
+  IngestJobSummary,
+  MarkEvaluationSpanPayload,
+  ReplaceAreaAccessPayload,
+  ReindexDocumentPayload,
+  RunEvaluationDatasetPayload,
+  UpdateAreaPayload,
+  UpdateChatSessionPayload,
+  UploadDocumentPayload,
+  UserSearchResult,
+} from "../generated/rest";
 
 
 /** 提供目前 access token 的非同步 getter。 */
@@ -77,92 +85,6 @@ async function readErrorMessage(response: Response): Promise<string> {
     return `未預期的 API 回應狀態：${response.status}`;
   }
   return `未預期的 API 回應狀態：${response.status}`;
-}
-
-
-interface RawPreviewChunkPayload {
-  /** chunk 關聯的 locator。 */
-  regions?: Array<{
-    page_number: number;
-    region_order: number;
-    bbox_left: number;
-    bbox_bottom: number;
-    bbox_right: number;
-    bbox_top: number;
-  }>;
-  /** chunk 唯一識別碼。 */
-  chunk_id: string;
-  /** chunk 所屬 parent chunk 識別碼。 */
-  parent_chunk_id: string | null;
-  /** parent 下 child 順序。 */
-  child_index: number | null;
-  /** chunk 所屬標題。 */
-  heading: string | null;
-  /** chunk 內容結構型別。 */
-  structure_kind: "text" | "table";
-  /** chunk 在全文中的起始 offset。 */
-  start_offset: number;
-  /** chunk 在全文中的結束 offset。 */
-  end_offset: number;
-  /** 起始頁碼。 */
-  page_start?: number | null;
-  /** 結束頁碼。 */
-  page_end?: number | null;
-}
-
-
-interface RawDocumentPreviewPayload {
-  /** 文件識別碼。 */
-  document_id: string;
-  /** 文件名稱。 */
-  file_name: string;
-  /** 文件 MIME 類型。 */
-  content_type: string;
-  /** 目前後端可能仍回傳的舊欄位。 */
-  normalized_text?: string;
-  /** 文件全文顯示文字。 */
-  display_text?: string;
-  /** child chunk map。 */
-  chunks: RawPreviewChunkPayload[];
-}
-
-
-/**
- * 將後端 preview 回應正規化為前端正式契約。
- *
- * @param payload 後端回傳的原始 JSON。
- * @returns 供前端預覽使用的標準化 payload。
- */
-function normalizeDocumentPreviewPayload(payload: RawDocumentPreviewPayload): DocumentPreviewPayload {
-  const displayText =
-    typeof payload.display_text === "string" && payload.display_text
-      ? payload.display_text
-      : typeof payload.normalized_text === "string"
-        ? payload.normalized_text
-        : "";
-
-  if (!displayText) {
-    throw new Error("文件預覽回應缺少 display_text。");
-  }
-
-  return {
-    document_id: payload.document_id,
-    file_name: payload.file_name,
-    content_type: payload.content_type,
-    display_text: displayText,
-    chunks: payload.chunks.map((chunk) => ({
-      chunk_id: chunk.chunk_id,
-      parent_chunk_id: chunk.parent_chunk_id,
-      child_index: chunk.child_index,
-      heading: chunk.heading,
-      structure_kind: chunk.structure_kind,
-      start_offset: chunk.start_offset,
-      end_offset: chunk.end_offset,
-      page_start: typeof chunk.page_start === "number" ? chunk.page_start : null,
-      page_end: typeof chunk.page_end === "number" ? chunk.page_end : null,
-      regions: Array.isArray(chunk.regions) ? chunk.regions : [],
-    })),
-  };
 }
 
 
@@ -273,7 +195,7 @@ export async function fetchAreas(): Promise<AreaListPayload> {
  * @param payload 要建立的 area 名稱與說明。
  * @returns 新建立 area 的摘要資料。
  */
-export async function createArea(payload: { name: string; description: string }): Promise<AreaSummary> {
+export async function createArea(payload: CreateAreaPayload): Promise<AreaSummary> {
   const response = await fetchProtected("/areas", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -302,22 +224,7 @@ export async function fetchAreaDetail(areaId: string): Promise<AreaSummary> {
  */
 export async function fetchAreaChatSessions(areaId: string): Promise<ChatSessionListPayload> {
   const response = await fetchProtected(`/areas/${areaId}/chat-sessions`);
-  const payload = (await response.json()) as {
-    items: Array<{
-      thread_id: string;
-      title: string;
-      created_at: string;
-      updated_at: string;
-    }>;
-  };
-  return {
-    items: payload.items.map((item) => ({
-      threadId: item.thread_id,
-      title: item.title,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at,
-    })),
-  };
+  return (await response.json()) as ChatSessionListPayload;
 }
 
 
@@ -330,27 +237,19 @@ export async function fetchAreaChatSessions(areaId: string): Promise<ChatSession
  */
 export async function registerAreaChatSession(
   areaId: string,
-  payload: { threadId?: string | null; title?: string | null } = {},
+  payload: {
+    thread_id?: string | null;
+    title?: string | null;
+  } = {},
 ): Promise<ChatSessionSummary> {
   const response = await fetchProtected(`/areas/${areaId}/chat-sessions`, {
     method: "POST",
     body: JSON.stringify({
-      thread_id: payload.threadId ?? null,
+      thread_id: payload.thread_id ?? null,
       title: payload.title ?? null,
     }),
   });
-  const item = (await response.json()) as {
-    thread_id: string;
-    title: string;
-    created_at: string;
-    updated_at: string;
-  };
-  return {
-    threadId: item.thread_id,
-    title: item.title,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-  };
+  return (await response.json()) as ChatSessionSummary;
 }
 
 
@@ -365,7 +264,7 @@ export async function registerAreaChatSession(
 export async function updateAreaChatSession(
   areaId: string,
   threadId: string,
-  payload: { title?: string | null } = {},
+  payload: UpdateChatSessionPayload = {},
 ): Promise<ChatSessionSummary> {
   const response = await fetchProtected(`/areas/${areaId}/chat-sessions/${threadId}`, {
     method: "PATCH",
@@ -373,18 +272,7 @@ export async function updateAreaChatSession(
       title: payload.title ?? null,
     }),
   });
-  const item = (await response.json()) as {
-    thread_id: string;
-    title: string;
-    created_at: string;
-    updated_at: string;
-  };
-  return {
-    threadId: item.thread_id,
-    title: item.title,
-    createdAt: item.created_at,
-    updatedAt: item.updated_at,
-  };
+  return (await response.json()) as ChatSessionSummary;
 }
 
 
@@ -423,7 +311,7 @@ export async function fetchEvaluationDatasets(areaId: string): Promise<{ items: 
  */
 export async function createEvaluationDataset(
   areaId: string,
-  payload: { name: string; query_type: EvaluationQueryType },
+  payload: CreateEvaluationDatasetPayload,
 ): Promise<EvaluationDatasetSummary> {
   const response = await fetchProtected(`/areas/${areaId}/evaluation/datasets`, {
     method: "POST",
@@ -470,12 +358,7 @@ export async function deleteEvaluationDataset(datasetId: string): Promise<void> 
  */
 export async function createEvaluationItem(
   datasetId: string,
-  payload: {
-    query_text: string;
-    language: "zh-TW" | "en" | "mixed";
-    query_type?: EvaluationQueryType;
-    notes?: string | null;
-  },
+  payload: CreateEvaluationItemPayload,
 ): Promise<EvaluationItemSummary> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items`, {
     method: "POST",
@@ -512,7 +395,7 @@ export async function deleteEvaluationItem(datasetId: string, itemId: string): P
 export async function fetchEvaluationCandidatePreview(
   datasetId: string,
   itemId: string,
-  payload: EvaluationPreviewDebugPayload = {},
+  payload: Partial<EvaluationPreviewDebugPayload> = {},
 ): Promise<EvaluationCandidatePreviewPayload> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/candidate-preview`, {
     method: "POST",
@@ -533,7 +416,7 @@ export async function fetchEvaluationCandidatePreview(
 export async function createEvaluationSpan(
   datasetId: string,
   itemId: string,
-  payload: { document_id: string; start_offset: number; end_offset: number; relevance_grade: 2 | 3 },
+  payload: MarkEvaluationSpanPayload,
 ): Promise<EvaluationItemSummary> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/items/${itemId}/spans`, {
     method: "POST",
@@ -567,7 +450,7 @@ export async function markEvaluationMiss(datasetId: string, itemId: string): Pro
  */
 export async function runEvaluationDataset(
   datasetId: string,
-  payload: { top_k?: number; evaluation_profile?: EvaluationProfile } = {},
+  payload: Partial<RunEvaluationDatasetPayload> = {},
 ): Promise<EvaluationRunReportPayload> {
   const response = await fetchProtected(`/evaluation/datasets/${datasetId}/runs`, {
     method: "POST",
@@ -639,7 +522,7 @@ export async function fetchAreaAccess(areaId: string): Promise<AreaAccessPayload
  */
 export async function replaceAreaAccess(
   areaId: string,
-  payload: Pick<AreaAccessPayload, "users" | "groups">,
+  payload: ReplaceAreaAccessPayload,
 ): Promise<AreaAccessPayload> {
   const response = await fetchProtected(`/areas/${areaId}/access`, {
     method: "PUT",
@@ -708,7 +591,7 @@ export async function fetchDocumentDetail(documentId: string): Promise<DocumentS
  */
 export async function fetchDocumentPreview(documentId: string): Promise<DocumentPreviewPayload> {
   const response = await fetchProtected(`/documents/${documentId}/preview`);
-  return normalizeDocumentPreviewPayload((await response.json()) as RawDocumentPreviewPayload);
+  return (await response.json()) as DocumentPreviewPayload;
 }
 
 
@@ -764,9 +647,9 @@ export async function fetchIngestJob(jobId: string): Promise<IngestJobSummary> {
  * @param query 要搜尋的關鍵字。
  * @returns 符合條件的使用者清單。
  */
-export async function searchUsers(query: string) {
+export async function searchUsers(query: string): Promise<UserSearchResult[]> {
   const response = await fetchProtected(`/directory/users?q=${encodeURIComponent(query)}`);
-  return await response.json();
+  return (await response.json()) as UserSearchResult[];
 }
 
 /**
@@ -775,7 +658,7 @@ export async function searchUsers(query: string) {
  * @param query 要搜尋的關鍵字。
  * @returns 符合條件的群組清單。
  */
-export async function searchGroups(query: string) {
+export async function searchGroups(query: string): Promise<GroupSearchResult[]> {
   const response = await fetchProtected(`/directory/groups?q=${encodeURIComponent(query)}`);
-  return await response.json();
+  return (await response.json()) as GroupSearchResult[];
 }

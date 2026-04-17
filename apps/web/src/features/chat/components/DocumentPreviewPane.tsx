@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { MarkdownContent } from "../../../components/MarkdownContent";
-import type { ChatContextReference, DocumentPreviewPayload } from "../../../lib/types";
+import type { DocumentPreviewPayload } from "../../../generated/rest";
+import type { ChatContextReference } from "../../../lib/types";
 
 
 interface PreviewSegment {

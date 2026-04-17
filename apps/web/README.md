@@ -10,7 +10,11 @@ This module contains the project's React + Tailwind frontend. It currently provi
 
 - Local Node run:
   - `npm install`
+  - `npm run generate:rest-types`
   - `npm run dev`
+- Regenerate or verify REST contract types:
+  - `npm run generate:rest-types`
+  - `npm run check:rest-types`
 - Validate the real login flow locally:
   - Make sure Keycloak and the API are available
   - Open `http://localhost:3000` for local Node dev, or `https://<PUBLIC_HOST>` for the compose-backed public entry
@@ -47,7 +51,9 @@ This module contains the project's React + Tailwind frontend. It currently provi
 - `src/pages`: landing, callback, and Areas pages
 - `src/features/chat`: LangGraph SDK transport, chat state, and chat/debug UI
 - `src/components`: reusable UI blocks
-- `src/lib`: environment and API helpers
+- `src/generated/rest.ts`: generated REST contract types from the API OpenAPI schema
+- `src/lib`: environment helpers, API client, and UI-only local types
+- `scripts/generate-rest-types.mjs`: OpenAPI -> TypeScript generation/check entrypoint
 - `tests/e2e`: Playwright E2E tests, bootstrap scripts, and local test-mode API startup helpers
 - `playwright.config.ts`: Playwright runtime configuration
 
@@ -66,6 +72,7 @@ This module contains the project's React + Tailwind frontend. It currently provi
 ## Troubleshooting
 
 - If the page shows API errors, make sure the API container is healthy and `VITE_API_BASE_URL` is correct.
+- If `npm run build` fails at `check:rest-types`, regenerate `src/generated/rest.ts` with `npm run generate:rest-types` before retrying.
 - If the Areas page shows `Failed to fetch` or cannot reach the API, make sure `API_CORS_ORIGINS` includes the current frontend origin. The compose default is the public `https://<PUBLIC_HOST>` origin; local Node dev should explicitly allow `http://localhost:3000`.
 - If callback cannot return to the frontend after login, verify the redirect URI for the Keycloak client `deep-agent-web` matches `VITE_KEYCLOAK_URL` and `VITE_KEYCLOAK_CLIENT_ID`.
 - If Vite shows `Blocked request. This host is not allowed.`, add the public hostname to `WEB_ALLOWED_HOSTS` so the dev server accepts the incoming Host header.

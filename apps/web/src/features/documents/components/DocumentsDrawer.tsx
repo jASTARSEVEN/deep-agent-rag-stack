@@ -8,7 +8,7 @@ import {
   deleteDocument,
   fetchIngestJob
 } from "../../../lib/api";
-import type { DocumentPreviewPayload, DocumentSummary, IngestJobSummary } from "../../../lib/types";
+import type { DocumentPreviewPayload, DocumentSummary, IngestJobSummary } from "../../../generated/rest";
 
 /**
  * DocumentsDrawer 元件。

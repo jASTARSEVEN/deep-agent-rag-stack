@@ -1,5 +1,5 @@
 import React, { useState, type FormEvent } from "react";
-import type { AreaSummary } from "../../../lib/types";
+import type { AreaSummary } from "../../../generated/rest";
 import { createArea } from "../../../lib/api";
 
 /**
