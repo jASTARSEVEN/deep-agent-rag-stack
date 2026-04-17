@@ -154,6 +154,62 @@ class _OpenDataLoaderElement:
     regions: list[ParsedRegion]
 
 
+@dataclass(slots=True)
+class OpenDataLoaderRawRegion:
+    """OpenDataLoader artifact 中的原始 region payload。"""
+
+    # 所屬頁碼。
+    page_number: int | None
+    # 左邊界座標。
+    left: float | None
+    # 下邊界座標。
+    bottom: float | None
+    # 右邊界座標。
+    right: float | None
+    # 上邊界座標。
+    top: float | None
+
+
+@dataclass(slots=True)
+class OpenDataLoaderRawElement:
+    """OpenDataLoader artifact 中的原始 element payload。"""
+
+    # element 類型名稱。
+    element_kind: str
+    # 優先使用的 Markdown 文字。
+    markdown: str | None
+    # fallback 純文字內容。
+    text: str | None
+    # 另一種常見內容欄位。
+    content: str | None
+    # element heading。
+    heading: str | None
+    # heading 等級。
+    heading_level: int | None
+    # 單頁時的頁碼。
+    page_number: int | None
+    # element 起始頁碼。
+    page_start: int | None
+    # element 結束頁碼。
+    page_end: int | None
+    # 關聯的原始 regions。
+    regions: list[OpenDataLoaderRawRegion]
+
+
+@dataclass(slots=True)
+class OpenDataLoaderArtifactPayload:
+    """可持久化與可重建的 OpenDataLoader artifact。"""
+
+    # artifact schema 版本。
+    schema_version: str
+    # 供重建 ParsedDocument 使用的乾淨 Markdown。
+    cleaned_markdown: str
+    # 原始 Markdown；若來源提供則保留。
+    markdown: str | None
+    # 已標準化的 OpenDataLoader elements。
+    elements: list[OpenDataLoaderRawElement]
+
+
 def parse_document(
     *,
     file_name: str,
@@ -303,7 +359,7 @@ def _decode_payload(*, payload: bytes) -> str:
     return text
 
 
-def _decode_json_payload(*, payload: bytes) -> dict[str, object]:
+def _decode_json_payload(*, payload: bytes) -> OpenDataLoaderArtifactPayload:
     """將 JSON artifact 解碼為物件。"""
 
     try:
@@ -312,7 +368,7 @@ def _decode_json_payload(*, payload: bytes) -> dict[str, object]:
         raise ValueError("JSON parse artifact 內容無法解碼。") from exc
     if not isinstance(decoded, dict):
         raise ValueError("JSON parse artifact 格式不正確。")
-    return decoded
+    return _normalize_opendataloader_artifact_payload(raw_payload=decoded)
 
 
 def _parse_txt_document(*, payload: bytes) -> ParsedDocument:
@@ -417,7 +473,11 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
     if provider == "opendataloader":
         markdown, json_payload = _extract_pdf_content_with_opendataloader(payload=payload, pdf_config=pdf_config)
         cleaned_markdown = _clean_pdf_markdown(markdown=markdown, provider_name="OpenDataLoader")
-        parsed_document = _parse_opendataloader_payload(markdown=cleaned_markdown, artifact_payload=json_payload)
+        artifact_payload = _build_opendataloader_artifact_payload(
+            raw_payload=json_payload,
+            cleaned_markdown=cleaned_markdown,
+        )
+        parsed_document = _parse_opendataloader_payload(markdown=cleaned_markdown, artifact_payload=artifact_payload)
         return ParsedDocument(
             normalized_text=parsed_document.normalized_text,
             source_format=parsed_document.source_format,
@@ -425,10 +485,7 @@ def _parse_pdf_document(*, payload: bytes, pdf_config: PdfParserConfig) -> Parse
             artifacts=[
                 _build_json_artifact(
                     file_name="opendataloader.json",
-                    payload_obj=_build_opendataloader_artifact_payload(
-                        raw_payload=json_payload,
-                        cleaned_markdown=cleaned_markdown,
-                    ),
+                    payload_obj=artifact_payload,
                 ),
                 _build_text_artifact(
                     file_name="opendataloader.cleaned.md",
@@ -814,23 +871,181 @@ def _materialize_blocks(
     )
 
 
-def _build_opendataloader_artifact_payload(*, raw_payload: dict[str, object], cleaned_markdown: str) -> dict[str, object]:
+def _normalize_opendataloader_artifact_payload(
+    *,
+    raw_payload: dict[str, object],
+) -> OpenDataLoaderArtifactPayload:
+    """將外部或既有 JSON artifact 正規化為內部 dataclass。"""
+
+    cleaned_markdown = str(raw_payload.get("cleaned_markdown", "") or "").strip()
+    markdown = raw_payload.get("markdown")
+    if not cleaned_markdown and isinstance(markdown, str):
+        cleaned_markdown = markdown.strip()
+    return OpenDataLoaderArtifactPayload(
+        schema_version=str(raw_payload.get("schema_version", "deep-agent-opendataloader-v1") or "deep-agent-opendataloader-v1"),
+        cleaned_markdown=cleaned_markdown,
+        markdown=str(markdown).strip() if isinstance(markdown, str) and markdown.strip() else None,
+        elements=_extract_raw_opendataloader_elements_from_mapping(raw_payload=raw_payload),
+    )
+
+
+def _extract_raw_opendataloader_elements_from_mapping(
+    *,
+    raw_payload: dict[str, object],
+) -> list[OpenDataLoaderRawElement]:
+    """從任意 OpenDataLoader JSON mapping 萃取標準化 elements。"""
+
+    raw_elements = raw_payload.get("elements")
+    if not isinstance(raw_elements, list):
+        raw_content = raw_payload.get("content")
+        if isinstance(raw_content, dict):
+            raw_elements = raw_content.get("elements")
+        elif isinstance(raw_payload.get("document"), dict):
+            raw_elements = raw_payload["document"].get("elements")
+    if not isinstance(raw_elements, list):
+        return []
+
+    elements: list[OpenDataLoaderRawElement] = []
+    for item in raw_elements:
+        if not isinstance(item, dict):
+            continue
+        raw_regions = item.get("regions") or item.get("bboxes") or item.get("boxes")
+        if isinstance(raw_regions, dict):
+            raw_regions = [raw_regions]
+        if raw_regions is None:
+            raw_bbox = item.get("bbox")
+            raw_regions = [raw_bbox] if isinstance(raw_bbox, dict) else []
+        normalized_regions: list[OpenDataLoaderRawRegion] = []
+        if isinstance(raw_regions, list):
+            for region in raw_regions:
+                if not isinstance(region, dict):
+                    continue
+                page_number = region.get("page_number") or region.get("page")
+                left = region.get("left", region.get("x0"))
+                bottom = region.get("bottom", region.get("y0"))
+                right = region.get("right", region.get("x1"))
+                top = region.get("top", region.get("y1"))
+                normalized_regions.append(
+                    OpenDataLoaderRawRegion(
+                        page_number=page_number if isinstance(page_number, int) else None,
+                        left=float(left) if isinstance(left, (int, float)) else None,
+                        bottom=float(bottom) if isinstance(bottom, (int, float)) else None,
+                        right=float(right) if isinstance(right, (int, float)) else None,
+                        top=float(top) if isinstance(top, (int, float)) else None,
+                    )
+                )
+        heading = item.get("heading")
+        heading_level = item.get("heading_level") or item.get("level")
+        elements.append(
+            OpenDataLoaderRawElement(
+                element_kind=str(item.get("type") or item.get("kind") or item.get("label") or "text"),
+                markdown=str(item.get("markdown")).strip() if isinstance(item.get("markdown"), str) and str(item.get("markdown")).strip() else None,
+                text=str(item.get("text")).strip() if isinstance(item.get("text"), str) and str(item.get("text")).strip() else None,
+                content=(
+                    str(item.get("content")).strip()
+                    if isinstance(item.get("content"), str) and str(item.get("content")).strip()
+                    else None
+                ),
+                heading=str(heading).strip() if isinstance(heading, str) and heading.strip() else None,
+                heading_level=int(heading_level) if isinstance(heading_level, int) else None,
+                page_number=item.get("page_number") if isinstance(item.get("page_number"), int) else item.get("page") if isinstance(item.get("page"), int) else None,
+                page_start=item.get("page_start") if isinstance(item.get("page_start"), int) else None,
+                page_end=item.get("page_end") if isinstance(item.get("page_end"), int) else None,
+                regions=normalized_regions,
+            )
+        )
+    return elements
+
+
+def _serialize_opendataloader_artifact_payload(
+    *,
+    payload_obj: OpenDataLoaderArtifactPayload,
+) -> dict[str, object]:
+    """將內部 OpenDataLoader artifact dataclass 轉回可持久化 JSON。"""
+
+    return {
+        "schema_version": payload_obj.schema_version,
+        "cleaned_markdown": payload_obj.cleaned_markdown,
+        **({"markdown": payload_obj.markdown} if payload_obj.markdown else {}),
+        "elements": [
+            _serialize_opendataloader_raw_element(element=element)
+            for element in payload_obj.elements
+        ],
+    }
+
+
+def _serialize_opendataloader_raw_element(
+    *,
+    element: OpenDataLoaderRawElement,
+) -> dict[str, object]:
+    """將內部 raw element dataclass 轉回 JSON mapping。"""
+
+    payload: dict[str, object] = {"type": element.element_kind}
+    if element.markdown:
+        payload["markdown"] = element.markdown
+    if element.text:
+        payload["text"] = element.text
+    if element.content:
+        payload["content"] = element.content
+    if element.heading:
+        payload["heading"] = element.heading
+    if element.heading_level is not None:
+        payload["heading_level"] = element.heading_level
+    if element.page_number is not None:
+        payload["page_number"] = element.page_number
+    if element.page_start is not None:
+        payload["page_start"] = element.page_start
+    if element.page_end is not None:
+        payload["page_end"] = element.page_end
+    if element.regions:
+        payload["regions"] = [
+            _serialize_opendataloader_raw_region(region=region)
+            for region in element.regions
+        ]
+    return payload
+
+
+def _serialize_opendataloader_raw_region(
+    *,
+    region: OpenDataLoaderRawRegion,
+) -> dict[str, object]:
+    """將內部 raw region dataclass 轉回 JSON mapping。"""
+
+    payload: dict[str, object] = {}
+    if region.page_number is not None:
+        payload["page_number"] = region.page_number
+    if region.left is not None:
+        payload["left"] = region.left
+    if region.bottom is not None:
+        payload["bottom"] = region.bottom
+    if region.right is not None:
+        payload["right"] = region.right
+    if region.top is not None:
+        payload["top"] = region.top
+    return payload
+
+
+def _build_opendataloader_artifact_payload(
+    *,
+    raw_payload: dict[str, object],
+    cleaned_markdown: str,
+) -> OpenDataLoaderArtifactPayload:
     """建立可供 reindex 重用的 OpenDataLoader JSON artifact。"""
 
-    artifact_payload = dict(raw_payload)
-    artifact_payload["schema_version"] = "deep-agent-opendataloader-v1"
-    artifact_payload["cleaned_markdown"] = cleaned_markdown
-    return artifact_payload
+    normalized = _normalize_opendataloader_artifact_payload(raw_payload=raw_payload)
+    normalized.schema_version = "deep-agent-opendataloader-v1"
+    normalized.cleaned_markdown = cleaned_markdown
+    return normalized
 
 
 def _parse_opendataloader_json_artifact_payload(
     *,
-    artifact_payload: dict[str, object],
+    artifact_payload: OpenDataLoaderArtifactPayload,
     source_format: str,
 ) -> ParsedDocument:
     """從 OpenDataLoader JSON artifact 重建 ParsedDocument。"""
 
-    cleaned_markdown = str(artifact_payload.get("cleaned_markdown", "") or "").strip()
+    cleaned_markdown = artifact_payload.cleaned_markdown.strip()
     if not cleaned_markdown:
         raise ValueError("OpenDataLoader JSON artifact 缺少 cleaned_markdown。")
     parsed_document = _parse_opendataloader_payload(markdown=cleaned_markdown, artifact_payload=artifact_payload)
@@ -842,7 +1057,11 @@ def _parse_opendataloader_json_artifact_payload(
     )
 
 
-def _parse_opendataloader_payload(*, markdown: str, artifact_payload: dict[str, object]) -> ParsedDocument:
+def _parse_opendataloader_payload(
+    *,
+    markdown: str,
+    artifact_payload: OpenDataLoaderArtifactPayload,
+) -> ParsedDocument:
     """依 OpenDataLoader JSON+Markdown 建立帶 locator metadata 的 ParsedDocument。"""
 
     parsed_markdown = _parse_markdown_text(text=markdown, source_format="pdf")
@@ -859,36 +1078,25 @@ def _parse_opendataloader_payload(*, markdown: str, artifact_payload: dict[str, 
     )
 
 
-def _extract_opendataloader_elements(*, artifact_payload: dict[str, object]) -> list[_OpenDataLoaderElement]:
+def _extract_opendataloader_elements(
+    *,
+    artifact_payload: OpenDataLoaderArtifactPayload,
+) -> list[_OpenDataLoaderElement]:
     """從 OpenDataLoader artifact 中擷取可對齊 Markdown blocks 的 elements。"""
 
-    raw_elements = artifact_payload.get("elements")
-    if not isinstance(raw_elements, list):
-        raw_content = artifact_payload.get("content")
-        if isinstance(raw_content, dict):
-            raw_elements = raw_content.get("elements")
-        elif isinstance(artifact_payload.get("document"), dict):
-            raw_elements = artifact_payload["document"].get("elements")
-    if not isinstance(raw_elements, list):
-        return []
-
     extracted_elements: list[_OpenDataLoaderElement] = []
-    for item in raw_elements:
-        if not isinstance(item, dict):
-            continue
-        content = str(item.get("markdown") or item.get("text") or item.get("content") or "").strip()
+    for item in artifact_payload.elements:
+        content = str(item.markdown or item.text or item.content or "").strip()
         if not content:
             continue
-        element_kind = str(item.get("type") or item.get("kind") or item.get("label") or "text").strip().lower()
-        heading = item.get("heading")
-        heading_level = item.get("heading_level") or item.get("level")
+        element_kind = item.element_kind.strip().lower() or "text"
         page_start, page_end = _extract_page_span(item)
         extracted_elements.append(
             _OpenDataLoaderElement(
                 element_kind=element_kind,
                 content=content,
-                heading=str(heading).strip() if isinstance(heading, str) and heading.strip() else None,
-                heading_level=int(heading_level) if isinstance(heading_level, int) else None,
+                heading=item.heading.strip() if isinstance(item.heading, str) and item.heading.strip() else None,
+                heading_level=item.heading_level,
                 page_start=page_start,
                 page_end=page_end,
                 regions=_extract_parsed_regions(item),
@@ -998,44 +1206,30 @@ def _normalize_element_kind(value: str) -> str:
     return "text"
 
 
-def _extract_page_span(item: dict[str, object]) -> tuple[int | None, int | None]:
+def _extract_page_span(item: OpenDataLoaderRawElement) -> tuple[int | None, int | None]:
     """從 OpenDataLoader element 擷取頁碼範圍。"""
 
-    page_number = item.get("page_number") or item.get("page")
-    page_start = item.get("page_start")
-    page_end = item.get("page_end")
-    if isinstance(page_number, int):
-        return page_number, page_number
+    if isinstance(item.page_number, int):
+        return item.page_number, item.page_number
     return (
-        page_start if isinstance(page_start, int) else None,
-        page_end if isinstance(page_end, int) else (page_start if isinstance(page_start, int) else None),
+        item.page_start if isinstance(item.page_start, int) else None,
+        item.page_end if isinstance(item.page_end, int) else (item.page_start if isinstance(item.page_start, int) else None),
     )
 
 
-def _extract_parsed_regions(item: dict[str, object]) -> list[ParsedRegion]:
+def _extract_parsed_regions(item: OpenDataLoaderRawElement) -> list[ParsedRegion]:
     """從 OpenDataLoader element 擷取 bounding box regions。"""
-
-    raw_regions = item.get("regions") or item.get("bboxes") or item.get("boxes")
-    if isinstance(raw_regions, dict):
-        raw_regions = [raw_regions]
-    if raw_regions is None:
-        raw_bbox = item.get("bbox")
-        raw_regions = [raw_bbox] if isinstance(raw_bbox, dict) else []
-    if not isinstance(raw_regions, list):
-        return []
 
     parsed_regions: list[ParsedRegion] = []
     fallback_page, _ = _extract_page_span(item)
-    for region_order, region in enumerate(raw_regions):
-        if not isinstance(region, dict):
+    for region_order, region in enumerate(item.regions):
+        page_number = region.page_number or fallback_page
+        if page_number is None:
             continue
-        page_number = region.get("page_number") or region.get("page") or fallback_page
-        if not isinstance(page_number, int):
-            continue
-        left = region.get("left", region.get("x0"))
-        bottom = region.get("bottom", region.get("y0"))
-        right = region.get("right", region.get("x1"))
-        top = region.get("top", region.get("y1"))
+        left = region.left
+        bottom = region.bottom
+        right = region.right
+        top = region.top
         if not all(isinstance(value, (int, float)) for value in (left, bottom, right, top)):
             continue
         parsed_regions.append(
@@ -1176,13 +1370,17 @@ def _build_text_artifact(*, file_name: str, content_type: str, text: str) -> Par
     return ParseArtifact(file_name=file_name, content_type=content_type, payload=text.encode("utf-8"))
 
 
-def _build_json_artifact(*, file_name: str, payload_obj: dict[str, object]) -> ParseArtifact:
+def _build_json_artifact(*, file_name: str, payload_obj: OpenDataLoaderArtifactPayload) -> ParseArtifact:
     """建立 JSON artifact。"""
 
     return ParseArtifact(
         file_name=file_name,
         content_type="application/json; charset=utf-8",
-        payload=json.dumps(payload_obj, ensure_ascii=False, sort_keys=True).encode("utf-8"),
+        payload=json.dumps(
+            _serialize_opendataloader_artifact_payload(payload_obj=payload_obj),
+            ensure_ascii=False,
+            sort_keys=True,
+        ).encode("utf-8"),
     )
 
 

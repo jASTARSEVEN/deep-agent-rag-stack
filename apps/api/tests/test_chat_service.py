@@ -228,8 +228,8 @@ def test_deepagents_runtime_exposes_single_retrieval_tool_without_keyword_gate(m
     )
 
     assert len(captured_tools) == 1
-    assert result["answer"] == "這是直接回答。"
-    assert result["trace"]["agent"]["retrieval_invoked"] is False
+    assert result.answer == "這是直接回答。"
+    assert result.trace.agent["retrieval_invoked"] is False
 
 
 def test_deep_agents_system_prompt_requires_split_retrieval_for_multiple_subjects() -> None:
@@ -407,7 +407,7 @@ def test_deepagents_runtime_uses_conversation_history_as_agent_input(monkeypatch
         conversation_messages=conversation_messages,
     )
 
-    assert result["answer"] == "這是多輪回答。"
+    assert result.answer == "這是多輪回答。"
     assert captured_inputs == [{"messages": conversation_messages}]
 
 
@@ -531,7 +531,7 @@ def test_deepagents_runtime_emits_phase_tool_call_and_token_custom_events(monkey
         writer=emitted_events.append,
     )
 
-    assert result["answer"] == "這是帶搜尋流程的回答。"
+    assert result.answer == "這是帶搜尋流程的回答。"
     phase_events = [event for event in emitted_events if event["type"] == "phase"]
     tool_events = [event for event in emitted_events if event["type"] == "tool_call"]
     assert [event["phase"] for event in phase_events] == [
@@ -688,14 +688,14 @@ def test_deepagents_runtime_summary_queries_use_unified_answer_path(monkeypatch)
         thinking_mode=True,
     )
 
-    assert result_false["answer"] == "這是統一路徑摘要回答。"
-    assert result_true["answer"] == "這是統一路徑摘要回答。"
-    assert result_false["trace"]["agent"]["answer_path"] == "deepagents_unified"
-    assert result_true["trace"]["agent"]["answer_path"] == "deepagents_unified"
-    assert result_false["trace"]["agent"]["thinking_mode"] is False
-    assert result_true["trace"]["agent"]["thinking_mode"] is True
-    assert result_false["trace"]["agent"]["thinking_mode_ignored"] is False
-    assert result_true["trace"]["agent"]["thinking_mode_ignored"] is True
+    assert result_false.answer == "這是統一路徑摘要回答。"
+    assert result_true.answer == "這是統一路徑摘要回答。"
+    assert result_false.trace.agent["answer_path"] == "deepagents_unified"
+    assert result_true.trace.agent["answer_path"] == "deepagents_unified"
+    assert result_false.trace.agent["thinking_mode"] is False
+    assert result_true.trace.agent["thinking_mode"] is True
+    assert result_false.trace.agent["thinking_mode_ignored"] is False
+    assert result_true.trace.agent["thinking_mode_ignored"] is True
     assert "reasoning_effort" not in captured_llm_kwargs[0]
     assert all(item == {"messages": [{"role": "user", "content": "Summarize the document"}]} or item == {"messages": [{"role": "user", "content": "Summarize the section"}]} for item in captured_inputs)
 
@@ -1118,7 +1118,7 @@ def test_deepagents_runtime_accepts_phase8c_tool_summary_and_preserves_debug_saf
     ][-1]
     reference_event = [event for event in emitted_events if event["type"] == "references"][0]
 
-    assert result["answer"] == "目前引用內容不足以完成完整比較。"
+    assert result.answer == "目前引用內容不足以完成完整比較。"
     assert completed_tool_event["output"]["tool_call_count"] >= 1
     assert completed_tool_event["output"]["followup_call_count"] >= 0
     assert completed_tool_event["output"]["synopsis_inspection_count"] >= 0
@@ -2180,15 +2180,15 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
         writer=emitted_events.append,
     )
 
-    assert result["answer"] == "這是帶真實檢索的回答。"
-    assert result["answer_blocks"] == [
+    assert result.answer == "這是帶真實檢索的回答。"
+    assert [item.model_dump(mode="json") for item in result.answer_blocks] == [
         {
             "text": "這是帶真實檢索的回答。",
             "citation_context_indices": [],
             "display_citations": [],
         }
     ]
-    assert result["citations"] == [
+    assert [item.model_dump(mode="json") for item in result.citations] == [
         {
             "context_index": 0,
             "context_label": "C1",
@@ -2208,7 +2208,7 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "regions": [],
         }
     ]
-    assert result["assembled_contexts"] == [
+    assert [item.model_dump(mode="json") for item in result.assembled_contexts] == [
         {
             "context_index": 0,
             "context_label": "C1",
@@ -2229,13 +2229,13 @@ def test_deepagents_runtime_runs_real_retrieval_tool_and_returns_context_contrac
             "truncated": False,
         }
     ]
-    assert result["trace"]["retrieval"]["query"] == "請根據文件回答 alpha"
-    assert result["trace"]["assembler"]["kept_chunk_ids"] == [child_one.id, child_two.id]
-    assert result["trace"]["agent"]["retrieval_invoked"] is True
-    assert result["trace"]["agent"]["contexts_count"] == 1
-    assert result["used_knowledge_base"] is True
-    assert result["message_artifact"]["assistant_turn_index"] == 0
-    assert result["message_artifact"]["used_knowledge_base"] is True
+    assert result.trace.retrieval["query"] == "請根據文件回答 alpha"
+    assert result.trace.assembler["kept_chunk_ids"] == [child_one.id, child_two.id]
+    assert result.trace.agent["retrieval_invoked"] is True
+    assert result.trace.agent["contexts_count"] == 1
+    assert result.used_knowledge_base is True
+    assert result.message_artifact.assistant_turn_index == 0
+    assert result.message_artifact.used_knowledge_base is True
     assert captured_tool_result["assembled_contexts"] == [
         {
             "context_label": "C1",
@@ -2426,7 +2426,7 @@ def test_deepagents_runtime_wraps_invocation_in_langsmith_tracing_context(monkey
         question="請根據文件回答 reader policy",
     )
 
-    assert result["answer"] == "這是 traced 回答。"
+    assert result.answer == "這是 traced 回答。"
     assert captured_context["kwargs"] == {
         "enabled": True,
         "project_name": "deep-agent-rag-stack-test",

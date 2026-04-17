@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.chat.contracts.types import ChatAnswerBlock, ChatCitation, ChatTrace
 from app.db.models import EvaluationLanguage, EvaluationQueryType
 from app.schemas.summary_compare_checkpoint import SummaryCompareGoldSpanRef, SummaryCompareResolvedGoldSpan
 
@@ -338,6 +339,15 @@ class SummaryComparePairwiseJudgeResult(BaseModel):
     score: float = Field(ge=0.0, le=1.0)
 
 
+class SummaryComparePairwiseCompletionPayload(BaseModel):
+    """pairwise judge completion 的受控 JSON payload。"""
+
+    # 勝方；`candidate`、`reference` 或 `tie`。
+    verdict: Literal["candidate", "reference", "tie"] = "reference"
+    # judge 簡短理由。
+    rationale: str = ""
+
+
 class SummaryCompareBenchmarkPerItemResult(BaseModel):
     """單題 benchmark 執行結果。"""
 
@@ -361,6 +371,59 @@ class SummaryCompareBenchmarkPerItemResult(BaseModel):
     citations: list[dict[str, object]]
     # trace。
     trace: dict[str, object]
+    # wall-clock latency。
+    latency_seconds: float = Field(ge=0.0)
+    # token 統計。
+    total_tokens: int = Field(ge=0)
+    # 對回後的 gold spans。
+    resolved_gold_spans: list[SummaryCompareResolvedGoldSpan]
+    # scope 驗證結果。
+    benchmark_document_scope: SummaryCompareScopeValidationResult
+    # 必需文件覆蓋率。
+    required_document_coverage: float = Field(ge=0.0, le=1.0)
+    # 尚未被引用到的必需文件名稱。
+    missing_required_document_names: list[str] = Field(default_factory=list)
+    # section 覆蓋率。
+    section_coverage: float = Field(ge=0.0, le=1.0)
+    # citation 覆蓋率。
+    citation_coverage: float = Field(ge=0.0, le=1.0)
+    # 是否觸發 fallback。
+    fallback_triggered: bool
+    # blocker 或 validation 失敗原因。
+    hard_blocker_failures: list[str]
+    # supporting rubric judge 結果。
+    rubric_judge_result: SummaryCompareRubricJudgeResult | None = None
+    # compare 主分數用 pairwise judge 結果。
+    pairwise_judge_result: SummaryComparePairwiseJudgeResult | None = None
+    # 單題 metrics。
+    metrics: dict[str, SummaryCompareMetricResult]
+    # 是否為 partial 題。
+    partial: bool = False
+
+
+class SummaryCompareBenchmarkItemDraft(BaseModel):
+    """benchmark 單題在 finalize 前的 builder model。"""
+
+    # 套件名稱。
+    benchmark_name: str
+    # 題目識別碼。
+    item_id: str
+    # 題目語言。
+    language: EvaluationLanguage
+    # 題目類型。
+    task_type: EvaluationQueryType
+    # summary strategy；compare 題為空。
+    summary_strategy: str | None = None
+    # 題目文字。
+    question: str
+    # 回答文字。
+    answer: str
+    # 回答區塊。
+    answer_blocks: list[ChatAnswerBlock]
+    # citations。
+    citations: list[ChatCitation]
+    # trace。
+    trace: ChatTrace
     # wall-clock latency。
     latency_seconds: float = Field(ge=0.0)
     # token 統計。

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.chat.contracts.types import ChatAnswerBlock, ChatCitation, ChatTrace
 from app.db.models import EvaluationLanguage, EvaluationQueryType
 
 
@@ -196,6 +197,19 @@ class SummaryCompareJudgeResult(BaseModel):
     missing_points: list[str]
 
 
+class SummaryCompareJudgeCompletionPayload(BaseModel):
+    """LLM judge completion 的受控 JSON payload。"""
+
+    # 四維分數。
+    scores: SummaryCompareJudgeScores
+    # 第四維實際代表的評分名稱。
+    coverage_dimension_name: str | None = None
+    # judge 的簡短理由摘要。
+    rationale: str = ""
+    # judge 指出的主要缺口。
+    missing_points: list[str] = Field(default_factory=list)
+
+
 class SummaryCompareGateMetric(BaseModel):
     """單一 gate 指標結果。"""
 
@@ -271,6 +285,51 @@ class SummaryComparePerItemResult(BaseModel):
     hard_blocker_failures: list[str]
     # judge 結果。
     judge_result: SummaryCompareJudgeResult
+
+
+class SummaryComparePerItemDraft(BaseModel):
+    """checkpoint 單題在寫入 judge 結果前的 builder model。"""
+
+    # 題目識別碼。
+    item_id: str
+    # 題目語言。
+    language: EvaluationLanguage
+    # 題目文字。
+    question: str
+    # runtime 輸出的乾淨答案。
+    answer: str
+    # 最終回答區塊。
+    answer_blocks: list[ChatAnswerBlock]
+    # 最終 citations。
+    citations: list[ChatCitation]
+    # 整體 trace。
+    trace: ChatTrace
+    # 本題實際命中的 query type。
+    actual_query_type: str | None
+    # 本題實際命中的 summary strategy。
+    actual_summary_strategy: str | None
+    # task type 是否命中 fixture 預期。
+    task_type_matched: bool
+    # summary strategy 是否命中 fixture 預期。
+    summary_strategy_matched: bool
+    # 必需文件是否都有被引用。
+    required_document_coverage: float = Field(ge=0.0, le=1.0)
+    # 尚未被引用到的必需文件名稱。
+    missing_required_document_names: list[str] = Field(default_factory=list)
+    # section heading 是否都有被命中。
+    section_coverage: float = Field(ge=0.0, le=1.0)
+    # citation 與 gold spans 的覆蓋率。
+    citation_coverage: float = Field(ge=0.0, le=1.0)
+    # 是否發生 retrieval fallback。
+    fallback_triggered: bool
+    # 本題 wall-clock latency。
+    latency_seconds: float = Field(ge=0.0)
+    # 本題 summary/compare trace 估算的總 token。
+    total_tokens: int = Field(ge=0)
+    # 對回後的 gold spans。
+    resolved_gold_spans: list[SummaryCompareResolvedGoldSpan]
+    # deterministic blocker 失敗原因。
+    hard_blocker_failures: list[str]
 
 
 class SummaryCompareAggregateMetrics(BaseModel):

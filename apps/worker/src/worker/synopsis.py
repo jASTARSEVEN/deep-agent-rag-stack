@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 from worker.core.settings import WorkerSettings
 
@@ -16,6 +16,44 @@ if TYPE_CHECKING:
 _CJK_PATTERN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff]")
 # 壓縮多餘空白，避免 synopsis prompt 被 parser 噪音放大。
 _WHITESPACE_PATTERN = re.compile(r"\s+")
+
+
+class OpenAIReasoningPayload(TypedDict):
+    """OpenAI Responses API 的 reasoning payload。"""
+
+    # GPT-5 family reasoning effort。
+    effort: str
+
+
+class OpenAITextPayload(TypedDict):
+    """OpenAI Responses API 的 text payload。"""
+
+    # GPT-5 family text verbosity。
+    verbosity: str
+
+
+class OpenAIChatCompletionKwargs(TypedDict, total=False):
+    """傳給 `chat.completions.create()` 的 kwargs。"""
+
+    # 使用的模型名稱。
+    model: str
+    # chat completions 路徑的輸出 token 上限。
+    max_completion_tokens: int
+    # 非 GPT-5 路徑使用的溫度。
+    temperature: float
+
+
+class OpenAIResponsesKwargs(TypedDict):
+    """傳給 `responses.create()` 的 kwargs。"""
+
+    # 使用的模型名稱。
+    model: str
+    # Responses API 的輸出 token 上限。
+    max_output_tokens: int
+    # GPT-5 reasoning 設定。
+    reasoning: OpenAIReasoningPayload
+    # GPT-5 text 設定。
+    text: OpenAITextPayload
 
 
 class DocumentSynopsisProvider(ABC):
@@ -196,7 +234,7 @@ class OpenAIDocumentSynopsisProvider(DocumentSynopsisProvider):
         self._reasoning_effort = reasoning_effort
         self._text_verbosity = text_verbosity
 
-    def _build_completion_kwargs(self, *, max_output_chars: int) -> dict[str, object]:
+    def _build_completion_kwargs(self, *, max_output_chars: int) -> OpenAIChatCompletionKwargs:
         """建立 OpenAI chat completion kwargs，並處理模型相容性。
 
         參數：
@@ -206,7 +244,7 @@ class OpenAIDocumentSynopsisProvider(DocumentSynopsisProvider):
         - `dict[str, object]`：可直接傳給 `chat.completions.create()` 的參數。
         """
 
-        kwargs: dict[str, object] = {
+        kwargs: OpenAIChatCompletionKwargs = {
             "model": self._model,
             "max_completion_tokens": max(256, min(1200, max_output_chars)),
         }
@@ -214,7 +252,7 @@ class OpenAIDocumentSynopsisProvider(DocumentSynopsisProvider):
             kwargs["temperature"] = 0.1
         return kwargs
 
-    def _build_responses_kwargs(self) -> dict[str, object]:
+    def _build_responses_kwargs(self) -> OpenAIResponsesKwargs:
         """建立 GPT-5 family 使用的 Responses API kwargs。
 
         參數：
@@ -224,7 +262,7 @@ class OpenAIDocumentSynopsisProvider(DocumentSynopsisProvider):
         - `dict[str, object]`：可直接傳給 `responses.create()` 的參數。
         """
 
-        kwargs: dict[str, object] = {
+        kwargs: OpenAIResponsesKwargs = {
             "model": self._model,
             "max_output_tokens": self._max_output_tokens,
             "reasoning": {"effort": self._reasoning_effort},

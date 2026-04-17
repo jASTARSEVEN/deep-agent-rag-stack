@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from threading import Lock
+from typing import NotRequired, TypedDict
 
 import jwt
 from jwt import InvalidTokenError as JwtLibraryInvalidTokenError
@@ -32,6 +33,21 @@ class CurrentPrincipal:
     authenticated: bool = True
     name: str | None = None
     preferred_username: str | None = None
+
+
+class JwtClaimsPayload(TypedDict, total=False):
+    """JWT 驗證完成後使用的最小 claims payload。"""
+
+    # 使用者 sub。
+    sub: str
+    # 群組列表；實際 claim key 由設定決定。
+    groups: list[str]
+    # 顯示名稱。
+    name: str | None
+    # 偏好使用者名稱。
+    preferred_username: str | None
+    # 允許保留其他 Keycloak claims，而不要求全部顯式列出。
+    aud: NotRequired[object]
 
 
 class TokenVerifier:
@@ -187,14 +203,14 @@ class TestModeTokenVerifier(TokenVerifier):
             _, sub, raw_groups = token.split("::", maxsplit=2)
         except ValueError as exc:
             raise InvalidTokenError("測試模式 token 格式不正確。") from exc
-        payload = {
+        payload: JwtClaimsPayload = {
             "sub": sub,
             self._groups_claim: [group for group in raw_groups.split(",") if group],
         }
         return _build_principal_from_payload(payload=payload, groups_claim=self._groups_claim)
 
 
-def _build_principal_from_payload(payload: dict[str, object], groups_claim: str) -> CurrentPrincipal:
+def _build_principal_from_payload(payload: JwtClaimsPayload, groups_claim: str) -> CurrentPrincipal:
     """從已驗證 payload 建立 principal。
 
     參數：

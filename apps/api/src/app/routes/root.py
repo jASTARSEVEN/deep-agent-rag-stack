@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.core.settings import AppSettings, get_app_settings
-from app.schemas.health import HealthResponse
+from app.schemas.health import HealthResponse, RootResponse
 from app.services.runtime import build_dependency_snapshot
 
 
@@ -12,13 +12,13 @@ router = APIRouter()
 
 
 @router.get("/", tags=["root"])
-def read_root(settings: AppSettings = Depends(get_app_settings)) -> dict[str, str]:
+def read_root(settings: AppSettings = Depends(get_app_settings)) -> RootResponse:
     """回傳最小 landing payload，明確說明此 API 仍是骨架。"""
 
-    return {
-        "service": settings.service_name,
-        "message": "API 骨架已啟動；正式業務路由目前刻意尚未實作。",
-    }
+    return RootResponse(
+        service=settings.service_name,
+        message="API 骨架已啟動；正式業務路由目前刻意尚未實作。",
+    )
 
 
 @router.get("/health", response_model=HealthResponse, tags=["health"])

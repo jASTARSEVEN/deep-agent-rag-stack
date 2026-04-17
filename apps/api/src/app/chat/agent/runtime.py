@@ -13,7 +13,27 @@ from typing import Any
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.agent.deep_agents import build_main_agent
-from app.chat.contracts.types import ChatAnswerBlock, ChatMessageArtifact
+from app.chat.contracts.types import (
+    AgentLoopTracePayload,
+    AgentToolContextPayload,
+    AgentToolPayload,
+    AssistantMessagePayload,
+    ChatAnswerBlock,
+    ChatAssembledContext,
+    ChatAssembledContextPayload,
+    ChatCitation,
+    ChatCitationPayload,
+    ChatMessageArtifact,
+    ChatPhaseEventPayload,
+    ChatReferencesEventPayload,
+    ChatRuntimeResult,
+    ChatTokenEventPayload,
+    ChatToolCallEventPayload,
+    ChatToolCallInputPayload,
+    ChatTrace,
+    ChatTracePayload,
+    LangSmithMetadataPayload,
+)
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
     _retrieve_area_contexts_internal,
@@ -197,7 +217,7 @@ class DeepAgentsChatRuntime:
         settings: AppSettings,
         area_id: str,
         question: str,
-    ) -> dict[str, object]:
+    ) -> LangSmithMetadataPayload:
         """建立本次 chat invocation 的 LangSmith metadata。
 
         參數：
@@ -229,9 +249,9 @@ class DeepAgentsChatRuntime:
         question: str,
         thinking_mode: bool = False,
         conversation_messages: list[object] | None = None,
-        writer: Callable[[dict[str, object]], None] | None = None,
+        writer: Callable[[object], None] | None = None,
         benchmark_document_ids: tuple[str, ...] | None = None,
-    ) -> dict[str, object]:
+    ) -> ChatRuntimeResult:
         """執行 Deep Agents 回答，並回傳最終 graph state payload。
 
         參數：
@@ -254,12 +274,12 @@ class DeepAgentsChatRuntime:
 
         retrieval_invoked = False
         retrieval_result: RetrievalToolResult | None = None
-        citations_payload: list[dict[str, object]] = []
-        assembled_contexts_payload: list[dict[str, object]] = []
-        llm_tool_contexts_payload: list[dict[str, object]] = []
+        citations_payload: list[ChatCitationPayload] = []
+        assembled_contexts_payload: list[ChatAssembledContextPayload] = []
+        llm_tool_contexts_payload: list[AgentToolContextPayload] = []
         latest_retrieval_result: RetrievalToolResult | None = None
-        latest_loop_trace_delta: dict[str, object] = {}
-        aggregated_contexts_by_key: dict[tuple[object, ...], dict[str, object]] = {}
+        latest_loop_trace_delta: AgentLoopTracePayload = {}
+        aggregated_contexts_by_key: dict[tuple[object, ...], ChatAssembledContextPayload] = {}
         agentic_round_summaries: list[dict[str, object]] = []
         tool_call_count = 0
         followup_call_count = 0
@@ -298,13 +318,19 @@ class DeepAgentsChatRuntime:
             log_stream_debug(event="phase", phase=phase, status=status, message=message)
             if writer is None:
                 return
-            writer({"type": "phase", "phase": phase, "status": status, "message": message})
+            payload: ChatPhaseEventPayload = {
+                "type": "phase",
+                "phase": phase,
+                "status": status,
+                "message": message,
+            }
+            writer(payload)
 
         def emit_tool_call(
             *,
             name: str,
             status: str,
-            input_payload: dict[str, object],
+            input_payload: ChatToolCallInputPayload,
             output_payload: dict[str, object] | None = None,
         ) -> None:
             """透過 LangGraph custom stream 發送工具呼叫事件。"""
@@ -312,15 +338,14 @@ class DeepAgentsChatRuntime:
             log_stream_debug(event="tool_call", name=name, status=status)
             if writer is None:
                 return
-            writer(
-                {
-                    "type": "tool_call",
-                    "name": name,
-                    "status": status,
-                    "input": input_payload,
-                    "output": output_payload,
-                }
-            )
+            payload: ChatToolCallEventPayload = {
+                "type": "tool_call",
+                "name": name,
+                "status": status,
+                "input": input_payload,
+                "output": output_payload,
+            }
+            writer(payload)
 
         def emit_token(delta: str) -> None:
             """透過 LangGraph custom stream 發送回答 token 增量。
@@ -337,9 +362,10 @@ class DeepAgentsChatRuntime:
             log_stream_debug(event="token", delta_length=len(delta), delta_preview=delta[:80])
             if writer is None:
                 return
-            writer({"type": "token", "delta": delta})
+            payload: ChatTokenEventPayload = {"type": "token", "delta": delta}
+            writer(payload)
 
-        def emit_references(references: list[dict[str, object]]) -> None:
+        def emit_references(references: list[ChatAssembledContextPayload]) -> None:
             """透過 LangGraph custom stream 提前發送 citation / context metadata。
 
             參數：
@@ -352,7 +378,11 @@ class DeepAgentsChatRuntime:
             log_stream_debug(event="references", references_count=len(references))
             if writer is None:
                 return
-            writer({"type": "references", "references": references})
+            payload: ChatReferencesEventPayload = {
+                "type": "references",
+                "references": references,
+            }
+            writer(payload)
 
         agentic_followup_enabled = bool(settings.chat_agentic_enabled)
 
@@ -449,7 +479,7 @@ class DeepAgentsChatRuntime:
             latest_loop_trace_delta = dict(round_result.loop_trace_delta)
             return new_context_count, new_document_names
 
-        def build_current_agent_payload(*, stop_reason_override: str | None = None) -> dict[str, object]:
+        def build_current_agent_payload(*, stop_reason_override: str | None = None) -> AgentToolPayload:
             """建立回傳給 agent 的當前整體 tool payload。
 
             參數：
@@ -498,7 +528,7 @@ class DeepAgentsChatRuntime:
             nonlocal latency_budget_status
             nonlocal last_agentic_stop_reason
 
-            tool_input = {
+            tool_input: ChatToolCallInputPayload = {
                 "area_id": area_id,
                 "question": question,
                 "query_variant": (query_variant or "").strip(),
@@ -778,33 +808,36 @@ class DeepAgentsChatRuntime:
             "stop_reason": last_agentic_stop_reason,
             "rounds": agentic_round_summaries,
         }
-        trace = {
+        trace: ChatTracePayload = {
             "retrieval": retrieval_result.trace["retrieval"] if retrieval_result is not None else {},
             "assembler": retrieval_result.trace["assembler"] if retrieval_result is not None else {"contexts": []},
             "agent": agent_trace_payload,
         }
-        return {
-            "answer": answer,
-            "answer_blocks": [item.model_dump(mode="json") for item in answer_blocks],
-            "citations": citations_payload,
-            "assembled_contexts": assembled_contexts_payload,
-            "used_knowledge_base": used_knowledge_base,
-            "message_artifact": ChatMessageArtifact(
-                assistant_turn_index=_count_assistant_turns(conversation_messages),
-                answer=answer,
-                answer_blocks=answer_blocks,
-                citations=citations_payload,
-                used_knowledge_base=used_knowledge_base,
-            ).model_dump(mode="json"),
-            "trace": trace,
-            "raw_result": result,
-        }
+        citations = [ChatCitation.model_validate(item) for item in citations_payload]
+        assembled_contexts = [ChatAssembledContext.model_validate(item) for item in assembled_contexts_payload]
+        message_artifact = ChatMessageArtifact(
+            assistant_turn_index=_count_assistant_turns(conversation_messages),
+            answer=answer,
+            answer_blocks=answer_blocks,
+            citations=citations,
+            used_knowledge_base=used_knowledge_base,
+        )
+        return ChatRuntimeResult(
+            answer=answer,
+            answer_blocks=answer_blocks,
+            citations=citations,
+            assembled_contexts=assembled_contexts,
+            message_artifact=message_artifact,
+            used_knowledge_base=used_knowledge_base,
+            trace=ChatTrace.model_validate(trace),
+            raw_result=result,
+        )
 
 
 def _build_answer_blocks_from_markers(
     *,
     answer: str,
-    citations_payload: list[dict[str, object]],
+    citations_payload: list[ChatCitationPayload],
 ) -> tuple[str, list[ChatAnswerBlock]]:
     """將回答中的 citation markers 解析為 UI 可用的 answer blocks。
 
@@ -995,7 +1028,7 @@ def _extract_final_answer_text(result: object) -> str:
     return ""
 
 
-def extract_final_assistant_message(result: object) -> dict[str, Any] | None:
+def extract_final_assistant_message(result: object) -> AssistantMessagePayload | None:
     """從 Deep Agents 最終結果擷取最後一則助理訊息。
 
     參數：

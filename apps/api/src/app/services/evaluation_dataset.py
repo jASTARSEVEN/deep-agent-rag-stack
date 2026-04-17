@@ -49,6 +49,7 @@ from app.services.retrieval_routing import QueryRoutingDecision, build_query_rou
 from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
 from app.services.retrieval import (
     RetrievalResult,
+    RetrievalTrace,
     _apply_python_rrf,
     _apply_ranking_policy,
     _apply_rerank,
@@ -827,7 +828,7 @@ def _build_empty_trace(
     total_candidates: int,
     routing_decision: QueryRoutingDecision,
     selection_result: RetrievalSelectionResult,
-) -> dict[str, object]:
+ ) -> RetrievalTrace:
     """建立 assembler 需要的最小 trace 物件。
 
     參數：
@@ -838,21 +839,21 @@ def _build_empty_trace(
     - `selection_result`：本次 diversified selection 結果。
 
     回傳：
-    - `dict[str, object]`：最小 trace payload。
+    - `RetrievalTrace`：最小 retrieval trace dataclass。
     """
 
-    return {
-        "query": query,
-        "vector_top_k": settings.retrieval_vector_top_k,
-        "fts_top_k": settings.retrieval_fts_top_k,
-        "max_candidates": settings.retrieval_max_candidates,
-        "rerank_top_n": min(settings.rerank_top_n, total_candidates),
-        "query_type": routing_decision.query_type.value,
-        "query_type_language": routing_decision.language,
-        "query_type_source": routing_decision.source,
-        "query_type_confidence": routing_decision.confidence,
-        "query_type_matched_rules": list(routing_decision.matched_rules),
-        "query_type_rule_hits": [
+    return RetrievalTrace(
+        query=query,
+        vector_top_k=settings.retrieval_vector_top_k,
+        fts_top_k=settings.retrieval_fts_top_k,
+        max_candidates=settings.retrieval_max_candidates,
+        rerank_top_n=min(settings.rerank_top_n, total_candidates),
+        query_type=routing_decision.query_type.value,
+        query_type_language=routing_decision.language,
+        query_type_source=routing_decision.source,
+        query_type_confidence=routing_decision.confidence,
+        query_type_matched_rules=list(routing_decision.matched_rules),
+        query_type_rule_hits=[
             {
                 "label": hit.label,
                 "reason": hit.reason,
@@ -860,23 +861,23 @@ def _build_empty_trace(
             }
             for hit in routing_decision.query_type_rule_hits
         ],
-        "query_type_embedding_scores": [
+        query_type_embedding_scores=[
             {
                 "label": score.label,
                 "score": score.score,
             }
             for score in routing_decision.query_type_embedding_scores
         ],
-        "query_type_top_label": routing_decision.query_type_top_label,
-        "query_type_runner_up_label": routing_decision.query_type_runner_up_label,
-        "query_type_embedding_margin": routing_decision.query_type_embedding_margin,
-        "query_type_fallback_used": routing_decision.query_type_fallback_used,
-        "query_type_fallback_reason": routing_decision.query_type_fallback_reason,
-        "summary_scope": routing_decision.summary_scope,
-        "summary_strategy": routing_decision.summary_strategy,
-        "summary_strategy_source": routing_decision.summary_strategy_source,
-        "summary_strategy_confidence": routing_decision.summary_strategy_confidence,
-        "summary_strategy_rule_hits": [
+        query_type_top_label=routing_decision.query_type_top_label,
+        query_type_runner_up_label=routing_decision.query_type_runner_up_label,
+        query_type_embedding_margin=routing_decision.query_type_embedding_margin,
+        query_type_fallback_used=routing_decision.query_type_fallback_used,
+        query_type_fallback_reason=routing_decision.query_type_fallback_reason,
+        summary_scope=routing_decision.summary_scope,
+        summary_strategy=routing_decision.summary_strategy,
+        summary_strategy_source=routing_decision.summary_strategy_source,
+        summary_strategy_confidence=routing_decision.summary_strategy_confidence,
+        summary_strategy_rule_hits=[
             {
                 "label": hit.label,
                 "reason": hit.reason,
@@ -884,31 +885,31 @@ def _build_empty_trace(
             }
             for hit in routing_decision.summary_strategy_rule_hits
         ],
-        "summary_strategy_embedding_scores": [
+        summary_strategy_embedding_scores=[
             {
                 "label": score.label,
                 "score": score.score,
             }
             for score in routing_decision.summary_strategy_embedding_scores
         ],
-        "summary_strategy_top_label": routing_decision.summary_strategy_top_label,
-        "summary_strategy_runner_up_label": routing_decision.summary_strategy_runner_up_label,
-        "summary_strategy_embedding_margin": routing_decision.summary_strategy_embedding_margin,
-        "summary_strategy_fallback_used": routing_decision.summary_strategy_fallback_used,
-        "summary_strategy_fallback_reason": routing_decision.summary_strategy_fallback_reason,
-        "resolved_document_ids": list(routing_decision.resolved_document_ids),
-        "document_mention_source": routing_decision.document_mention_source,
-        "document_mention_confidence": routing_decision.document_mention_confidence,
-        "document_mention_candidates": [dict(candidate) for candidate in routing_decision.document_mention_candidates],
-        "selected_profile": routing_decision.selected_profile,
-        "profile_settings": routing_decision.resolved_settings,
-        "selection_applied": selection_result.applied,
-        "selection_strategy": selection_result.strategy,
-        "selected_document_count": len(selection_result.selected_document_ids),
-        "selected_parent_count": len(selection_result.selected_parent_ids),
-        "selected_document_ids": list(selection_result.selected_document_ids),
-        "selected_parent_ids": list(selection_result.selected_parent_ids),
-        "dropped_by_diversity": [
+        summary_strategy_top_label=routing_decision.summary_strategy_top_label,
+        summary_strategy_runner_up_label=routing_decision.summary_strategy_runner_up_label,
+        summary_strategy_embedding_margin=routing_decision.summary_strategy_embedding_margin,
+        summary_strategy_fallback_used=routing_decision.summary_strategy_fallback_used,
+        summary_strategy_fallback_reason=routing_decision.summary_strategy_fallback_reason,
+        resolved_document_ids=list(routing_decision.resolved_document_ids),
+        document_mention_source=routing_decision.document_mention_source,
+        document_mention_confidence=routing_decision.document_mention_confidence,
+        document_mention_candidates=[dict(candidate) for candidate in routing_decision.document_mention_candidates],
+        selected_profile=routing_decision.selected_profile,
+        profile_settings=routing_decision.resolved_settings,
+        selection_applied=selection_result.applied,
+        selection_strategy=selection_result.strategy,
+        selected_document_count=len(selection_result.selected_document_ids),
+        selected_parent_count=len(selection_result.selected_parent_ids),
+        selected_document_ids=list(selection_result.selected_document_ids),
+        selected_parent_ids=list(selection_result.selected_parent_ids),
+        dropped_by_diversity=[
             {
                 "document_id": entry.document_id,
                 "parent_chunk_id": entry.parent_chunk_id,
@@ -917,8 +918,8 @@ def _build_empty_trace(
             }
             for entry in selection_result.dropped_by_diversity
         ],
-        "candidates": [],
-    }
+        candidates=[],
+    )
 
 
 def _build_query_routing_detail(

@@ -10,6 +10,15 @@ class DependencySnapshot(BaseModel):
     target: str
 
 
+class RootResponse(BaseModel):
+    """API root landing payload。"""
+
+    # 服務名稱。
+    service: str
+    # 骨架狀態訊息。
+    message: str
+
+
 class HealthResponse(BaseModel):
     """API 骨架健康檢查的回應模型。"""
 

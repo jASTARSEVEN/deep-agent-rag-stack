@@ -15,6 +15,15 @@ from app.chat.agent.runtime import (
     build_chat_runtime,
     extract_final_assistant_message,
 )
+from app.chat.contracts.types import (
+    AssistantMessagePayload,
+    ChatAnswerBlockPayload,
+    ChatAssembledContextPayload,
+    ChatCitationPayload,
+    ChatMessageArtifactPayload,
+    ChatTracePayload,
+    PrincipalPayload,
+)
 from app.chat.tools.retrieval import build_assembled_context_payload, retrieve_area_contexts_tool
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
@@ -32,7 +41,7 @@ class ChatGraphState(TypedDict):
     """單輪 chat graph state。"""
 
     # LangGraph thread 持久化的完整對話訊息列表。
-    messages: Annotated[list[dict[str, object]], add_messages]
+    messages: Annotated[list[AssistantMessagePayload], add_messages]
     # 要提問的 area 識別碼。
     area_id: str
     # 使用者提問。
@@ -40,21 +49,21 @@ class ChatGraphState(TypedDict):
     # 是否啟用 thinking mode。
     thinking_mode: NotRequired[bool]
     # 目前已驗證使用者。
-    principal: dict[str, object]
+    principal: PrincipalPayload
     # 最終回答文字。
     answer: str
     # 最終回答區塊。
-    answer_blocks: list[dict]
+    answer_blocks: list[ChatAnswerBlockPayload]
     # 最終 context references。
-    citations: list[dict]
+    citations: list[ChatCitationPayload]
     # 最終 assembled contexts。
-    assembled_contexts: list[dict]
+    assembled_contexts: list[ChatAssembledContextPayload]
     # 每個 assistant turn 的持久化 UI artifacts。
-    message_artifacts: Annotated[list[dict[str, object]], add]
+    message_artifacts: Annotated[list[ChatMessageArtifactPayload], add]
     # 本輪是否使用知識庫。
     used_knowledge_base: bool
     # 最終 trace。
-    trace: dict
+    trace: ChatTracePayload
     # 測試與本機覆寫用的可選 settings。
     settings: NotRequired[object]
     # 測試與本機覆寫用的可選 session factory。
@@ -86,17 +95,17 @@ def _run_chat_node(state: ChatGraphState) -> ChatGraphState:
                 conversation_messages=list(state.get("messages", [])),
                 writer=get_stream_writer(),
             )
-            final_assistant_message = extract_final_assistant_message(result.get("raw_result"))
+            final_assistant_message = extract_final_assistant_message(result.raw_result)
             return {
                 **state,
                 "messages": [final_assistant_message] if final_assistant_message is not None else [],
-                "answer": str(result.get("answer", "")),
-                "answer_blocks": list(result.get("answer_blocks", [])),
-                "citations": list(result.get("citations", [])),
-                "assembled_contexts": list(result.get("assembled_contexts", [])),
-                "message_artifacts": [dict(result["message_artifact"])] if isinstance(result.get("message_artifact"), dict) else [],
-                "used_knowledge_base": bool(result.get("used_knowledge_base", False)),
-                "trace": dict(result.get("trace", {})),
+                "answer": result.answer,
+                "answer_blocks": [item.model_dump(mode="json") for item in result.answer_blocks],
+                "citations": [item.model_dump(mode="json") for item in result.citations],
+                "assembled_contexts": [item.model_dump(mode="json") for item in result.assembled_contexts],
+                "message_artifacts": [result.message_artifact.model_dump(mode="json")],
+                "used_knowledge_base": result.used_knowledge_base,
+                "trace": result.trace.model_dump(mode="json"),
             }
 
         retrieval_tool_result = retrieve_area_contexts_tool(

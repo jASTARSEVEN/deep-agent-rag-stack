@@ -10,22 +10,25 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.agent.runtime import DeepAgentsChatRuntime, build_chat_runtime
+from app.chat.contracts.types import ChatAnswerBlock, ChatCitation, ChatTrace
 from app.core.settings import AppSettings
 from app.db.models import Document, DocumentStatus
 from app.schemas.summary_compare_checkpoint import (
     SummaryCompareAggregateMetrics,
     SummaryCompareCheckpointItem,
     SummaryCompareCheckpointManifest,
+    SummaryCompareJudgeCompletionPayload,
     SummaryCompareCheckpointReport,
     SummaryCompareGateMetric,
     SummaryCompareGoldSpanRef,
+    SummaryComparePerItemDraft,
     SummaryCompareJudgeResult,
     SummaryCompareJudgeScores,
     SummaryComparePerItemResult,
@@ -59,6 +62,21 @@ INSUFFICIENT_EVIDENCE_PATTERNS = (
 )
 
 
+class SummaryCompareProgressEvent(TypedDict, total=False):
+    """checkpoint 執行期間的可序列化進度事件。"""
+
+    # 事件名稱。
+    event: str
+    # 所屬題目識別碼。
+    item_id: str
+    # 目前完成題數。
+    completed_items: int
+    # 題目總數。
+    total_items: int
+    # 補充說明。
+    message: str
+
+
 class SummaryCompareJudge(Protocol):
     """summary/compare checkpoint judge 介面。"""
 
@@ -67,8 +85,8 @@ class SummaryCompareJudge(Protocol):
         *,
         item: SummaryCompareCheckpointItem,
         answer: str,
-        citations: list[dict[str, object]],
-        trace: dict[str, object],
+        citations: list[ChatCitation],
+        trace: ChatTrace,
     ) -> SummaryCompareJudgeResult:
         """對單題結果打分。
 
@@ -86,7 +104,7 @@ class SummaryCompareJudge(Protocol):
 class SummaryCompareProgressReporter(Protocol):
     """checkpoint 執行期間的進度回報介面。"""
 
-    def __call__(self, event: dict[str, object]) -> None:
+    def __call__(self, event: SummaryCompareProgressEvent) -> None:
         """回報單次 checkpoint 進度事件。
 
         參數：
@@ -104,15 +122,25 @@ class SummaryCompareExecution:
     # 最終回答文字。
     answer: str
     # 最終回答區塊。
-    answer_blocks: list[dict[str, object]]
+    answer_blocks: list[ChatAnswerBlock]
     # 最終 citations。
-    citations: list[dict[str, object]]
+    citations: list[ChatCitation]
     # runtime trace。
-    trace: dict[str, object]
+    trace: ChatTrace
     # 整體 wall-clock latency。
     latency_seconds: float
     # 是否觸發 timeout。
     timed_out: bool
+
+    def __post_init__(self) -> None:
+        """將測試或離線路徑傳入的 dict payload 正規化為正式模型。"""
+
+        self.answer_blocks = [
+            item if isinstance(item, ChatAnswerBlock) else ChatAnswerBlock.model_validate(item)
+            for item in self.answer_blocks
+        ]
+        self.citations = [_normalize_chat_citation(citation) for citation in self.citations]
+        self.trace = _normalize_chat_trace(self.trace)
 
 
 @dataclass(slots=True)
@@ -120,7 +148,7 @@ class _CheckpointEvaluationContext:
     """單題 checkpoint 在 judge 前的上下文。"""
 
     # 單題結果 payload，尚未包含 judge_result。
-    base_payload: dict[str, object]
+    base_payload: SummaryComparePerItemDraft
     # 若已有可直接使用的 judge 結果，則不需外部 judge。
     seeded_judge_result: SummaryCompareJudgeResult | None
     # 若需外部 judge，保存 system prompt。
@@ -157,8 +185,8 @@ class OpenAISummaryCompareJudge:
         *,
         item: SummaryCompareCheckpointItem,
         answer: str,
-        citations: list[dict[str, object]],
-        trace: dict[str, object],
+        citations: list[ChatCitation],
+        trace: ChatTrace,
     ) -> SummaryCompareJudgeResult:
         """呼叫 OpenAI 對單題結果打分。
 
@@ -180,18 +208,13 @@ class OpenAISummaryCompareJudge:
         )
         response = self._create_completion_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
         content = response.choices[0].message.content or "{}"
-        payload = json.loads(content)
-        scores = SummaryCompareJudgeScores.model_validate(payload.get("scores", {}))
+        payload = SummaryCompareJudgeCompletionPayload.model_validate(json.loads(content))
         return SummaryCompareJudgeResult(
             model=self._model,
-            scores=scores,
-            coverage_dimension_name=str(payload.get("coverage_dimension_name", _resolve_coverage_dimension_name(item))),
-            rationale=str(payload.get("rationale", "")).strip(),
-            missing_points=[
-                str(point).strip()
-                for point in payload.get("missing_points", [])
-                if isinstance(point, str) and point.strip()
-            ],
+            scores=payload.scores,
+            coverage_dimension_name=(payload.coverage_dimension_name or _resolve_coverage_dimension_name(item)).strip(),
+            rationale=payload.rationale.strip(),
+            missing_points=[point.strip() for point in payload.missing_points if point.strip()],
         )
 
     def _create_completion_with_retry(self, *, system_prompt: str, user_prompt: str):
@@ -230,8 +253,8 @@ def build_summary_compare_judge_prompt(
     *,
     item: SummaryCompareCheckpointItem,
     answer: str,
-    citations: list[dict[str, object]],
-    trace: dict[str, object],
+    citations: list[ChatCitation],
+    trace: ChatTrace,
 ) -> tuple[str, str]:
     """建立 summary/compare judge prompt。
 
@@ -245,6 +268,8 @@ def build_summary_compare_judge_prompt(
     - `tuple[str, str]`：system prompt 與 user prompt。
     """
 
+    normalized_citations = [_normalize_chat_citation(citation) for citation in citations]
+    normalized_trace = _normalize_chat_trace(trace)
     coverage_dimension_name = _resolve_coverage_dimension_name(item)
     system_prompt = (
         "你是嚴格的 RAG summary/compare checkpoint judge。"
@@ -257,12 +282,12 @@ def build_summary_compare_judge_prompt(
     )
     citation_payload = [
         {
-            "context_label": citation.get("context_label"),
-            "document_name": citation.get("document_name"),
-            "heading": citation.get("heading"),
-            "excerpt": str(citation.get("excerpt", ""))[:800],
+            "context_label": citation.context_label,
+            "document_name": citation.document_name,
+            "heading": citation.heading,
+            "excerpt": citation.excerpt[:800],
         }
-        for citation in citations[:8]
+        for citation in normalized_citations[:8]
     ]
     user_payload = {
         "question": item.question,
@@ -276,10 +301,10 @@ def build_summary_compare_judge_prompt(
         "answer": answer,
         "citations": citation_payload,
         "trace_summary": {
-            "actual_query_type": trace.get("retrieval", {}).get("query_type"),
-            "actual_summary_strategy": trace.get("retrieval", {}).get("summary_strategy"),
-            "fallback_reason": trace.get("retrieval", {}).get("fallback_reason"),
-            "map_reduce_trace": trace.get("agent", {}).get("map_reduce_trace"),
+            "actual_query_type": normalized_trace.retrieval.get("query_type"),
+            "actual_summary_strategy": normalized_trace.retrieval.get("summary_strategy"),
+            "fallback_reason": normalized_trace.retrieval.get("fallback_reason"),
+            "map_reduce_trace": normalized_trace.agent.get("map_reduce_trace"),
         },
         "rubric": {
             "completeness": "回答是否覆蓋 required_claims_or_compare_axes，且不遺漏主要重點。",
@@ -293,6 +318,65 @@ def build_summary_compare_judge_prompt(
         },
     }
     return system_prompt, json.dumps(user_payload, ensure_ascii=False, indent=2)
+
+
+def _normalize_chat_citation(citation: ChatCitation | dict[str, object]) -> ChatCitation:
+    """將正式 citation 或舊式精簡 dict 正規化為 `ChatCitation`。"""
+
+    if isinstance(citation, ChatCitation):
+        return citation
+
+    context_index = citation.get("context_index")
+    normalized_context_index = context_index if isinstance(context_index, int) else 0
+    context_label = citation.get("context_label")
+    normalized_context_label = (
+        context_label
+        if isinstance(context_label, str) and context_label.strip()
+        else f"C{normalized_context_index + 1}"
+    )
+    page_start = citation.get("page_start")
+    page_end = citation.get("page_end")
+    return ChatCitation.model_validate(
+        {
+            "context_index": normalized_context_index,
+            "context_label": normalized_context_label,
+            "document_id": str(citation.get("document_id", "") or ""),
+            "document_name": str(citation.get("document_name", "") or ""),
+            "parent_chunk_id": (
+                str(citation.get("parent_chunk_id"))
+                if citation.get("parent_chunk_id") is not None
+                else None
+            ),
+            "child_chunk_ids": [str(item) for item in citation.get("child_chunk_ids", [])],
+            "heading": str(citation.get("heading")).strip() if isinstance(citation.get("heading"), str) else None,
+            "structure_kind": str(citation.get("structure_kind", "text") or "text"),
+            "start_offset": int(citation.get("start_offset", 0) or 0),
+            "end_offset": int(citation.get("end_offset", 0) or 0),
+            "excerpt": str(citation.get("excerpt", "") or ""),
+            "source": str(citation.get("source", "benchmark") or "benchmark"),
+            "truncated": bool(citation.get("truncated", False)),
+            "page_start": page_start if isinstance(page_start, int) else None,
+            "page_end": page_end if isinstance(page_end, int) else None,
+            "regions": citation.get("regions", []),
+        }
+    )
+
+
+def _normalize_chat_trace(trace: ChatTrace | dict[str, object]) -> ChatTrace:
+    """將正式 trace 或舊式 dict 正規化為 `ChatTrace`。"""
+
+    if isinstance(trace, ChatTrace):
+        return trace
+    retrieval = trace.get("retrieval", {})
+    assembler = trace.get("assembler", {})
+    agent = trace.get("agent", {})
+    return ChatTrace.model_validate(
+        {
+            "retrieval": retrieval if isinstance(retrieval, dict) else {},
+            "assembler": assembler if isinstance(assembler, dict) else {},
+            "agent": agent if isinstance(agent, dict) else {},
+        }
+    )
 
 
 def load_summary_compare_checkpoint_dataset(
@@ -492,7 +576,7 @@ def export_summary_compare_checkpoint_offline_packets(
                 model_label=judge_label,
                 system_prompt=context.system_prompt or "seeded-result",
                 user_prompt=context.user_prompt or "seeded-result",
-                context_payload=context.base_payload,
+                context_payload=context.base_payload.model_dump(mode="json"),
                 decision_required=context.seeded_judge_result is None,
                 seeded_result=(
                     context.seeded_judge_result.model_dump(mode="json")
@@ -552,9 +636,15 @@ def run_summary_compare_checkpoint_from_offline_packets(
                 decision_payload=decision.result,
                 model=decision.model or judge_label,
             )
-        item_payload = dict(packet.context_payload)
-        item_payload["judge_result"] = judge_result.model_dump(mode="json")
-        per_item_results.append(SummaryComparePerItemResult.model_validate(item_payload))
+        item_payload = SummaryComparePerItemDraft.model_validate(packet.context_payload)
+        per_item_results.append(
+            SummaryComparePerItemResult.model_validate(
+                {
+                    **item_payload.model_dump(mode="json"),
+                    "judge_result": judge_result.model_dump(mode="json"),
+                }
+            )
+        )
     if seen_item_ids != expected_item_ids:
         missing_item_ids = sorted(expected_item_ids - seen_item_ids)
         raise ValueError(f"離線 judge packet 缺少題目：{', '.join(missing_item_ids)}")
@@ -612,13 +702,16 @@ def _run_single_checkpoint_item(
     if judge_result is None:
         judge_result = judge.judge(
             item=item,
-            answer=str(context.base_payload["answer"]),
-            citations=list(context.base_payload["citations"]),
-            trace=dict(context.base_payload["trace"]),
+            answer=context.base_payload.answer,
+            citations=context.base_payload.citations,
+            trace=context.base_payload.trace,
         )
-    item_payload = dict(context.base_payload)
-    item_payload["judge_result"] = judge_result.model_dump(mode="json")
-    return SummaryComparePerItemResult.model_validate(item_payload)
+    return SummaryComparePerItemResult.model_validate(
+        {
+            **context.base_payload.model_dump(mode="json"),
+            "judge_result": judge_result.model_dump(mode="json"),
+        }
+    )
 
 
 def _evaluate_checkpoint_item_context(
@@ -665,34 +758,34 @@ def _evaluate_checkpoint_item_context(
                 answer="",
                 answer_blocks=[],
                 citations=[],
-                trace={},
+                trace=ChatTrace(retrieval={}, assembler={}, agent={}),
                 latency_seconds=round(time.perf_counter() - execution_started_at, 4),
                 timed_out=False,
             )
             hard_blocker_failures.append(f"runtime_error:{type(exc).__name__}")
-            base_payload = {
-                "item_id": item.id,
-                "language": item.language.value,
-                "question": item.question,
-                "answer": "",
-                "answer_blocks": [],
-                "citations": [],
-                "trace": {},
-                "actual_query_type": None,
-                "actual_summary_strategy": None,
-                "task_type_matched": False,
-                "summary_strategy_matched": False,
-                "required_document_coverage": 0.0,
-                "section_coverage": 0.0,
-                "citation_coverage": 0.0,
-                "fallback_triggered": False,
-                "latency_seconds": execution.latency_seconds,
-                "total_tokens": 0,
-                "resolved_gold_spans": [],
-                "hard_blocker_failures": hard_blocker_failures,
-            }
             return _CheckpointEvaluationContext(
-                base_payload=base_payload,
+                base_payload=SummaryComparePerItemDraft(
+                    item_id=item.id,
+                    language=item.language,
+                    question=item.question,
+                    answer="",
+                    answer_blocks=[],
+                    citations=[],
+                    trace=ChatTrace(retrieval={}, assembler={}, agent={}),
+                    actual_query_type=None,
+                    actual_summary_strategy=None,
+                    task_type_matched=False,
+                    summary_strategy_matched=False,
+                    required_document_coverage=0.0,
+                    missing_required_document_names=[],
+                    section_coverage=0.0,
+                    citation_coverage=0.0,
+                    fallback_triggered=False,
+                    latency_seconds=execution.latency_seconds,
+                    total_tokens=0,
+                    resolved_gold_spans=[],
+                    hard_blocker_failures=hard_blocker_failures,
+                ),
                 seeded_judge_result=_build_runtime_error_judge_result(
                     model=judge_model,
                     error_message=str(exc),
@@ -703,8 +796,8 @@ def _evaluate_checkpoint_item_context(
             )
 
         trace = execution.trace
-        retrieval_trace = trace.get("retrieval", {})
-        agent_trace = trace.get("agent", {})
+        retrieval_trace = trace.retrieval
+        agent_trace = trace.agent
         agent_map_reduce_trace = (
             agent_trace.get("map_reduce_trace")
             if isinstance(agent_trace.get("map_reduce_trace"), dict)
@@ -771,28 +864,28 @@ def _evaluate_checkpoint_item_context(
             trace=trace,
         )
         return _CheckpointEvaluationContext(
-            base_payload={
-                "item_id": item.id,
-                "language": item.language.value,
-                "question": item.question,
-                "answer": execution.answer,
-                "answer_blocks": execution.answer_blocks,
-                "citations": execution.citations,
-                "trace": trace,
-                "actual_query_type": actual_query_type,
-                "actual_summary_strategy": actual_summary_strategy,
-                "task_type_matched": task_type_matched,
-                "summary_strategy_matched": summary_strategy_matched,
-                "required_document_coverage": required_document_coverage,
-                "missing_required_document_names": missing_required_document_names,
-                "section_coverage": section_coverage,
-                "citation_coverage": citation_coverage,
-                "fallback_triggered": fallback_triggered,
-                "latency_seconds": execution.latency_seconds,
-                "total_tokens": total_tokens,
-                "resolved_gold_spans": [span.model_dump(mode="json") for span in resolved_gold_spans],
-                "hard_blocker_failures": sorted(set(hard_blocker_failures)),
-            },
+            base_payload=SummaryComparePerItemDraft(
+                item_id=item.id,
+                language=item.language,
+                question=item.question,
+                answer=execution.answer,
+                answer_blocks=execution.answer_blocks,
+                citations=execution.citations,
+                trace=trace,
+                actual_query_type=actual_query_type,
+                actual_summary_strategy=actual_summary_strategy,
+                task_type_matched=task_type_matched,
+                summary_strategy_matched=summary_strategy_matched,
+                required_document_coverage=required_document_coverage,
+                missing_required_document_names=missing_required_document_names,
+                section_coverage=section_coverage,
+                citation_coverage=citation_coverage,
+                fallback_triggered=fallback_triggered,
+                latency_seconds=execution.latency_seconds,
+                total_tokens=total_tokens,
+                resolved_gold_spans=resolved_gold_spans,
+                hard_blocker_failures=sorted(set(hard_blocker_failures)),
+            ),
             seeded_judge_result=None,
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -883,20 +976,14 @@ def _build_offline_checkpoint_judge_result(
         if packet.context_payload.get("actual_query_type") == "cross_document_compare"
         else "section_focus_accuracy"
     )
-    scores = SummaryCompareJudgeScores.model_validate(decision_payload.get("scores", {}))
+    payload = SummaryCompareJudgeCompletionPayload.model_validate(decision_payload)
     return SummaryCompareJudgeResult(
         model=model,
-        scores=scores,
-        coverage_dimension_name=str(
-            decision_payload.get("coverage_dimension_name", default_coverage_dimension)
-        ).strip()
+        scores=payload.scores,
+        coverage_dimension_name=(payload.coverage_dimension_name or default_coverage_dimension).strip()
         or default_coverage_dimension,
-        rationale=str(decision_payload.get("rationale", "")).strip(),
-        missing_points=[
-            str(point).strip()
-            for point in decision_payload.get("missing_points", [])
-            if isinstance(point, str) and str(point).strip()
-        ],
+        rationale=payload.rationale.strip(),
+        missing_points=[point.strip() for point in payload.missing_points if point.strip()],
     )
 
 
@@ -941,10 +1028,10 @@ def execute_summary_compare_item(
     )
     latency_seconds = round(time.perf_counter() - started_at, 4)
     return SummaryCompareExecution(
-        answer=str(result.get("answer", "")),
-        answer_blocks=list(result.get("answer_blocks", [])),
-        citations=list(result.get("citations", [])),
-        trace=dict(result.get("trace", {})),
+        answer=result.answer,
+        answer_blocks=result.answer_blocks,
+        citations=result.citations,
+        trace=result.trace,
         latency_seconds=latency_seconds,
         timed_out=latency_seconds > settings.chat_timeout_seconds,
     )
@@ -1145,7 +1232,7 @@ def _resolve_single_gold_span_ref(
 
 def _validate_citation_ready_documents(
     *,
-    citations: list[dict[str, object]],
+    citations: list[ChatCitation],
     ready_documents: dict[str, Document],
 ) -> list[str]:
     """驗證 citations 是否都來自 ready 文件。
@@ -1161,8 +1248,7 @@ def _validate_citation_ready_documents(
     ready_by_id = {document.id: document for document in ready_documents.values()}
     failures: list[str] = []
     for citation in citations:
-        document_id = _coerce_optional_str(citation.get("document_id"))
-        if document_id is None or document_id not in ready_by_id:
+        if citation.document_id not in ready_by_id:
             failures.append("citation_not_from_ready_document")
     return failures
 
@@ -1170,7 +1256,7 @@ def _validate_citation_ready_documents(
 def _compute_required_document_coverage(
     *,
     expected_document_names: list[str],
-    citations: list[dict[str, object]],
+    citations: list[ChatCitation],
 ) -> float:
     """計算必需文件覆蓋率。
 
@@ -1182,11 +1268,7 @@ def _compute_required_document_coverage(
     - `float`：0 到 1 的覆蓋率。
     """
 
-    cited_document_names = {
-        str(citation.get("document_name", "")).strip()
-        for citation in citations
-        if str(citation.get("document_name", "")).strip()
-    }
+    cited_document_names = {citation.document_name.strip() for citation in citations if citation.document_name.strip()}
     matched = sum(1 for file_name in expected_document_names if file_name in cited_document_names)
     return round(matched / max(1, len(expected_document_names)), 4)
 
@@ -1194,7 +1276,7 @@ def _compute_required_document_coverage(
 def _collect_missing_required_document_names(
     *,
     expected_document_names: list[str],
-    citations: list[dict[str, object]],
+    citations: list[ChatCitation],
 ) -> list[str]:
     """列出尚未出現在 citations 中的必需文件名稱。
 
@@ -1206,18 +1288,14 @@ def _collect_missing_required_document_names(
     - `list[str]`：依 fixture 原順序保留的缺失文件名稱清單。
     """
 
-    cited_document_names = {
-        str(citation.get("document_name", "")).strip()
-        for citation in citations
-        if str(citation.get("document_name", "")).strip()
-    }
+    cited_document_names = {citation.document_name.strip() for citation in citations if citation.document_name.strip()}
     return [document_name for document_name in expected_document_names if document_name not in cited_document_names]
 
 
 def _compute_section_coverage(
     *,
     expected_section_headings: list[str],
-    citations: list[dict[str, object]],
+    citations: list[ChatCitation],
 ) -> float:
     """計算題目預期章節的覆蓋率。
 
@@ -1230,9 +1308,8 @@ def _compute_section_coverage(
 
     observed: list[str] = []
     for citation in citations:
-        heading = _coerce_optional_str(citation.get("heading"))
-        if heading:
-            observed.append(heading.casefold())
+        if citation.heading:
+            observed.append(citation.heading.casefold())
     matched = sum(1 for heading in expected_section_headings if any(heading.casefold() in item for item in observed))
     return round(matched / max(1, len(expected_section_headings)), 4)
 
@@ -1240,7 +1317,7 @@ def _compute_section_coverage(
 def _compute_citation_coverage(
     *,
     resolved_gold_spans: list[SummaryCompareResolvedGoldSpan],
-    citations: list[dict[str, object]],
+    citations: list[ChatCitation],
 ) -> float:
     """計算 citation 對 gold spans 的覆蓋率。
 
@@ -1264,7 +1341,7 @@ def _compute_citation_coverage(
 
 def _citation_overlaps_gold_span(
     *,
-    citation: dict[str, object],
+    citation: ChatCitation,
     gold_span: SummaryCompareResolvedGoldSpan,
 ) -> bool:
     """判斷 citation 是否命中 gold span。
@@ -1277,14 +1354,9 @@ def _citation_overlaps_gold_span(
     - `bool`：若 citation 與 gold span 同文件且 offset overlap，回傳真值。
     """
 
-    citation_document_id = _coerce_optional_str(citation.get("document_id"))
-    if citation_document_id != gold_span.document_id:
+    if citation.document_id != gold_span.document_id:
         return False
-    start_offset = citation.get("start_offset")
-    end_offset = citation.get("end_offset")
-    if not isinstance(start_offset, int) or not isinstance(end_offset, int):
-        return False
-    return start_offset < gold_span.end_offset and end_offset > gold_span.start_offset
+    return citation.start_offset < gold_span.end_offset and citation.end_offset > gold_span.start_offset
 
 
 def _build_aggregate_metrics(

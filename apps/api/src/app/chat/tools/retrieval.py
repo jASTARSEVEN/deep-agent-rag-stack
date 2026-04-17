@@ -9,7 +9,22 @@ from dataclasses import dataclass, asdict
 from sqlalchemy import select
 
 from app.auth.verifier import CurrentPrincipal
-from app.chat.contracts.types import ChatCitation, ChatCitationRegion
+from app.chat.contracts.types import (
+    AgentLoopTracePayload,
+    AgentResponseContractPayload,
+    AgentToolContextPayload,
+    AgentToolPayload,
+    ChatAssembledContextPayload,
+    ChatCitation,
+    ChatCitationPayload,
+    ChatCitationRegion,
+    ChatCitationRegionPayload,
+    RetrievalCoverageSignalsPayload,
+    RetrievalEvidenceCuePayload,
+    RetrievalPlanningDocumentPayload,
+    RetrievalSynopsisHintPayload,
+    RetrievalToolTracePayload,
+)
 from app.core.settings import AppSettings
 from app.db.models import Document, DocumentStatus, EvaluationQueryType
 from app.services.access import require_area_access
@@ -107,9 +122,9 @@ class RetrievalToolResult:
     # agent 要求檢視時回傳的 synopsis hints。
     synopsis_hints: list[RetrievalSynopsisHint]
     # 單回合 follow-up trace 增量。
-    loop_trace_delta: dict[str, object]
+    loop_trace_delta: AgentLoopTracePayload
     # retrieval 與 assembler trace。
-    trace: dict[str, object]
+    trace: RetrievalToolTracePayload
 
 
 def retrieve_area_contexts_tool(
@@ -328,7 +343,7 @@ def _coerce_optional_query_type(*, task_type: EvaluationQueryType | str | None) 
 def build_assembled_context_payload(
     session,
     retrieval_result: RetrievalToolResult | None,
-) -> list[dict[str, object]]:
+) -> list[ChatAssembledContextPayload]:
     """將 retrieval tool result 轉成前端可直接顯示的 assembled context payload。
 
     參數：
@@ -352,44 +367,47 @@ def build_assembled_context_payload(
         item["context_index"]: item["truncated"]
         for item in retrieval_result.trace["assembler"]["contexts"]
     }
-    return [
-        {
-            "context_index": index,
-            "context_label": _build_context_label(index),
-            "document_id": str(context.document_id),
-            "document_name": document_name_by_id.get(str(context.document_id), ""),
-            "parent_chunk_id": str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
-            "child_chunk_ids": [str(chunk_id) for chunk_id in context.chunk_ids],
-            "structure_kind": context.structure_kind.value,
-            "heading": context.heading,
-            "excerpt": context.assembled_text,
-            "assembled_text": context.assembled_text,
-            "source": context.source,
-            "start_offset": context.start_offset,
-            "end_offset": context.end_offset,
-            "page_start": min((region.page_number for region in context.regions), default=None),
-            "page_end": max((region.page_number for region in context.regions), default=None),
-            "regions": [
-                {
-                    "page_number": region.page_number,
-                    "region_order": region.region_order,
-                    "bbox_left": region.bbox_left,
-                    "bbox_bottom": region.bbox_bottom,
-                    "bbox_right": region.bbox_right,
-                    "bbox_top": region.bbox_top,
-                }
-                for region in context.regions
-            ],
-            "truncated": truncated_by_index.get(index, False),
-        }
-        for index, context in enumerate(retrieval_result.assembled_contexts)
-    ]
+    payload: list[ChatAssembledContextPayload] = []
+    for index, context in enumerate(retrieval_result.assembled_contexts):
+        regions: list[ChatCitationRegionPayload] = [
+            {
+                "page_number": region.page_number,
+                "region_order": region.region_order,
+                "bbox_left": region.bbox_left,
+                "bbox_bottom": region.bbox_bottom,
+                "bbox_right": region.bbox_right,
+                "bbox_top": region.bbox_top,
+            }
+            for region in context.regions
+        ]
+        payload.append(
+            {
+                "context_index": index,
+                "context_label": _build_context_label(index),
+                "document_id": str(context.document_id),
+                "document_name": document_name_by_id.get(str(context.document_id), ""),
+                "parent_chunk_id": str(context.parent_chunk_id) if context.parent_chunk_id is not None else None,
+                "child_chunk_ids": [str(chunk_id) for chunk_id in context.chunk_ids],
+                "structure_kind": context.structure_kind.value,
+                "heading": context.heading,
+                "excerpt": context.assembled_text,
+                "assembled_text": context.assembled_text,
+                "source": context.source,
+                "start_offset": context.start_offset,
+                "end_offset": context.end_offset,
+                "page_start": min((region.page_number for region in context.regions), default=None),
+                "page_end": max((region.page_number for region in context.regions), default=None),
+                "regions": regions,
+                "truncated": truncated_by_index.get(index, False),
+            }
+        )
+    return payload
 
 
 def build_agent_tool_context_payload(
     session,
     retrieval_result: RetrievalToolResult | None,
-) -> list[dict[str, object]]:
+) -> list[AgentToolContextPayload]:
     """建立回傳給 LLM 的最小 assembled context payload。
 
     參數：
@@ -426,14 +444,14 @@ def build_agent_tool_payload(
     session,
     retrieval_result: RetrievalToolResult | None,
     *,
-    assembled_contexts_payload: list[dict[str, object]] | None = None,
-    loop_trace_delta: dict[str, object] | None = None,
+    assembled_contexts_payload: list[AgentToolContextPayload] | None = None,
+    loop_trace_delta: AgentLoopTracePayload | None = None,
     tool_call_count: int,
     followup_call_count: int,
     synopsis_inspection_count: int,
     latency_budget_status: str,
     stop_reason: str,
-) -> dict[str, object]:
+) -> AgentToolPayload:
     """建立 `retrieve_area_contexts` 回傳給 LLM 的正式 payload。
 
     參數：
@@ -470,7 +488,7 @@ def build_agent_tool_payload(
         or latency_budget_status != "normal"
         or stop_reason not in {"not_started", "continue"}
     )
-    payload: dict[str, object] = {
+    payload: AgentToolPayload = {
         "assembled_contexts": tool_contexts_payload,
         "coverage_signals": _build_agent_coverage_signals_payload(retrieval_result),
         "planning_documents": _build_agent_planning_documents_payload(retrieval_result),
@@ -499,7 +517,7 @@ def build_agent_tool_payload(
 def build_agent_response_contract_payload(
     session,
     retrieval_result: RetrievalToolResult | None,
-) -> dict[str, object] | None:
+) -> AgentResponseContractPayload | None:
     """建立給 LLM 的回答契約提示。
 
     參數：
@@ -703,7 +721,7 @@ def build_chat_citations(
 
 def _build_agent_planning_documents_payload(
     retrieval_result: RetrievalToolResult | None,
-) -> list[dict[str, object]]:
+) -> list[RetrievalPlanningDocumentPayload]:
     """建立提供給 LLM 的 planning documents 欄位。
 
     參數：
@@ -716,7 +734,7 @@ def _build_agent_planning_documents_payload(
     if retrieval_result is None:
         return []
 
-    payload: list[dict[str, object]] = []
+    payload: list[RetrievalPlanningDocumentPayload] = []
     for item in retrieval_result.planning_documents:
         planning_document = {
             "document_name": str(getattr(item, "document_name", "") or ""),
@@ -733,7 +751,7 @@ def _build_agent_planning_documents_payload(
 
 def _build_agent_coverage_signals_payload(
     retrieval_result: RetrievalToolResult | None,
-) -> dict[str, object] | None:
+) -> RetrievalCoverageSignalsPayload | None:
     """建立提供給 LLM 的 coverage signals 欄位。
 
     參數：
@@ -767,7 +785,7 @@ def _build_agent_coverage_signals_payload(
 
 def _build_agent_evidence_cue_payload(
     retrieval_result: RetrievalToolResult | None,
-) -> list[dict[str, object]]:
+) -> list[RetrievalEvidenceCuePayload]:
     """建立提供給 LLM 的 evidence cues 欄位。
 
     參數：
@@ -792,7 +810,7 @@ def _build_agent_evidence_cue_payload(
 
 def _build_agent_synopsis_hints_payload(
     retrieval_result: RetrievalToolResult | None,
-) -> list[dict[str, object]]:
+) -> list[RetrievalSynopsisHintPayload]:
     """建立提供給 LLM 的 synopsis hints 欄位。
 
     參數：
@@ -805,7 +823,7 @@ def _build_agent_synopsis_hints_payload(
     if retrieval_result is None:
         return []
 
-    payload: list[dict[str, object]] = []
+    payload: list[RetrievalSynopsisHintPayload] = []
     for item in retrieval_result.synopsis_hints:
         synopsis_hint = {
             "document_name": str(getattr(item, "document_name", "") or ""),
