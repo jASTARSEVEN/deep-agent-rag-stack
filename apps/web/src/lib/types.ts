@@ -1,6 +1,14 @@
 /** 前端 UI state 與 chat view-model 使用的本機型別。 */
 
+import type {
+  ChatAnswerBlock,
+  ChatAssembledContext,
+  ChatCitation,
+  ChatDisplayCitation,
+} from "../generated/chat";
 import type { ApiHealthPayload, AuthContextPayload } from "../generated/rest";
+
+export type { ChatAnswerBlock, ChatDisplayCitation };
 
 
 /** landing page 上顯示的服務中繼資料。 */
@@ -44,84 +52,11 @@ export interface ChatSessionViewModel {
 export type ChatSynthesisMode = "disabled" | "summary_compare";
 
 
-/** chat citation 內容結構型別。 */
-export type ChatStructureKind = "text" | "table";
-
-
-/** 回答區塊句尾可點擊的 citation 顯示資料。 */
-export interface ChatDisplayCitation {
-  /** context 在回傳列表中的順序。 */
-  context_index: number;
-  /** 前端顯示用的穩定 citation label。 */
-  context_label: string;
-  /** context 所屬文件識別碼。 */
-  document_id: string;
-  /** context 所屬文件名稱。 */
-  document_name: string;
-  /** context 所屬段落標題。 */
-  heading: string | null;
-  /** 起始頁碼。 */
-  page_start?: number | null;
-  /** 結束頁碼。 */
-  page_end?: number | null;
-}
-
-
-/** assistant 回答的單一顯示區塊。 */
-export interface ChatAnswerBlock {
-  /** 區塊文字內容。 */
-  text: string;
-  /** 此區塊引用的 context index 列表。 */
-  citation_context_indices: number[];
-  /** 句尾顯示用的 citations。 */
-  display_citations: ChatDisplayCitation[];
-}
-
-
 /** 單一 assembled context reference。 */
-export interface ChatContextReference {
-  /** 單一 PDF locator。 */
-  regions?: Array<{
-    page_number: number;
-    region_order: number;
-    bbox_left: number;
-    bbox_bottom: number;
-    bbox_right: number;
-    bbox_top: number;
-  }>;
-  /** context 在回傳列表中的順序。 */
-  context_index: number;
-  /** 前端顯示用的穩定 citation label。 */
-  context_label: string;
-  /** context 所屬文件識別碼。 */
-  document_id: string;
-  /** context 所屬文件名稱。 */
-  document_name: string;
-  /** context 所屬 parent chunk 識別碼。 */
-  parent_chunk_id: string | null;
-  /** 合併進此 context 的 child chunk 識別碼。 */
-  child_chunk_ids: string[];
-  /** context 所屬段落標題。 */
-  heading: string | null;
-  /** context 內容結構型別。 */
-  structure_kind: ChatStructureKind;
-  /** context 在 normalized text 的起始 offset。 */
-  start_offset: number;
-  /** context 在 normalized text 的結束 offset。 */
-  end_offset: number;
-  /** 起始頁碼。 */
-  page_start?: number | null;
-  /** 結束頁碼。 */
-  page_end?: number | null;
-  /** context 組裝後文字摘要。 */
-  excerpt: string;
+export type ChatContextReference = (ChatCitation | ChatAssembledContext) & {
   /** context 組裝後全文；若未提供則回退使用 excerpt。 */
   assembled_text?: string;
-  /** context 來源，可能為 vector、fts 或 hybrid。 */
-  source: string;
-  /** 此 context 是否已被裁切。 */
-  truncated: boolean;
-}
+};
 
 
 /** LangGraph custom event 對應的高層 chat 階段。 */

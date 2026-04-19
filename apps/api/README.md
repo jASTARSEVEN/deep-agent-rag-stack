@@ -27,6 +27,8 @@ This module contains the project's FastAPI service. It currently provides:
   - `langgraph dev --config langgraph.json --host 0.0.0.0 --port 18000 --no-browser`
 - Export the current REST OpenAPI schema for frontend contract generation:
   - `python -m app.scripts.export_openapi --output -`
+- Export the current chat/runtime contract schema for frontend contract generation:
+  - `python -m app.scripts.export_chat_contracts --output -`
 - Run tests locally:
   - `pytest`
 - Docker Compose:
@@ -140,7 +142,7 @@ Notes:
 - `src/app/db`: SQLAlchemy models, sessions, and metadata
 - `src/app/routes`: HTTP routes
 - `src/app/services`: authorization, storage, task dispatch, internal retrieval, and assembler services
-- `src/app/scripts`: benchmark import/export/run utilities, external benchmark curation CLI, and OpenAPI export helpers
+- `src/app/scripts`: benchmark import/export/run utilities, external benchmark curation CLI, OpenAPI export helpers, and chat contract export helpers
 - `langgraph.json`: LangGraph Server loader config for the built-in thread/run runtime
 - `tests`: authorization and API tests
 
@@ -168,6 +170,7 @@ Notes:
 
 - If the API process does not start, verify that `langgraph-cli[inmem]` is installed and `langgraph.json` is present in `apps/api`.
 - Use `python -m app.scripts.export_openapi --output -` when the frontend needs to regenerate `apps/web/src/generated/rest.ts` from the current API contract.
+- Use `python -m app.scripts.export_chat_contracts --output -` when the frontend needs to regenerate `apps/web/src/generated/chat.ts` from the current chat/runtime contract.
 - For local auth tests, enable `AUTH_TEST_MODE=true` and use `Bearer test::<sub>::<group1,group2>`.
 - `GET /areas/{area_id}`, `PUT /areas/{area_id}`, `DELETE /areas/{area_id}`, and `GET /areas/{area_id}/access` return `404` for both unauthorized and missing resources by design to preserve `deny-by-default`.
 - `AUTH_TEST_MODE=true` is commonly used together with `STORAGE_BACKEND=filesystem` for API tests; Playwright E2E should start both the API and the worker.

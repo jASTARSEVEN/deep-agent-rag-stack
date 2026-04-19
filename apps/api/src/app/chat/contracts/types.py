@@ -134,8 +134,8 @@ class ChatAssembledContext(BaseModel):
     parent_chunk_id: str | None
     # 合併進此 context 的 child chunk 識別碼。
     child_chunk_ids: list[str]
-    # context 內容結構型別字串。
-    structure_kind: str
+    # context 內容結構型別。
+    structure_kind: ChunkStructureKind
     # context 所屬段落標題。
     heading: str | None
     # context 摘錄文字。

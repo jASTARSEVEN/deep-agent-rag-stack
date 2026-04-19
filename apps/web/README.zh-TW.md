@@ -15,6 +15,9 @@
 - 重新產生或檢查 REST contract types：
   - `npm run generate:rest-types`
   - `npm run check:rest-types`
+- 重新產生或檢查 chat/runtime contract types：
+  - `npm run generate:chat-types`
+  - `npm run check:chat-types`
 - 本機驗證正式登入：
   - 確保 Keycloak 與 API 已可用
   - 本機 Node 開發請開啟 `http://localhost:3000`；若走 compose 正式入口則開啟 `https://<PUBLIC_HOST>`
@@ -52,8 +55,10 @@
 - `src/features/chat`：LangGraph SDK transport、chat state 與 chat/debug UI
 - `src/components`: Reusable UI blocks
 - `src/generated/rest.ts`：由 API OpenAPI schema 自動產生的 REST contract types
+- `src/generated/chat.ts`：由 API chat Pydantic schema 自動產生的 chat/runtime contract types
 - `src/lib`: environment helpers、API client 與純前端本機型別
-- `scripts/generate-rest-types.mjs`：OpenAPI -> TypeScript 產生 / 檢查入口
+- `scripts/generate-rest-types.mjs`：REST OpenAPI -> TypeScript 產生 / 檢查入口
+- `scripts/generate-chat-types.mjs`：chat/runtime schema -> TypeScript 產生 / 檢查入口
 - `tests/e2e`: Playwright E2E 測試、bootstrap 與本機 test-mode API 啟動腳本
 - `playwright.config.ts`：Playwright 執行設定
 
@@ -73,6 +78,7 @@
 
 - 若頁面顯示 API 錯誤，請確認 API container 健康且 `VITE_API_BASE_URL` 設定正確。
 - 若 `npm run build` 卡在 `check:rest-types`，代表 `src/generated/rest.ts` 與目前 API schema 已漂移；請先執行 `npm run generate:rest-types` 再重試。
+- 若 `npm run build` 卡在 `check:chat-types`，代表 `src/generated/chat.ts` 與目前 API chat contract 已漂移；請先執行 `npm run generate:chat-types` 再重試。
 - 若 Areas 頁出現 `Failed to fetch` 或無法連線到 API，請確認 `API_CORS_ORIGINS` 已包含目前前端來源。compose 預設是公開 `https://<PUBLIC_HOST>`；若你用本機 Node dev，則要額外允許 `http://localhost:3000`。
 - 若登入後 callback 無法回到前端，請確認 Keycloak client `deep-agent-web` 的 redirect URI 與 `VITE_KEYCLOAK_URL`、`VITE_KEYCLOAK_CLIENT_ID` 一致。
 - 若 Vite 顯示 `Blocked request. This host is not allowed.`，請把公開網域加入 `WEB_ALLOWED_HOSTS`，讓 dev server 接受該 Host header。

@@ -8,10 +8,12 @@
   "scripts": {
     "generate:rest-types": "node ./scripts/generate-rest-types.mjs",
     "check:rest-types": "node ./scripts/generate-rest-types.mjs --check",
+    "generate:chat-types": "node ./scripts/generate-chat-types.mjs",
+    "check:chat-types": "node ./scripts/generate-chat-types.mjs --check",
     "dev": "vite --host 0.0.0.0 --port 3000",
     "dev:e2e": "vite --host 127.0.0.1 --port 13001",
     "api:e2e": "node ./tests/e2e/scripts/start-e2e-api.mjs",
-    "build": "npm run check:rest-types && tsc --noEmit && vite build",
+    "build": "npm run check:rest-types && npm run check:chat-types && tsc --noEmit && vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "test:e2e:prepare": "node ./tests/e2e/scripts/prepare-e2e.mjs",
     "test:e2e": "npm run test:e2e:prepare && playwright test",

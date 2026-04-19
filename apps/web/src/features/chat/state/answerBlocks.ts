@@ -31,6 +31,8 @@ function buildCitationLookup(citations: ChatContextReference[]): Map<string, Cha
         document_id: citation.document_id,
         document_name: citation.document_name,
         heading: citation.heading,
+        page_start: citation.page_start,
+        page_end: citation.page_end,
       },
     ]),
   );
