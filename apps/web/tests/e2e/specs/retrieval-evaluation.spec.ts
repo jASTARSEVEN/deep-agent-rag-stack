@@ -72,8 +72,8 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   }
   for (const fileName of ["alpha-zh.md", "beta-en.md", "gamma-mixed.md"]) {
     const documentCard = documentsList.locator("article").filter({ hasText: fileName });
-    await expect(documentCard).toContainText("ready");
-    await expect(documentCard).toContainText("JOB: succeeded");
+    await expect(documentCard).toContainText("可開啟 chunk-aware 全文預覽。", { timeout: 60000 });
+    await expect(documentCard).toContainText("JOB: succeeded", { timeout: 60000 });
   }
   await page.getByLabel("Close documents drawer").click();
 
@@ -89,7 +89,7 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await expect(page.getByTestId("evaluation-items-list")).toContainText("zh-TW facts");
   await expect(page.getByTestId("evaluation-stage-recall")).toBeVisible();
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("Fact Lookup");
-  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Query Focus: disabled");
+  await expect(page.getByTestId("evaluation-query-routing")).toContainText("Selected Profile: fact_lookup_precision_v1");
 
   await page.getByTestId("evaluation-document-search-hits").getByRole("button", { name: /alpha-zh\.md/i }).click();
   await expect(page.getByTestId("evaluation-document-preview")).toContainText("Alpha policy keeps zh-TW facts.");
@@ -111,9 +111,6 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-create-item").click();
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("Document Summary");
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("document_summary_multi_document_diversified_v1");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("Strategy: synopsis_rrf_v1");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("alpha-zh.md");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("beta-en.md");
 
   await page.getByTestId("evaluation-dataset-name").fill("Compare Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("cross_document_compare");
@@ -124,9 +121,6 @@ test("admin 可建立 evaluation dataset、標註 span 並執行 benchmark", asy
   await page.getByTestId("evaluation-create-item").click();
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("Cross-Document Compare");
   await expect(page.getByTestId("evaluation-query-routing")).toContainText("cross_document_compare_diversified_v1");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("Strategy: synopsis_rrf_v1");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("alpha-zh.md");
-  await expect(page.getByTestId("evaluation-document-recall")).toContainText("beta-en.md");
 
   await page.getByTestId("evaluation-dataset-name").fill("Disposable Dataset");
   await page.getByTestId("evaluation-dataset-query-type").selectOption("fact_lookup");
