@@ -193,6 +193,13 @@ flowchart TD
 6.5. benchmark 治理的第一核心是「不得造成 domain overfit」；任何 candidate profile 若引入非 generic-first 的 retrieval wording、query rewrite 或 corpus-specific heuristic，必須在治理腳本層直接視為失敗，不得進入正式 lane 比較。
 7. run 完成後，`retrieval_eval_runs` 僅保存可查 metadata，完整 summary / per-query / baseline compare JSON 落在 `retrieval_eval_run_artifacts`，再由 API 與 UI 顯示；benchmark strategy 的擴充必須透過單一 profile registry 進行，資料庫不得新增策略專用欄位
 
+### Evaluation / benchmark package 邊界
+1. evaluation 與 benchmark 正式位於 `app.evaluation` package，不再放在 `app.services` 產品 service 層。
+2. `app.evaluation.retrieval` 負責 Phase 7 retrieval evaluation 的 dataset/item/span 管理、stage preview、benchmark run、metrics、mapping 與 profile registry。
+3. `app.evaluation.retrieval.stage_runner` 是 evaluation 唯一可直接串接 `routing -> recall -> rerank -> selection -> assembler` 的 adapter；產品 retrieval runtime 不得 import evaluation package。
+4. `app.evaluation.summary_compare` 負責 Phase 8 summary/compare checkpoint、benchmark suite 與 offline judge workflow；其正式執行路徑只能透過 chat runtime contract 取得 answer / citations / trace，不得直接呼叫 retrieval internals。
+5. HTTP routes 與 CLI scripts 可以依賴 `app.evaluation.*` 作為入口；`app.services.*`、`app.chat.*` 與 retrieval runtime 不得反向依賴 evaluation / benchmark 模組。
+
 ### Phase 8 summary/compare benchmark 契約
 1. `summary/compare` 的正式 checkpoint 不沿用 Phase 7 retrieval-only runner，而是透過 `python -m app.scripts.run_summary_compare_checkpoint` 執行固定 dataset。
 2. checkpoint runner 直接呼叫真實 chat runtime，逐題保存 `answer`、`answer_blocks`、`citations`、routing / selection trace、fallback reason 與 latency。

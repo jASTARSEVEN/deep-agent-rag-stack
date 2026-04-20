@@ -9,7 +9,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import EvaluationLanguage, EvaluationQueryType, EvaluationRunStatus
-from app.services.evaluation_profiles import (
+from app.evaluation.retrieval.profiles import (
     DETERMINISTIC_GATE_V1,
     GENERIC_GUARDED_ASSEMBLER_V1,
     GENERIC_GUARDED_ASSEMBLER_V1_GATE,

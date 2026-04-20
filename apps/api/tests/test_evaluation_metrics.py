@@ -2,14 +2,14 @@
 
 from uuid import uuid4
 
-from app.services.evaluation_metrics import (
+from app.evaluation.retrieval.metrics import (
     document_coverage_at_k,
     mean_reciprocal_rank_at_k,
     normalized_discounted_cumulative_gain,
     precision_at_k,
     recall_at_k,
 )
-from app.services.evaluation_mapping import CandidateWindow, GoldSpan, match_gold_relevance
+from app.evaluation.retrieval.mapping import CandidateWindow, GoldSpan, match_gold_relevance
 
 
 def test_normalized_discounted_cumulative_gain_returns_one_for_ideal_ranking() -> None:

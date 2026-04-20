@@ -20,7 +20,7 @@ from app.schemas.evaluation import (
     MarkEvaluationSpanRequest,
     RunEvaluationDatasetRequest,
 )
-from app.services.evaluation_dataset import (
+from app.evaluation.retrieval.datasets import (
     add_item_span,
     create_area_evaluation_dataset,
     create_evaluation_item,

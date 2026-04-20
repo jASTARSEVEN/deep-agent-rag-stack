@@ -10,8 +10,8 @@ import pytest
 
 from app.db.models import Area, Document, DocumentStatus
 from app.schemas.summary_compare_checkpoint import SummaryCompareCheckpointItem, SummaryCompareJudgeResult, SummaryCompareJudgeScores
-from app.services.summary_compare_offline_judge import write_offline_judge_packets
-from app.services.summary_compare_checkpoint import (
+from app.evaluation.summary_compare.offline_judge import write_offline_judge_packets
+from app.evaluation.summary_compare.checkpoint import (
     SummaryCompareExecution,
     build_summary_compare_checkpoint_markdown,
     build_summary_compare_judge_prompt,
@@ -310,7 +310,7 @@ def test_run_summary_compare_checkpoint_passes_with_fake_executor_and_judge(db_s
             timed_out=False,
         )
 
-    monkeypatch.setattr("app.services.summary_compare_checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
+    monkeypatch.setattr("app.evaluation.summary_compare.checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
 
     judge = FakeJudge(
         scores_by_item_id={
@@ -434,7 +434,7 @@ def test_run_summary_compare_checkpoint_reports_hard_and_soft_failures(db_sessio
             timed_out=True,
         )
 
-    monkeypatch.setattr("app.services.summary_compare_checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
+    monkeypatch.setattr("app.evaluation.summary_compare.checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
 
     judge = FakeJudge(
         scores_by_item_id={
@@ -564,7 +564,7 @@ def test_summary_compare_checkpoint_supports_offline_judge_packets(
             timed_out=False,
         )
 
-    monkeypatch.setattr("app.services.summary_compare_checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
+    monkeypatch.setattr("app.evaluation.summary_compare.checkpoint.execute_summary_compare_item", fake_execute_summary_compare_item)
 
     manifest, packets = export_summary_compare_checkpoint_offline_packets(
         session=db_session,

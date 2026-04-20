@@ -7,8 +7,8 @@ from pathlib import Path
 import time
 
 from app.schemas.summary_compare_offline_judge import SummaryCompareOfflineJudgePacket
-from app.services import summary_compare_offline_judge as offline_judge_module
-from app.services.summary_compare_offline_judge import (
+from app.evaluation.summary_compare import offline_judge as offline_judge_module
+from app.evaluation.summary_compare.offline_judge import (
     load_offline_judge_decisions,
     run_codex_cli_on_offline_judge_packets,
     write_offline_judge_packets,

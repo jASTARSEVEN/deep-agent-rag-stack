@@ -29,16 +29,17 @@ from app.schemas.evaluation import (
     EvaluationSummaryByDimension,
 )
 from app.services.access import require_minimum_area_role
-from app.services.evaluation_mapping import first_hit_rank
-from app.services.evaluation_metrics import (
+from app.evaluation.retrieval.mapping import first_hit_rank
+from app.evaluation.retrieval.metrics import (
     document_coverage_at_k,
     mean_reciprocal_rank_at_k,
     normalized_discounted_cumulative_gain,
     precision_at_k,
     recall_at_k,
 )
-from app.services.evaluation_dataset import build_dataset_summary, evaluate_item_stage_outputs
-from app.services.evaluation_profiles import resolve_evaluation_settings
+from app.evaluation.retrieval.datasets import build_dataset_summary
+from app.evaluation.retrieval.profiles import resolve_evaluation_settings
+from app.evaluation.retrieval.stage_runner import evaluate_item_stage_outputs
 from app.services.retrieval_routing import build_query_routing_decision
 
 # 這些外部資料集的原始任務皆帶有指定文件上下文；benchmark run 應用 gold 文件作為 oracle scope。

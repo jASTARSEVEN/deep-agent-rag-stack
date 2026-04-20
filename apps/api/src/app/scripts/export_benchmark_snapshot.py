@@ -16,7 +16,7 @@ from app.auth.verifier import CurrentPrincipal
 from app.core.settings import get_settings
 from app.db.models import Document, RetrievalEvalDataset, RetrievalEvalItem, RetrievalEvalItemSpan, RetrievalEvalRun, RetrievalEvalRunArtifact, utc_now
 from app.db.session import create_database_engine, create_session_factory
-from app.services.evaluation_dataset import get_evaluation_run_report
+from app.evaluation.retrieval.datasets import get_evaluation_run_report
 
 
 # 匯出 package 時固定產生的檔名清單，用於 manifest 與目錄檢查。

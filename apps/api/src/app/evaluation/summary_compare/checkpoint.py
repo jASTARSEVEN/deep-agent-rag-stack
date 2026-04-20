@@ -39,7 +39,7 @@ from app.schemas.summary_compare_offline_judge import (
     SummaryCompareOfflineJudgeDecision,
     SummaryCompareOfflineJudgePacket,
 )
-from app.services.summary_compare_offline_judge import load_offline_judge_decisions, load_offline_judge_packets
+from .offline_judge import load_offline_judge_decisions, load_offline_judge_packets
 
 
 # checkpoint dataset manifest 檔名。

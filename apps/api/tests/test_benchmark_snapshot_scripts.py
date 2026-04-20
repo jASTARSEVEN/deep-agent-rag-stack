@@ -11,7 +11,7 @@ from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Doc
 from app.scripts.compare_benchmark_runs import compare_reports
 from app.scripts.export_benchmark_snapshot import export_snapshot
 from app.scripts.import_benchmark_snapshot import import_snapshot
-from app.services.evaluation_dataset import create_evaluation_run, get_evaluation_run_report
+from app.evaluation.retrieval.datasets import create_evaluation_run, get_evaluation_run_report
 
 def _uuid() -> str:
     """建立測試用 UUID 字串。

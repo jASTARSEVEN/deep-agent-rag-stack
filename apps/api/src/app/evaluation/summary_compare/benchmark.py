@@ -45,7 +45,7 @@ from app.schemas.summary_compare_offline_judge import (
     SummaryCompareOfflineJudgeDecision,
     SummaryCompareOfflineJudgePacket,
 )
-from app.services.summary_compare_checkpoint import (
+from .checkpoint import (
     OpenAISummaryCompareJudge,
     SummaryCompareExecution,
     _answer_mentions_insufficient_evidence,
@@ -60,7 +60,7 @@ from app.services.summary_compare_checkpoint import (
     build_summary_compare_judge_prompt,
     execute_summary_compare_item,
 )
-from app.services.summary_compare_offline_judge import load_offline_judge_decisions, load_offline_judge_packets
+from .offline_judge import load_offline_judge_decisions, load_offline_judge_packets
 
 
 # suite manifest 檔名。

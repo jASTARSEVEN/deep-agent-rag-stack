@@ -61,6 +61,7 @@
 - 專案已具備 `documents.display_text` 全文持久化來源與 `GET /documents/{document_id}/preview`，供 ready-only 文件全文預覽與 chunk-aware UI 使用
 - 專案已具備 retrieval correctness evaluation SQL-first schema、area-scoped dataset/item/span/run APIs，以及 CLI-first benchmark runner
 - 專案已具備 `EvaluationDrawer` reviewer UI，可在 `/areas` 內建立 `fact_lookup` dataset、複核 recall/rerank/assembled 候選、標註 gold spans、標記 `retrieval_miss` 並檢視 run report
+- evaluation / benchmark 已自產品 `app.services` 層解耦，正式收斂到 `app.evaluation.retrieval` 與 `app.evaluation.summary_compare` package；產品 retrieval/chat runtime 不依賴 evaluation package
 - 專案已具備 retrieval evaluation summary/per-query metrics、baseline compare 與 JSON artifact 持久化
 - 目前 `Phase 7` 的 retrieval correctness evaluation 已擴充 additive `evidence_recall` stage 與 evidence trace 欄位，但正式 promotion gate 仍待用 `QASPER 100 / NQ 100 / DRCD 100 / phase8a-summary-compare-v1` 跑完後確認
 - benchmark strategy governance 已收斂為「單一 evaluation profile registry + 單一 strategy lane registry」；未來新增策略應以 registry data 擴充，`retrieval_eval_runs` 與 artifacts 維持通用 schema，不新增策略專用欄位

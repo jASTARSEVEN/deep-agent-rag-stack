@@ -8,13 +8,13 @@ import json
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
-from app.services.evaluation_dataset import (
+from app.evaluation.retrieval.datasets import (
     create_area_evaluation_dataset,
     create_evaluation_item,
     create_evaluation_run,
     get_evaluation_run_report,
 )
-from app.services.evaluation_profiles import SUPPORTED_EVALUATION_PROFILES
+from app.evaluation.retrieval.profiles import SUPPORTED_EVALUATION_PROFILES
 from app.schemas.evaluation import CreateEvaluationItemRequest
 from app.db.models import EvaluationLanguage, EvaluationQueryType
 

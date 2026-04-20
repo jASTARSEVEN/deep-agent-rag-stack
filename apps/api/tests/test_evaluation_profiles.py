@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.core.settings import AppSettings
-from app.services.evaluation_profiles import (
+from app.evaluation.retrieval.profiles import (
     GENERIC_GUARDED_ASSEMBLER_V1,
     GENERIC_GUARDED_ASSEMBLER_V1_GATE,
     HYPOTHESIS_ASSEMBLER,

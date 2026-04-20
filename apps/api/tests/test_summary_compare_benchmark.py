@@ -14,8 +14,8 @@ from app.schemas.summary_compare_benchmark import (
     SummaryComparePairwiseJudgeResult,
 )
 from app.schemas.summary_compare_checkpoint import SummaryCompareJudgeResult, SummaryCompareJudgeScores
-from app.services.summary_compare_offline_judge import write_offline_judge_packets
-from app.services.summary_compare_benchmark import (
+from app.evaluation.summary_compare.offline_judge import write_offline_judge_packets
+from app.evaluation.summary_compare.benchmark import (
     build_summary_compare_benchmark_markdown,
     export_summary_compare_benchmark_offline_packets,
     load_summary_compare_benchmark_suite,
@@ -362,7 +362,7 @@ def test_run_summary_compare_benchmark_aggregates_summary_and_compare_scores(
         reference_main_score=0.7,
     )
 
-    from app.services import summary_compare_benchmark as benchmark_module
+    from app.evaluation.summary_compare import benchmark as benchmark_module
 
     def fake_execute_summary_compare_item(*, item, benchmark_document_ids=None, **kwargs):
         """回傳固定 runtime 執行結果。"""
@@ -499,7 +499,7 @@ def test_run_summary_compare_benchmark_marks_partial_when_compare_judge_missing(
         reference_main_score=0.2,
     )
 
-    from app.services import summary_compare_benchmark as benchmark_module
+    from app.evaluation.summary_compare import benchmark as benchmark_module
 
     def fake_execute_summary_compare_item(*, item, benchmark_document_ids=None, **kwargs):
         """回傳固定 runtime 執行結果。"""
@@ -710,7 +710,7 @@ def test_summary_compare_benchmark_supports_offline_judge_packets(
         reference_main_score=0.7,
     )
 
-    from app.services import summary_compare_benchmark as benchmark_module
+    from app.evaluation.summary_compare import benchmark as benchmark_module
 
     def fake_execute_summary_compare_item(*, item, benchmark_document_ids=None, **kwargs):
         """回傳固定 runtime 執行結果。"""

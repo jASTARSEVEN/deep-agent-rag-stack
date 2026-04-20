@@ -9,13 +9,13 @@ import sys
 
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
-from app.services.summary_compare_checkpoint import (
+from app.evaluation.summary_compare.checkpoint import (
     export_summary_compare_checkpoint_offline_packets,
     run_summary_compare_checkpoint,
     run_summary_compare_checkpoint_from_offline_packets,
     write_summary_compare_checkpoint_artifacts,
 )
-from app.services.summary_compare_offline_judge import (
+from app.evaluation.summary_compare.offline_judge import (
     run_codex_cli_on_offline_judge_packets,
     write_offline_judge_packets,
 )
