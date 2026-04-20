@@ -24,7 +24,8 @@ from app.chat.contracts.types import (
     ChatTracePayload,
     PrincipalPayload,
 )
-from app.chat.tools.retrieval import build_assembled_context_payload, retrieve_area_contexts_tool
+from app.chat.tools.retrieval import retrieve_area_contexts_tool
+from app.chat.tools.retrieval_serialization import build_assembled_context_payload
 from app.core.settings import get_settings
 from app.db.session import create_database_engine, create_session_factory
 

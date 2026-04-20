@@ -45,17 +45,11 @@ from app.schemas.evaluation import (
 )
 from app.services.access import require_area_access, require_minimum_area_role
 from app.services.evaluation_mapping import CandidateWindow, GoldSpan, first_hit_rank, match_gold_relevance, match_gold_relevance_for_windows
+from app.services.retrieval_recall import apply_python_rrf, recall_ranked_candidates
+from app.services.retrieval_rerank import apply_ranking_policy, apply_rerank as apply_rerank_stage, build_retrieval_candidate
 from app.services.retrieval_routing import QueryRoutingDecision, build_query_routing_decision
 from app.services.retrieval_selection import RetrievalSelectionResult, apply_scope_aware_selection
-from app.services.retrieval import (
-    RetrievalResult,
-    RetrievalTrace,
-    _apply_python_rrf,
-    _apply_ranking_policy,
-    _apply_rerank,
-    _build_retrieval_candidate,
-    _recall_ranked_candidates,
-)
+from app.services.retrieval_types import RetrievalResult, RetrievalTrace
 from app.services.retrieval_assembler import assemble_retrieval_result
 
 
@@ -438,9 +432,9 @@ def evaluate_item_stage_outputs(
     retrieval_query = item.query_text
     scoped_document_ids = allowed_document_ids_override or routing_decision.resolved_document_ids or None
 
-    recall_matches = _apply_ranking_policy(
-        matches=_apply_python_rrf(
-            matches=_recall_ranked_candidates(
+    recall_matches = apply_ranking_policy(
+        matches=apply_python_rrf(
+            matches=recall_ranked_candidates(
                 session=session,
                 settings=effective_settings,
                 area_id=area_id,
@@ -454,11 +448,11 @@ def evaluate_item_stage_outputs(
         settings=effective_settings,
     )
     rerank_matches = (
-        _apply_rerank(matches=recall_matches, query=item.query_text, settings=effective_settings)
+        apply_rerank_stage(matches=recall_matches, query=item.query_text, settings=effective_settings)
         if apply_rerank
         else recall_matches
     )
-    reranked_candidates = [_build_retrieval_candidate(match) for match in rerank_matches]
+    reranked_candidates = [build_retrieval_candidate(match) for match in rerank_matches]
     selection_result = apply_scope_aware_selection(
         candidates=reranked_candidates,
         selected_profile=routing_decision.selected_profile,

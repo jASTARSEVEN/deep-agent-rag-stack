@@ -37,6 +37,8 @@ from app.chat.contracts.types import (
 from app.chat.tools.retrieval import (
     RetrievalToolResult,
     _retrieve_area_contexts_internal,
+)
+from app.chat.tools.retrieval_serialization import (
     build_agent_tool_payload,
     build_assembled_context_payload,
     build_tool_call_output_summary,

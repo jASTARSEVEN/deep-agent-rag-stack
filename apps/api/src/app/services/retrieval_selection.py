@@ -4,16 +4,12 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 from app.services.retrieval_routing import (
     RETRIEVAL_PROFILE_CROSS_DOCUMENT_COMPARE_DIVERSIFIED_V1,
     RETRIEVAL_PROFILE_DOCUMENT_SUMMARY_MULTI_DOCUMENT_DIVERSIFIED_V1,
     RETRIEVAL_PROFILE_DOCUMENT_SUMMARY_SINGLE_DOCUMENT_DIVERSIFIED_V1,
 )
-
-if TYPE_CHECKING:
-    from app.services.retrieval import RetrievalCandidate
+from app.services.retrieval_types import RetrievalCandidate
 
 
 # single-document summary 過濾掉非目標文件的原因。

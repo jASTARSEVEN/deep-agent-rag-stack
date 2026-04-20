@@ -759,7 +759,7 @@ def test_evaluation_preview_and_run_expose_rerank_fallback_reason(client, db_ses
 
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: FailingRerankProvider())
+    monkeypatch.setattr("app.services.retrieval_rerank.build_rerank_provider", lambda settings: FailingRerankProvider())
 
     dataset_id = client.post(
         f"/areas/{area.id}/evaluation/datasets",

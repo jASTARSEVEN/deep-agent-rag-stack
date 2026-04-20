@@ -33,12 +33,14 @@ from app.services.reranking import (
     build_rerank_provider,
 )
 from app.services.retrieval_text import build_rerank_document_text
-from app.services.retrieval import (
-    _build_match_chunks_rpc_statement,
-    _apply_python_rrf,
-    _apply_ranking_policy,
+from app.services.retrieval_recall import (
+    apply_python_rrf,
+    build_match_chunks_rpc_statement,
+)
+from app.services.retrieval_rerank import apply_ranking_policy
+from app.services.retrieval_runtime import retrieve_area_candidates
+from app.services.retrieval_types import (
     RankedChunkMatch,
-    retrieve_area_candidates,
 )
 
 
@@ -577,7 +579,7 @@ def test_score_with_qwen_reranker_formats_inputs_and_sorts_scores(monkeypatch) -
 def test_build_match_chunks_rpc_statement_uses_postgres_bind_types() -> None:
     """`match_chunks` RPC statement 應明確綁定 PostgreSQL 參數型別。"""
 
-    statement = _build_match_chunks_rpc_statement()
+    statement = build_match_chunks_rpc_statement()
     bind_params = statement._bindparams
     query_embedding_type = bind_params["query_embedding"].type
 
@@ -816,7 +818,7 @@ def test_apply_ranking_policy_downranks_table_of_contents_noise(db_session, app_
         end_offset=1021,
     )
 
-    ranked = _apply_ranking_policy(
+    ranked = apply_ranking_policy(
         matches=[
             RankedChunkMatch(chunk=toc_chunk, vector_rank=1, fts_rank=1, rrf_rank=1, rrf_score=0.032),
             RankedChunkMatch(chunk=body_chunk, vector_rank=2, fts_rank=2, rrf_rank=2, rrf_score=0.031),
@@ -883,7 +885,7 @@ def test_retrieve_area_candidates_falls_back_to_rrf_when_rerank_runtime_fails(
 
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: FailingRerankProvider())
+    monkeypatch.setattr("app.services.retrieval_rerank.build_rerank_provider", lambda settings: FailingRerankProvider())
 
     result = retrieve_area_candidates(
         session=db_session,
@@ -1136,7 +1138,7 @@ def test_retrieve_area_candidates_uses_parent_level_rerank_documents(db_session,
                 for index, document in enumerate(documents)
             ]
 
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+    monkeypatch.setattr("app.services.retrieval_rerank.build_rerank_provider", lambda settings: CapturingRerankProvider())
 
     result = retrieve_area_candidates(
         session=db_session,
@@ -1249,7 +1251,7 @@ def test_retrieve_area_candidates_preserves_all_hit_children_in_rerank_documents
             captured_documents.extend(documents)
             return [type("Score", (), {"candidate_id": document.candidate_id, "score": 1.0})() for document in documents]
 
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: CapturingRerankProvider())
+    monkeypatch.setattr("app.services.retrieval_rerank.build_rerank_provider", lambda settings: CapturingRerankProvider())
 
     retrieve_area_candidates(
         session=db_session,
@@ -1658,7 +1660,7 @@ def test_apply_python_rrf_merges_vector_and_fts_ranks_stably(app_settings) -> No
         fts_rank=2,
     )
 
-    merged = _apply_python_rrf(matches=[vector_only, hybrid, fts_only], settings=app_settings)
+    merged = apply_python_rrf(matches=[vector_only, hybrid, fts_only], settings=app_settings)
 
     assert [match.chunk.heading for match in merged] == ["Hybrid", "Vector", "FTS"]
     assert [match.rrf_rank for match in merged] == [1, 2, 3]
@@ -1692,7 +1694,7 @@ def test_apply_ranking_policy_keeps_single_match_identity(app_settings) -> None:
         )
     ]
 
-    ranked = _apply_ranking_policy(matches=matches, query="policy", settings=app_settings)
+    ranked = apply_ranking_policy(matches=matches, query="policy", settings=app_settings)
 
     assert len(ranked) == 1
     assert ranked[0] is matches[0]

@@ -5,12 +5,13 @@ from uuid import uuid4, UUID
 from app.auth.verifier import CurrentPrincipal
 from app.core.settings import AppSettings
 from app.db.models import Area, AreaUserRole, ChunkStructureKind, ChunkType, Document, DocumentChunk, DocumentStatus, Role
-from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace, retrieve_area_candidates
 from app.services.retrieval_assembler import (
     _load_child_chunks,
     _load_parent_chunks,
     assemble_retrieval_result,
 )
+from app.services.retrieval_runtime import retrieve_area_candidates
+from app.services.retrieval_types import RetrievalCandidate, RetrievalResult, RetrievalTrace
 
 
 def _uuid() -> str:
@@ -1059,7 +1060,7 @@ def test_assemble_retrieval_result_works_after_rerank_fallback(db_session, app_s
 
             raise RuntimeError("boom")
 
-    monkeypatch.setattr("app.services.retrieval.build_rerank_provider", lambda settings: FailingRerankProvider())
+    monkeypatch.setattr("app.services.retrieval_rerank.build_rerank_provider", lambda settings: FailingRerankProvider())
 
     retrieval_result = retrieve_area_candidates(
         session=db_session,

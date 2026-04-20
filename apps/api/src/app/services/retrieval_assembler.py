@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import AppSettings
 from app.db.models import ChunkStructureKind, ChunkType, DocumentChunk, DocumentChunkRegion
-from app.services.retrieval import RetrievalCandidate, RetrievalResult, RetrievalTrace
 from app.services.retrieval_text import merge_chunk_contents
+from app.services.retrieval_types import RetrievalCandidate, RetrievalResult, RetrievalTrace
 
 
 @dataclass(slots=True)

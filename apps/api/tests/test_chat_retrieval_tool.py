@@ -6,14 +6,16 @@ import pytest
 
 from app.auth.verifier import CurrentPrincipal
 from app.chat.tools.retrieval import (
+    retrieve_area_contexts_tool,
+)
+from app.chat.tools.retrieval_serialization import (
     build_agent_tool_payload,
     build_agent_tool_context_payload,
     build_assembled_context_payload,
     build_chat_citations,
     build_tool_call_output_summary,
-    retrieve_area_contexts_tool,
 )
-from app.services.retrieval import RetrievalTrace
+from app.services.retrieval_types import RetrievalTrace
 from app.services.retrieval_assembler import (
     AssembledContext,
     AssembledRetrievalResult,

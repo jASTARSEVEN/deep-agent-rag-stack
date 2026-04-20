@@ -318,6 +318,17 @@ flowchart TD
 19.12. `task routing` 的正式主線採 2 層統一 classifier framework：第一層 `task_type` 為 `fact_lookup | document_summary | cross_document_compare`，第二層 `summary_strategy` 僅在 `task_type=document_summary` 時啟用，至少包含 `document_overview | section_focused | multi_document_theme`。
 19.12.1. 第一層與第二層都必須共用 `deterministic anchors -> embedding classifier -> LLM fallback` 的相同決策哲學；`LLM fallback` 輸入必須嚴格受限為 query、language、document mention summary 與 label options。
 19.12.2. Deep Agents 可見的 retrieval tool contract 不應讓 agent 提供 routing 參數；`task_type`、`document_scope` 與 `summary_strategy` 皆由後端 router 根據原始 query 與已授權且 `ready` 文件集合自動判斷。
+
+### Retrieval runtime 模組邊界
+1. retrieval runtime 採固定六階段責任切分：`routing -> recall -> rerank -> selection -> assembler -> tool serialization`。
+2. `app.services.retrieval_routing` 只負責 query type、document scope、summary strategy 與 runtime profile/effective settings。
+3. `app.services.retrieval_recall` 只負責 chunk/document/section recall、PostgreSQL RPC、SQLite fallback、RRF 與 recall trace 輸入，不得 import chat 模組。
+4. `app.services.retrieval_rerank` 只負責 minimal ranking policy、parent-level rerank、provider fail-open 與 `RetrievalCandidate` 轉換。
+5. `app.services.retrieval_runtime` 是 pipeline orchestrator，負責串接 routing、recall、rerank 與 selection，並輸出 `RetrievalResult` / `RetrievalTrace`。
+6. `app.services.retrieval_types` 是跨階段 dataclass 的唯一來源；selection、assembler、evaluation 與測試不得從舊單體 retrieval service 匯入型別。
+7. `app.services.retrieval_assembler` 只負責 parent/materialization/citation-ready assembly；不得執行 recall、rerank 或 agent payload mapping。
+8. `app.chat.tools.retrieval` 只保留 Deep Agents tool orchestration；文件 handle、coverage、follow-up、synopsis hint 由 `retrieval_planning` 負責，chat/runtime payload 由 `retrieval_serialization` 負責。
+9. 不保留 `app.services.retrieval` facade；新增 retrieval 功能時必須落在對應階段模組，避免重新形成單一大型 service。
 19.12.3. `task_type=document_summary` 與 `task_type=cross_document_compare` 的最終回答不再走 runtime 專用 synthesis lane；正式主線是一致的 `Deep Agents` 主 agent path，由 agent 根據 `retrieve_area_contexts` 的 assembled contexts 自行完成摘要或比較。
 19.12.4. `thinking_mode` 目前僅作為前後端與 checkpoint 的相容 metadata 保留，不再決定 answer lane；正式 trace 只保留固定 `answer_path="deepagents_unified"` 與 `thinking_mode_ignored` 狀態。
 19.12.5. `Phase 8B` 的 enrichment lane 已取消並自 runtime / worker / schema 主線移除；正式檢索不得依賴已移除的 enrichment table、query-time recall lane 或 trace contract。

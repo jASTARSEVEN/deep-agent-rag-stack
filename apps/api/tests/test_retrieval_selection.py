@@ -1,8 +1,8 @@
 """Scope-aware diversified selection 測試。"""
 
 from app.db.models import ChunkStructureKind
-from app.services.retrieval import RetrievalCandidate
 from app.services.retrieval_selection import apply_scope_aware_selection
+from app.services.retrieval_types import RetrievalCandidate
 
 
 def _candidate(
